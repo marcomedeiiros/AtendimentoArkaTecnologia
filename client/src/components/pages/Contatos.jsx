@@ -328,7 +328,7 @@ export default function Contatos({ conversas = [], setConversas, setAba }) {
           </button>
           <select value={ordenacao} onChange={e => setOrdenacao(e.target.value)}
             className="bg-[#161922] border border-[#2A3040] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500/50">
-            <option value="nome">A–Z</option>
+            <option value="nome">A-Z</option>
             <option value="recente">Recentes</option>
           </select>
         </div>

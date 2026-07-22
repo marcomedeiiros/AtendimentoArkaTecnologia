@@ -359,7 +359,7 @@ export default function Agenda() {
                 className="w-full bg-[#161922] border border-[#2A3040] rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50" />
             </div>
             <div className="text-xs text-slate-400 shrink-0">
-              {verTodos ? 'Todos' : dataFoco} — <span className="text-white font-semibold">{listagem.length}</span>
+              {verTodos ? 'Todos' : dataFoco} - <span className="text-white font-semibold">{listagem.length}</span>
             </div>
           </div>
 
