@@ -17,3 +17,8 @@ npm run dev
 
 
 abrirá na porta http://localhost:5173/
+
+
+entre na pasta client
+
+server é back - end
