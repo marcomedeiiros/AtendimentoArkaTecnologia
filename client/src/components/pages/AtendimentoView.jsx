@@ -176,11 +176,7 @@ function PainelChat({
           <div className="font-bold text-sm text-white flex items-center gap-2 flex-wrap">
             {conversa.cliente}
             <span className="text-xs font-normal text-slate-400 font-mono">({conversa.telefone})</span>
-<<<<<<< HEAD
          
-=======
-            {/* Badge de status */}
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
             <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
               conversa.statusAtendimento === 'resolvido'
                 ? 'bg-emerald-500/20 text-emerald-400'
@@ -229,11 +225,7 @@ function PainelChat({
             </button>
           )}
 
-<<<<<<< HEAD
           
-=======
-          {/* ── Concluir / Finalizar ── */}
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
           <button onClick={() => onFinalizar(conversa.id)}
             className="px-2.5 py-1.5 rounded-lg bg-slate-500/15 hover:bg-slate-500/25 text-slate-300 text-xs font-semibold border border-slate-500/30 transition-all flex items-center gap-1">
             <Check size={13} /> Concluir
@@ -413,11 +405,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       conv.cnpj          = cnpjNumeros;
       conv.cnpjVerificado = true;
       const msgConf = parceiroEncontrado
-<<<<<<< HEAD
         ? `✅ CNPJ ${mascararCnpj(cnpjNumeros)} validado! Razão Social: ${parceiroEncontrado.razaoSocial} Parceiro com Contrato Ativo.`
-=======
-        ? `✅ CNPJ ${mascararCnpj(cnpjNumeros)} validado! Razão Social: ${parceiroEncontrado.razaoSocial} — Parceiro com Contrato Ativo.`
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
         : `⚠️ CNPJ ${mascararCnpj(cnpjNumeros)} consultado. Não possui contrato de parceiro ativo.`;
       conv.mensagens = [
         ...conv.mensagens,
@@ -481,11 +469,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
 
   return (
     <div className="fade-in space-y-4 h-full flex flex-col">
-<<<<<<< HEAD
   
-=======
-      {/* Header */}
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
         <div>
           <div className="flex items-center gap-3 flex-wrap">
@@ -497,11 +481,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                 {naoLidos}
               </span>
             )}
-<<<<<<< HEAD
             
-=======
-            {/* Ícone WiFi offline — sem integração WhatsApp ativa */}
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
             <div className="flex items-center justify-center w-7 h-7 rounded-full bg-rose-500/15 border border-rose-500/40 text-rose-400" title="WhatsApp offline">
               <WifiOff size={13} />
             </div>
@@ -513,15 +493,9 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-[550px]">
-<<<<<<< HEAD
     
         <div className="lg:col-span-4 glass-panel rounded-2xl flex flex-col overflow-hidden border border-[#2A3040]">
        
-=======
-        {/* Lista lateral */}
-        <div className="lg:col-span-4 glass-panel rounded-2xl flex flex-col overflow-hidden border border-[#2A3040]">
-          {/* Abas: Abertos / Pendentes / Fechados */}
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
           <div className="grid grid-cols-3 bg-[#1E2330]/80 border-b border-[#2A3040]">
             {ABAS.map(aba => {
               const Icon  = aba.icon;

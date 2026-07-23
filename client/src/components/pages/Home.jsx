@@ -39,10 +39,6 @@ function cnpjValido(v) {
   return c === c.slice(0,12)+String(d1)+String(d2);
 }
 
-<<<<<<< HEAD
-=======
-// ── Persistência ──────────────────────────────────────────────────────────────
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
 const temStorage = typeof window !== 'undefined' && !!window.storage;
 async function carregar(chave, padrao) {
   try {
@@ -62,10 +58,6 @@ async function salvar(chave, valor) {
   } catch { return false; }
 }
 
-<<<<<<< HEAD
-=======
-// ── Seeds ─────────────────────────────────────────────────────────────────────
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
 const SEED_EQUIPE = [
   { id: 'e1', nome: 'Marina Souza', cargo: 'Atendimento Especializado', status: 'online' },
   { id: 'e2', nome: 'Diego Alves',  cargo: 'Suporte Técnico N2',        status: 'offline' },
@@ -125,19 +117,11 @@ const SEED_CONVERSAS = [
       { de: 'cliente', texto: 'Olá, solicito atendimento para renovação contratual.', hora: '09:50' },
       { de: 'equipe',  texto: '[🤖 Automação Arka]: Por favor, informe o CNPJ da empresa para consulta.', hora: '09:51' },
       { de: 'cliente', texto: 'Meu CNPJ é 11.222.333/0001-81', hora: '09:52' },
-<<<<<<< HEAD
       { de: 'equipe',  texto: '✅ CNPJ 11.222.333/0001-81 validado! Empresa Exemplo LTDA Parceiro Cadastrado.', hora: '09:52' },
-=======
-      { de: 'equipe',  texto: '✅ CNPJ 11.222.333/0001-81 validado! Empresa Exemplo LTDA — Parceiro Cadastrado.', hora: '09:52' },
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
     ],
   },
 ];
 
-<<<<<<< HEAD
-=======
-// ── Navegação ─────────────────────────────────────────────────────────────────
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
 const NAV = [
   { id: 'dashboard',   label: 'Visão Geral',          icon: LayoutGrid   },
   { id: 'atendimento', label: 'Central de Atendimento',icon: MessageSquare},
@@ -151,10 +135,6 @@ const NAV = [
   { id: 'massa',       label: 'Envio em Massa',        icon: Send         },
 ];
 
-<<<<<<< HEAD
-=======
-// ── Logo ──────────────────────────────────────────────────────────────────────
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
 function ArkaLogo({ size = 36, className = '' }) {
   return (
     <div className={`relative flex items-center justify-center shrink-0 ${className}`}>
@@ -167,10 +147,6 @@ function ArkaLogo({ size = 36, className = '' }) {
   );
 }
 
-<<<<<<< HEAD
-=======
-// ── App principal ─────────────────────────────────────────────────────────────
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
 export default function App() {
   const [aba,              setAba]              = useState('dashboard');
   const [carregando,       setCarregando]        = useState(true);
@@ -205,11 +181,6 @@ export default function App() {
   async function atualizarFluxos(novo)    { setFluxos(novo);    await salvar('arka:fluxos',    novo); }
   async function atualizarParceiros(nova) { setParceiros(nova); await salvar('arka:parceiros', nova); }
   async function atualizarConversas(nova) {
-<<<<<<< HEAD
-
-=======
-    // Aceita função (prev => ...) ou valor direto, para compatibilidade
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
     if (typeof nova === 'function') {
       setConversas(prev => {
         const resultado = nova(prev);
@@ -222,10 +193,6 @@ export default function App() {
     }
   }
 
-<<<<<<< HEAD
-=======
-  // Abas que usam layout sem padding (full-screen)
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
   const abaFullScreen = aba === 'automacoes';
 
   return (
@@ -295,30 +262,16 @@ export default function App() {
   );
 }
 
-<<<<<<< HEAD
-=======
-// ── Sidebar ───────────────────────────────────────────────────────────────────
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
 function Sidebar({ aba, setAba, whatsAppConectado, conversas }) {
   const naFila   = conversas.filter(c => c.statusAtendimento === 'aguardando').length;
   const naoLidos = conversas.filter(c => !c.lido && c.statusAtendimento !== 'finalizado' && c.statusAtendimento !== 'resolvido').length;
 
-<<<<<<< HEAD
   const navPrincipal = NAV.slice(0, 4);  
   const navSecundario = NAV.slice(4);     
 
   return (
     <aside className="w-64 shrink-0 bg-[#11141C] border-r border-[#2A3040] flex flex-col p-4 h-screen select-none overflow-y-auto">
 
-=======
-  // Separa nav em dois grupos para organização visual
-  const navPrincipal = NAV.slice(0, 4);  // dashboard, atendimento, contatos, automacoes
-  const navSecundario = NAV.slice(4);     // whatsapp, equipe, parceiros, mensagens, agenda, massa
-
-  return (
-    <aside className="w-64 shrink-0 bg-[#11141C] border-r border-[#2A3040] flex flex-col p-4 h-screen select-none overflow-y-auto">
-      {/* Brand */}
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
       <div className="flex items-center gap-3 px-2 py-3 mb-4 shrink-0">
         <div className="p-2 rounded-xl bg-gradient-to-br from-orange-500/20 to-amber-500/10 border border-orange-500/30 shadow-lg shadow-orange-500/10">
           <ArkaLogo size={32} />
@@ -329,10 +282,6 @@ function Sidebar({ aba, setAba, whatsAppConectado, conversas }) {
         </div>
       </div>
 
-<<<<<<< HEAD
-=======
-      {/* WhatsApp status */}
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
       <div
         onClick={() => setAba('whatsapp')}
         className={`mx-1 mb-4 p-2.5 rounded-xl cursor-pointer border transition-all duration-200 flex items-center gap-2.5 text-xs font-semibold shrink-0 ${
@@ -345,10 +294,6 @@ function Sidebar({ aba, setAba, whatsAppConectado, conversas }) {
         <span className="sidebar-label">{whatsAppConectado ? 'WhatsApp Conectado' : 'WhatsApp Offline'}</span>
       </div>
 
-<<<<<<< HEAD
-=======
-      {/* Nav principal */}
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
       <nav className="flex flex-col gap-1 flex-1">
         <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-1">Principal</div>
         {navPrincipal.map(item => <NavItem key={item.id} item={item} aba={aba} setAba={setAba} naFila={naFila} naoLidos={naoLidos} />)}
@@ -364,10 +309,6 @@ function NavItem({ item, aba, setAba, naFila, naoLidos }) {
   const Icon  = item.icon;
   const ativo = aba === item.id;
 
-<<<<<<< HEAD
-=======
-  // Badge numérico por item
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
   const badge =
     item.id === 'atendimento' && naFila > 0   ? naFila   :
     item.id === 'atendimento' && naoLidos > 0 ? naoLidos : null;
@@ -394,10 +335,6 @@ function NavItem({ item, aba, setAba, naFila, naoLidos }) {
   );
 }
 
-<<<<<<< HEAD
-=======
-// ── Header reutilizável ───────────────────────────────────────────────────────
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
 export function Header({ titulo, subtitulo, children }) {
   return (
     <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
@@ -410,10 +347,6 @@ export function Header({ titulo, subtitulo, children }) {
   );
 }
 
-<<<<<<< HEAD
-=======
-// ── WhatsAppView ──────────────────────────────────────────────────────────────
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
 function WhatsAppView({ conectado, setConectado, conversas }) {
   const [instancia,   setInstancia]   = useState('arka-wapi-oficial');
   const [webhookUrl,  setWebhookUrl]  = useState('https://api.arkatecnologia.com.br/webhook/v1/whatsapp');
@@ -479,10 +412,6 @@ function WhatsAppView({ conectado, setConectado, conversas }) {
   );
 }
 
-<<<<<<< HEAD
-=======
-// ── EquipeView ────────────────────────────────────────────────────────────────
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
 function EquipeView({ equipe, setEquipe }) {
   const [nome,  setNome]  = useState('');
   const [cargo, setCargo] = useState('');
@@ -533,10 +462,6 @@ function EquipeView({ equipe, setEquipe }) {
   );
 }
 
-<<<<<<< HEAD
-=======
-// ── ParceirosView ─────────────────────────────────────────────────────────────
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
 function ParceirosView({ parceiros, setParceiros }) {
   const [cnpjInput, setCnpjInput] = useState('');
   const [nome,      setNome]      = useState('');
@@ -545,11 +470,7 @@ function ParceirosView({ parceiros, setParceiros }) {
 
   function adicionar() {
     const c = limparCnpj(cnpjInput);
-<<<<<<< HEAD
     if (!cnpjValido(c)) { setErro('CNPJ inválido confira os números.'); return; }
-=======
-    if (!cnpjValido(c)) { setErro('CNPJ inválido — confira os números.'); return; }
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
     if (!nome.trim())   { setErro('Informe a razão social.'); return; }
     setErro('');
     setParceiros([...parceiros.filter(p => p.cnpj !== c), { cnpj: c, razaoSocial: nome.trim(), status: 'ativo' }]);

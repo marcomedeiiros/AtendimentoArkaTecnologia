@@ -331,10 +331,6 @@ export default function Agenda() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-<<<<<<< HEAD
-=======
-        {/* Calendário lateral */}
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
         <div className="lg:col-span-4 space-y-4">
           <MiniCalendario compromissos={compromissos} dataFoco={dataFoco} setDataFoco={d => { setDataFoco(d); setVerTodos(false); }} />
           <div className="glass-panel rounded-2xl p-4 border border-[#2A3040] space-y-2">

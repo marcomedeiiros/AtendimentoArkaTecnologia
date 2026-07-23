@@ -29,11 +29,7 @@ export default function App() {
     <Router>
       <AppProvider>
         <Routes>
-<<<<<<< HEAD
           <Route path="/" element={<Navigate to="/atendimento" replace />} />
-=======
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
           <Route element={<AppLayout />}>
             <Route path="/dashboard"   element={<DashboardPage />} />
             <Route path="/atendimento" element={<AtendimentoPage />} />

@@ -1,19 +1,10 @@
 /**
-<<<<<<< HEAD
  * AppContext estado global compartilhado entre todas as rotas.
  *
  * Centraliza conversas, fluxos, equipe e parceiros que antes viviam
  * dentro do componente App em Home.jsx. Cada rota le/escreve aqui
  * via useAppContext(), eliminando prop-drilling e permitindo que
  * qualquer pagina acesse o mesmo estado sem re-montar dados
-=======
- * AppContext — estado global compartilhado entre todas as rotas.
- *
- * Centraliza conversas, fluxos, equipe e parceiros que antes viviam
- * dentro do componente App em Home.jsx. Cada rota lê/escreve aqui
- * via useAppContext(), eliminando prop-drilling e permitindo que
- * qualquer página acesse o mesmo estado sem re-montar dados.
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
  */
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
@@ -97,11 +88,7 @@ const SEED_CONVERSAS = [
       { de: 'cliente', texto: 'Olá, solicito atendimento para renovação contratual.', hora: '09:50' },
       { de: 'equipe',  texto: '[🤖 Automação Arka]: Por favor, informe o CNPJ da empresa para consulta.', hora: '09:51' },
       { de: 'cliente', texto: 'Meu CNPJ é 11.222.333/0001-81', hora: '09:52' },
-<<<<<<< HEAD
       { de: 'equipe',  texto: '✅ CNPJ 11.222.333/0001-81 validado! Empresa Exemplo LTDA Parceiro Cadastrado.', hora: '09:52' },
-=======
-      { de: 'equipe',  texto: '✅ CNPJ 11.222.333/0001-81 validado! Empresa Exemplo LTDA — Parceiro Cadastrado.', hora: '09:52' },
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
     ],
   },
 ];

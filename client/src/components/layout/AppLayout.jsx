@@ -1,17 +1,9 @@
 /**
-<<<<<<< HEAD
  * AppLayout shell visual compartilhado por todas as rotas.
  *
  * Renderiza a Sidebar com NavLink (destaca rota ativa automaticamente)
  * e um <Outlet onde cada página é inserida pelo React Router
  * Substitui o sistema de aba/useState que estava em Home.jsx
-=======
- * AppLayout — shell visual compartilhado por todas as rotas.
- *
- * Renderiza a Sidebar com NavLink (destaca rota ativa automaticamente)
- * e um <Outlet /> onde cada página é inserida pelo React Router.
- * Substitui o sistema de aba/useState que estava em Home.jsx.
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
  */
 import React from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
@@ -21,10 +13,6 @@ import {
 } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
 
-<<<<<<< HEAD
-=======
-// ── Mapa de rotas da navegação ────────────────────────────────────────────────
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
 const NAV_PRINCIPAL = [
   { to: '/atendimento', label: 'Central de Atendimento', icon: MessageSquare },
   { to: '/contatos',    label: 'Contatos',               icon: Users         },
@@ -44,10 +32,6 @@ const NAV_FERRAMENTAS = [
   { to: '/massa',      label: 'Envio em Massa',        icon: Send          },
 ];
 
-<<<<<<< HEAD
-=======
-// ── Logo ──────────────────────────────────────────────────────────────────────
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
 function ArkaLogo({ size = 32 }) {
   return (
     <img
@@ -61,10 +45,6 @@ function ArkaLogo({ size = 32 }) {
   );
 }
 
-<<<<<<< HEAD
-=======
-// ── Item de navegação com NavLink ─────────────────────────────────────────────
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
 function NavItem({ to, label, icon: Icon, badge }) {
   return (
     <NavLink
@@ -94,10 +74,6 @@ function NavItem({ to, label, icon: Icon, badge }) {
   );
 }
 
-<<<<<<< HEAD
-=======
-// ── Sidebar ───────────────────────────────────────────────────────────────────
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
 function Sidebar() {
   const { conversas } = useAppContext();
 
@@ -109,11 +85,7 @@ function Sidebar() {
 
   return (
     <aside className="w-64 shrink-0 bg-[#11141C] border-r border-[#2A3040] flex flex-col p-4 h-screen select-none overflow-y-auto">
-<<<<<<< HEAD
     
-=======
-      {/* Brand */}
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
       <div className="flex items-center gap-3 px-2 py-3 mb-4 shrink-0">
         <div className="p-2 rounded-xl bg-gradient-to-br from-orange-500/20 to-amber-500/10 border border-orange-500/30 shadow-lg shadow-orange-500/10">
           <ArkaLogo size={32} />
@@ -126,10 +98,6 @@ function Sidebar() {
         </div>
       </div>
 
-<<<<<<< HEAD
-=======
-      {/* Navegação */}
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
       <nav className="flex flex-col gap-1 flex-1">
         <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-1">
           Principal
@@ -160,18 +128,10 @@ function Sidebar() {
   );
 }
 
-<<<<<<< HEAD
-=======
-// ── AppLayout ─────────────────────────────────────────────────────────────────
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
 export default function AppLayout() {
   const { carregando } = useAppContext();
   const location = useLocation();
 
-<<<<<<< HEAD
-=======
-  // A rota /fluxos usa canvas full-screen sem padding
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
   const isFluxos = location.pathname === '/fluxos';
 
   if (carregando) {
@@ -191,10 +151,6 @@ export default function AppLayout() {
           isFluxos ? 'p-0 overflow-hidden' : 'p-6 lg:p-8 overflow-y-auto'
         }`}
       >
-<<<<<<< HEAD
-=======
-        {/* Cada rota é renderizada aqui pelo React Router */}
->>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
         <Outlet />
       </main>
     </div>
