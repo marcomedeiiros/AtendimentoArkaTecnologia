@@ -1,0 +1,240 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum StatusAtendimento {
+  aguardando
+  em_atendimento
+  finalizado
+  resolvido
+}
+
+enum OrigemMensagem {
+  cliente
+  equipe
+  sistema
+  bot
+}
+
+enum StatusParceiro {
+  ativo
+  inativo
+}
+
+enum StatusEquipe {
+  online
+  offline
+}
+
+enum TipoPassoFluxo {
+  gatilho
+  mensagem
+  condicao
+  delay
+  acao
+  comentario
+}
+
+enum TagContato {
+  cliente
+  parceiro
+  suporte
+  vip
+  inativo
+}
+
+model Instancia {
+  id            String   @id @default(uuid())
+  nome          String   @unique
+  conectado     Boolean  @default(false)
+  webhookSecret String   @map("webhook_secret")
+  criadoEm      DateTime @default(now()) @map("criado_em")
+  atualizadoEm  DateTime @updatedAt @map("atualizado_em")
+
+  conversas     Conversa[]
+  sessoes       SessaoChatbot[]
+  logsExecucao  LogExecucaoFluxo[]
+
+  @@map("instancias")
+}
+
+model Usuario {
+  id           String   @id @default(uuid())
+  nome         String
+  email        String   @unique
+  senhaHash    String   @map("senha_hash")
+  cargo        String   @default("Administrador")
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  conversasAtendidas Conversa[] @relation("AtendenteConversa")
+
+  @@map("usuarios")
+}
+
+model Equipe {
+  id           String       @id @default(uuid())
+  nome         String
+  cargo        String       @default("Atendimento")
+  status       StatusEquipe @default(offline)
+  criadoEm     DateTime     @default(now()) @map("criado_em")
+  atualizadoEm DateTime     @updatedAt @map("atualizado_em")
+
+  @@map("equipe")
+}
+
+model Parceiro {
+  cnpj         String         @id
+  razaoSocial  String         @map("razao_social")
+  status       StatusParceiro @default(ativo)
+  criadoEm     DateTime       @default(now()) @map("criado_em")
+  atualizadoEm DateTime       @updatedAt @map("atualizado_em")
+
+  conversas Conversa[]
+
+  @@index([status])
+  @@map("parceiros")
+}
+
+model Contato {
+  id           String     @id @default(uuid())
+  nome         String
+  telefone     String
+  email        String?
+  empresa      String?
+  tag          TagContato @default(cliente)
+  favorito     Boolean    @default(false)
+  observacoes  String?
+  criadoEm     DateTime   @default(now()) @map("criado_em")
+  atualizadoEm DateTime   @updatedAt @map("atualizado_em")
+
+  @@index([telefone])
+  @@index([tag])
+  @@map("contatos")
+}
+
+model Fluxo {
+  id           String   @id @default(uuid())
+  nome         String
+  gatilho      String
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  passos       PassoFluxo[]
+  sessoes      SessaoChatbot[]
+  logsExecucao LogExecucaoFluxo[]
+
+  @@index([gatilho, ativo])
+  @@map("fluxos")
+}
+
+model PassoFluxo {
+  id           String         @id @default(uuid())
+  fluxoId      String         @map("fluxo_id")
+  tipo         TipoPassoFluxo
+  titulo       String
+  descricao    String?        @map("descricao")
+  texto        String?
+  config       Json?
+  posX         Float?         @map("pos_x")
+  posY         Float?         @map("pos_y")
+  largura      Float?         @map("largura")
+  altura       Float?         @map("altura")
+  targetId     String?        @map("target_id")
+  ordem        Int            @default(0)
+  criadoEm     DateTime       @default(now()) @map("criado_em")
+  atualizadoEm DateTime       @updatedAt @map("atualizado_em")
+
+  fluxo Fluxo @relation(fields: [fluxoId], references: [id], onDelete: Cascade)
+
+  @@index([fluxoId, ordem])
+  @@map("fluxo_passos")
+}
+
+model Conversa {
+  id                String            @id @default(uuid())
+  instanciaId       String            @map("instancia_id")
+  cliente           String
+  telefone          String
+  statusAtendimento StatusAtendimento @default(aguardando) @map("status_atendimento")
+  cnpj              String?
+  cnpjVerificado    Boolean           @default(false) @map("cnpj_verificado")
+  lido              Boolean           @default(false)
+  atendenteId       String?           @map("atendente_id")
+  criadoEm          DateTime          @default(now()) @map("criado_em")
+  atualizadoEm      DateTime          @updatedAt @map("atualizado_em")
+
+  instancia   Instancia  @relation(fields: [instanciaId], references: [id], onDelete: Cascade)
+  atendente   Usuario?   @relation("AtendenteConversa", fields: [atendenteId], references: [id], onDelete: SetNull)
+  parceiroRef Parceiro?  @relation(fields: [cnpj], references: [cnpj], onDelete: SetNull)
+  mensagens   Mensagem[]
+  sessao      SessaoChatbot?
+
+  @@index([telefone])
+  @@index([statusAtendimento])
+  @@index([instanciaId, telefone])
+  @@map("conversas")
+}
+
+model Mensagem {
+  id         String         @id @default(uuid())
+  conversaId String         @map("conversa_id")
+  origem     OrigemMensagem
+  texto      String
+  metadata   Json?
+  criadoEm   DateTime       @default(now()) @map("criado_em")
+
+  conversa Conversa @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+
+  @@index([conversaId, criadoEm])
+  @@map("mensagens")
+}
+
+model SessaoChatbot {
+  id           String   @id @default(uuid())
+  instanciaId  String   @map("instancia_id")
+  conversaId   String   @unique @map("conversa_id")
+  telefone     String
+  fluxoAtualId String?  @map("fluxo_atual_id")
+  passoAtualId String?  @map("passo_atual_id")
+  contexto     Json     @default("{}")
+  aguardando   String?
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  instancia  Instancia @relation(fields: [instanciaId], references: [id], onDelete: Cascade)
+  conversa   Conversa  @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+  fluxoAtual Fluxo?    @relation(fields: [fluxoAtualId], references: [id], onDelete: SetNull)
+
+  @@unique([instanciaId, telefone])
+  @@index([telefone])
+  @@map("sessoes_chatbot")
+}
+
+model LogExecucaoFluxo {
+  id          String   @id @default(uuid())
+  instanciaId String   @map("instancia_id")
+  fluxoId     String   @map("fluxo_id")
+  conversaId  String?  @map("conversa_id")
+  passoId     String?  @map("passo_id")
+  tipo        String
+  titulo      String
+  mensagem    String?
+  sucesso     Boolean  @default(true)
+  duracaoMs   Int?     @map("duracao_ms")
+  criadoEm    DateTime @default(now()) @map("criado_em")
+
+  instancia Instancia @relation(fields: [instanciaId], references: [id], onDelete: Cascade)
+  fluxo     Fluxo     @relation(fields: [fluxoId], references: [id], onDelete: Cascade)
+
+  @@index([fluxoId, criadoEm])
+  @@map("logs_execucao_fluxo")
+}
