@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "description": "Backend Arka Tecnologia - Chatbot WhatsApp",
   "main": "src/server.js",
+<<<<<<< HEAD
   "type": "module",
+=======
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",

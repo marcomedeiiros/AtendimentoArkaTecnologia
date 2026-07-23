@@ -38,7 +38,11 @@ export default function ParceirosPage() {
 
   function adicionar() {
     const c = limparCnpj(cnpjInput);
+<<<<<<< HEAD
     if (!cnpjValido(c)) { setErro('CNPJ inválido confira os números.'); return; }
+=======
+    if (!cnpjValido(c)) { setErro('CNPJ inválido — confira os números.'); return; }
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
     if (!nome.trim())   { setErro('Informe a razão social.'); return; }
     setErro('');
     atualizarParceiros([
@@ -72,6 +76,10 @@ export default function ParceirosPage() {
         </div>
       </div>
 
+<<<<<<< HEAD
+=======
+      {/* Formulário de cadastro */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
       <div className="glass-panel p-5 rounded-2xl border border-[#2A3040] space-y-3">
         <div className="flex flex-wrap gap-2.5">
           <input
@@ -98,6 +106,10 @@ export default function ParceirosPage() {
         {erro && <div className="text-xs text-rose-400 font-semibold">{erro}</div>}
       </div>
 
+<<<<<<< HEAD
+=======
+      {/* Busca */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
       <div className="relative max-w-xs">
         <Search size={14} className="absolute left-3.5 top-3 text-slate-500" />
         <input
@@ -108,6 +120,10 @@ export default function ParceirosPage() {
         />
       </div>
 
+<<<<<<< HEAD
+=======
+      {/* Lista de parceiros */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
       <div className="space-y-2.5">
         {filtrados.map(p => (
           <div key={p.cnpj} className="glass-panel p-4 rounded-xl border border-[#2A3040] flex items-center justify-between gap-4">

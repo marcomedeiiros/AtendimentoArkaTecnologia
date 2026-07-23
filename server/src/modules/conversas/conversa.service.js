@@ -47,7 +47,11 @@ class ConversaService {
       });
 
       const msgConf = parceiro
+<<<<<<< HEAD
         ? `CNPJ ${mascararCnpj(cnpjNumeros)} validado! Razao Social: ${parceiro.razaoSocial} Parceiro com Contrato Ativo.`
+=======
+        ? `CNPJ ${mascararCnpj(cnpjNumeros)} validado! Razao Social: ${parceiro.razaoSocial} — Parceiro com Contrato Ativo.`
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
         : `CNPJ ${mascararCnpj(cnpjNumeros)} consultado. Nao possui contrato de parceiro ativo.`;
 
       mensagensExtras.push(

@@ -4,6 +4,10 @@ import {
   CreditCard, Search, Clock, HandHeart, PhoneOff, Monitor
 } from 'lucide-react';
 
+<<<<<<< HEAD
+=======
+// ── Persistência ─────────────────────────────────────────────────────────────
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
 async function carregar(chave, padrao) {
   try {
     const raw = localStorage.getItem(chave);
@@ -14,6 +18,10 @@ async function salvar(chave, valor) {
   try { localStorage.setItem(chave, JSON.stringify(valor)); } catch {}
 }
 
+<<<<<<< HEAD
+=======
+// ── Mensagens padrão ─────────────────────────────────────────────────────────
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
 const MENSAGENS_PADRAO = [
   {
     id: 'mr_pix',
@@ -44,7 +52,11 @@ const MENSAGENS_PADRAO = [
     titulo: 'Até a Próxima!',
     categoria: 'encerramento',
     icon: 'bye',
+<<<<<<< HEAD
     texto: 'Foi um prazer atendê-lo(a)! 😊\n\nSe precisar de mais alguma coisa, é só entrar em contato. Estamos sempre aqui para ajudar.\n\n*Equipe Arka Tecnologia* Até a próxima! 👋',
+=======
+    texto: 'Foi um prazer atendê-lo(a)! 😊\n\nSe precisar de mais alguma coisa, é só entrar em contato. Estamos sempre aqui para ajudar.\n\n*Equipe Arka Tecnologia* — Até a próxima! 👋',
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
     editavel: true,
   },
   {
@@ -52,7 +64,11 @@ const MENSAGENS_PADRAO = [
     titulo: 'Sem Retorno',
     categoria: 'encerramento',
     icon: 'noreturn',
+<<<<<<< HEAD
     texto: 'Olá! Percebemos que não obtivemos retorno após nossos contatos.\n\nEste atendimento será encerrado por falta de resposta. Caso precise de auxílio, basta enviar uma nova mensagem será um prazer atendê-lo(a) novamente!',
+=======
+    texto: 'Olá! Percebemos que não obtivemos retorno após nossos contatos.\n\nEste atendimento será encerrado por falta de resposta. Caso precise de auxílio, basta enviar uma nova mensagem — será um prazer atendê-lo(a) novamente!',
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
     editavel: true,
   },
   {
@@ -60,11 +76,19 @@ const MENSAGENS_PADRAO = [
     titulo: 'AnyDesk',
     categoria: 'suporte',
     icon: 'monitor',
+<<<<<<< HEAD
     texto: 'Olá! Para darmos continuidade ao suporte remoto, precisamos acessar seu computador via AnyDesk.\n\n📥 *Download AnyDesk:* https://anydesk.com/pt\n\n1. Baixe e instale o AnyDesk\n2. Abra o programa\n3. Envie o número de 9 dígitos que aparecer na tela\n\nAguardamos! 🛠️',
+=======
+    texto: 'Olá! Para darmos continuidade ao suporte remoto, precisamos acessar seu computador via AnyDesk.\n\n📥 *Download AnyDesk:* https://anydesk.com/pt/downloads\n\n1. Baixe e instale o AnyDesk\n2. Abra o programa\n3. Envie o número de 9 dígitos que aparecer na tela\n\nAguardamos! 🛠️',
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
     editavel: true,
   },
 ];
 
+<<<<<<< HEAD
+=======
+// ── Ícones por categoria ──────────────────────────────────────────────────────
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
 function IconeMensagem({ icon, size = 16 }) {
   const mapa = {
     pix: { Icon: CreditCard, color: 'text-emerald-400' },
@@ -87,6 +111,10 @@ const CATEGORIAS = {
   geral: { label: 'Geral', color: 'bg-slate-600/30 text-slate-300 border-slate-600/40' },
 };
 
+<<<<<<< HEAD
+=======
+// ── Modal de edição / criação ─────────────────────────────────────────────────
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
 function ModalEdicao({ msg, onSalvar, onFechar }) {
   const [titulo, setTitulo] = useState(msg?.titulo || '');
   const [texto, setTexto] = useState(msg?.texto || '');
@@ -176,6 +204,10 @@ function ModalEdicao({ msg, onSalvar, onFechar }) {
   );
 }
 
+<<<<<<< HEAD
+=======
+// ── Card de mensagem rápida ──────────────────────────────────────────────────
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
 function CardMensagem({ msg, onEditar, onRemover, onCopiar, copiado }) {
   const cat = CATEGORIAS[msg.categoria] || CATEGORIAS.geral;
 
@@ -225,6 +257,10 @@ function CardMensagem({ msg, onEditar, onRemover, onCopiar, copiado }) {
         </div>
       </div>
 
+<<<<<<< HEAD
+=======
+      {/* Preview do texto */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
       <div className="bg-[#161922] rounded-xl p-3 border border-[#2A3040]">
         <p className="text-[11px] text-slate-300 leading-relaxed line-clamp-3 whitespace-pre-line">
           {msg.texto}
@@ -234,6 +270,10 @@ function CardMensagem({ msg, onEditar, onRemover, onCopiar, copiado }) {
   );
 }
 
+<<<<<<< HEAD
+=======
+// ── Componente principal ─────────────────────────────────────────────────────
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
 export default function MensagensRapidas({ onUsarMensagem }) {
   const [mensagens, setMensagens] = useState([]);
   const [modalAberto, setModalAberto] = useState(false);
@@ -242,12 +282,20 @@ export default function MensagensRapidas({ onUsarMensagem }) {
   const [busca, setBusca] = useState('');
   const [catFiltro, setCatFiltro] = useState('todas');
 
+<<<<<<< HEAD
+=======
+  // Carrega do localStorage, com seed padrão
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
   useEffect(() => {
     carregar('arka:mensagens_rapidas', null).then(salvas => {
       setMensagens(salvas || MENSAGENS_PADRAO);
     });
   }, []);
 
+<<<<<<< HEAD
+=======
+  // Persiste sempre que houver mudança
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
   useEffect(() => {
     if (mensagens.length > 0) {
       salvar('arka:mensagens_rapidas', mensagens);
@@ -375,6 +423,10 @@ export default function MensagensRapidas({ onUsarMensagem }) {
         )}
       </div>
 
+<<<<<<< HEAD
+=======
+      {/* Modal de edição */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
       {modalAberto && (
         <ModalEdicao
           msg={editando}

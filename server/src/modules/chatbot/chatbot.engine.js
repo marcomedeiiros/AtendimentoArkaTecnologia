@@ -80,7 +80,11 @@ class ChatbotEngine {
     });
 
     const msg = parceiro
+<<<<<<< HEAD
       ? `CNPJ ${mascararCnpj(cnpjLimpo)} validado! Razao Social: ${parceiro.razaoSocial} Parceiro com Contrato Ativo.`
+=======
+      ? `CNPJ ${mascararCnpj(cnpjLimpo)} validado! Razao Social: ${parceiro.razaoSocial} — Parceiro com Contrato Ativo.`
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
       : `CNPJ ${mascararCnpj(cnpjLimpo)} consultado. Nao possui contrato de parceiro ativo.`;
 
     return { valido: true, cnpj: cnpjLimpo, parceiro, mensagem: msg };
@@ -145,7 +149,11 @@ class ChatbotEngine {
             });
             resposta = `[${passo.titulo}]: ${result.mensagem}`;
           } else {
+<<<<<<< HEAD
             resposta = `[${passo.titulo}]: Desconto de parceiro nao aplicavel CNPJ sem contrato ativo.`;
+=======
+            resposta = `[${passo.titulo}]: Desconto de parceiro nao aplicavel — CNPJ sem contrato ativo.`;
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
           }
         } else if (acao === "gerar_boleto") {
           const result = await mockErp.gerarBoleto({

@@ -452,9 +452,16 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
   return (
     <div className="flex flex-col h-[calc(100vh-60px)] w-full relative bg-[#0B0D12] overflow-hidden select-none font-sans">
 
+<<<<<<< HEAD
       <div className="p-3 bg-[#11141C]/90 backdrop-blur-md border-b border-[#2A3040] flex flex-wrap items-center justify-between gap-3 z-20">
         <div className="flex items-center gap-2 flex-wrap">
           
+=======
+      {/* ── Toolbar ── */}
+      <div className="p-3 bg-[#11141C]/90 backdrop-blur-md border-b border-[#2A3040] flex flex-wrap items-center justify-between gap-3 z-20">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Seletor de fluxo */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
           <span className="p-2 rounded-xl bg-orange-500/10 text-orange-400 border border-orange-500/30">
             <Zap size={18} />
           </span>
@@ -466,6 +473,10 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
             {fluxos.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
           </select>
 
+<<<<<<< HEAD
+=======
+          {/* Novo fluxo */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
           <button
             onClick={() => {
               const novoId = 'f' + Date.now();
@@ -478,6 +489,10 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
             <Plus size={14} /> Novo Fluxo
           </button>
 
+<<<<<<< HEAD
+=======
+          {/* Deletar fluxo */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
           {fluxos.length > 1 && !showDeleteConfirm && (
             <button
               onClick={() => setShowDeleteConfirm(true)}
@@ -497,14 +512,22 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+<<<<<<< HEAD
 
+=======
+          {/* Zoom */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
           <div className="flex items-center bg-[#161922] border border-[#2A3040] rounded-xl p-1 text-xs text-slate-300">
             <button onClick={() => setZoom(z => Math.max(z / 1.15, 0.25))} className="p-1.5 hover:text-white"><ZoomOut size={14} /></button>
             <span className="px-2 font-mono text-[11px] text-slate-400">{Math.round(zoom * 100)}%</span>
             <button onClick={() => setZoom(z => Math.min(z * 1.15, 2.5))} className="p-1.5 hover:text-white"><ZoomIn size={14} /></button>
             <button onClick={() => { setZoom(1); setCanvasOffset({ x: 100, y: 100 }); }} className="p-1.5 hover:text-white border-l border-[#2A3040] ml-1" title="Resetar"><Maximize2 size={13} /></button>
           </div>
+<<<<<<< HEAD
 
+=======
+          {/* Undo/Redo */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
           <div className="flex items-center bg-[#161922] border border-[#2A3040] rounded-xl p-1">
             <button onClick={handleUndo} disabled={historyIndex <= 0} className="p-1.5 text-slate-400 hover:text-white disabled:opacity-30"><RotateCcw size={14} /></button>
             <button onClick={handleRedo} disabled={historyIndex >= history.length - 1} className="p-1.5 text-slate-400 hover:text-white disabled:opacity-30"><RefreshCw size={14} /></button>
@@ -524,8 +547,16 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
         </div>
       </div>
 
+<<<<<<< HEAD
       <div className="flex-1 flex relative overflow-hidden">
 
+=======
+
+      {/* ── Body ── */}
+      <div className="flex-1 flex relative overflow-hidden">
+
+        {/* Sidebar esquerda: biblioteca + sequência */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
         <div className="w-56 bg-[#11141C] border-r border-[#2A3040] p-3 flex flex-col gap-3 z-10 hidden md:flex select-none overflow-y-auto">
           <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
             <Layers size={13} className="text-orange-400" /> Biblioteca
@@ -553,6 +584,10 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
           )}
         </div>
 
+<<<<<<< HEAD
+=======
+        {/* Canvas */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
         <div
           ref={containerRef}
           onWheel={handleWheel}
@@ -561,14 +596,25 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
           onMouseUp={handleCanvasMouseUp}
           className={`flex-1 relative overflow-hidden bg-[#0B0D12] ${isSpacePressed ? 'cursor-grab' : isPanning ? 'cursor-grabbing' : 'cursor-default'}`}
         >
+<<<<<<< HEAD
+=======
+          {/* Grid de pontos */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
           <div className="absolute inset-0 pointer-events-none opacity-20" style={{
             backgroundImage: `radial-gradient(#384156 1px, transparent 1px)`,
             backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
             backgroundPosition: `${canvasOffset.x}px ${canvasOffset.y}px`
           }} />
 
+<<<<<<< HEAD
           <div style={{ transform: `translate3d(${canvasOffset.x}px, ${canvasOffset.y}px, 0) scale(${zoom})`, transformOrigin: '0 0', width: '100%', height: '100%', position: 'absolute' }}>
 
+=======
+          {/* Canvas transformado */}
+          <div style={{ transform: `translate3d(${canvasOffset.x}px, ${canvasOffset.y}px, 0) scale(${zoom})`, transformOrigin: '0 0', width: '100%', height: '100%', position: 'absolute' }}>
+
+            {/* SVG das conexões */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
             <svg className="absolute inset-0 w-full h-full overflow-visible z-0" style={{ pointerEvents: 'none' }}>
               {nodes.map(node => {
                 if (!node.targetId) return null;
@@ -582,7 +628,11 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                 const edgeSel = selectedEdgeTargetId === node.targetId;
                 return (
                   <g key={`${node.id}->${target.id}`}>
+<<<<<<< HEAD
                    
+=======
+                    {/* Hitbox invisível mais larga para facilitar clique */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
                     <path d={d} fill="none" stroke="transparent" strokeWidth={12}
                       style={{ cursor: 'pointer', pointerEvents: 'all' }}
                       onClick={(e) => { e.stopPropagation(); setSelectedEdgeTargetId(prev => prev === node.targetId ? null : node.targetId); setSelectedNodeIds([]); }} />
@@ -606,6 +656,10 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
               })()}
             </svg>
 
+<<<<<<< HEAD
+=======
+            {/* Marquee */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
             {marquee && (
               <div className="absolute border border-orange-500 bg-orange-500/10 pointer-events-none rounded-md" style={{
                 left: Math.min(marquee.startX, marquee.currentX), top: Math.min(marquee.startY, marquee.currentY),
@@ -613,6 +667,11 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
               }} />
             )}
 
+<<<<<<< HEAD
+=======
+
+            {/* Canvas vazio */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
             {nodes.length === 0 && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 pointer-events-none">
                 <div className="text-6xl opacity-30">⚡</div>
@@ -623,6 +682,10 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
               </div>
             )}
 
+<<<<<<< HEAD
+=======
+            {/* Nós */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
             {nodes.map(node => {
               const isSelected  = selectedNodeIds.includes(node.id);
               const isExecuting = activeSimNodeId === node.id;
@@ -651,7 +714,11 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                   `}
                   style={{ left: node.x, top: node.y, width: node.w || 220, minHeight: node.h || 96 }}
                 >
+<<<<<<< HEAD
                  
+=======
+                  {/* Porta de entrada (laranja) — clique para selecionar aresta, Delete para desconectar */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
                   {!isComment && (() => {
                     const hasIncoming = nodes.some(n => n.targetId === node.id);
                     const isEdgeSel   = selectedEdgeTargetId === node.id;
@@ -679,6 +746,10 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                     );
                   })()}
 
+<<<<<<< HEAD
+=======
+                  {/* Porta de saída (verde) — arrastar para criar conexão */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
                   {!isComment && (
                     <div
                       onMouseDown={(e) => handleOutgoingPortMouseDown(e, node.id)}
@@ -693,6 +764,10 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                     </div>
                   )}
 
+<<<<<<< HEAD
+=======
+                  {/* Conteúdo */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
@@ -717,6 +792,10 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
           </div>
         </div>
 
+<<<<<<< HEAD
+=======
+        {/* Minimap */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
         <FlowMinimap
           nodes={nodes}
           canvasOffset={canvasOffset}
@@ -725,6 +804,10 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
           onNavigate={(x, y) => setCanvasOffset({ x, y })}
         />
 
+<<<<<<< HEAD
+=======
+        {/* Console */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
         {showLogsConsole && (
           <FlowExecutionLogs
             logs={simLogs}
@@ -735,6 +818,10 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
           />
         )}
 
+<<<<<<< HEAD
+=======
+        {/* Painel de propriedades */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
         {activePropertyNode && (
           <FlowPropertyPanel
             node={activePropertyNode}

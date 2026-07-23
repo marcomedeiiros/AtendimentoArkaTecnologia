@@ -17,6 +17,10 @@ ChartJS.register(
   BarElement, ArcElement, Filler, Tooltip, Legend
 );
 
+<<<<<<< HEAD
+=======
+// ── Paleta consistente ────────────────────────────────────────────────────────
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
 const C = {
   orange: '#F97316',
   amber:  '#F59E0B',
@@ -48,6 +52,10 @@ const CHART_DEFAULTS = {
 
 function limparCnpj(v) { return String(v || '').replace(/\D/g, ''); }
 
+<<<<<<< HEAD
+=======
+// ── Gera dados simulados de série temporal ────────────────────────────────────
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
 function gerarSerie(dias, base, volatilidade = 0.3) {
   const arr = [];
   let v = base;
@@ -141,16 +149,28 @@ function exportarRelatorio(metricas, filtro) {
 }
 
 export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba }) {
+<<<<<<< HEAD
   const [filtro, setFiltro] = useState('hoje');
+=======
+  const [filtro, setFiltro] = useState('7d');
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
 
   const metricas = useMemo(
     () => calcularMetricas(conversas, parceiros, equipe, filtro),
     [conversas, parceiros, equipe, filtro]
   );
 
+<<<<<<< HEAD
   const dias = filtro === 'hoje' ? 1 : filtro === '7d' ? 7 : filtro === '30d' ? 30 : 90;
   const labels = useMemo(() => labelsDias(Math.min(dias, 30)), [dias]);
 
+=======
+  // Número de dias para os gráficos de série temporal
+  const dias = filtro === 'hoje' ? 1 : filtro === '7d' ? 7 : filtro === '30d' ? 30 : 90;
+  const labels = useMemo(() => labelsDias(Math.min(dias, 30)), [dias]);
+
+  // ── Dados dos gráficos (simulados baseados nas conversas reais) ──────────
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
   const totalBase = Math.max(conversas.length, 3);
 
   const lineData = useMemo(() => ({
@@ -231,6 +251,10 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
 
   return (
     <div className="fade-in space-y-6">
+<<<<<<< HEAD
+=======
+      {/* Header */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight font-display">Visão Geral</h1>
@@ -242,6 +266,10 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
         </button>
       </div>
 
+<<<<<<< HEAD
+=======
+      {/* Filtro de período */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
       <div className="flex items-center gap-2 flex-wrap">
         {FILTROS.map(f => (
           <button key={f.id} onClick={() => setFiltro(f.id)}
@@ -255,10 +283,19 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
         ))}
       </div>
 
+<<<<<<< HEAD
+=======
+      {/* Cards de métricas */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {cards.map(c => <MetricCard key={c.label} {...c} />)}
       </div>
 
+<<<<<<< HEAD
+=======
+      {/* ── Gráficos ── */}
+      {/* Linha: atendimentos ao longo do tempo */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
       <div className="glass-panel rounded-2xl p-5 border border-[#2A3040]">
         <h3 className="text-sm font-bold text-white font-display mb-4 flex items-center gap-2">
           <TrendingUp size={15} className="text-orange-400" /> Atendimentos ao longo do tempo
@@ -268,6 +305,10 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
         </div>
       </div>
 
+<<<<<<< HEAD
+=======
+      {/* Barra + Rosca lado a lado */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="glass-panel rounded-2xl p-5 border border-[#2A3040]">
           <h3 className="text-sm font-bold text-white font-display mb-4 flex items-center gap-2">
@@ -299,6 +340,10 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
         </div>
       </div>
 
+<<<<<<< HEAD
+=======
+      {/* Status rápidos */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           { icon: Inbox,        color: 'blue',    label: 'Abertos',   val: metricas.atendimentosAbertos  },
@@ -318,6 +363,10 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
         })}
       </div>
 
+<<<<<<< HEAD
+=======
+      {/* Fila + Equipe */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="glass-panel rounded-2xl p-5 border border-[#2A3040]">
           <div className="flex items-center justify-between mb-4">

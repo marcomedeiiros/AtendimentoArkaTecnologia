@@ -257,7 +257,11 @@ export default function EnvioEmMassa({ conversas = [] }) {
 
   return (
     <div className="fade-in space-y-6">
+<<<<<<< HEAD
    
+=======
+      {/* Header */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight font-display">Envio em Massa</h1>

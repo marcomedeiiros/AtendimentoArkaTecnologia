@@ -20,6 +20,10 @@ export default function WhatsAppPage() {
         </div>
       </div>
 
+<<<<<<< HEAD
+=======
+      {/* Status da instância */}
+>>>>>>> 5eddf9efedba389287d3c8bd67d57fa6f14c8fcf
       <div className="glass-panel p-6 rounded-2xl border border-[#2A3040] flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
