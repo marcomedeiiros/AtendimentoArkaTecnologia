@@ -558,17 +558,37 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
 
         <div className="lg:col-span-8 glass-panel rounded-2xl flex flex-col overflow-hidden border border-[#2A3040]">
           {!conversa || (conversa.statusAtendimento !== 'em_atendimento' && conversa.statusAtendimento !== 'resolvido') ? (
-            <div className="m-auto text-center p-8 max-w-sm">
-              <div className="inline-flex p-4 rounded-2xl bg-orange-500/10 border border-orange-500/20 mb-4 text-orange-400">
-                <MessageSquare size={36} />
+            <div
+              className="flex-1 flex items-center justify-center relative overflow-hidden"
+              style={{
+                background: '#0B141A',
+                backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+              }}
+            >
+              {/* Gradient overlay */}
+              <div className="absolute inset-0 bg-gradient-to-br from-[#0B141A] via-transparent to-[#0B141A] opacity-60 pointer-events-none" />
+
+              {/* Bolhas decorativas de chat ao fundo */}
+              <div className="absolute top-8 left-8 w-32 h-10 rounded-2xl rounded-tl-sm bg-[#1F2C34] opacity-20" />
+              <div className="absolute top-20 right-10 w-40 h-10 rounded-2xl rounded-tr-sm bg-[#005C4B] opacity-15" />
+              <div className="absolute top-36 left-14 w-24 h-10 rounded-2xl rounded-tl-sm bg-[#1F2C34] opacity-20" />
+              <div className="absolute bottom-24 right-8 w-36 h-10 rounded-2xl rounded-tr-sm bg-[#005C4B] opacity-15" />
+              <div className="absolute bottom-12 left-10 w-28 h-10 rounded-2xl rounded-tl-sm bg-[#1F2C34] opacity-20" />
+              <div className="absolute bottom-36 right-20 w-20 h-10 rounded-2xl rounded-tr-sm bg-[#005C4B] opacity-10" />
+
+              {/* Conteúdo central */}
+              <div className="relative z-10 text-center p-8 max-w-sm">
+                <div className="inline-flex p-5 rounded-2xl bg-[#1F2C34]/80 border border-[#2A3B45]/60 mb-5 text-[#25D366] shadow-lg shadow-black/30">
+                  <MessageSquare size={38} />
+                </div>
+                <h3 className="text-base font-bold text-[#E9Edef] font-display mb-2">
+                  Nenhum Atendimento Selecionado
+                </h3>
+                <p className="text-xs text-[#8696A0] leading-relaxed">
+                  Selecione uma conversa ou clique em{' '}
+                  <strong className="text-[#25D366]">"ATENDER CONVERSA"</strong> para iniciar o chat.
+                </p>
               </div>
-              <h3 className="text-base font-bold text-white font-display mb-1">
-                Nenhum Atendimento Selecionado
-              </h3>
-              <p className="text-xs text-slate-400">
-                Selecione uma conversa ou clique em{' '}
-                <strong className="text-emerald-400">"ATENDER CONVERSA"</strong> para iniciar o chat.
-              </p>
             </div>
           ) : (
             <PainelChat

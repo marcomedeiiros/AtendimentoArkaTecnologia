@@ -66,7 +66,7 @@ const SEED_EQUIPE = [
 
 const SEED_FLUXOS = [
   {
-    id: 'f1', nome: 'Fluxo 1: Atendimento de Orçamentos', gatilho: 'orçamento', ativo: true,
+    id: 'f1', nome: 'Atendimento de Orçamentos', gatilho: 'orçamento', ativo: true,
     passos: [
       { id: 'p1', tipo: 'gatilho',  titulo: 'Gatilho Recebido',       desc: 'Cliente digita "orçamento"' },
       { id: 'p2', tipo: 'mensagem', titulo: 'Perguntar CNPJ',         desc: 'Solicita o CNPJ para consulta de cadastro' },
@@ -77,7 +77,7 @@ const SEED_FLUXOS = [
     ],
   },
   {
-    id: 'f2', nome: 'Fluxo 2: Reenvio de 2ª Via de Boleto', gatilho: 'boleto', ativo: true,
+    id: 'f2', nome: 'Reenvio de 2ª Via de Boleto', gatilho: 'boleto', ativo: true,
     passos: [
       { id: 'p21', tipo: 'gatilho',  titulo: 'Gatilho Recebido',    desc: 'Cliente digita "boleto"' },
       { id: 'p22', tipo: 'mensagem', titulo: 'Solicitar CNPJ',      desc: 'Por favor informe seu CNPJ para consultar títulos em aberto...' },
@@ -86,7 +86,7 @@ const SEED_FLUXOS = [
     ],
   },
   {
-    id: 'f3', nome: 'Fluxo 3: Consulta de Horário de Suporte', gatilho: 'horário', ativo: true,
+    id: 'f3', nome: 'Consulta de Horário de Suporte', gatilho: 'horário', ativo: true,
     passos: [
       { id: 'p31', tipo: 'gatilho',  titulo: 'Gatilho Recebido', desc: 'Cliente digita "horário"' },
       { id: 'p32', tipo: 'mensagem', titulo: 'Informa Horário',  desc: 'Nosso atendimento funciona de segunda a sexta, das 8h às 18h.' },

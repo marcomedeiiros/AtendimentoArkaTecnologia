@@ -1,13 +1,13 @@
 /**
- * AppContext estado global compartilhado entre todas as rotas.
- *
- * Centraliza conversas, fluxos, equipe e parceiros que antes viviam
- * dentro do componente App em Home.jsx. Cada rota le/escreve aqui
- * via useAppContext(), eliminando prop-drilling e permitindo que
- * qualquer pagina acesse o mesmo estado sem re-montar dados
+ AppContext estado global compartilhado entre todas as rotas.
+ Centraliza conversas, fluxos, equipe e parceiros que antes viviam
+ dentro do componente App em Home.jsx. Cada rota le/escreve aqui
+ via useAppContext(), eliminando prop-drilling e permitindo que
+ qualquer pagina acesse o mesmo estado sem re-montar dados
  */
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
+const DATA_VERSION = '2'; // incrementar aqui força reset do localStorage com os novos seeds
 const temStorage = typeof window !== 'undefined' && !!window.storage;
 
 async function carregar(chave, padrao) {
@@ -37,7 +37,7 @@ const SEED_EQUIPE = [
 
 const SEED_FLUXOS = [
   {
-    id: 'f1', nome: 'Fluxo 1: Atendimento de Orçamentos', gatilho: 'orçamento', ativo: true,
+    id: 'f1', nome: 'Atendimento de Orçamentos', gatilho: 'orçamento', ativo: true,
     passos: [
       { id: 'p1', tipo: 'gatilho',  titulo: 'Gatilho Recebido',        desc: 'Cliente digita "orçamento"' },
       { id: 'p2', tipo: 'mensagem', titulo: 'Perguntar CNPJ',          desc: 'Solicita o CNPJ para consulta de cadastro' },
@@ -48,7 +48,7 @@ const SEED_FLUXOS = [
     ],
   },
   {
-    id: 'f2', nome: 'Fluxo 2: Reenvio de 2ª Via de Boleto', gatilho: 'boleto', ativo: true,
+    id: 'f2', nome: 'Reenvio de 2ª Via de Boleto', gatilho: 'boleto', ativo: true,
     passos: [
       { id: 'p21', tipo: 'gatilho',  titulo: 'Gatilho Recebido',     desc: 'Cliente digita "boleto"' },
       { id: 'p22', tipo: 'mensagem', titulo: 'Solicitar CNPJ',       desc: 'Por favor informe seu CNPJ para consultar títulos em aberto...' },
@@ -57,7 +57,7 @@ const SEED_FLUXOS = [
     ],
   },
   {
-    id: 'f3', nome: 'Fluxo 3: Consulta de Horário de Suporte', gatilho: 'horário', ativo: true,
+    id: 'f3', nome: 'Consulta de Horário de Suporte', gatilho: 'horário', ativo: true,
     passos: [
       { id: 'p31', tipo: 'gatilho',  titulo: 'Gatilho Recebido', desc: 'Cliente digita "horário"' },
       { id: 'p32', tipo: 'mensagem', titulo: 'Informa Horário',  desc: 'Nosso atendimento funciona de segunda a sexta, das 8h às 18h.' },
@@ -105,6 +105,16 @@ export function AppProvider({ children }) {
 
   useEffect(() => {
     (async () => {
+      // Verifica versão dos dados — se diferente, reinicializa com os seeds atuais
+      const versaoSalva = localStorage.getItem('arka:data_version');
+      if (versaoSalva !== DATA_VERSION) {
+        localStorage.removeItem('arka:equipe');
+        localStorage.removeItem('arka:fluxos');
+        localStorage.removeItem('arka:parceiros');
+        localStorage.removeItem('arka:conversas');
+        localStorage.setItem('arka:data_version', DATA_VERSION);
+      }
+
       const [eq, fl, pa, co] = await Promise.all([
         carregar('arka:equipe',    null),
         carregar('arka:fluxos',    null),
