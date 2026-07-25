@@ -6,9 +6,9 @@ class ContatoRepository {
     if (filtros.tag) where.tag = filtros.tag;
     if (filtros.busca) {
       where.OR = [
-        { nome: { contains: filtros.busca, mode: "insensitive" } },
+        { nome: { contains: filtros.busca } },
         { telefone: { contains: filtros.busca } },
-        { empresa: { contains: filtros.busca, mode: "insensitive" } },
+        { empresa: { contains: filtros.busca } },
       ];
     }
 

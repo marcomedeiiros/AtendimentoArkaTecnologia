@@ -19,6 +19,7 @@ class SessaoRepository {
         instanciaId,
         conversaId,
         telefone,
+        contexto: data.contexto ?? {},
         ...data,
       },
     });

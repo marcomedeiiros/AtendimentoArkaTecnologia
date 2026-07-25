@@ -35,6 +35,11 @@ class FluxoService {
     await fluxoRepository.delete(id);
     return { removido: true };
   }
+
+  async removerTodos() {
+    await fluxoRepository.deleteAll();
+    return { removidos: true };
+  }
 }
 
 module.exports = new FluxoService();

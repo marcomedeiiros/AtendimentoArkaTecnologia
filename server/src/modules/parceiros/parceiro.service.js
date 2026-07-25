@@ -4,8 +4,8 @@ const { limparCnpj, cnpjValido } = require("../../shared/helpers/cnpj.helper");
 const AppError = require("../../shared/errors/AppError");
 
 class ParceiroService {
-  async listar() {
-    const itens = await parceiroRepository.findAll();
+  async listar(busca) {
+    const itens = await parceiroRepository.findAll(busca);
     return itens.map(mapParceiro);
   }
 

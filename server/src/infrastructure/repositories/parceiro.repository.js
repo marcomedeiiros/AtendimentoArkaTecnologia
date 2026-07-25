@@ -1,8 +1,14 @@
 const prisma = require("../database/prisma.client");
 
 class ParceiroRepository {
-  findAll() {
-    return prisma.parceiro.findMany({ orderBy: { razaoSocial: "asc" } });
+  findAll(busca) {
+    const where = busca ? {
+      OR: [
+        { razaoSocial: { contains: busca } },
+        { cnpj: { contains: busca } },
+      ],
+    } : {};
+    return prisma.parceiro.findMany({ where, orderBy: { razaoSocial: "asc" } });
   }
 
   findByCnpj(cnpj) {

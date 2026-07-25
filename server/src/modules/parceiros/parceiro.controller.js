@@ -3,7 +3,8 @@ const { success } = require("../../shared/helpers/response.helper");
 
 class ParceiroController {
   listar(req, res) {
-    return parceiroService.listar().then((data) => success(res, data));
+    const busca = req.query.q || req.query.busca || req.query.nome;
+    return parceiroService.listar(busca).then((data) => success(res, data));
   }
 
   criar(req, res) {

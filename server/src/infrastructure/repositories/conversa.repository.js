@@ -7,7 +7,7 @@ class ConversaRepository {
     if (filtros.instanciaId) where.instanciaId = filtros.instanciaId;
     if (filtros.busca) {
       where.OR = [
-        { cliente: { contains: filtros.busca, mode: "insensitive" } },
+        { cliente: { contains: filtros.busca } },
         { telefone: { contains: filtros.busca } },
       ];
     }
