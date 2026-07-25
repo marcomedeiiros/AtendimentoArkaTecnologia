@@ -5,13 +5,14 @@
  * e um <Outlet onde cada página é inserida pelo React Router
  * Substitui o sistema de aba/useState que estava em Home.jsx
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   LayoutGrid, Users, Zap, MessageSquare, ShieldCheck,
-  GitFork, MessageCircle, CalendarDays, Send, Loader2
+  GitFork, MessageCircle, CalendarDays, Send, Loader2, Menu, X
 } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
+import NotificacoesToast from '../NotificacoesToast';
 
 const NAV_PRINCIPAL = [
   { to: '/atendimento', label: 'Central de Atendimento', icon: MessageSquare },
@@ -45,10 +46,11 @@ function ArkaLogo({ size = 32 }) {
   );
 }
 
-function NavItem({ to, label, icon: Icon, badge }) {
+function NavItem({ to, label, icon: Icon, badge, onNavigate }) {
   return (
     <NavLink
       to={to}
+      onClick={onNavigate}
       className={({ isActive }) =>
         `flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 border ${
           isActive
@@ -74,7 +76,7 @@ function NavItem({ to, label, icon: Icon, badge }) {
   );
 }
 
-function Sidebar() {
+function Sidebar({ aberto, onClose }) {
   const { conversas } = useAppContext();
 
   const naFila = conversas.filter(c => c.statusAtendimento === 'aguardando').length;
@@ -84,18 +86,24 @@ function Sidebar() {
   const badgeAtendimento = naFila > 0 ? naFila : naoLidos;
 
   return (
-    <aside className="w-64 shrink-0 bg-[#11141C] border-r border-[#2A3040] flex flex-col p-4 h-screen select-none overflow-y-auto">
-    
+    <aside
+      className={`w-64 shrink-0 bg-[#11141C] border-r border-[#2A3040] flex flex-col p-4 h-screen select-none overflow-y-auto
+        fixed inset-y-0 left-0 z-50 transition-transform duration-300 lg:static lg:translate-x-0
+        ${aberto ? 'translate-x-0 shadow-2xl shadow-black/50' : '-translate-x-full'}`}
+    >
       <div className="flex items-center gap-3 px-2 py-3 mb-4 shrink-0">
         <div className="p-2 rounded-xl bg-gradient-to-br from-orange-500/20 to-amber-500/10 border border-orange-500/30 shadow-lg shadow-orange-500/10">
           <ArkaLogo size={32} />
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <h1 className="font-bold text-base text-white leading-tight tracking-tight font-display">
             Arka Tecnologia
           </h1>
           <p className="text-[11px] text-slate-400 font-medium">Painel de Atendimento</p>
         </div>
+        <button onClick={onClose} className="lg:hidden p-1.5 -mr-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800" title="Fechar menu">
+          <X size={18} />
+        </button>
       </div>
 
       <nav className="flex flex-col gap-1 flex-1">
@@ -107,6 +115,7 @@ function Sidebar() {
             key={item.to}
             {...item}
             badge={item.to === '/atendimento' ? badgeAtendimento : 0}
+            onNavigate={onClose}
           />
         ))}
 
@@ -114,14 +123,14 @@ function Sidebar() {
           Monitoramento
         </p>
         {NAV_MONITORAMENTO.map(item => (
-          <NavItem key={item.to} {...item} />
+          <NavItem key={item.to} {...item} onNavigate={onClose} />
         ))}
 
         <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider px-3 mt-3 mb-1">
           Ferramentas
         </p>
         {NAV_FERRAMENTAS.map(item => (
-          <NavItem key={item.to} {...item} />
+          <NavItem key={item.to} {...item} onNavigate={onClose} />
         ))}
       </nav>
     </aside>
@@ -131,6 +140,7 @@ function Sidebar() {
 export default function AppLayout() {
   const { carregando } = useAppContext();
   const location = useLocation();
+  const [menuAberto, setMenuAberto] = useState(false);
 
   const isFluxos = location.pathname === '/fluxos';
 
@@ -145,14 +155,40 @@ export default function AppLayout() {
 
   return (
     <div className="min-h-screen bg-[#0B0D12] text-[#F3F4F8] flex font-sans antialiased selection:bg-orange-500/30 selection:text-orange-200">
-      <Sidebar />
-      <main
-        className={`flex-1 min-w-0 h-screen ${
-          isFluxos ? 'p-0 overflow-hidden' : 'p-6 lg:p-8 overflow-y-auto'
-        }`}
-      >
-        <Outlet />
-      </main>
+      <NotificacoesToast />
+      <Sidebar aberto={menuAberto} onClose={() => setMenuAberto(false)} />
+
+      {/* Backdrop do menu no mobile */}
+      {menuAberto && (
+        <div
+          className="fixed inset-0 bg-black/60 z-40 lg:hidden"
+          onClick={() => setMenuAberto(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      <div className="flex-1 min-w-0 flex flex-col h-screen">
+        {/* Barra superior — só no mobile (abre o menu) */}
+        <header className="lg:hidden flex items-center gap-3 h-14 px-4 bg-[#11141C] border-b border-[#2A3040] shrink-0 sticky top-0 z-30">
+          <button
+            onClick={() => setMenuAberto(true)}
+            className="p-2 -ml-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+            title="Abrir menu"
+          >
+            <Menu size={20} />
+          </button>
+          <ArkaLogo size={22} />
+          <span className="font-bold text-sm text-white tracking-tight font-display">Arka Tecnologia</span>
+        </header>
+
+        <main
+          className={`flex-1 min-w-0 min-h-0 ${
+            isFluxos ? 'p-0 overflow-hidden' : 'p-4 sm:p-6 lg:p-8 overflow-y-auto'
+          }`}
+        >
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }

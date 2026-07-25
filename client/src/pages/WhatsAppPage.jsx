@@ -1,15 +1,34 @@
 import React, { useState } from 'react';
-import { MessageCircle, Power, QrCode } from 'lucide-react';
+import { MessageCircle, Power, QrCode, Loader2 } from 'lucide-react';
 import { EmojiIcon } from '../components/pages/EmojiIcon';
 import { useAppContext } from '../context/AppContext';
+import { WhatsAppAPI } from '../services/api';
 
 export default function WhatsAppPage() {
   const { whatsAppConectado, setWhatsAppConectado } = useAppContext();
   const [instancia,  setInstancia]  = useState('arka-wapi-oficial');
   const [webhookUrl, setWebhookUrl] = useState('https://api.arkatecnologia.com.br/webhook/v1/whatsapp');
+  const [ocupado, setOcupado] = useState(false);
+  const [aviso, setAviso] = useState('');
 
   const conectado = whatsAppConectado;
-  const setConectado = setWhatsAppConectado;
+
+  async function alternarConexao() {
+    setOcupado(true); setAviso('');
+    try {
+      if (conectado) {
+        await WhatsAppAPI.desconectar();
+        setWhatsAppConectado(false);
+      } else {
+        await WhatsAppAPI.conectar();
+        setWhatsAppConectado(true);
+      }
+    } catch {
+      setAviso('Não foi possível falar com a Evolution API. Verifique se ela está no ar e se EVOLUTION_API_URL/KEY estão configurados no servidor.');
+    } finally {
+      setOcupado(false);
+    }
+  }
 
   return (
     <div className="fade-in space-y-6">
@@ -42,16 +61,24 @@ export default function WhatsAppPage() {
           </div>
         </div>
         <button
-          onClick={() => setConectado(!conectado)}
-          className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all ${
+          onClick={alternarConexao}
+          disabled={ocupado}
+          className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all disabled:opacity-60 ${
             conectado
               ? 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30'
               : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20'
           }`}
         >
-          <Power size={15} /> {conectado ? 'Desconectar WhatsApp' : 'Reconectar WhatsApp'}
+          {ocupado ? <Loader2 size={15} className="animate-spin" /> : <Power size={15} />}
+          {conectado ? 'Desconectar WhatsApp' : 'Conectar WhatsApp'}
         </button>
       </div>
+
+      {aviso && (
+        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300">
+          {aviso}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 

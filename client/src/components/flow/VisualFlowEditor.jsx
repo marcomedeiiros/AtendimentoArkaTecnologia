@@ -3,8 +3,9 @@ import {
   Zap, GitFork, Clock, CheckCircle2, Plus, Trash2,
   Play, RotateCcw, ZoomIn, ZoomOut, Maximize2, LayoutGrid,
   Sparkles, Layers, RefreshCw, X, Power, ChevronUp, ChevronDown,
-  MessageSquare, Settings, AlertCircle
+  MessageSquare, Settings, AlertCircle, Pencil, Flame
 } from 'lucide-react';
+import { FluxosAPI } from '../../services/api';
 import { FlowMinimap } from './FlowMinimap';
 import { FlowPropertyPanel } from './FlowPropertyPanel';
 import { FlowExecutionLogs } from './FlowExecutionLogs';
@@ -22,8 +23,10 @@ const BLOCK_META = {
 function formatNodesPositions(passos = []) {
   return passos.map((p, idx) => ({
     ...p,
-    x: p.x !== undefined ? p.x : 80 + idx * 270,
-    y: p.y !== undefined ? p.y : 180 + (idx % 2 === 0 ? 0 : 40),
+    // Usa ?? para tratar null (posicao nao salva no banco) alem de undefined —
+    // senao os blocos do seed (posX/posY null) empilhavam todos em left:0.
+    x: p.x ?? (80 + idx * 270),
+    y: p.y ?? (180 + (idx % 2 === 0 ? 0 : 40)),
     w: p.w || (p.tipo === 'comentario' ? 240 : 220),
     h: p.h || (p.tipo === 'comentario' ? 120 : 96),
     targetId: p.targetId || (idx < passos.length - 1 ? passos[idx + 1].id : null),
@@ -139,6 +142,11 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
   const [showLogsConsole, setShowLogsConsole] = useState(false);
   const [showSequencePanel, setShowSequencePanel] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [showLibrary, setShowLibrary] = useState(false);
+  const [dragOverCanvas, setDragOverCanvas] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [nomeEditado, setNomeEditado] = useState('');
 
   const containerRef = useRef(null);
 
@@ -149,6 +157,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
       setSelectedNodeIds([]);
       setActivePropertyNodeId(null);
       setShowDeleteConfirm(false);
+      setShowDeleteAllConfirm(false);
       pushHistory(formatted);
     }
   }, [selectedFlowId]);
@@ -162,9 +171,14 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
     });
   };
 
-  const syncFlowToParent = useCallback((updatedNodes) => {
+  const syncFlowToParent = useCallback(async (updatedNodes) => {
     setNodes(updatedNodes);
     setFluxos(fluxos.map(f => f.id === selectedFlowId ? { ...f, passos: updatedNodes } : f));
+    try {
+      if (selectedFlowId) {
+        await FluxosAPI.atualizar(selectedFlowId, { passos: updatedNodes });
+      }
+    } catch {}
   }, [fluxos, selectedFlowId, setFluxos]);
 
   const handleUndo = () => {
@@ -185,12 +199,36 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
     }
   };
 
-  const handleDeleteFlow = () => {
-    if (fluxos.length <= 1) return; // não deleta o último
-    const remaining = fluxos.filter(f => f.id !== selectedFlowId);
+  const handleRenameFlow = async () => {
+    if (!nomeEditado.trim() || !selectedFlowId) return;
+    const novoNome = nomeEditado.trim();
+    setFluxos(fluxos.map(f => f.id === selectedFlowId ? { ...f, nome: novoNome } : f));
+    setIsRenaming(false);
+    try {
+      await FluxosAPI.atualizar(selectedFlowId, { nome: novoNome });
+    } catch {}
+  };
+
+  const handleDeleteFlow = async () => {
+    const targetId = selectedFlowId;
+    const remaining = fluxos.filter(f => f.id !== targetId);
     setFluxos(remaining);
-    setSelectedFlowId(remaining[0].id);
+    if (remaining.length > 0) setSelectedFlowId(remaining[0].id);
+    else setSelectedFlowId(null);
     setShowDeleteConfirm(false);
+    try {
+      if (targetId) await FluxosAPI.remover(targetId);
+    } catch {}
+  };
+
+  const handleDeleteAllFlows = async () => {
+    setFluxos([]);
+    setSelectedFlowId(null);
+    setNodes([]);
+    setShowDeleteAllConfirm(false);
+    try {
+      await FluxosAPI.removerTodos();
+    } catch {}
   };
 
   useEffect(() => {
@@ -272,16 +310,21 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
   };
 
   const handleMouseDown = (e) => {
-    if (e.button === 1 || isSpacePressed) {
+    const onEmptyCanvas = e.target === containerRef.current || e.target.tagName === 'svg';
+    // Arrastar o canvas vazio com o botao esquerdo (ou meio/espaco) faz o "pan"
+    // com a mãozinha. Shift+arrasto no vazio faz selecao retangular (marquee).
+    if (e.button === 1 || isSpacePressed || (e.button === 0 && onEmptyCanvas && !e.shiftKey)) {
       setIsPanning(true);
       setPanStart({ x: e.clientX - canvasOffset.x, y: e.clientY - canvasOffset.y });
-    } else if (e.target === containerRef.current || e.target.tagName === 'svg') {
+      setSelectedNodeIds([]);
+      setSelectedEdgeTargetId(null);
+    } else if (e.button === 0 && onEmptyCanvas && e.shiftKey) {
       const rect = containerRef.current.getBoundingClientRect();
       const sx = (e.clientX - rect.left - canvasOffset.x) / zoom;
       const sy = (e.clientY - rect.top - canvasOffset.y) / zoom;
       setMarquee({ startX: sx, startY: sy, currentX: sx, currentY: sy });
       setSelectedNodeIds([]);
-      setSelectedEdgeTargetId(null); 
+      setSelectedEdgeTargetId(null);
     }
   };
 
@@ -350,15 +393,15 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
     pushHistory(updated);
   };
 
-  const addNode = (tipo) => {
+  const addNode = (tipo, pos = null) => {
     const newId = 'p_' + Date.now();
     const titleMap = { gatilho: 'Novo Gatilho', mensagem: 'Nova Mensagem', condicao: 'Validar CNPJ', delay: 'Aguardar...', acao: 'Ação Automática', comentario: 'Anotação' };
     const newNode = {
       id: newId, tipo,
       titulo: titleMap[tipo] || 'Nova Etapa',
       desc: '',
-      x: -canvasOffset.x / zoom + 300,
-      y: -canvasOffset.y / zoom + 200,
+      x: pos ? pos.x : -canvasOffset.x / zoom + 300,
+      y: pos ? pos.y : -canvasOffset.y / zoom + 200,
       w: tipo === 'comentario' ? 240 : 220,
       h: tipo === 'comentario' ? 120 : 96,
       targetId: null,
@@ -373,6 +416,18 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
     pushHistory(updated);
     setSelectedNodeIds([newId]);
     setActivePropertyNodeId(newId);
+  };
+
+  // Solta um bloco arrastado da biblioteca na posição do mouse no canvas.
+  const handleCanvasDrop = (e) => {
+    e.preventDefault();
+    setDragOverCanvas(false);
+    const tipo = e.dataTransfer.getData('tipo');
+    if (!tipo || !BLOCK_META[tipo]) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = Math.round(((e.clientX - rect.left - canvasOffset.x) / zoom) / 10) * 10;
+    const y = Math.round(((e.clientY - rect.top - canvasOffset.y) / zoom) / 10) * 10;
+    addNode(tipo, { x, y });
   };
 
   const deleteSelectedNodes = () => {
@@ -450,35 +505,85 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
   const activePropertyNode = nodes.find(n => n.id === activePropertyNodeId);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-60px)] w-full relative bg-[#0B0D12] overflow-hidden select-none font-sans">
+    <div className="flex flex-col h-full min-h-[500px] w-full relative bg-[#0B0D12] overflow-hidden select-none font-sans">
 
       <div className="p-3 bg-[#11141C]/90 backdrop-blur-md border-b border-[#2A3040] flex flex-wrap items-center justify-between gap-3 z-20">
         <div className="flex items-center gap-2 flex-wrap">
-          
           <span className="p-2 rounded-xl bg-orange-500/10 text-orange-400 border border-orange-500/30">
             <Zap size={18} />
           </span>
-          <select
-            value={selectedFlowId || ''}
-            onChange={e => setSelectedFlowId(e.target.value)}
-            className="bg-[#161922] border border-[#2A3040] rounded-xl px-3 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-orange-500 max-w-[220px] truncate"
-          >
-            {fluxos.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
-          </select>
+
+          {!isRenaming ? (
+            <div className="flex items-center gap-1.5">
+              {fluxos.length > 0 ? (
+                <>
+                  <select
+                    value={selectedFlowId || ''}
+                    onChange={e => setSelectedFlowId(e.target.value)}
+                    className="bg-[#161922] border border-[#2A3040] rounded-xl px-3 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-orange-500 max-w-[220px] truncate"
+                  >
+                    {fluxos.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
+                  </select>
+                  {flow && (
+                    <button
+                      onClick={() => { setNomeEditado(flow.nome); setIsRenaming(true); }}
+                      className="p-1.5 rounded-xl bg-[#161922] hover:bg-[#1E2330] border border-[#2A3040] text-slate-400 hover:text-white transition-colors"
+                      title="Renomear este fluxo"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                  )}
+                </>
+              ) : (
+                <span className="text-xs text-slate-500 font-semibold px-1">Nenhum fluxo clique em “Novo Fluxo”</span>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-1">
+              <input
+                value={nomeEditado}
+                onChange={e => setNomeEditado(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleRenameFlow()}
+                placeholder="Novo nome do fluxo"
+                autoFocus
+                className="bg-[#161922] border border-orange-500/60 rounded-xl px-3 py-1.5 text-xs font-bold text-white focus:outline-none w-48"
+              />
+              <button
+                onClick={handleRenameFlow}
+                className="px-2.5 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 text-xs font-bold transition-all"
+              >
+                Salvar
+              </button>
+              <button
+                onClick={() => setIsRenaming(false)}
+                className="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white transition-colors"
+              >
+                <X size={13} />
+              </button>
+            </div>
+          )}
 
           <button
-            onClick={() => {
-              const novoId = 'f' + Date.now();
-              const novo = { id: novoId, nome: `Novo Fluxo ${fluxos.length + 1}`, gatilho: 'novo', ativo: true, passos: [] };
-              setFluxos([...fluxos, novo]);
-              setSelectedFlowId(novoId);
+            onClick={async () => {
+              const tempId = 'f' + Date.now();
+              const nome = `Novo Fluxo ${fluxos.length + 1}`;
+              const gatilho = `gatilho_${Date.now().toString().slice(-4)}`;
+              const novoLocal = { id: tempId, nome, gatilho, ativo: true, passos: [] };
+              setFluxos([...fluxos, novoLocal]);
+              setSelectedFlowId(tempId);
+              try {
+                // Usa o id real do back-end para que os blocos adicionados persistam.
+                const criado = await FluxosAPI.criar({ nome, gatilho, ativo: true, passos: [] });
+                setFluxos(prev => prev.map(f => (f.id === tempId ? criado : f)));
+                setSelectedFlowId(criado.id);
+              } catch {}
             }}
             className="px-3 py-1.5 rounded-xl bg-orange-500/15 hover:bg-orange-500/25 text-orange-400 text-xs font-semibold border border-orange-500/30 flex items-center gap-1.5 transition-all"
           >
             <Plus size={14} /> Novo Fluxo
           </button>
 
-          {fluxos.length > 1 && !showDeleteConfirm && (
+          {fluxos.length > 0 && !showDeleteConfirm && !showDeleteAllConfirm && (
             <button
               onClick={() => setShowDeleteConfirm(true)}
               className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-semibold border border-rose-500/30 flex items-center gap-1.5 transition-all"
@@ -489,9 +594,27 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
           {showDeleteConfirm && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-xs">
               <AlertCircle size={13} className="text-rose-400 shrink-0" />
-              <span className="text-rose-300 font-semibold">Confirmar?</span>
+              <span className="text-rose-300 font-semibold">Excluir este fluxo?</span>
               <button onClick={handleDeleteFlow} className="px-2 py-0.5 rounded-lg bg-rose-500 hover:bg-rose-400 text-white font-bold transition-colors">Sim</button>
               <button onClick={() => setShowDeleteConfirm(false)} className="px-2 py-0.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold transition-colors">Não</button>
+            </div>
+          )}
+
+          {fluxos.length > 0 && !showDeleteAllConfirm && !showDeleteConfirm && (
+            <button
+              onClick={() => setShowDeleteAllConfirm(true)}
+              className="px-3 py-1.5 rounded-xl bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 text-xs font-semibold border border-rose-800/50 flex items-center gap-1.5 transition-all"
+              title="Apagar todos os fluxos cadastrados"
+            >
+              <Flame size={14} className="text-rose-400" /> Apagar Todos
+            </button>
+          )}
+          {showDeleteAllConfirm && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-950 border border-rose-600 text-xs">
+              <AlertCircle size={13} className="text-rose-400 shrink-0" />
+              <span className="text-rose-200 font-bold">Apagar TODOS os fluxos?</span>
+              <button onClick={handleDeleteAllFlows} className="px-2.5 py-0.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-extrabold transition-colors">Apagar Todos</button>
+              <button onClick={() => setShowDeleteAllConfirm(false)} className="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition-colors">Cancelar</button>
             </div>
           )}
         </div>
@@ -524,31 +647,63 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
 
       <div className="flex-1 flex relative overflow-hidden">
 
-        <div className="w-56 bg-[#11141C] border-r border-[#2A3040] p-3 flex flex-col gap-3 z-10 hidden md:flex select-none overflow-y-auto">
-          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-            <Layers size={13} className="text-orange-400" /> Biblioteca
-          </div>
-          {Object.entries(BLOCK_META).map(([tipo, meta]) => (
-            <button key={tipo} onClick={() => addNode(tipo)}
-              className="p-2.5 rounded-xl bg-[#161922] hover:bg-[#1E2330] border border-[#2A3040] hover:border-orange-500/40 text-left transition-all group flex items-center gap-2.5">
-              <span className="text-lg leading-none">{meta.emoji}</span>
-              <div>
-                <div className="text-xs font-semibold text-white group-hover:text-orange-400 transition-colors">{meta.label}</div>
-                <div className="text-[10px] text-slate-400">{meta.desc}</div>
-              </div>
-            </button>
-          ))}
-
-          {showSequencePanel && (
-            <div className="mt-2 border-t border-[#2A3040] pt-3">
-              <SequencePanel
-                nodes={nodes}
-                onReorder={handleReorder}
-                onSelectNode={(id) => { setSelectedNodeIds([id]); setActivePropertyNodeId(id); }}
-                selectedNodeIds={selectedNodeIds}
-              />
+        {/* Sidebar Biblioteca colapsável */}
+        <div className="relative flex-shrink-0 flex z-10">
+          {/* Painel da biblioteca com animação de largura */}
+          <div
+            className="bg-[#11141C] border-r border-[#2A3040] flex flex-col gap-3 select-none overflow-hidden"
+            style={{
+              width: showLibrary ? '224px' : '0px',
+              padding: showLibrary ? '12px' : '0px',
+              opacity: showLibrary ? 1 : 0,
+              transition: 'width 0.28s cubic-bezier(0.4,0,0.2,1), padding 0.28s cubic-bezier(0.4,0,0.2,1), opacity 0.2s ease',
+              overflow: 'hidden',
+            }}
+          >
+            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1 whitespace-nowrap">
+              <Layers size={13} className="text-orange-400" /> Biblioteca de Blocos
             </div>
-          )}
+            <div className="text-[10px] text-slate-500 -mt-1 whitespace-nowrap">Clique ou arraste para direita os blocos</div>
+            {Object.entries(BLOCK_META).map(([tipo, meta]) => (
+              <button key={tipo}
+                onClick={() => addNode(tipo)}
+                draggable
+                onDragStart={(e) => { e.dataTransfer.setData('tipo', tipo); e.dataTransfer.effectAllowed = 'copy'; }}
+                className="p-2.5 rounded-xl bg-[#161922] hover:bg-[#1E2330] border border-[#2A3040] hover:border-orange-500/40 text-left transition-all group flex items-center gap-2.5 whitespace-nowrap cursor-grab active:cursor-grabbing">
+                <span className="text-lg leading-none">{meta.emoji}</span>
+                <div>
+                  <div className="text-xs font-semibold text-white group-hover:text-orange-400 transition-colors">{meta.label}</div>
+                  <div className="text-[10px] text-slate-400">{meta.desc}</div>
+                </div>
+              </button>
+            ))}
+
+            {showSequencePanel && (
+              <div className="mt-2 border-t border-[#2A3040] pt-3">
+                <SequencePanel
+                  nodes={nodes}
+                  onReorder={handleReorder}
+                  onSelectNode={(id) => { setSelectedNodeIds([id]); setActivePropertyNodeId(id); }}
+                  selectedNodeIds={selectedNodeIds}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Botão toggle << / >> */}
+          <button
+            onClick={() => setShowLibrary(v => !v)}
+            title={showLibrary ? 'Recolher biblioteca' : 'Abrir biblioteca de blocos'}
+            className="absolute top-1/2 -translate-y-1/2 -right-4 z-20 w-8 h-14 flex items-center justify-center bg-[#1E2330] border border-[#2A3040] rounded-r-xl text-slate-400 hover:text-orange-400 hover:border-orange-500/40 transition-all shadow-lg hover:shadow-orange-500/10 cursor-pointer"
+            style={{ right: '-32px' }}
+          >
+            <span
+              className="font-bold text-base tracking-tighter leading-none transition-transform duration-300"
+              style={{ transform: showLibrary ? 'scaleX(1)' : 'scaleX(1)' }}
+            >
+              {showLibrary ? '\u00AB' : '\u00BB'}
+            </span>
+          </button>
         </div>
 
         <div
@@ -557,7 +712,10 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleCanvasMouseUp}
-          className={`flex-1 relative overflow-hidden bg-[#0B0D12] ${isSpacePressed ? 'cursor-grab' : isPanning ? 'cursor-grabbing' : 'cursor-default'}`}
+          onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; if (!dragOverCanvas) setDragOverCanvas(true); }}
+          onDragLeave={(e) => { if (e.target === containerRef.current) setDragOverCanvas(false); }}
+          onDrop={handleCanvasDrop}
+          className={`flex-1 relative overflow-hidden bg-[#0B0D12] transition-shadow ${isPanning ? 'cursor-grabbing' : 'cursor-grab'} ${dragOverCanvas ? 'ring-2 ring-inset ring-orange-500/50' : ''}`}
         >
           <div className="absolute inset-0 pointer-events-none opacity-20" style={{
             backgroundImage: `radial-gradient(#384156 1px, transparent 1px)`,

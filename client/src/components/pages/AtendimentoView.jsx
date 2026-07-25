@@ -2,10 +2,28 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   MessageSquare, Send, Eye, Trash2, UserCheck, Check, X,
   CheckCircle2, Clock, Inbox, Play, Search, Zap,
-  CheckCheck, WifiOff
+  CheckCheck, WifiOff, Wifi, Bell, Pin, ChevronLeft
 } from 'lucide-react';
 import { EmojiIcon, FormattedMessage } from './EmojiIcon';
 import { useMensagensRapidas } from './MensagensRapidas';
+import Avatar from '../Avatar';
+import { useAppContext } from '../../context/AppContext';
+import { ConversasAPI } from '../../services/api';
+import { playPing } from '../../utils/sound';
+
+// Fundo estilo WhatsApp (papel de parede com padrão sutil) para a área do chat.
+const WHATSAPP_BG = {
+  backgroundColor: '#0B141A',
+  backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+};
+
+const PINOS_KEY = 'arka_conversas_fixadas';
+function lerFixados() {
+  try { return JSON.parse(localStorage.getItem(PINOS_KEY)) || []; } catch { return []; }
+}
+function salvarFixados(ids) {
+  try { localStorage.setItem(PINOS_KEY, JSON.stringify(ids)); } catch {}
+}
 
 function limparCnpj(v) { return String(v || '').replace(/\D/g, ''); }
 function mascararCnpj(v) {
@@ -92,11 +110,12 @@ function PainelMensagensRapidas({ onSelecionar, onFechar }) {
 }
 
 const CardConversa = React.memo(function CardConversa({
-  c, selecionada, parceiros, onSelecionar, onAtender, onApagar, onEspiar
+  c, selecionada, parceiros, onSelecionar, onAtender, onResolver, onEspiar, onFixar, fixado
 }) {
   const ehAtivo   = selecionada === c.id && c.statusAtendimento === 'em_atendimento';
   const ultimaMsg = c.mensagens?.[c.mensagens.length - 1];
   const naoLido   = !c.lido && c.statusAtendimento !== 'finalizado' && c.statusAtendimento !== 'resolvido';
+  const encerrado = c.statusAtendimento === 'finalizado' || c.statusAtendimento === 'resolvido';
 
   return (
     <div
@@ -104,25 +123,36 @@ const CardConversa = React.memo(function CardConversa({
       className={`p-3.5 rounded-xl border transition-all duration-200 cursor-pointer flex flex-col gap-2 ${
         ehAtivo
           ? 'bg-gradient-to-r from-orange-500/10 to-transparent border-orange-500/50 shadow-sm'
-          : 'bg-[#1E2330]/40 border-[#2A3040]/60 hover:border-slate-600/60'
+          : fixado
+            ? 'bg-[#1E2330]/60 border-orange-500/25 hover:border-orange-500/40'
+            : 'bg-[#1E2330]/40 border-[#2A3040]/60 hover:border-slate-600/60'
       }`}
     >
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          {naoLido && <span className="w-2 h-2 rounded-full bg-orange-400 shrink-0" />}
-          <span className={`font-bold text-xs truncate ${naoLido ? 'text-white' : 'text-slate-300'}`}>
-            {c.cliente}
-          </span>
+          <Avatar nome={c.cliente} size="sm" />
+          <div className="flex items-center gap-1.5 min-w-0">
+            {naoLido && <span className="w-2 h-2 rounded-full bg-orange-400 shrink-0" />}
+            <span className={`font-bold text-xs truncate ${naoLido ? 'text-white' : 'text-slate-300'}`}>
+              {c.cliente}
+            </span>
+          </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
+          <button onClick={e => { e.stopPropagation(); onFixar(c.id); }} title={fixado ? 'Desafixar conversa' : 'Fixar no topo'}
+            className={`p-1.5 rounded-lg transition-colors ${fixado ? 'bg-orange-500/20 text-orange-400' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-400'}`}>
+            <Pin size={12} className={fixado ? 'fill-current' : ''} />
+          </button>
           <button onClick={e => { e.stopPropagation(); onEspiar(c); }} title="Espiar conversa"
             className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-blue-400 transition-colors">
             <Eye size={12} />
           </button>
-          <button onClick={e => { e.stopPropagation(); onApagar(c.id, e); }} title="Apagar"
-            className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-rose-400 transition-colors">
-            <Trash2 size={12} />
-          </button>
+          {!encerrado && (
+            <button onClick={e => { e.stopPropagation(); onResolver(c.id); }} title="Resolver problema"
+              className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-emerald-500/20 text-emerald-400 transition-colors">
+              <CheckCircle2 size={12} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -159,7 +189,7 @@ function PainelChat({
   conversa, parceiros, conversas, setConversas, fluxos,
   texto, setTexto, scrollRef, onEnviar, onFinalizar, onResolver,
   onMarcarLido, onApagarChat, onSolicitarCnpj, onValidarCnpjModal,
-  onExecutarFluxo, fluxoSugerido
+  onExecutarFluxo, fluxoSugerido, onVoltar
 }) {
   const [showMsgRapidas, setShowMsgRapidas] = useState(false);
 
@@ -172,7 +202,13 @@ function PainelChat({
   return (
     <>
       <div className="p-4 bg-[#1E2330]/80 border-b border-[#2A3040] flex flex-wrap items-center justify-between gap-3">
-        <div>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <button onClick={onVoltar} title="Voltar para a lista"
+            className="lg:hidden p-1.5 -ml-1 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
+            <ChevronLeft size={18} />
+          </button>
+          <Avatar nome={conversa.cliente} size="md" />
+          <div>
           <div className="font-bold text-sm text-white flex items-center gap-2 flex-wrap">
             {conversa.cliente}
             <span className="text-xs font-normal text-slate-400 font-mono">({conversa.telefone})</span>
@@ -192,6 +228,7 @@ function PainelChat({
                 ? <EmojiIcon name="shield" label={`${parceiroCadastrado?.razaoSocial} (${mascararCnpj(conversa.cnpj)})`} size="sm" />
                 : <EmojiIcon name="warning" label={`CNPJ ${mascararCnpj(conversa.cnpj)} (Sem Contrato)`} size="sm" />
             }
+          </div>
           </div>
         </div>
 
@@ -238,7 +275,7 @@ function PainelChat({
         </div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div ref={scrollRef} style={WHATSAPP_BG} className="flex-1 overflow-y-auto p-4 space-y-3">
         {conversa.mensagens.map((m, i) => (
           <div key={i} className={`flex ${m.de === 'cliente' ? 'justify-start' : m.de === 'sistema' ? 'justify-center' : 'justify-end'}`}>
             {m.de === 'sistema' ? (
@@ -319,6 +356,7 @@ function PainelChat({
 }
 
 export default function AtendimentoView({ conversas, setConversas, fluxos, parceiros }) {
+  const { whatsAppConectado } = useAppContext();
   const [abaAtual,      setAbaAtual]     = useState('abertos');
   const [selecionada,   setSelecionada]  = useState(null);
   const [texto,         setTexto]        = useState('');
@@ -326,9 +364,40 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   const [modalCnpj,     setModalCnpj]    = useState(false);
   const [inputCnpj,     setInputCnpj]    = useState('');
   const [busca,         setBusca]        = useState('');
+  const [fixados,       setFixados]      = useState(lerFixados);
+  const [sinoTocando,   setSinoTocando]  = useState(false);
   const scrollRef = useRef(null);
+  const totalMsgClienteRef = useRef(null);
 
   const conversa = conversas.find(c => c.id === selecionada);
+
+  const alternarFixado = useCallback((id) => {
+    setFixados(prev => {
+      const novo = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+      salvarFixados(novo);
+      return novo;
+    });
+  }, []);
+
+  // Sino + som: dispara quando o total de mensagens de clientes aumenta
+  // (nova mensagem recebida via polling do AppContext).
+  const totalMsgCliente = conversas.reduce(
+    (acc, c) => acc + (c.mensagens || []).filter(m => m.de === 'cliente').length, 0
+  );
+  useEffect(() => {
+    if (totalMsgClienteRef.current === null) {
+      totalMsgClienteRef.current = totalMsgCliente;
+      return;
+    }
+    if (totalMsgCliente > totalMsgClienteRef.current) {
+      // O som toca globalmente (AppContext); aqui só animamos o sino.
+      setSinoTocando(true);
+      const t = setTimeout(() => setSinoTocando(false), 1600);
+      totalMsgClienteRef.current = totalMsgCliente;
+      return () => clearTimeout(t);
+    }
+    totalMsgClienteRef.current = totalMsgCliente;
+  }, [totalMsgCliente]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -352,110 +421,119 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     return c.cliente.toLowerCase().includes(q) ||
            (c.telefone || '').includes(q) ||
            c.mensagens.some(m => m.texto.toLowerCase().includes(q));
-  });
+  }).sort((a, b) => (fixados.includes(b.id) ? 1 : 0) - (fixados.includes(a.id) ? 1 : 0));
 
   const contadores = ABAS.reduce((acc, aba) => {
     acc[aba.id] = conversas.filter(aba.statusMatch).length;
     return acc;
   }, {});
 
-  const atenderConversa = useCallback((id, e) => {
+  // Atualiza uma conversa no estado global a partir da resposta do back-end.
+  const aplicarConversa = useCallback((atualizada) => {
+    if (!atualizada?.id) return;
+    setConversas(prev => prev.map(c => c.id === atualizada.id ? atualizada : c));
+  }, [setConversas]);
+
+  const atenderConversa = useCallback(async (id, e) => {
     if (e) e.stopPropagation();
+    setAbaAtual('abertos');
+    setSelecionada(id);
     setConversas(prev => prev.map(c =>
       c.id === id ? { ...c, statusAtendimento: 'em_atendimento', lido: true } : c
     ));
-    setAbaAtual('abertos');
-    setSelecionada(id);
-  }, [setConversas]);
+    try { aplicarConversa(await ConversasAPI.atender(id)); } catch {}
+  }, [setConversas, aplicarConversa]);
 
-  const finalizarAtendimento = useCallback((id) => {
+  const finalizarAtendimento = useCallback(async (id) => {
     if (!window.confirm('Deseja concluir e finalizar este atendimento?')) return;
+    setSelecionada(null);
     setConversas(prev => prev.map(c =>
       c.id === id ? { ...c, statusAtendimento: 'finalizado' } : c
     ));
-    setSelecionada(null);
-  }, [setConversas]);
+    try { aplicarConversa(await ConversasAPI.atualizarStatus(id, 'finalizado')); } catch {}
+  }, [setConversas, aplicarConversa]);
 
-  const resolverAtendimento = useCallback((id) => {
+  const resolverAtendimento = useCallback(async (id) => {
+    setSelecionada(null);
+    setAbaAtual('fechados');
     setConversas(prev => prev.map(c =>
       c.id === id ? { ...c, statusAtendimento: 'resolvido', lido: true } : c
     ));
-    setSelecionada(null);
-    setAbaAtual('fechados');
-  }, [setConversas]);
+    try { aplicarConversa(await ConversasAPI.atualizarStatus(id, 'resolvido')); } catch {}
+  }, [setConversas, aplicarConversa]);
 
-  const marcarComoLido = useCallback((id) => {
+  const marcarComoLido = useCallback(async (id) => {
     setConversas(prev => prev.map(c => c.id === id ? { ...c, lido: true } : c));
-  }, [setConversas]);
+    try { aplicarConversa(await ConversasAPI.marcarLido(id)); } catch {}
+  }, [setConversas, aplicarConversa]);
 
-  const apagarChat = useCallback((id, e) => {
+  const apagarChat = useCallback(async (id, e) => {
     if (e) e.stopPropagation();
     if (!window.confirm('Deseja realmente apagar este atendimento?')) return;
     setConversas(prev => prev.filter(c => c.id !== id));
     if (selecionada === id) setSelecionada(null);
+    try { await ConversasAPI.remover(id); } catch {}
   }, [setConversas, selecionada]);
 
-  const enviarResposta = useCallback((txt) => {
+  const enviarResposta = useCallback(async (txt) => {
     if (!txt.trim() || !conversa) return;
-    const cnpjNumeros = limparCnpj(txt);
-    let conv = { ...conversa };
-
-    if (cnpjNumeros.length === 14 && !conversa.cnpjVerificado) {
-      const parceiroEncontrado = parceiros.find(p => p.cnpj === cnpjNumeros && p.status === 'ativo');
-      conv.cnpj          = cnpjNumeros;
-      conv.cnpjVerificado = true;
-      const msgConf = parceiroEncontrado
-        ? `✅ CNPJ ${mascararCnpj(cnpjNumeros)} validado! Razão Social: ${parceiroEncontrado.razaoSocial} Parceiro com Contrato Ativo.`
-        : `⚠️ CNPJ ${mascararCnpj(cnpjNumeros)} consultado. Não possui contrato de parceiro ativo.`;
-      conv.mensagens = [
-        ...conv.mensagens,
-        { de: 'equipe', texto: txt.trim(), hora: horaAgora() },
-        { de: 'equipe', texto: `[🤖 Validação Automática Arka]: ${msgConf}`, hora: horaAgora() },
-      ];
-    } else {
-      conv.mensagens = [...conv.mensagens, { de: 'equipe', texto: txt.trim(), hora: horaAgora() }];
-    }
-
-    setConversas(prev => prev.map(c => c.id === conversa.id ? conv : c));
-    setTexto('');
-  }, [conversa, parceiros, setConversas]);
-
-  const solicitarCnpjBot = useCallback(() => {
-    if (!conversa) return;
-    const msg = '[🤖 Arka Tecnologia]: Para prosseguirmos e verificar benefícios de parceiro, informe o CNPJ da sua empresa:';
+    const id = conversa.id;
+    // Otimista: mostra a mensagem da equipe na hora.
     setConversas(prev => prev.map(c =>
-      c.id === conversa.id
-        ? { ...c, mensagens: [...c.mensagens, { de: 'equipe', texto: msg, hora: horaAgora() }] }
-        : c
+      c.id === id ? { ...c, mensagens: [...c.mensagens, { de: 'equipe', texto: txt.trim(), hora: horaAgora() }] } : c
     ));
-  }, [conversa, setConversas]);
+    setTexto('');
+    // O back-end persiste, detecta CNPJ e devolve a conversa completa.
+    try { aplicarConversa(await ConversasAPI.enviarMensagem(id, txt.trim())); } catch {}
+  }, [conversa, setConversas, aplicarConversa]);
 
-  const validarCnpjManual = useCallback(() => {
+  const solicitarCnpjBot = useCallback(async () => {
+    if (!conversa) return;
+    try { aplicarConversa(await ConversasAPI.solicitarCnpj(conversa.id)); }
+    catch {
+      const msg = '[🤖 Arka Tecnologia]: Para prosseguirmos e verificar benefícios de parceiro, informe o CNPJ da sua empresa:';
+      setConversas(prev => prev.map(c =>
+        c.id === conversa.id ? { ...c, mensagens: [...c.mensagens, { de: 'equipe', texto: msg, hora: horaAgora() }] } : c
+      ));
+    }
+  }, [conversa, setConversas, aplicarConversa]);
+
+  const validarCnpjManual = useCallback(async () => {
     const c = limparCnpj(inputCnpj);
     if (!cnpjValido(c)) { alert('CNPJ inválido!'); return; }
-    const parceiroEncontrado = parceiros.find(p => p.cnpj === c && p.status === 'ativo');
-    const msgBot = parceiroEncontrado
-      ? `✅ CNPJ ${mascararCnpj(c)} identificado! Razão Social: ${parceiroEncontrado.razaoSocial} (Parceiro Cadastrado).`
-      : `⚠️ CNPJ ${mascararCnpj(c)} não consta como parceiro cadastrado.`;
-    setConversas(prev => prev.map(item =>
-      item.id === conversa.id
-        ? { ...item, cnpj: c, cnpjVerificado: true,
-            mensagens: [...item.mensagens, { de: 'equipe', texto: `[🤖 Validação de CNPJ]: ${msgBot}`, hora: horaAgora() }] }
-        : item
-    ));
+    const id = conversa.id;
     setInputCnpj('');
     setModalCnpj(false);
-  }, [inputCnpj, conversa, parceiros, setConversas]);
+    try { aplicarConversa(await ConversasAPI.validarCnpj(id, c)); }
+    catch {
+      const parceiroEncontrado = parceiros.find(p => p.cnpj === c && p.status === 'ativo');
+      const msgBot = parceiroEncontrado
+        ? `✅ CNPJ ${mascararCnpj(c)} identificado! Razão Social: ${parceiroEncontrado.razaoSocial} (Parceiro Cadastrado).`
+        : `⚠️ CNPJ ${mascararCnpj(c)} não consta como parceiro cadastrado.`;
+      setConversas(prev => prev.map(item =>
+        item.id === id
+          ? { ...item, cnpj: c, cnpjVerificado: true,
+              mensagens: [...item.mensagens, { de: 'equipe', texto: `[🤖 Validação de CNPJ]: ${msgBot}`, hora: horaAgora() }] }
+          : item
+      ));
+    }
+  }, [inputCnpj, conversa, parceiros, setConversas, aplicarConversa]);
 
-  const executarFluxo = useCallback((fluxo) => {
+  const executarFluxo = useCallback(async (fluxo) => {
     if (!conversa || !fluxo) return;
-    const msgsBot = fluxo.passos
+    const id = conversa.id;
+    const textos = fluxo.passos
       .filter(p => p.tipo === 'mensagem' || p.tipo === 'acao')
-      .map(p => ({ de: 'equipe', texto: `[🤖 ${p.titulo}]: ${p.desc || p.texto}`, hora: horaAgora() }));
-    setConversas(prev => prev.map(c =>
-      c.id === conversa.id ? { ...c, mensagens: [...c.mensagens, ...msgsBot] } : c
-    ));
-  }, [conversa, setConversas]);
+      .map(p => `[🤖 ${p.titulo}]: ${p.desc || p.texto || ''}`);
+    try {
+      let atualizada = null;
+      for (const t of textos) atualizada = await ConversasAPI.enviarMensagem(id, t);
+      if (atualizada) aplicarConversa(atualizada);
+    } catch {
+      const msgsBot = textos.map(t => ({ de: 'equipe', texto: t, hora: horaAgora() }));
+      setConversas(prev => prev.map(c => c.id === id ? { ...c, mensagens: [...c.mensagens, ...msgsBot] } : c));
+    }
+  }, [conversa, setConversas, aplicarConversa]);
 
   const fluxoSugerido = conversa
     ? fluxos.find(f => f.ativo && conversa.mensagens.some(m =>
@@ -467,6 +545,10 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     !c.lido && c.statusAtendimento !== 'finalizado' && c.statusAtendimento !== 'resolvido'
   ).length;
 
+  // No mobile mostramos a lista OU o chat aberto (não os dois empilhados).
+  const chatAberto = !!conversa &&
+    (conversa.statusAtendimento === 'em_atendimento' || conversa.statusAtendimento === 'resolvido');
+
   return (
     <div className="fade-in space-y-4 h-full flex flex-col">
   
@@ -476,25 +558,45 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
             <h1 className="text-2xl font-bold text-white tracking-tight font-display">
               Central de Atendimentos
             </h1>
-            {naoLidos > 0 && (
-              <span className="text-sm px-2.5 py-0.5 rounded-full bg-orange-500 text-slate-950 font-bold">
-                {naoLidos}
-              </span>
-            )}
-            
-            <div className="flex items-center justify-center w-7 h-7 rounded-full bg-rose-500/15 border border-rose-500/40 text-rose-400" title="WhatsApp offline">
-              <WifiOff size={13} />
-            </div>
+            <button
+              onClick={() => { playPing(); setAbaAtual('pendentes'); }}
+              title={naoLidos > 0 ? `${naoLidos} conversa(s) não lida(s) — clique para ouvir o som` : 'Testar som de notificação'}
+              className={`relative flex items-center justify-center w-8 h-8 rounded-full border transition-colors ${
+                naoLidos > 0
+                  ? 'bg-orange-500/15 border-orange-500/40 text-orange-400'
+                  : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-white'
+              } ${sinoTocando ? 'animate-bounce' : ''}`}
+            >
+              <Bell size={14} className={sinoTocando ? 'fill-current' : ''} />
+              {naoLidos > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-orange-500 text-slate-950 text-[9px] font-extrabold flex items-center justify-center">
+                  {naoLidos}
+                </span>
+              )}
+            </button>
           </div>
           <p className="text-slate-400 text-xs sm:text-sm mt-1">
             Assuma conversas, consulte CNPJ e automatize respostas.
           </p>
         </div>
+
+        {/* Status da conexão WhatsApp — canto direito, sincronizado com a Integração */}
+        <div
+          title={whatsAppConectado ? 'WhatsApp conectado' : 'WhatsApp desconectado — configure em Integração WhatsApp'}
+          className={`self-start sm:self-auto flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${
+            whatsAppConectado
+              ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400'
+              : 'bg-rose-500/15 border-rose-500/40 text-rose-400'
+          }`}
+        >
+          {whatsAppConectado ? <Wifi size={14} /> : <WifiOff size={14} />}
+          <span>WhatsApp {whatsAppConectado ? 'Online' : 'Offline'}</span>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-[550px]">
-    
-        <div className="lg:col-span-4 glass-panel rounded-2xl flex flex-col overflow-hidden border border-[#2A3040]">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-0 lg:min-h-[550px]">
+
+        <div className={`${chatAberto ? 'hidden lg:flex' : 'flex'} lg:col-span-4 glass-panel rounded-2xl flex-col overflow-hidden border border-[#2A3040] min-h-[420px] lg:min-h-0`}>
        
           <div className="grid grid-cols-3 bg-[#1E2330]/80 border-b border-[#2A3040]">
             {ABAS.map(aba => {
@@ -542,8 +644,10 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                 parceiros={parceiros}
                 onSelecionar={setSelecionada}
                 onAtender={atenderConversa}
-                onApagar={apagarChat}
+                onResolver={resolverAtendimento}
                 onEspiar={setEspiandoChat}
+                onFixar={alternarFixado}
+                fixado={fixados.includes(c.id)}
               />
             ))}
             {conversasFiltradas.length === 0 && (
@@ -556,7 +660,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
           </div>
         </div>
 
-        <div className="lg:col-span-8 glass-panel rounded-2xl flex flex-col overflow-hidden border border-[#2A3040]">
+        <div className={`${chatAberto ? 'flex' : 'hidden lg:flex'} lg:col-span-8 glass-panel rounded-2xl flex-col overflow-hidden border border-[#2A3040] min-h-[70vh] lg:min-h-0`}>
           {!conversa || (conversa.statusAtendimento !== 'em_atendimento' && conversa.statusAtendimento !== 'resolvido') ? (
             <div
               className="flex-1 flex items-center justify-center relative overflow-hidden"
@@ -609,6 +713,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               onValidarCnpjModal={() => setModalCnpj(true)}
               onExecutarFluxo={executarFluxo}
               fluxoSugerido={fluxoSugerido}
+              onVoltar={() => setSelecionada(null)}
             />
           )}
         </div>

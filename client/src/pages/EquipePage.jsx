@@ -1,29 +1,42 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Circle } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
+import { EquipeAPI } from '../services/api';
 
 export default function EquipePage() {
   const { equipe, atualizarEquipe } = useAppContext();
   const [nome,  setNome]  = useState('');
   const [cargo, setCargo] = useState('');
 
-  function adicionar() {
+  async function adicionar() {
     if (!nome.trim()) return;
-    atualizarEquipe([
-      ...equipe,
-      { id: 'e' + Date.now(), nome: nome.trim(), cargo: cargo.trim() || 'Atendimento', status: 'offline' },
-    ]);
+    const novo = { nome: nome.trim(), cargo: cargo.trim() || 'Atendimento', status: 'offline' };
+    try {
+      const criado = await EquipeAPI.criar(novo);
+      atualizarEquipe([...equipe, criado]);
+    } catch {
+      atualizarEquipe([...equipe, { id: 'e' + Date.now(), ...novo }]);
+    }
     setNome(''); setCargo('');
   }
 
-  function remover(id) {
+  async function remover(id) {
+    try {
+      await EquipeAPI.remover(id);
+    } catch {}
     atualizarEquipe(equipe.filter(e => e.id !== id));
   }
 
-  function alternarStatus(id) {
-    atualizarEquipe(equipe.map(e =>
-      e.id === id ? { ...e, status: e.status === 'online' ? 'offline' : 'online' } : e
-    ));
+  async function alternarStatus(id) {
+    const alvo = equipe.find(e => e.id === id);
+    if (!alvo) return;
+    const novoStatus = alvo.status === 'online' ? 'offline' : 'online';
+    try {
+      const atualizado = await EquipeAPI.atualizar(id, { status: novoStatus });
+      atualizarEquipe(equipe.map(e => e.id === id ? atualizado : e));
+    } catch {
+      atualizarEquipe(equipe.map(e => e.id === id ? { ...e, status: novoStatus } : e));
+    }
   }
 
   return (

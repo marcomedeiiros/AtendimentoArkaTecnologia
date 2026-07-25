@@ -1,0 +1,53 @@
+import React from 'react';
+
+// Paleta de cores para avatares gerados a partir do nome (sem foto real).
+// Tons que combinam com o tema escuro do painel.
+const CORES = [
+  { bg: 'bg-orange-500/20',  ring: 'border-orange-500/40',  text: 'text-orange-300' },
+  { bg: 'bg-blue-500/20',    ring: 'border-blue-500/40',    text: 'text-blue-300' },
+  { bg: 'bg-emerald-500/20', ring: 'border-emerald-500/40', text: 'text-emerald-300' },
+  { bg: 'bg-purple-500/20',  ring: 'border-purple-500/40',  text: 'text-purple-300' },
+  { bg: 'bg-pink-500/20',    ring: 'border-pink-500/40',    text: 'text-pink-300' },
+  { bg: 'bg-amber-500/20',   ring: 'border-amber-500/40',   text: 'text-amber-300' },
+  { bg: 'bg-cyan-500/20',    ring: 'border-cyan-500/40',    text: 'text-cyan-300' },
+];
+
+export function iniciais(nome = '') {
+  const partes = String(nome).trim().split(/\s+/).filter(Boolean);
+  if (partes.length === 0) return '?';
+  if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
+  return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
+}
+
+function corDoNome(nome = '') {
+  let hash = 0;
+  for (let i = 0; i < nome.length; i++) hash = nome.charCodeAt(i) + ((hash << 5) - hash);
+  return CORES[Math.abs(hash) % CORES.length];
+}
+
+const TAMANHOS = {
+  sm: 'w-8 h-8 text-[11px]',
+  md: 'w-10 h-10 text-xs',
+  lg: 'w-12 h-12 text-sm',
+};
+
+export default function Avatar({ nome = '', size = 'md', online = null, className = '' }) {
+  const cor = corDoNome(nome);
+  return (
+    <div className={`relative shrink-0 ${className}`}>
+      <div
+        className={`${TAMANHOS[size] || TAMANHOS.md} rounded-full border ${cor.bg} ${cor.ring} ${cor.text} font-bold flex items-center justify-center`}
+        title={nome}
+      >
+        {iniciais(nome)}
+      </div>
+      {online !== null && (
+        <span
+          className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#161922] ${
+            online ? 'bg-emerald-400' : 'bg-slate-500'
+          }`}
+        />
+      )}
+    </div>
+  );
+}

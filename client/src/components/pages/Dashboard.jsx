@@ -68,22 +68,18 @@ function labelsDias(n) {
   return labels;
 }
 
-function calcularMetricas(conversas, parceiros, equipe, filtro) {
-  const fatores = { hoje: 1, '7d': 7, '30d': 30, '90d': 90 };
-  const fator = fatores[filtro] || 1;
-  const total = Math.max(conversas.length, 1) * fator;
+function calcularMetricas(conversas, parceiros, equipe) {
+  // Números reais do estado atual — sem multiplicar por período (não há
+  // histórico de 7/30/90 dias sendo registrado ainda).
   const ativas = conversas.filter(c => c.statusAtendimento === 'em_atendimento').length;
   const aguardando = conversas.filter(c => c.statusAtendimento === 'aguardando').length;
-  const finalizados = conversas.filter(c => c.statusAtendimento === 'finalizado').length;
+  const finalizados = conversas.filter(c => c.statusAtendimento === 'finalizado' || c.statusAtendimento === 'resolvido').length;
   return {
-    totalAtendimentos: total,
-    demandasAtivas: (ativas + aguardando) * fator,
-    novosContatos: Math.max(1, Math.round(total * 0.35)),
-    tempoMedioAtendimento: '8m 24s',
-    tempoMedioEspera: '2m 47s',
+    totalAtendimentos: conversas.length,
+    demandasAtivas: ativas + aguardando,
     atendimentosAbertos: ativas + aguardando,
     atendimentosPendentes: aguardando,
-    atendimentosFechados: finalizados * fator,
+    atendimentosFechados: finalizados,
     parceirosPeriodo: parceiros.filter(p => p.status === 'ativo').length,
     equipeOnline: equipe.filter(e => e.status === 'online').length,
     totalEquipe: equipe.length,
@@ -113,19 +109,14 @@ function MetricCard({ label, valor, icon: Icon, color, sublabel, onClick }) {
   );
 }
 
-function exportarRelatorio(metricas, filtro) {
-  const labels = { hoje:'Hoje', '7d':'Últimos 7 dias', '30d':'Últimos 30 dias', '90d':'Últimos 90 dias' };
+function exportarRelatorio(metricas) {
   const linhas = [
     ['Relatório Arka Tecnologia',''],
-    ['Período', labels[filtro] || filtro],
     ['Gerado em', new Date().toLocaleString('pt-BR')],
     ['',''],
     ['Métrica','Valor'],
     ['Total de Atendimentos', metricas.totalAtendimentos],
     ['Demandas Ativas', metricas.demandasAtivas],
-    ['Novos Contatos', metricas.novosContatos],
-    ['Tempo Médio Atendimento', metricas.tempoMedioAtendimento],
-    ['Tempo Médio Espera', metricas.tempoMedioEspera],
     ['Abertos', metricas.atendimentosAbertos],
     ['Pendentes', metricas.atendimentosPendentes],
     ['Fechados', metricas.atendimentosFechados],
@@ -141,61 +132,10 @@ function exportarRelatorio(metricas, filtro) {
 }
 
 export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba }) {
-  const [filtro, setFiltro] = useState('hoje');
-
   const metricas = useMemo(
-    () => calcularMetricas(conversas, parceiros, equipe, filtro),
-    [conversas, parceiros, equipe, filtro]
+    () => calcularMetricas(conversas, parceiros, equipe),
+    [conversas, parceiros, equipe]
   );
-
-  const dias = filtro === 'hoje' ? 1 : filtro === '7d' ? 7 : filtro === '30d' ? 30 : 90;
-  const labels = useMemo(() => labelsDias(Math.min(dias, 30)), [dias]);
-
-  const totalBase = Math.max(conversas.length, 3);
-
-  const lineData = useMemo(() => ({
-    labels,
-    datasets: [
-      {
-        label: 'Atendimentos',
-        data: gerarSerie(labels.length, totalBase * 1.5, 0.4),
-        borderColor: C.orange,
-        backgroundColor: 'rgba(249,115,22,0.12)',
-        fill: true,
-        tension: 0.4,
-        pointRadius: 3,
-        pointBackgroundColor: C.orange,
-      },
-      {
-        label: 'Resolvidos',
-        data: gerarSerie(labels.length, totalBase * 0.9, 0.3),
-        borderColor: C.emerald,
-        backgroundColor: 'rgba(16,185,129,0.08)',
-        fill: true,
-        tension: 0.4,
-        pointRadius: 3,
-        pointBackgroundColor: C.emerald,
-      },
-    ],
-  }), [labels, totalBase]);
-
-  const barData = useMemo(() => ({
-    labels: labels.slice(-7),
-    datasets: [
-      {
-        label: 'Novos',
-        data: gerarSerie(Math.min(labels.length, 7), totalBase * 0.6, 0.5),
-        backgroundColor: 'rgba(59,130,246,0.7)',
-        borderRadius: 6,
-      },
-      {
-        label: 'Finalizados',
-        data: gerarSerie(Math.min(labels.length, 7), totalBase * 0.4, 0.4),
-        backgroundColor: 'rgba(16,185,129,0.7)',
-        borderRadius: 6,
-      },
-    ],
-  }), [labels, totalBase]);
 
   const doughnutData = useMemo(() => {
     const abertos   = conversas.filter(c => c.statusAtendimento === 'em_atendimento').length || 1;
@@ -213,20 +153,11 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
     };
   }, [conversas]);
 
-  const FILTROS = [
-    { id: 'hoje', label: 'Hoje' },
-    { id: '7d',   label: '7 dias' },
-    { id: '30d',  label: '30 dias' },
-    { id: '90d',  label: '90 dias' },
-  ];
-
   const cards = [
-    { label: 'Total de Atendimentos',     valor: metricas.totalAtendimentos,    icon: BarChart3,     color: 'orange', sublabel: 'Período selecionado' },
-    { label: 'Demandas Ativas',           valor: metricas.demandasAtivas,       icon: Activity,      color: 'emerald',sublabel: 'Em atendimento + fila', onClick: () => setAba('atendimento') },
-    { label: 'Novos Contatos',            valor: metricas.novosContatos,        icon: Users,         color: 'blue',   sublabel: 'Primeiro contato', onClick: () => setAba('contatos') },
-    { label: 'Tempo Médio Atendimento',   valor: metricas.tempoMedioAtendimento,icon: Timer,         color: 'amber',  sublabel: 'Duração média por conversa' },
-    { label: 'Tempo Médio de Espera',     valor: metricas.tempoMedioEspera,     icon: Clock,         color: 'indigo', sublabel: 'Da entrada ao 1º contato' },
-    { label: 'Parceiros Ativos',          valor: metricas.parceirosPeriodo,     icon: ShieldCheck,   color: 'purple', sublabel: 'CNPJs cadastrados ativos' },
+    { label: 'Total de Atendimentos', valor: metricas.totalAtendimentos, icon: BarChart3,   color: 'orange',  sublabel: 'Conversas registradas' },
+    { label: 'Demandas Ativas',       valor: metricas.demandasAtivas,    icon: Activity,    color: 'emerald', sublabel: 'Em atendimento + fila', onClick: () => setAba('atendimento') },
+    { label: 'Equipe Online',         valor: `${metricas.equipeOnline}/${metricas.totalEquipe}`, icon: Users, color: 'blue', sublabel: 'Atendentes disponíveis', onClick: () => setAba('equipe') },
+    { label: 'Parceiros Ativos',      valor: metricas.parceirosPeriodo,  icon: ShieldCheck, color: 'purple',  sublabel: 'CNPJs cadastrados ativos', onClick: () => setAba('parceiros') },
   ];
 
   return (
@@ -236,56 +167,22 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
           <h1 className="text-2xl font-bold text-white tracking-tight font-display">Visão Geral</h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-1">Métricas, fila e desempenho da equipe Arka Tecnologia.</p>
         </div>
-        <button onClick={() => exportarRelatorio(metricas, filtro)}
+        <button onClick={() => exportarRelatorio(metricas)}
           className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 text-xs font-semibold border border-orange-500/30 transition-all shrink-0">
           <Download size={14} /> Exportar CSV
         </button>
       </div>
 
-      <div className="flex items-center gap-2 flex-wrap">
-        {FILTROS.map(f => (
-          <button key={f.id} onClick={() => setFiltro(f.id)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-              filtro === f.id
-                ? 'bg-orange-500/20 border-orange-500/40 text-orange-400'
-                : 'bg-[#1E2330] border-[#2A3040] text-slate-400 hover:text-slate-200'
-            }`}>
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {cards.map(c => <MetricCard key={c.label} {...c} />)}
-      </div>
-
-      <div className="glass-panel rounded-2xl p-5 border border-[#2A3040]">
-        <h3 className="text-sm font-bold text-white font-display mb-4 flex items-center gap-2">
-          <TrendingUp size={15} className="text-orange-400" /> Atendimentos ao longo do tempo
-        </h3>
-        <div style={{ height: 220 }}>
-          <Line data={lineData} options={{ ...CHART_DEFAULTS }} />
-        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="glass-panel rounded-2xl p-5 border border-[#2A3040]">
           <h3 className="text-sm font-bold text-white font-display mb-4 flex items-center gap-2">
-            <BarChart3 size={15} className="text-blue-400" /> Novos vs Finalizados (últimos 7 dias)
-          </h3>
-          <div style={{ height: 200 }}>
-            <Bar data={barData} options={{
-              ...CHART_DEFAULTS,
-              plugins: { ...CHART_DEFAULTS.plugins, legend: { ...CHART_DEFAULTS.plugins.legend, position: 'bottom' } },
-            }} />
-          </div>
-        </div>
-
-        <div className="glass-panel rounded-2xl p-5 border border-[#2A3040]">
-          <h3 className="text-sm font-bold text-white font-display mb-4 flex items-center gap-2">
             <Activity size={15} className="text-emerald-400" /> Distribuição de Status
           </h3>
-          <div style={{ height: 200 }} className="flex items-center justify-center">
+          <div style={{ height: 220 }} className="flex items-center justify-center">
             <Doughnut data={doughnutData} options={{
               responsive: true,
               maintainAspectRatio: false,
@@ -296,6 +193,16 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
               },
             }} />
           </div>
+        </div>
+
+        <div className="glass-panel rounded-2xl p-5 border border-[#2A3040] flex flex-col justify-center gap-3">
+          <h3 className="text-sm font-bold text-white font-display flex items-center gap-2">
+            <TrendingUp size={15} className="text-orange-400" /> Situação atual
+          </h3>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            O histórico por período (7/30/90 dias) aparecerá aqui assim que os atendimentos
+            começarem a ser registrados pelo WhatsApp. Por enquanto, os números refletem o estado atual em tempo real.
+          </p>
         </div>
       </div>
 

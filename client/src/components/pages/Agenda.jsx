@@ -269,14 +269,18 @@ export default function Agenda() {
   const [dataFoco, setDataFoco]         = useState(hojeISO());
   const [busca, setBusca]               = useState('');
   const [verTodos, setVerTodos]         = useState(false);
+  const [carregado, setCarregado]       = useState(false);
 
   useEffect(() => {
-    carregar('arka:agenda', null).then(d => setCompromissos(d || SEED_AGENDA));
+    carregar('arka:agenda', null).then(d => { setCompromissos(d || SEED_AGENDA); setCarregado(true); });
   }, []);
 
   useEffect(() => {
-    if (compromissos.length > 0) salvar('arka:agenda', compromissos);
-  }, [compromissos]);
+    // Salva SEMPRE após o carregamento inicial — inclusive lista vazia. Antes só
+    // salvava com length > 0, então apagar o último item não persistia e o
+    // compromisso "voltava" no F5.
+    if (carregado) salvar('arka:agenda', compromissos);
+  }, [compromissos, carregado]);
 
   function salvarCompromisso(comp) {
     setCompromissos(prev => {

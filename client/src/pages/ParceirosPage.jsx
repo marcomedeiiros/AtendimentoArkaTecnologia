@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Search } from 'lucide-react';
+import { Plus, Trash2, Search, Building2 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
+import { ParceirosAPI } from '../services/api';
 
 function limparCnpj(v) { return String(v || '').replace(/\D/g, ''); }
 
@@ -36,39 +37,56 @@ export default function ParceirosPage() {
   const [erro,      setErro]      = useState('');
   const [busca,     setBusca]     = useState('');
 
-  function adicionar() {
+  async function adicionar() {
     const c = limparCnpj(cnpjInput);
     if (!cnpjValido(c)) { setErro('CNPJ inválido confira os números.'); return; }
     if (!nome.trim())   { setErro('Informe a razão social.'); return; }
     setErro('');
-    atualizarParceiros([
-      ...parceiros.filter(p => p.cnpj !== c),
-      { cnpj: c, razaoSocial: nome.trim(), status: 'ativo' },
-    ]);
+
+    const novo = { cnpj: c, razaoSocial: nome.trim(), status: 'ativo' };
+    try {
+      const criado = await ParceirosAPI.criar(novo);
+      atualizarParceiros([...parceiros.filter(p => p.cnpj !== c), criado]);
+    } catch {
+      atualizarParceiros([...parceiros.filter(p => p.cnpj !== c), novo]);
+    }
     setCnpjInput(''); setNome('');
   }
 
-  function remover(c) {
+  async function remover(c) {
+    if (!window.confirm('Deseja remover este parceiro?')) return;
+    try {
+      await ParceirosAPI.remover(c);
+    } catch {}
     atualizarParceiros(parceiros.filter(p => p.cnpj !== c));
   }
 
-  function alternarStatus(c) {
-    atualizarParceiros(parceiros.map(p =>
-      p.cnpj === c ? { ...p, status: p.status === 'ativo' ? 'inativo' : 'ativo' } : p
-    ));
+  async function alternarStatus(c) {
+    try {
+      const alt = await ParceirosAPI.alternarStatus(c);
+      atualizarParceiros(parceiros.map(p => p.cnpj === c ? alt : p));
+    } catch {
+      atualizarParceiros(parceiros.map(p =>
+        p.cnpj === c ? { ...p, status: p.status === 'ativo' ? 'inativo' : 'ativo' } : p
+      ));
+    }
   }
 
-  const filtrados = parceiros.filter(p =>
-    p.razaoSocial.toLowerCase().includes(busca.toLowerCase()) ||
-    p.cnpj.includes(limparCnpj(busca))
-  );
+  const filtrados = parceiros.filter(p => {
+    if (!busca.trim()) return true;
+    const term = busca.toLowerCase().trim();
+    const cnpjDigits = limparCnpj(busca);
+    const matchNome = (p.razaoSocial || '').toLowerCase().includes(term);
+    const matchCnpj = cnpjDigits ? (p.cnpj || '').includes(cnpjDigits) : false;
+    return matchNome || matchCnpj;
+  });
 
   return (
     <div className="fade-in space-y-6">
       <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight font-display">Parceiros Cadastrados (CNPJ)</h1>
-          <p className="text-slate-400 text-xs sm:text-sm mt-1">Cadastro oficial de empresas com contrato ativo para validação automatizada.</p>
+          <h1 className="text-2xl font-bold text-white tracking-tight font-display">Parceiros Cadastrados (CNPJ & Nome)</h1>
+          <p className="text-slate-400 text-xs sm:text-sm mt-1">Cadastro oficial de empresas parceiras com validação automatizada de contrato.</p>
         </div>
       </div>
 
@@ -85,7 +103,7 @@ export default function ParceirosPage() {
             value={nome}
             onChange={e => setNome(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && adicionar()}
-            placeholder="Nome da empresa"
+            placeholder="Razão Social / Nome da Empresa"
             className="flex-1 min-w-[200px] bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50"
           />
           <button
@@ -98,22 +116,27 @@ export default function ParceirosPage() {
         {erro && <div className="text-xs text-rose-400 font-semibold">{erro}</div>}
       </div>
 
-      <div className="relative max-w-xs">
+      <div className="relative max-w-md">
         <Search size={14} className="absolute left-3.5 top-3 text-slate-500" />
         <input
           value={busca}
           onChange={e => setBusca(e.target.value)}
-          placeholder="Buscar por nome ou CNPJ"
-          className="w-full bg-[#161922] border border-[#2A3040] rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50"
+          placeholder="Pesquisar parceiro por Nome (Razão Social) ou CNPJ..."
+          className="w-full bg-[#161922] border border-[#2A3040] rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50"
         />
       </div>
 
       <div className="space-y-2.5">
         {filtrados.map(p => (
-          <div key={p.cnpj} className="glass-panel p-4 rounded-xl border border-[#2A3040] flex items-center justify-between gap-4">
-            <div className="flex-1 min-w-0">
-              <div className="font-bold text-xs text-white">{p.razaoSocial}</div>
-              <div className="text-[11px] text-slate-400 font-mono mt-0.5">{mascararCnpj(p.cnpj)}</div>
+          <div key={p.cnpj} className="glass-panel p-4 rounded-xl border border-[#2A3040] hover:border-slate-600/60 transition-all flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
+                <Building2 size={16} />
+              </div>
+              <div className="min-w-0">
+                <div className="font-bold text-xs sm:text-sm text-white truncate">{p.razaoSocial}</div>
+                <div className="text-[11px] text-slate-400 font-mono mt-0.5">{mascararCnpj(p.cnpj)}</div>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -129,6 +152,7 @@ export default function ParceirosPage() {
               <button
                 onClick={() => remover(p.cnpj)}
                 className="text-rose-400 hover:bg-slate-800 p-1.5 rounded-lg transition-colors"
+                title="Excluir parceiro"
               >
                 <Trash2 size={13} />
               </button>
@@ -137,8 +161,8 @@ export default function ParceirosPage() {
         ))}
 
         {filtrados.length === 0 && (
-          <div className="text-xs text-slate-400 text-center py-8 glass-panel rounded-2xl border border-[#2A3040]">
-            Nenhum parceiro encontrado.
+          <div className="text-xs text-slate-400 text-center py-10 glass-panel rounded-2xl border border-[#2A3040]">
+            Nenhum parceiro encontrado para &quot;{busca}&quot;.
           </div>
         )}
       </div>
