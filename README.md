@@ -15,10 +15,14 @@ npm install
 
 após isso para rodar basta dá o comando:
 
-npm run dev
+npm start
 
 
 abrirá na porta http://localhost:5173/
 
 
 server é back - end
+
+cd server
+
+npm run dev
