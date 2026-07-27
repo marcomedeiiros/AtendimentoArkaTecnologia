@@ -62,9 +62,18 @@ class ConversaRepository {
     return prisma.conversa.delete({ where: { id } });
   }
 
-  addMensagem(conversaId, origem, texto, metadata = null) {
+  addMensagem(conversaId, origem, texto, metadata = null, waMessageId = null) {
     return prisma.mensagem.create({
-      data: { conversaId, origem, texto, metadata },
+      data: { conversaId, origem, texto, metadata, waMessageId },
+    });
+  }
+
+  // Usado para descartar webhooks reentregues pela Evolution API.
+  existeMensagemWa(waMessageId) {
+    if (!waMessageId) return Promise.resolve(null);
+    return prisma.mensagem.findUnique({
+      where: { waMessageId },
+      select: { id: true },
     });
   }
 

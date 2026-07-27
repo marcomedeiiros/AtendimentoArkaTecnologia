@@ -5,6 +5,7 @@ const processarSchema = z.object({
   texto: z.string().min(1),
   nomeCliente: z.string().optional(),
   instanceName: z.string().optional(),
+  waMessageId: z.string().optional(),
 });
 
 module.exports = { processarSchema };

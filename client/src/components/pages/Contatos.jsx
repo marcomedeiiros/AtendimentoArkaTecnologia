@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Users, Plus, Search, Trash2, Pencil, Save, X,
-  Phone, MessageSquare, Star, StarOff, UserCheck, Circle, Building, Mail
+  Phone, MessageSquare, Star, StarOff, UserCheck, Circle, Building, Mail,
+  AlertTriangle
 } from 'lucide-react';
 import { ContatosAPI } from '../../services/api';
+import Portal from '../Portal';
 
 function limparTel(v) { return String(v || '').replace(/\D/g, ''); }
 function mascararTel(v) {
@@ -21,12 +23,6 @@ const TAGS_CORES = {
   inativo:   'bg-slate-600/30 text-slate-400 border-slate-600/40',
 };
 const TAGS_DISPONIVEIS = Object.keys(TAGS_CORES);
-
-const SEED_CONTATOS = [
-  { id:'ct_1', nome:'João Pereira',   telefone:'11987654321', email:'joao@email.com',   empresa:'',                    tag:'cliente',  favorito: false, observacoes:'' },
-  { id:'ct_2', nome:'Ricardo Nunes',  telefone:'21991238877', email:'',                empresa:'',                    tag:'cliente',  favorito: false, observacoes:'' },
-  { id:'ct_3', nome:'Beatriz Santos', telefone:'31988771122', email:'beatriz@ex.com',   empresa:'Empresa Exemplo LTDA', tag:'parceiro', favorito: true,  observacoes:'Renovação contratual em andamento.' },
-];
 
 function ModalContato({ contato, onSalvar, onFechar }) {
   const [nome,    setNome]    = useState(contato?.nome       || '');
@@ -51,16 +47,21 @@ function ModalContato({ contato, onSalvar, onFechar }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="glass-panel border border-[#2A3040] rounded-2xl w-full max-w-md shadow-2xl fade-in overflow-hidden">
-        <div className="p-4 bg-[#1E2330] border-b border-[#2A3040] flex items-center justify-between">
-          <div className="flex items-center gap-2 font-bold text-sm text-white">
-            <UserCheck size={16} className="text-orange-400" />
-            {contato?.id ? 'Editar Contato' : 'Novo Contato'}
+    // Portal + max-h + scroll interno: o Portal tira o modal de dentro do
+    // container `.fade-in` (que tem transform e quebrava o position:fixed,
+    // deixando o modal cortado); o max-h garante que o rodape (Salvar) nunca
+    // saia da tela em viewport baixa.
+    <Portal>
+    <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
+      <div className="glass-panel border border-[#2A3040] rounded-2xl w-full max-w-md shadow-2xl fade-in my-auto flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh]">
+        <div className="p-4 bg-[#1E2330] border-b border-[#2A3040] flex items-center justify-between shrink-0 rounded-t-2xl">
+          <div className="flex items-center gap-2 font-bold text-sm text-white min-w-0">
+            <UserCheck size={16} className="text-orange-400 shrink-0" />
+            <span className="truncate">{contato?.id ? 'Editar Contato' : 'Novo Contato'}</span>
           </div>
-          <button onClick={onFechar} className="text-slate-400 hover:text-white transition-colors"><X size={16}/></button>
+          <button onClick={onFechar} className="text-slate-400 hover:text-white transition-colors shrink-0 ml-2"><X size={16}/></button>
         </div>
-        <div className="p-5 space-y-3">
+        <div className="p-4 sm:p-5 space-y-3 flex-1 overflow-y-auto min-h-0">
           <div className="grid grid-cols-1 gap-3">
             <div>
               <label className="text-xs text-slate-400 font-medium block mb-1">Nome *</label>
@@ -96,15 +97,16 @@ function ModalContato({ contato, onSalvar, onFechar }) {
             </div>
           </div>
         </div>
-        <div className="p-4 bg-[#1E2330] border-t border-[#2A3040] flex justify-end gap-2">
-          <button onClick={onFechar} className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors">Cancelar</button>
+        <div className="p-4 bg-[#1E2330] border-t border-[#2A3040] flex flex-col-reverse sm:flex-row sm:justify-end gap-2 shrink-0 rounded-b-2xl">
+          <button onClick={onFechar} className="px-3 py-2 sm:py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors">Cancelar</button>
           <button onClick={salvar} disabled={!nome.trim() || limparTel(tel).length < 10}
-            className="px-4 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-orange-500/20 disabled:opacity-50 transition-all">
+            className="px-4 py-2 sm:py-1.5 rounded-lg bg-orange-500 hover:bg-orange-400 text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-orange-500/20 disabled:opacity-50 transition-all">
             <Save size={13}/> Salvar
           </button>
         </div>
       </div>
     </div>
+    </Portal>
   );
 }
 
@@ -186,15 +188,22 @@ export default function Contatos({ conversas = [], setConversas, setAba }) {
   const [busca,        setBusca]      = useState('');
   const [tagFiltro,    setTagFiltro]  = useState('todas');
   const [apenasEstrelas, setEstrelas] = useState(false);
-  const [ordenacao,    setOrdenacao]  = useState('nome'); 
+  const [ordenacao,    setOrdenacao]  = useState('nome');
+  const [erroApi,      setErroApi]    = useState(null);
 
   const carregarContatosServidor = useCallback(async () => {
     setCarregando(true);
     try {
       const lista = await ContatosAPI.listar();
-      setContatos(Array.isArray(lista) && lista.length > 0 ? lista : SEED_CONTATOS);
-    } catch {
-      setContatos(SEED_CONTATOS);
+      // Lista vazia = o usuario apagou todos os contatos. Antes caia no
+      // SEED_CONTATOS aqui, entao apagar o ultimo contato "desfazia" no F5.
+      setContatos(Array.isArray(lista) ? lista : []);
+      setErroApi(null);
+    } catch (err) {
+      // Back-end fora: nao inventamos contatos de exemplo (eles teriam ids que
+      // a API nao reconhece e nunca poderiam ser apagados de verdade).
+      setContatos([]);
+      setErroApi(err.message || 'Nao foi possivel carregar os contatos.');
     } finally {
       setCarregando(false);
     }
@@ -204,6 +213,8 @@ export default function Contatos({ conversas = [], setConversas, setAba }) {
     carregarContatosServidor();
   }, [carregarContatosServidor]);
 
+  // So mexe no estado depois que o servidor confirma. Antes, o catch gravava
+  // o contato apenas na tela: parecia salvo e sumia no F5.
   const salvarContato = useCallback(async (ct) => {
     try {
       if (ct.id && !ct.id.startsWith('ct_conv_')) {
@@ -213,32 +224,39 @@ export default function Contatos({ conversas = [], setConversas, setAba }) {
         const criado = await ContatosAPI.criar(ct);
         setContatos(prev => [criado, ...prev.filter(c => c.id !== ct.id)]);
       }
-    } catch {
-      setContatos(prev => {
-        const idx = prev.findIndex(c => c.id === ct.id);
-        if (idx >= 0) { const n = [...prev]; n[idx] = ct; return n; }
-        return [{ ...ct, id: ct.id || 'ct_' + Date.now() }, ...prev];
-      });
+      setErroApi(null);
+      setModal(false); setEditando(null);
+    } catch (err) {
+      setErroApi(`Nao foi possivel salvar: ${err.message}. Verifique se o back-end esta rodando.`);
     }
-    setModal(false); setEditando(null);
   }, []);
 
+  // Idem: se o DELETE falhar, o contato CONTINUA na tela. Antes ele sumia e
+  // reaparecia no F5, porque nunca tinha sido apagado no banco.
   const removerContato = useCallback(async (id) => {
     if (!window.confirm('Remover este contato?')) return;
     try {
       await ContatosAPI.remover(id);
-    } catch {}
-    setContatos(prev => prev.filter(c => c.id !== id));
+      setContatos(prev => prev.filter(c => c.id !== id));
+      setErroApi(null);
+    } catch (err) {
+      setErroApi(`Nao foi possivel remover: ${err.message}. Verifique se o back-end esta rodando.`);
+    }
   }, []);
 
   const toggleFavorito = useCallback(async (id) => {
     const alvo = contatos.find(c => c.id === id);
     if (!alvo) return;
     const nFav = !alvo.favorito;
+    // Otimista, mas desfaz se o servidor recusar -- assim a estrela na tela
+    // sempre reflete o que esta gravado no banco.
     setContatos(prev => prev.map(c => c.id === id ? { ...c, favorito: nFav } : c));
     try {
       await ContatosAPI.atualizar(id, { favorito: nFav });
-    } catch {}
+    } catch (err) {
+      setContatos(prev => prev.map(c => c.id === id ? { ...c, favorito: !nFav } : c));
+      setErroApi(`Nao foi possivel atualizar o favorito: ${err.message}`);
+    }
   }, [contatos]);
 
   function iniciarChat(contato) {
@@ -314,6 +332,19 @@ export default function Contatos({ conversas = [], setConversas, setAba }) {
           <Plus size={14}/> Novo Contato
         </button>
       </div>
+
+      {erroApi && (
+        <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
+          <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-semibold">Operacao nao concluida</p>
+            <p className="text-rose-300/80 mt-0.5">{erroApi}</p>
+          </div>
+          <button onClick={() => setErroApi(null)} className="text-rose-300/60 hover:text-rose-200 shrink-0">
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
         <div className="relative flex-1 min-w-0">

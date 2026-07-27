@@ -3,6 +3,7 @@ import {
   Zap, Plus, Pencil, Trash2, Save, X, Copy, Check,
   CreditCard, Search, Clock, HandHeart, PhoneOff, Monitor
 } from 'lucide-react';
+import Portal from '../Portal';
 
 async function carregar(chave, padrao) {
   try {
@@ -105,19 +106,23 @@ function ModalEdicao({ msg, onSalvar, onFechar }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="glass-panel border border-[#2A3040] rounded-2xl w-full max-w-xl shadow-2xl fade-in">
-        <div className="p-4 bg-[#1E2330] border-b border-[#2A3040] flex items-center justify-between">
-          <div className="flex items-center gap-2 font-bold text-sm text-white">
-            <Zap size={16} className="text-orange-400" />
-            {msg?.id ? 'Editar Mensagem Rápida' : 'Nova Mensagem Rápida'}
+    // Portal: tira o modal do container `.fade-in` (transform quebrava o
+    // position:fixed e cortava o modal). max-h + scroll interno garantem que o
+    // rodape com o botao Salvar nunca fique fora da tela em viewport baixa.
+    <Portal>
+    <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
+      <div className="glass-panel border border-[#2A3040] rounded-2xl w-full max-w-xl shadow-2xl fade-in my-auto flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh]">
+        <div className="p-4 bg-[#1E2330] border-b border-[#2A3040] flex items-center justify-between shrink-0 rounded-t-2xl">
+          <div className="flex items-center gap-2 font-bold text-sm text-white min-w-0">
+            <Zap size={16} className="text-orange-400 shrink-0" />
+            <span className="truncate">{msg?.id ? 'Editar Mensagem Rápida' : 'Nova Mensagem Rápida'}</span>
           </div>
-          <button onClick={onFechar} className="text-slate-400 hover:text-white transition-colors">
+          <button onClick={onFechar} className="text-slate-400 hover:text-white transition-colors shrink-0 ml-2">
             <X size={16} />
           </button>
         </div>
 
-        <div className="p-5 space-y-4">
+        <div className="p-4 sm:p-5 space-y-4 flex-1 overflow-y-auto min-h-0">
           <div>
             <label className="text-xs text-slate-400 font-medium block mb-1.5">Título / Atalho</label>
             <input
@@ -151,28 +156,29 @@ function ModalEdicao({ msg, onSalvar, onFechar }) {
               onChange={e => setTexto(e.target.value)}
               rows={7}
               placeholder="Digite o texto completo da mensagem..."
-              className="w-full bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50 resize-none transition-colors font-mono leading-relaxed"
+              className="w-full min-h-[140px] bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50 resize-y transition-colors font-mono leading-relaxed"
             />
           </div>
         </div>
 
-        <div className="p-4 bg-[#1E2330] border-t border-[#2A3040] flex justify-end gap-2">
+        <div className="p-4 bg-[#1E2330] border-t border-[#2A3040] flex flex-col-reverse sm:flex-row sm:justify-end gap-2 shrink-0 rounded-b-2xl">
           <button
             onClick={onFechar}
-            className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors"
+            className="px-3 py-2 sm:py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors"
           >
             Cancelar
           </button>
           <button
             onClick={salvar}
             disabled={!titulo.trim() || !texto.trim()}
-            className="px-4 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-orange-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 sm:py-1.5 rounded-lg bg-orange-500 hover:bg-orange-400 text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-orange-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Save size={13} /> Salvar Mensagem
           </button>
         </div>
       </div>
     </div>
+    </Portal>
   );
 }
 
@@ -242,17 +248,22 @@ export default function MensagensRapidas({ onUsarMensagem }) {
   const [busca, setBusca] = useState('');
   const [catFiltro, setCatFiltro] = useState('todas');
 
+  const [carregado, setCarregado] = useState(false);
+
   useEffect(() => {
     carregar('arka:mensagens_rapidas', null).then(salvas => {
-      setMensagens(salvas || MENSAGENS_PADRAO);
+      setMensagens(Array.isArray(salvas) ? salvas : MENSAGENS_PADRAO);
+      setCarregado(true);
     });
   }, []);
 
   useEffect(() => {
-    if (mensagens.length > 0) {
-      salvar('arka:mensagens_rapidas', mensagens);
-    }
-  }, [mensagens]);
+    // Salva SEMPRE apos o carregamento inicial -- inclusive lista vazia. Antes
+    // o guard `length > 0` impedia de gravar quando voce apagava a ultima
+    // mensagem, entao o localStorage ficava com a lista antiga e tudo
+    // "voltava" no F5. O flag `carregado` evita sobrescrever com o [] inicial.
+    if (carregado) salvar('arka:mensagens_rapidas', mensagens);
+  }, [mensagens, carregado]);
 
   function salvarMensagem(msg) {
     setMensagens(prev => {

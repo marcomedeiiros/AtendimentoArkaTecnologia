@@ -23,7 +23,7 @@ const BLOCK_META = {
 function formatNodesPositions(passos = []) {
   return passos.map((p, idx) => ({
     ...p,
-    // Usa ?? para tratar null (posicao nao salva no banco) alem de undefined —
+    // Usa ?? para tratar null (posicao nao salva no banco) alem de undefined
     // senao os blocos do seed (posX/posY null) empilhavam todos em left:0.
     x: p.x ?? (80 + idx * 270),
     y: p.y ?? (180 + (idx % 2 === 0 ? 0 : 40)),
@@ -394,6 +394,10 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
   };
 
   const addNode = (tipo, pos = null) => {
+    // Sem um fluxo selecionado nao ha onde anexar o bloco: o syncFlowToParent
+    // nao encontraria nenhum fluxo para gravar os passos, entao o bloco ficaria
+    // "solto" na tela e sumiria no primeiro reload. Bloqueamos aqui.
+    if (!flow) return;
     const newId = 'p_' + Date.now();
     const titleMap = { gatilho: 'Novo Gatilho', mensagem: 'Nova Mensagem', condicao: 'Validar CNPJ', delay: 'Aguardar...', acao: 'Ação Automática', comentario: 'Anotação' };
     const newNode = {

@@ -9,47 +9,15 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { EquipeAPI, FluxosAPI, ParceirosAPI, ConversasAPI, WhatsAppAPI } from '../services/api';
 import { playPing } from '../utils/sound';
 
-const SEED_EQUIPE = [
-  { id: 'e1', nome: 'Marina Souza', cargo: 'Atendimento Especializado', status: 'online' },
-  { id: 'e2', nome: 'Diego Alves',  cargo: 'Suporte Técnico N2',        status: 'offline' },
-  { id: 'e3', nome: 'Bruna Lima',   cargo: 'Gerente Comercial',         status: 'online' },
-];
+// NAO existe mais SEED aqui de proposito.
+//
+// Antes, quando a API falhava, o contexto injetava listas de exemplo com ids
+// falsos (e1, f1, c1...). O back-end nao conhece esses ids, entao apagar um
+// deles sumia da tela mas nao apagava nada; no F5 o SEED era injetado de novo
+// e o item "voltava". Agora, se o back-end estiver fora, as listas ficam
+// vazias e `apiOffline` avisa o usuario nada de dados fantasma
 
-const SEED_FLUXOS = [
-  {
-    id: 'f1', nome: 'Atendimento de Orçamentos', gatilho: 'orçamento', ativo: true,
-    passos: [
-      { id: 'p1', tipo: 'gatilho',  titulo: 'Gatilho Recebido',        desc: 'Cliente digita "orçamento"' },
-      { id: 'p2', tipo: 'mensagem', titulo: 'Perguntar CNPJ',          desc: 'Solicita o CNPJ para consulta de cadastro' },
-      { id: 'p3', tipo: 'condicao', titulo: 'Validar CNPJ do Cliente', desc: 'Verifica se possui contrato de parceiro ativo' },
-      { id: 'p4', tipo: 'mensagem', titulo: 'Resposta Inicial Bot',    desc: 'Olá! Sou a IA da Arka. Vou preparar seu orçamento agora mesmo.' },
-      { id: 'p5', tipo: 'delay',    titulo: 'Aguardar 1.5s',           desc: 'Simula digitação humana' },
-      { id: 'p6', tipo: 'acao',     titulo: 'Desconto Automático',     desc: 'Se for parceiro -> Aplica 15% de desconto automático na proposta' },
-    ],
-  },
-  {
-    id: 'f2', nome: 'Reenvio de 2ª Via de Boleto', gatilho: 'boleto', ativo: true,
-    passos: [
-      { id: 'p21', tipo: 'gatilho',  titulo: 'Gatilho Recebido',     desc: 'Cliente digita "boleto"' },
-      { id: 'p22', tipo: 'mensagem', titulo: 'Solicitar CNPJ',       desc: 'Por favor informe seu CNPJ para consultar títulos em aberto...' },
-      { id: 'p23', tipo: 'delay',    titulo: 'Aguardar 2.0s',        desc: 'Consulta no sistema ERP Arka' },
-      { id: 'p24', tipo: 'acao',     titulo: 'Gerar Linha Digitável', desc: 'Envia PDF + código Pix/Boleto atualizado' },
-    ],
-  },
-];
-
-const SEED_PARCEIROS = [
-  { cnpj: '11222333000181', razaoSocial: 'Empresa Exemplo LTDA', status: 'ativo' },
-  { cnpj: '00000000000191', razaoSocial: 'Banco do Brasil SA',   status: 'ativo' },
-];
-
-const SEED_CONVERSAS = [
-  {
-    id: 'c1', cliente: 'João Pereira', telefone: '+55 11 98765-4321',
-    statusAtendimento: 'aguardando', cnpj: null, cnpjVerificado: false, lido: false,
-    mensagens: [{ de: 'cliente', texto: 'Oi, boa tarde! Gostaria de um orçamento para a minha empresa.', hora: '09:12' }],
-  },
-];
+const ALERTA_SEM_FLUXO = 'alerta-sem-fluxo';
 
 const AppContext = createContext(null);
 
@@ -61,6 +29,8 @@ export function AppProvider({ children }) {
   const [conversas,         setConversas]         = useState([]);
   const [whatsAppConectado, setWhatsAppConectado] = useState(false);
   const [notificacoes,      setNotificacoes]      = useState([]);
+  const [historico,         setHistorico]         = useState([]);
+  const [apiOffline,        setApiOffline]        = useState(false);
   const msgCountsRef = useRef(null);
 
   const carregarDadosDoServidor = useCallback(async () => {
@@ -73,22 +43,23 @@ export function AppProvider({ children }) {
         ConversasAPI.listar(),
       ]);
 
-      // Se a API respondeu (fulfilled) usamos o valor real do back-end, mesmo
-      // que seja uma lista vazia. So caimos no SEED quando a chamada FALHA
-      // (back-end offline). Isso evita itens "fantasma" com id falso que a API
-      // nao reconhece e que fariam edicoes/exclusoes falharem silenciosamente.
-      const resolver = (res, seed) =>
-        res.status === 'fulfilled' && Array.isArray(res.value) ? res.value : seed;
+      // Lista vazia vinda da API e um resultado legitimo: significa que o
+      // usuario apagou tudo. Nunca substituimos por dados de exemplo.
+      const resolver = (res) =>
+        res.status === 'fulfilled' && Array.isArray(res.value) ? res.value : [];
 
-      setEquipe(resolver(eq, SEED_EQUIPE));
-      setFluxos(resolver(fl, SEED_FLUXOS));
-      setParceiros(resolver(pa, SEED_PARCEIROS));
-      setConversas(resolver(co, SEED_CONVERSAS));
+      setEquipe(resolver(eq));
+      setFluxos(resolver(fl));
+      setParceiros(resolver(pa));
+      setConversas(resolver(co));
+
+      setApiOffline([eq, fl, pa, co].every(r => r.status === 'rejected'));
     } catch {
-      setEquipe(SEED_EQUIPE);
-      setFluxos(SEED_FLUXOS);
-      setParceiros(SEED_PARCEIROS);
-      setConversas(SEED_CONVERSAS);
+      setEquipe([]);
+      setFluxos([]);
+      setParceiros([]);
+      setConversas([]);
+      setApiOffline(true);
     } finally {
       setCarregando(false);
     }
@@ -105,6 +76,7 @@ export function AppProvider({ children }) {
     try {
       const co = await ConversasAPI.listar();
       if (Array.isArray(co)) setConversas(co);
+      setApiOffline(false);
     } catch { /* back-end offline: mantem estado atual */ }
   }, []);
 
@@ -117,9 +89,18 @@ export function AppProvider({ children }) {
     setNotificacoes(prev => prev.filter(n => n.id !== id));
   }, []);
 
-  // Detecta mensagens novas de clientes (comparando com o snapshot anterior)
-  // e dispara: som de sino + toast "fulano lhe mandou mensagem". Roda em
-  // qualquer página, pois vive no contexto global.
+  // Historico do sino: diferente dos toasts, NAO some sozinho. Guarda as
+  // ultimas 30 notificacoes para o pop-up do sino listar.
+  const registrarNoHistorico = useCallback((itens) => {
+    setHistorico(prev => [...itens, ...prev].slice(0, 30));
+  }, []);
+
+  const marcarNotificacoesLidas = useCallback(() => {
+    setHistorico(prev => prev.map(n => ({ ...n, lida: true })));
+  }, []);
+
+  const limparHistorico = useCallback(() => setHistorico([]), []);
+
   useEffect(() => {
     const counts = {};
     conversas.forEach(c => {
@@ -136,21 +117,44 @@ export function AppProvider({ children }) {
           novas.push({
             id: `${c.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
             convId: c.id,
+            tipo: 'mensagem',
             cliente: c.cliente,
             texto: ultima?.texto || 'Nova mensagem',
+            em: Date.now(),
+            lida: false,
           });
         }
       });
       if (novas.length > 0) {
         playPing();
         setNotificacoes(prev => [...novas, ...prev].slice(0, 5));
+        registrarNoHistorico(novas);
         novas.forEach(n => setTimeout(() => removerNotificacao(n.id), 7000));
       }
     }
     msgCountsRef.current = counts;
-  }, [conversas, removerNotificacao]);
+  }, [conversas, removerNotificacao, registrarNoHistorico]);
 
-  // Sincroniza o status real da conexao WhatsApp (Evolution API) a cada 10s.
+  const fluxosAtivos = fluxos.filter(f => f.ativo).length;
+  useEffect(() => {
+    if (carregando) return;
+    setHistorico(prev => {
+      const semFluxo = prev.find(n => n.id === ALERTA_SEM_FLUXO);
+      if (fluxosAtivos === 0) {
+        if (semFluxo) return prev;
+        return [{
+          id: ALERTA_SEM_FLUXO,
+          tipo: 'alerta',
+          cliente: 'Automação desativada',
+          texto: 'Nenhum fluxo ativo o bot não vai responder sozinho. Crie ou ative um fluxo em Fluxo de Automações.',
+          em: Date.now(),
+          lida: false,
+        }, ...prev].slice(0, 30);
+      }
+      return semFluxo ? prev.filter(n => n.id !== ALERTA_SEM_FLUXO) : prev;
+    });
+  }, [fluxosAtivos, carregando]);
+
   useEffect(() => {
     let ativo = true;
     const checar = async () => {
@@ -194,6 +198,8 @@ export function AppProvider({ children }) {
       conversas,         atualizarConversas,
       whatsAppConectado, setWhatsAppConectado,
       notificacoes,      removerNotificacao,
+      historico,         marcarNotificacoesLidas, limparHistorico,
+      apiOffline,
     }}>
       {children}
     </AppContext.Provider>

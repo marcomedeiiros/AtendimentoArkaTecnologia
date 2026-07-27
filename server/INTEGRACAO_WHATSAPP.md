@@ -1,4 +1,4 @@
-# Integração WhatsApp (Evolution API) — Passo a passo
+# Integração WhatsApp (Evolution API) Passo a passo
 
 O back-end já está **pronto** para o WhatsApp: existe o cliente da Evolution API
 (`server/src/infrastructure/external/evolution-api.client.js`), o webhook que recebe
@@ -86,7 +86,7 @@ Depois pegue o QR Code e escaneie no celular (WhatsApp → Aparelhos conectados)
 - Ou via API: `GET http://localhost:8080/instance/connect/arka-wapi-oficial` (campo `base64`).
 
 Quando o telefone parear, o ícone **WhatsApp Online** (verde) aparece no topo do
-Central de Atendimento — ele é sincronizado a cada 10s com o status real da Evolution.
+Central de Atendimento ele é sincronizado a cada 10s com o status real da Evolution.
 
 ---
 

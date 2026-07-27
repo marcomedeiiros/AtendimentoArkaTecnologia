@@ -4,8 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import Avatar from './Avatar';
 
-// Pilha de avisos "fulano lhe mandou mensagem" no canto superior direito.
-// Aparece em qualquer página (vive acima do layout).
 export default function NotificacoesToast() {
   const { notificacoes, removerNotificacao } = useAppContext();
   const navigate = useNavigate();

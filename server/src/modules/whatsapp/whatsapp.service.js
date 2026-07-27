@@ -82,6 +82,7 @@ class WhatsAppService {
       texto,
       nomeCliente,
       instanceName,
+      waMessageId: key?.id || null,
     });
 
     return { recebido: true, ...result };

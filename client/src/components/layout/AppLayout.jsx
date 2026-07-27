@@ -9,7 +9,7 @@ import React, { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   LayoutGrid, Users, Zap, MessageSquare, ShieldCheck,
-  GitFork, MessageCircle, CalendarDays, Send, Loader2, Menu, X
+  GitFork, MessageCircle, CalendarDays, Send, Loader2, Menu, X, WifiOff
 } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
 import NotificacoesToast from '../NotificacoesToast';
@@ -138,7 +138,7 @@ function Sidebar({ aberto, onClose }) {
 }
 
 export default function AppLayout() {
-  const { carregando } = useAppContext();
+  const { carregando, apiOffline } = useAppContext();
   const location = useLocation();
   const [menuAberto, setMenuAberto] = useState(false);
 
@@ -167,8 +167,7 @@ export default function AppLayout() {
         />
       )}
 
-      <div className="flex-1 min-w-0 flex flex-col h-screen">
-        {/* Barra superior — só no mobile (abre o menu) */}
+      <div className="flex-1 min-w-0 flex flex-col h-screen">        
         <header className="lg:hidden flex items-center gap-3 h-14 px-4 bg-[#11141C] border-b border-[#2A3040] shrink-0 sticky top-0 z-30">
           <button
             onClick={() => setMenuAberto(true)}
@@ -180,6 +179,17 @@ export default function AppLayout() {
           <ArkaLogo size={22} />
           <span className="font-bold text-sm text-white tracking-tight font-display">Arka Tecnologia</span>
         </header>
+
+        {apiOffline && (
+          <div className="shrink-0 flex items-center gap-2.5 px-4 py-2.5 bg-amber-500/10 border-b border-amber-500/30 text-amber-300 text-xs">
+            <WifiOff size={14} className="shrink-0" />
+            <span>
+              Back-end offline nada esta sendo salvo. Rode{' '}
+              <code className="px-1.5 py-0.5 rounded bg-amber-500/15 font-mono">cd server &amp;&amp; npm run dev</code>
+              {' '}e atualize a pagina.
+            </span>
+          </div>
+        )}
 
         <main
           className={`flex-1 min-w-0 min-h-0 ${

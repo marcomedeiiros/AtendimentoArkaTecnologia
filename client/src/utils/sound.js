@@ -1,5 +1,3 @@
-// Som de notificação gerado via Web Audio API — sem arquivo externo.
-// Toca dois toques curtos e agradáveis ("ti-tim") quando chega mensagem nova.
 
 let ctx = null;
 
@@ -11,9 +9,6 @@ function getCtx() {
   return ctx;
 }
 
-// Navegadores bloqueiam áudio até o primeiro gesto do usuário. Este listener
-// cria/retoma o contexto no primeiro clique/tecla, deixando o som pronto para
-// tocar depois quando chegar uma mensagem (mesmo sem gesto naquele instante).
 function desbloquear() {
   const audio = getCtx();
   if (audio && audio.state === 'suspended') audio.resume().catch(() => {});

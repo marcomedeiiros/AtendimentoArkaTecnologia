@@ -3,6 +3,7 @@ import {
   CalendarDays, Plus, Pencil, Trash2, Save, X, Clock,
   CheckCircle2, AlertCircle, Circle, ChevronLeft, ChevronRight, Search
 } from 'lucide-react';
+import Portal from '../Portal';
 
 async function carregar(chave, padrao) {
   try {
@@ -63,17 +64,19 @@ function ModalCompromisso({ compromisso, onSalvar, onFechar }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="glass-panel border border-[#2A3040] rounded-2xl w-full max-w-lg shadow-2xl fade-in overflow-hidden">
-        <div className="p-4 bg-[#1E2330] border-b border-[#2A3040] flex items-center justify-between">
-          <div className="flex items-center gap-2 font-bold text-sm text-white">
-            <CalendarDays size={16} className="text-orange-400" />
-            {compromisso?.id ? 'Editar Compromisso' : 'Novo Compromisso'}
+    // Portal: evita que o transform do container `.fade-in` corte o modal.
+    <Portal>
+    <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
+      <div className="glass-panel border border-[#2A3040] rounded-2xl w-full max-w-lg shadow-2xl fade-in my-auto flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh]">
+        <div className="p-4 bg-[#1E2330] border-b border-[#2A3040] flex items-center justify-between shrink-0 rounded-t-2xl">
+          <div className="flex items-center gap-2 font-bold text-sm text-white min-w-0">
+            <CalendarDays size={16} className="text-orange-400 shrink-0" />
+            <span className="truncate">{compromisso?.id ? 'Editar Compromisso' : 'Novo Compromisso'}</span>
           </div>
-          <button onClick={onFechar} className="text-slate-400 hover:text-white transition-colors"><X size={16} /></button>
+          <button onClick={onFechar} className="text-slate-400 hover:text-white transition-colors shrink-0 ml-2"><X size={16} /></button>
         </div>
 
-        <div className="p-5 space-y-4">
+        <div className="p-4 sm:p-5 space-y-4 flex-1 overflow-y-auto min-h-0">
           <div>
             <label className="text-xs text-slate-400 font-medium block mb-1.5">Título *</label>
             <input value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ex: Reunião com cliente Arka..."
@@ -124,18 +127,19 @@ function ModalCompromisso({ compromisso, onSalvar, onFechar }) {
           </div>
         </div>
 
-        <div className="p-4 bg-[#1E2330] border-t border-[#2A3040] flex justify-end gap-2">
+        <div className="p-4 bg-[#1E2330] border-t border-[#2A3040] flex flex-col-reverse sm:flex-row sm:justify-end gap-2 shrink-0 rounded-b-2xl">
           <button onClick={onFechar}
-            className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors">
+            className="px-3 py-2 sm:py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors">
             Cancelar
           </button>
           <button onClick={salvar} disabled={!titulo.trim() || !data}
-            className="px-4 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+            className="px-4 py-2 sm:py-1.5 rounded-lg bg-orange-500 hover:bg-orange-400 text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
             <Save size={13} /> Salvar
           </button>
         </div>
       </div>
     </div>
+    </Portal>
   );
 }
 
@@ -276,7 +280,7 @@ export default function Agenda() {
   }, []);
 
   useEffect(() => {
-    // Salva SEMPRE após o carregamento inicial — inclusive lista vazia. Antes só
+    // Salva SEMPRE após o carregamento inicial inclusive lista vazia. Antes só
     // salvava com length > 0, então apagar o último item não persistia e o
     // compromisso "voltava" no F5.
     if (carregado) salvar('arka:agenda', compromissos);

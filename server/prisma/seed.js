@@ -28,6 +28,9 @@ const SEED_CONTATOS = [
   },
 ];
 
+// `descricao` = anotacao interna que aparece no editor de fluxos.
+// `texto`     = o que o cliente recebe no WhatsApp.
+// Sem `texto`, o bot acabava enviando a anotacao interna para o cliente.
 async function seedFluxos() {
   const existente = await prisma.fluxo.findFirst();
   if (existente) return;
@@ -35,16 +38,41 @@ async function seedFluxos() {
   const fluxo1 = await prisma.fluxo.create({
     data: {
       nome: "Fluxo 1: Atendimento de Orcamentos",
-      gatilho: "orcamento",
+      gatilho: "orcamento, orcar, proposta",
       ativo: true,
       passos: {
         create: [
           { tipo: "gatilho", titulo: "Gatilho Recebido", descricao: 'Cliente digita "orcamento"', ordem: 0 },
-          { tipo: "mensagem", titulo: "Perguntar CNPJ", descricao: "Solicita o CNPJ para consulta de cadastro", ordem: 1 },
-          { tipo: "condicao", titulo: "Validar CNPJ do Cliente", descricao: "Verifica se possui contrato de parceiro ativo", ordem: 2 },
-          { tipo: "mensagem", titulo: "Resposta Inicial Bot", descricao: "Ola! Sou a IA da Arka. Vou preparar seu orcamento agora mesmo.", ordem: 3 },
+          {
+            tipo: "mensagem",
+            titulo: "Perguntar CNPJ",
+            descricao: "Solicita o CNPJ para consulta de cadastro",
+            texto: "Claro, posso te ajudar com o orcamento! Para consultar seu cadastro, me informe o CNPJ da sua empresa (14 digitos).",
+            config: { aguardar: "cnpj" },
+            ordem: 1,
+          },
+          {
+            tipo: "condicao",
+            titulo: "Validar CNPJ do Cliente",
+            descricao: "Verifica se possui contrato de parceiro ativo",
+            texto: "Preciso de um CNPJ valido para consultar seu cadastro. Pode conferir e enviar de novo?",
+            ordem: 2,
+          },
+          {
+            tipo: "mensagem",
+            titulo: "Resposta Inicial Bot",
+            descricao: "Confirma que o orcamento esta sendo preparado",
+            texto: "Perfeito! Ja estou preparando seu orcamento.",
+            ordem: 3,
+          },
           { tipo: "delay", titulo: "Aguardar 1.5s", descricao: "Simula digitacao humana", config: { ms: 1500 }, ordem: 4 },
-          { tipo: "acao", titulo: "Desconto Automatico", descricao: "Se for parceiro -> Aplica 15% de desconto automatico na proposta", config: { acao: "desconto_parceiro", percentual: 15 }, ordem: 5 },
+          {
+            tipo: "acao",
+            titulo: "Desconto Automatico",
+            descricao: "Se for parceiro -> aplica 15% de desconto automatico na proposta",
+            config: { acao: "desconto_parceiro", percentual: 15 },
+            ordem: 5,
+          },
         ],
       },
     },
@@ -62,14 +90,27 @@ async function seedFluxos() {
   const fluxo2 = await prisma.fluxo.create({
     data: {
       nome: "Fluxo 2: Reenvio de 2a Via de Boleto",
-      gatilho: "boleto",
+      gatilho: "boleto, 2a via, segunda via",
       ativo: true,
       passos: {
         create: [
           { tipo: "gatilho", titulo: "Gatilho Recebido", descricao: 'Cliente digita "boleto"', ordem: 0 },
-          { tipo: "mensagem", titulo: "Solicitar CNPJ", descricao: "Por favor informe seu CNPJ para consultar titulos em aberto...", ordem: 1 },
+          {
+            tipo: "mensagem",
+            titulo: "Solicitar CNPJ",
+            descricao: "Pede o CNPJ para consultar titulos em aberto",
+            texto: "Vou buscar a 2a via para voce. Me informe o CNPJ da empresa (14 digitos).",
+            config: { aguardar: "cnpj" },
+            ordem: 1,
+          },
           { tipo: "delay", titulo: "Aguardar 2.0s", descricao: "Consulta no sistema ERP Arka", config: { ms: 2000 }, ordem: 2 },
-          { tipo: "acao", titulo: "Gerar Linha Digitavel", descricao: "Envia PDF + codigo Pix/Boleto atualizado", config: { acao: "gerar_boleto" }, ordem: 3 },
+          {
+            tipo: "acao",
+            titulo: "Gerar Linha Digitavel",
+            descricao: "Envia codigo Pix / linha digitavel atualizada",
+            config: { acao: "gerar_boleto" },
+            ordem: 3,
+          },
         ],
       },
     },
@@ -87,16 +128,66 @@ async function seedFluxos() {
   await prisma.fluxo.create({
     data: {
       nome: "Fluxo 3: Consulta de Horario de Suporte",
-      gatilho: "horario",
+      gatilho: "horario, funcionamento, expediente",
       ativo: true,
       passos: {
         create: [
           { tipo: "gatilho", titulo: "Gatilho Recebido", descricao: 'Cliente digita "horario"', ordem: 0 },
-          { tipo: "mensagem", titulo: "Informa Horario", descricao: "Nosso atendimento funciona de segunda a sexta, das 8h as 18h.", ordem: 1 },
+          {
+            tipo: "mensagem",
+            titulo: "Informa Horario",
+            descricao: "Responde o horario de atendimento",
+            texto: "Nosso atendimento funciona de segunda a sexta, das 8h as 18h.",
+            ordem: 1,
+          },
         ],
       },
     },
   });
+}
+
+// Bancos criados antes da separacao texto/descricao ficaram com os passos sem
+// `texto`, e o bot acabava mandando a anotacao interna para o cliente. Aqui so
+// preenchemos o que ainda esta vazio -- textos editados pelo usuario ficam intactos.
+const TEXTOS_PADRAO = {
+  "Perguntar CNPJ": {
+    texto: "Claro, posso te ajudar com o orcamento! Para consultar seu cadastro, me informe o CNPJ da sua empresa (14 digitos).",
+    config: { aguardar: "cnpj" },
+  },
+  "Validar CNPJ do Cliente": {
+    texto: "Preciso de um CNPJ valido para consultar seu cadastro. Pode conferir e enviar de novo?",
+  },
+  "Resposta Inicial Bot": {
+    texto: "Perfeito! Ja estou preparando seu orcamento.",
+  },
+  "Solicitar CNPJ": {
+    texto: "Vou buscar a 2a via para voce. Me informe o CNPJ da empresa (14 digitos).",
+    config: { aguardar: "cnpj" },
+  },
+  "Informa Horario": {
+    texto: "Nosso atendimento funciona de segunda a sexta, das 8h as 18h.",
+  },
+};
+
+async function backfillTextosFluxos() {
+  const passos = await prisma.passoFluxo.findMany({
+    where: { texto: null, titulo: { in: Object.keys(TEXTOS_PADRAO) } },
+  });
+
+  for (const passo of passos) {
+    const padrao = TEXTOS_PADRAO[passo.titulo];
+    await prisma.passoFluxo.update({
+      where: { id: passo.id },
+      data: {
+        texto: padrao.texto,
+        config: padrao.config ? { ...(passo.config || {}), ...padrao.config } : passo.config,
+      },
+    });
+  }
+
+  if (passos.length) {
+    console.log(`Backfill: ${passos.length} passo(s) receberam o texto de cliente.`);
+  }
 }
 
 async function main() {
@@ -151,6 +242,7 @@ async function main() {
   }
 
   await seedFluxos();
+  await backfillTextosFluxos();
 
   const conversaExistente = await prisma.conversa.findFirst({ where: { instanciaId: instancia.id } });
   if (!conversaExistente) {

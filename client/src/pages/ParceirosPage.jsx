@@ -44,31 +44,35 @@ export default function ParceirosPage() {
     setErro('');
 
     const novo = { cnpj: c, razaoSocial: nome.trim(), status: 'ativo' };
+    // A lista so muda depois que o servidor confirma. Antes o catch gravava
+    // so na tela: parecia salvo e o F5 desfazia tudo.
     try {
       const criado = await ParceirosAPI.criar(novo);
       atualizarParceiros([...parceiros.filter(p => p.cnpj !== c), criado]);
-    } catch {
-      atualizarParceiros([...parceiros.filter(p => p.cnpj !== c), novo]);
+      setCnpjInput(''); setNome('');
+    } catch (err) {
+      setErro(`Nao foi possivel salvar: ${err.message}. Verifique se o back-end esta rodando.`);
     }
-    setCnpjInput(''); setNome('');
   }
 
   async function remover(c) {
     if (!window.confirm('Deseja remover este parceiro?')) return;
     try {
       await ParceirosAPI.remover(c);
-    } catch {}
-    atualizarParceiros(parceiros.filter(p => p.cnpj !== c));
+      atualizarParceiros(parceiros.filter(p => p.cnpj !== c));
+      setErro('');
+    } catch (err) {
+      setErro(`Nao foi possivel remover: ${err.message}. Verifique se o back-end esta rodando.`);
+    }
   }
 
   async function alternarStatus(c) {
     try {
       const alt = await ParceirosAPI.alternarStatus(c);
       atualizarParceiros(parceiros.map(p => p.cnpj === c ? alt : p));
-    } catch {
-      atualizarParceiros(parceiros.map(p =>
-        p.cnpj === c ? { ...p, status: p.status === 'ativo' ? 'inativo' : 'ativo' } : p
-      ));
+      setErro('');
+    } catch (err) {
+      setErro(`Nao foi possivel mudar o status: ${err.message}`);
     }
   }
 

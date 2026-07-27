@@ -2,20 +2,16 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   MessageSquare, Send, Eye, Trash2, UserCheck, Check, X,
   CheckCircle2, Clock, Inbox, Play, Search, Zap,
-  CheckCheck, WifiOff, Wifi, Bell, Pin, ChevronLeft
+  CheckCheck, WifiOff, Wifi, Bell, Pin, ChevronLeft,
+  ArrowRightLeft, AlertCircle, Users
 } from 'lucide-react';
 import { EmojiIcon, FormattedMessage } from './EmojiIcon';
 import { useMensagensRapidas } from './MensagensRapidas';
 import Avatar from '../Avatar';
+import Portal from '../Portal';
 import { useAppContext } from '../../context/AppContext';
 import { ConversasAPI } from '../../services/api';
-import { playPing } from '../../utils/sound';
-
-// Fundo estilo WhatsApp (papel de parede com padrão sutil) para a área do chat.
-const WHATSAPP_BG = {
-  backgroundColor: '#0B141A',
-  backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-};
+import { wallpaperStyle as WHATSAPP_BG, COR_FUNDO_CHAT } from '../../utils/wallpaper';
 
 const PINOS_KEY = 'arka_conversas_fixadas';
 function lerFixados() {
@@ -23,6 +19,29 @@ function lerFixados() {
 }
 function salvarFixados(ids) {
   try { localStorage.setItem(PINOS_KEY, JSON.stringify(ids)); } catch {}
+}
+
+// Atendente responsavel por cada conversa. Fica no localStorage (e nao no
+// back-end) porque a coluna atendenteId da conversa aponta para Usuario, nao
+// para a Equipe cadastrada nesta tela -- e persistir no servidor exigiria
+// migracao. Guardado por id de conversa, sobrevive ao polling de 8s e ao F5.
+const ATEND_KEY = 'arka_conversa_atendentes';
+function lerAtendentes() {
+  try { return JSON.parse(localStorage.getItem(ATEND_KEY)) || {}; } catch { return {}; }
+}
+function salvarAtendentes(map) {
+  try { localStorage.setItem(ATEND_KEY, JSON.stringify(map)); } catch {}
+}
+
+// "ha 5 min" para o painel de notificacoes do sino.
+function tempoRelativo(ts) {
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return 'agora';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `ha ${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `ha ${h}h`;
+  return `ha ${Math.floor(h / 24)}d`;
 }
 
 function limparCnpj(v) { return String(v || '').replace(/\D/g, ''); }
@@ -189,7 +208,7 @@ function PainelChat({
   conversa, parceiros, conversas, setConversas, fluxos,
   texto, setTexto, scrollRef, onEnviar, onFinalizar, onResolver,
   onMarcarLido, onApagarChat, onSolicitarCnpj, onValidarCnpjModal,
-  onExecutarFluxo, fluxoSugerido, onVoltar
+  onExecutarFluxo, fluxoSugerido, onVoltar, atendente, onTransferir
 }) {
   const [showMsgRapidas, setShowMsgRapidas] = useState(false);
 
@@ -221,13 +240,19 @@ function PainelChat({
               {conversa.statusAtendimento === 'resolvido' ? 'Resolvido' : 'Em atendimento'}
             </span>
           </div>
-          <div className="mt-1">
+          <div className="mt-1 flex items-center gap-2 flex-wrap">
             {!conversa.cnpjVerificado
               ? <EmojiIcon name="question" label="CNPJ Pendente" size="sm" />
               : ehParceiro
                 ? <EmojiIcon name="shield" label={`${parceiroCadastrado?.razaoSocial} (${mascararCnpj(conversa.cnpj)})`} size="sm" />
                 : <EmojiIcon name="warning" label={`CNPJ ${mascararCnpj(conversa.cnpj)} (Sem Contrato)`} size="sm" />
             }
+            {atendente && (
+              <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 font-semibold"
+                title={`Conversa atribuida a ${atendente.nome}`}>
+                <UserCheck size={11} /> {atendente.nome}
+              </span>
+            )}
           </div>
           </div>
         </div>
@@ -262,7 +287,12 @@ function PainelChat({
             </button>
           )}
 
-          
+          <button onClick={onTransferir}
+            title="Transferir conversa para outro atendente"
+            className="px-2.5 py-1.5 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 text-xs font-semibold border border-purple-500/30 transition-all flex items-center gap-1">
+            <ArrowRightLeft size={13} /> Transferir
+          </button>
+
           <button onClick={() => onFinalizar(conversa.id)}
             className="px-2.5 py-1.5 rounded-lg bg-slate-500/15 hover:bg-slate-500/25 text-slate-300 text-xs font-semibold border border-slate-500/30 transition-all flex items-center gap-1">
             <Check size={13} /> Concluir
@@ -355,8 +385,8 @@ function PainelChat({
   );
 }
 
-export default function AtendimentoView({ conversas, setConversas, fluxos, parceiros }) {
-  const { whatsAppConectado } = useAppContext();
+export default function AtendimentoView({ conversas, setConversas, fluxos, parceiros, equipe = [] }) {
+  const { whatsAppConectado, historico = [], marcarNotificacoesLidas, limparHistorico } = useAppContext();
   const [abaAtual,      setAbaAtual]     = useState('abertos');
   const [selecionada,   setSelecionada]  = useState(null);
   const [texto,         setTexto]        = useState('');
@@ -366,10 +396,46 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   const [busca,         setBusca]        = useState('');
   const [fixados,       setFixados]      = useState(lerFixados);
   const [sinoTocando,   setSinoTocando]  = useState(false);
+  const [showNotif,     setShowNotif]    = useState(false);
+  const [atendentes,    setAtendentes]   = useState(lerAtendentes);
+  const [transferindo,  setTransferindo] = useState(null); // conversa alvo do modal de transferencia
   const scrollRef = useRef(null);
   const totalMsgClienteRef = useRef(null);
+  const sinoRef = useRef(null);
 
   const conversa = conversas.find(c => c.id === selecionada);
+
+  // Notificacoes ainda nao lidas do historico (sino).
+  const naoLidasSino = historico.filter(n => !n.lida).length;
+
+  // Abre/fecha o painel do sino. Ao abrir, marca tudo como lido (zera o badge).
+  const alternarNotif = useCallback(() => {
+    setShowNotif(prev => {
+      const abrindo = !prev;
+      if (abrindo && marcarNotificacoesLidas) marcarNotificacoesLidas();
+      return abrindo;
+    });
+  }, [marcarNotificacoesLidas]);
+
+  // Clicar fora fecha o painel do sino.
+  useEffect(() => {
+    if (!showNotif) return;
+    const onDoc = (e) => {
+      if (sinoRef.current && !sinoRef.current.contains(e.target)) setShowNotif(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [showNotif]);
+
+  // Transfere a conversa para um membro da equipe (persistido em localStorage).
+  const transferirConversa = useCallback((conv, membro) => {
+    setAtendentes(prev => {
+      const novo = { ...prev, [conv.id]: { nome: membro.nome, cargo: membro.cargo || '', em: Date.now() } };
+      salvarAtendentes(novo);
+      return novo;
+    });
+    setTransferindo(null);
+  }, []);
 
   const alternarFixado = useCallback((id) => {
     setFixados(prev => {
@@ -467,12 +533,22 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     try { aplicarConversa(await ConversasAPI.marcarLido(id)); } catch {}
   }, [setConversas, aplicarConversa]);
 
+  // Remove da tela SO depois que o servidor confirma. Antes era otimista com
+  // `catch {}`: se o DELETE falhasse, o proximo polling (8s) trazia a conversa
+  // de volta sozinha -- e no F5 ela estava la de novo
   const apagarChat = useCallback(async (id, e) => {
     if (e) e.stopPropagation();
     if (!window.confirm('Deseja realmente apagar este atendimento?')) return;
-    setConversas(prev => prev.filter(c => c.id !== id));
-    if (selecionada === id) setSelecionada(null);
-    try { await ConversasAPI.remover(id); } catch {}
+    try {
+      await ConversasAPI.remover(id);
+      setConversas(prev => prev.filter(c => c.id !== id));
+      if (selecionada === id) setSelecionada(null);
+    } catch (err) {
+      window.alert(
+        `Nao foi possivel apagar o atendimento: ${err.message}\n\n` +
+        'Verifique se o back-end esta rodando (cd server && npm run dev).'
+      );
+    }
   }, [setConversas, selecionada]);
 
   const enviarResposta = useCallback(async (txt) => {
@@ -541,11 +617,6 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       ))
     : null;
 
-  const naoLidos = conversas.filter(c =>
-    !c.lido && c.statusAtendimento !== 'finalizado' && c.statusAtendimento !== 'resolvido'
-  ).length;
-
-  // No mobile mostramos a lista OU o chat aberto (não os dois empilhados).
   const chatAberto = !!conversa &&
     (conversa.statusAtendimento === 'em_atendimento' || conversa.statusAtendimento === 'resolvido');
 
@@ -554,43 +625,96 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
         <div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold text-white tracking-tight font-display">
-              Central de Atendimentos
-            </h1>
-            <button
-              onClick={() => { playPing(); setAbaAtual('pendentes'); }}
-              title={naoLidos > 0 ? `${naoLidos} conversa(s) não lida(s) — clique para ouvir o som` : 'Testar som de notificação'}
-              className={`relative flex items-center justify-center w-8 h-8 rounded-full border transition-colors ${
-                naoLidos > 0
-                  ? 'bg-orange-500/15 border-orange-500/40 text-orange-400'
-                  : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-white'
-              } ${sinoTocando ? 'animate-bounce' : ''}`}
-            >
-              <Bell size={14} className={sinoTocando ? 'fill-current' : ''} />
-              {naoLidos > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-orange-500 text-slate-950 text-[9px] font-extrabold flex items-center justify-center">
-                  {naoLidos}
-                </span>
-              )}
-            </button>
-          </div>
+          <h1 className="text-2xl font-bold text-white tracking-tight font-display">
+            Central de Atendimentos
+          </h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-1">
             Assuma conversas, consulte CNPJ e automatize respostas.
           </p>
         </div>
 
-        {/* Status da conexão WhatsApp — canto direito, sincronizado com a Integração */}
-        <div
-          title={whatsAppConectado ? 'WhatsApp conectado' : 'WhatsApp desconectado — configure em Integração WhatsApp'}
-          className={`self-start sm:self-auto flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${
-            whatsAppConectado
-              ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400'
-              : 'bg-rose-500/15 border-rose-500/40 text-rose-400'
-          }`}
-        >
-          {whatsAppConectado ? <Wifi size={14} /> : <WifiOff size={14} />}
-          <span>WhatsApp {whatsAppConectado ? 'Online' : 'Offline'}</span>
+        {/* Sino + status do WhatsApp lado a lado, no canto direito. */}
+        <div className="self-start sm:self-auto flex items-center gap-2">
+          {/* Sino de notificacoes: abre o painel; NAO toca som ao clicar
+              (o som so dispara quando chega mensagem, via AppContext). */}
+          <div className="relative" ref={sinoRef}>
+            <button
+              onClick={alternarNotif}
+              title="Notificacoes"
+              className={`relative flex items-center justify-center w-9 h-9 rounded-full border transition-colors ${
+                naoLidasSino > 0
+                  ? 'bg-orange-500/15 border-orange-500/40 text-orange-400'
+                  : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-white'
+              } ${sinoTocando ? 'animate-bounce' : ''}`}
+            >
+              <Bell size={15} className={sinoTocando ? 'fill-current' : ''} />
+              {naoLidasSino > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-orange-500 text-slate-950 text-[9px] font-extrabold flex items-center justify-center">
+                  {naoLidasSino}
+                </span>
+              )}
+            </button>
+
+            {showNotif && (
+              <div className="absolute right-0 top-full mt-2 w-[min(88vw,340px)] glass-panel border border-[#2A3040] rounded-2xl shadow-2xl shadow-black/50 z-50 overflow-hidden fade-in">
+                <div className="p-3 bg-[#1E2330] border-b border-[#2A3040] flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-bold text-white">
+                    <Bell size={13} className="text-orange-400" /> Notificacoes
+                  </div>
+                  {historico.length > 0 && (
+                    <button onClick={() => limparHistorico && limparHistorico()}
+                      className="text-[11px] text-slate-400 hover:text-rose-400 transition-colors font-semibold">
+                      Limpar
+                    </button>
+                  )}
+                </div>
+                <div className="max-h-80 overflow-y-auto divide-y divide-[#2A3040]/60">
+                  {historico.length === 0 && (
+                    <div className="text-center text-slate-500 text-xs py-10">
+                      <Bell size={26} className="text-slate-600 mx-auto mb-2" />
+                      Nenhuma notificacao ainda.
+                    </div>
+                  )}
+                  {historico.map(n => {
+                    const ehAlerta = n.tipo === 'alerta';
+                    return (
+                      <button
+                        key={n.id}
+                        onClick={() => {
+                          if (n.convId) { setAbaAtual('abertos'); setSelecionada(n.convId); }
+                          setShowNotif(false);
+                        }}
+                        className="w-full text-left p-3 flex items-start gap-2.5 hover:bg-[#1E2330]/70 transition-colors"
+                      >
+                        <span className={`mt-0.5 shrink-0 ${ehAlerta ? 'text-amber-400' : 'text-orange-400'}`}>
+                          {ehAlerta ? <AlertCircle size={15} /> : <MessageSquare size={15} />}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-bold text-white truncate">{n.cliente}</span>
+                            <span className="text-[10px] text-slate-500 shrink-0">{tempoRelativo(n.em)}</span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 truncate mt-0.5">{n.texto}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div
+            title={whatsAppConectado ? 'WhatsApp conectado' : 'WhatsApp desconectado configure em Integração WhatsApp'}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${
+              whatsAppConectado
+                ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400'
+                : 'bg-rose-500/15 border-rose-500/40 text-rose-400'
+            }`}
+          >
+            {whatsAppConectado ? <Wifi size={14} /> : <WifiOff size={14} />}
+            <span>WhatsApp {whatsAppConectado ? 'Online' : 'Offline'}</span>
+          </div>
         </div>
       </div>
 
@@ -664,13 +788,15 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
           {!conversa || (conversa.statusAtendimento !== 'em_atendimento' && conversa.statusAtendimento !== 'resolvido') ? (
             <div
               className="flex-1 flex items-center justify-center relative overflow-hidden"
-              style={{
-                background: '#0B141A',
-                backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-              }}
+              style={WHATSAPP_BG}
             >
               {/* Gradient overlay */}
-              <div className="absolute inset-0 bg-gradient-to-br from-[#0B141A] via-transparent to-[#0B141A] opacity-60 pointer-events-none" />
+              <div
+                className="absolute inset-0 opacity-60 pointer-events-none"
+                style={{
+                  backgroundImage: `linear-gradient(to bottom right, ${COR_FUNDO_CHAT}, transparent, ${COR_FUNDO_CHAT})`,
+                }}
+              />
 
               {/* Bolhas decorativas de chat ao fundo */}
               <div className="absolute top-8 left-8 w-32 h-10 rounded-2xl rounded-tl-sm bg-[#1F2C34] opacity-20" />
@@ -714,22 +840,25 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               onExecutarFluxo={executarFluxo}
               fluxoSugerido={fluxoSugerido}
               onVoltar={() => setSelecionada(null)}
+              atendente={atendentes[conversa.id]}
+              onTransferir={() => setTransferindo(conversa)}
             />
           )}
         </div>
       </div>
 
       {espiandoChat && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="glass-panel border border-[#2A3040] rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl fade-in">
-            <div className="p-4 bg-[#1E2330] border-b border-[#2A3040] flex items-center justify-between">
-              <div className="flex items-center gap-2 font-bold text-sm text-white">
-                <Eye className="text-blue-400" size={16} />
-                Espiando: {espiandoChat.cliente}
+        <Portal>
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
+          <div className="glass-panel border border-[#2A3040] rounded-2xl w-full max-w-lg shadow-2xl fade-in my-auto flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh]">
+            <div className="p-4 bg-[#1E2330] border-b border-[#2A3040] flex items-center justify-between shrink-0 rounded-t-2xl">
+              <div className="flex items-center gap-2 font-bold text-sm text-white min-w-0">
+                <Eye className="text-blue-400 shrink-0" size={16} />
+                <span className="truncate">Espiando: {espiandoChat.cliente}</span>
               </div>
-              <button onClick={() => setEspiandoChat(null)} className="text-slate-400 hover:text-white"><X size={16}/></button>
+              <button onClick={() => setEspiandoChat(null)} className="text-slate-400 hover:text-white shrink-0 ml-2"><X size={16}/></button>
             </div>
-            <div className="p-4 max-h-96 overflow-y-auto space-y-2 text-xs">
+            <div className="p-4 flex-1 overflow-y-auto min-h-0 space-y-2 text-xs">
               {espiandoChat.mensagens.map((m, idx) => (
                 <div key={idx} className={`p-2.5 rounded-xl ${
                   m.de === 'cliente' ? 'bg-[#1E2330] text-slate-200' : 'bg-orange-500/10 text-orange-200 border border-orange-500/20'
@@ -741,16 +870,18 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                 </div>
               ))}
             </div>
-            <div className="p-4 bg-[#1E2330] border-t border-[#2A3040] flex justify-end">
-              <button onClick={() => setEspiandoChat(null)} className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold">Fechar</button>
+            <div className="p-4 bg-[#1E2330] border-t border-[#2A3040] flex justify-end shrink-0 rounded-b-2xl">
+              <button onClick={() => setEspiandoChat(null)} className="px-3 py-2 sm:py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold">Fechar</button>
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       {modalCnpj && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="glass-panel border border-[#2A3040] rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl fade-in">
+        <Portal>
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
+          <div className="glass-panel border border-[#2A3040] rounded-2xl w-full max-w-md p-5 sm:p-6 space-y-4 shadow-2xl fade-in my-auto">
             <h3 className="text-base font-bold text-white font-display">Validar CNPJ do Cliente</h3>
             <p className="text-xs text-slate-400">Insira o CNPJ para pesquisar o status do parceiro.</p>
             <input
@@ -759,12 +890,90 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               placeholder="00.000.000/0000-00"
               className="w-full bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder-slate-500 focus:outline-none focus:border-orange-500/50"
             />
-            <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setModalCnpj(false)} className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold">Cancelar</button>
-              <button onClick={validarCnpjManual} className="px-4 py-1.5 rounded-lg bg-orange-500 text-slate-950 text-xs font-bold">Validar</button>
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
+              <button onClick={() => setModalCnpj(false)} className="px-3 py-2 sm:py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold">Cancelar</button>
+              <button onClick={validarCnpjManual} className="px-4 py-2 sm:py-1.5 rounded-lg bg-orange-500 text-slate-950 text-xs font-bold">Validar</button>
             </div>
           </div>
         </div>
+        </Portal>
+      )}
+
+      {transferindo && (
+        <Portal>
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
+          <div className="glass-panel border border-[#2A3040] rounded-2xl w-full max-w-md shadow-2xl fade-in my-auto flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh]">
+            <div className="p-4 bg-[#1E2330] border-b border-[#2A3040] flex items-center justify-between shrink-0 rounded-t-2xl">
+              <div className="flex items-center gap-2 font-bold text-sm text-white min-w-0">
+                <ArrowRightLeft size={16} className="text-purple-400 shrink-0" />
+                <span className="truncate">Transferir: {transferindo.cliente}</span>
+              </div>
+              <button onClick={() => setTransferindo(null)} className="text-slate-400 hover:text-white shrink-0 ml-2"><X size={16} /></button>
+            </div>
+
+            <div className="p-4 flex-1 overflow-y-auto min-h-0 space-y-2">
+              <p className="text-xs text-slate-400 mb-1">Escolha o atendente que vai assumir esta conversa:</p>
+              {equipe.length === 0 && (
+                <div className="text-center text-slate-400 text-xs py-8 space-y-2">
+                  <Users size={26} className="text-slate-600 mx-auto" />
+                  <p>Nenhum atendente cadastrado.</p>
+                  <p className="text-slate-500">Adicione membros em <strong className="text-slate-300">Gestao da Equipe</strong>.</p>
+                </div>
+              )}
+              {equipe.map(m => {
+                const atual = atendentes[transferindo.id]?.nome === m.nome;
+                return (
+                  <button
+                    key={m.id}
+                    onClick={() => transferirConversa(transferindo, m)}
+                    disabled={atual}
+                    className={`w-full text-left p-3 rounded-xl border flex items-center gap-3 transition-all ${
+                      atual
+                        ? 'bg-purple-500/15 border-purple-500/40 cursor-default'
+                        : 'bg-[#161922] border-[#2A3040] hover:border-purple-500/40 hover:bg-[#1E2330]'
+                    }`}
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-purple-500/15 text-purple-300 font-bold text-sm flex items-center justify-center border border-purple-500/30 shrink-0">
+                      {m.nome.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold text-white truncate">{m.nome}</div>
+                      <div className="text-[11px] text-slate-400 truncate">{m.cargo || 'Atendimento'}</div>
+                    </div>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold shrink-0 ${
+                      m.status === 'online'
+                        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                        : 'bg-slate-700/40 text-slate-400 border-slate-600/40'
+                    }`}>
+                      {m.status === 'online' ? 'Online' : 'Offline'}
+                    </span>
+                    {atual && <Check size={15} className="text-purple-400 shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="p-4 bg-[#1E2330] border-t border-[#2A3040] flex justify-between items-center gap-2 shrink-0 rounded-b-2xl">
+              {atendentes[transferindo.id] ? (
+                <button
+                  onClick={() => {
+                    setAtendentes(prev => {
+                      const novo = { ...prev };
+                      delete novo[transferindo.id];
+                      salvarAtendentes(novo);
+                      return novo;
+                    });
+                    setTransferindo(null);
+                  }}
+                  className="text-[11px] text-slate-400 hover:text-rose-400 font-semibold transition-colors">
+                  Remover atribuicao
+                </button>
+              ) : <span />}
+              <button onClick={() => setTransferindo(null)} className="px-3 py-2 sm:py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors">Fechar</button>
+            </div>
+          </div>
+        </div>
+        </Portal>
       )}
     </div>
   );

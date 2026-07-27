@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Circle } from 'lucide-react';
+import { Plus, Trash2, Circle, AlertTriangle, X } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { EquipeAPI } from '../services/api';
 
@@ -7,24 +7,32 @@ export default function EquipePage() {
   const { equipe, atualizarEquipe } = useAppContext();
   const [nome,  setNome]  = useState('');
   const [cargo, setCargo] = useState('');
+  const [erro,  setErro]  = useState(null);
 
+  // Regra desta tela: a lista so muda depois que o servidor confirma. Antes o
+  // catch alterava so o estado local -- parecia funcionar e desfazia no F5.
   async function adicionar() {
     if (!nome.trim()) return;
     const novo = { nome: nome.trim(), cargo: cargo.trim() || 'Atendimento', status: 'offline' };
     try {
       const criado = await EquipeAPI.criar(novo);
       atualizarEquipe([...equipe, criado]);
-    } catch {
-      atualizarEquipe([...equipe, { id: 'e' + Date.now(), ...novo }]);
+      setErro(null);
+      setNome(''); setCargo('');
+    } catch (err) {
+      setErro(`Nao foi possivel adicionar: ${err.message}. Verifique se o back-end esta rodando.`);
     }
-    setNome(''); setCargo('');
   }
 
   async function remover(id) {
+    if (!window.confirm('Remover este membro da equipe?')) return;
     try {
       await EquipeAPI.remover(id);
-    } catch {}
-    atualizarEquipe(equipe.filter(e => e.id !== id));
+      atualizarEquipe(equipe.filter(e => e.id !== id));
+      setErro(null);
+    } catch (err) {
+      setErro(`Nao foi possivel remover: ${err.message}. Verifique se o back-end esta rodando.`);
+    }
   }
 
   async function alternarStatus(id) {
@@ -34,8 +42,9 @@ export default function EquipePage() {
     try {
       const atualizado = await EquipeAPI.atualizar(id, { status: novoStatus });
       atualizarEquipe(equipe.map(e => e.id === id ? atualizado : e));
-    } catch {
-      atualizarEquipe(equipe.map(e => e.id === id ? { ...e, status: novoStatus } : e));
+      setErro(null);
+    } catch (err) {
+      setErro(`Nao foi possivel mudar o status: ${err.message}`);
     }
   }
 
@@ -47,6 +56,16 @@ export default function EquipePage() {
           <p className="text-slate-400 text-xs sm:text-sm mt-1">Gerencie os operadores e atendentes autorizados da Arka Tecnologia.</p>
         </div>
       </div>
+
+      {erro && (
+        <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
+          <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+          <p className="flex-1">{erro}</p>
+          <button onClick={() => setErro(null)} className="text-rose-300/60 hover:text-rose-200 shrink-0">
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2.5">
         <input

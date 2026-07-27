@@ -69,8 +69,7 @@ function labelsDias(n) {
 }
 
 function calcularMetricas(conversas, parceiros, equipe) {
-  // Números reais do estado atual — sem multiplicar por período (não há
-  // histórico de 7/30/90 dias sendo registrado ainda).
+
   const ativas = conversas.filter(c => c.statusAtendimento === 'em_atendimento').length;
   const aguardando = conversas.filter(c => c.statusAtendimento === 'aguardando').length;
   const finalizados = conversas.filter(c => c.statusAtendimento === 'finalizado' || c.statusAtendimento === 'resolvido').length;
