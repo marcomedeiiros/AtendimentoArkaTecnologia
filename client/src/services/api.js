@@ -2,9 +2,13 @@ const API_BASE = '/api';
 
 // Credenciais do operador padrao (criado pelo seed do back-end).
 // Como ainda nao existe tela de login, o front autentica automaticamente.
+//
+// Vem de client/.env (fora do versionamento) -- antes a senha ficava escrita
+// aqui e ia publicada junto com o codigo-fonte. Copie client/.env.example para
+// client/.env e preencha com os mesmos valores do server/.env.
 const DEFAULT_CREDENTIALS = {
-  email: 'admin@arkatecnologia.com.br',
-  senha: 'Admin@123',
+  email: import.meta.env.VITE_ADMIN_EMAIL || 'admin@arkatecnologia.com.br',
+  senha: import.meta.env.VITE_ADMIN_SENHA || '',
 };
 
 const TOKEN_KEY = 'arka_token';

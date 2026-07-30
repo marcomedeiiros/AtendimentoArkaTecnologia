@@ -210,7 +210,9 @@ async function main() {
 
   await prisma.usuario.upsert({
     where: { email: adminEmail },
-    update: {},
+    // Sincroniza a senha com o .env: antes era `update: {}`, entao trocar
+    // ADMIN_PASSWORD nao surtia efeito nenhum num banco ja existente.
+    update: { senhaHash, ativo: true },
     create: {
       nome: process.env.ADMIN_NOME || "Administrador Arka",
       email: adminEmail,

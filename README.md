@@ -76,6 +76,14 @@ cd ../client
 ```
 
 ```bash
+copy .env.example .env
+```
+
+Preencha `VITE_ADMIN_SENHA` com o **mesmo** valor de `ADMIN_PASSWORD` do
+`server/.env` (o painel usa isso para autenticar sozinho, já que ainda não há
+tela de login).
+
+```bash
 npm install
 ```
 
