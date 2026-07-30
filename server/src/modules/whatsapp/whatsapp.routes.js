@@ -56,4 +56,32 @@ adminRouter.get("/qrcode", (req, res, next) =>
   whatsappController.qrcode(req, res).catch(next)
 );
 
+/**
+ * @openapi
+ * /api/whatsapp/detalhes:
+ *   get:
+ *     tags: [WhatsApp]
+ *     security: [{ bearerAuth: [] }]
+ *     summary: Painel completo da instancia (perfil, webhook, versao, token)
+ */
+adminRouter.get("/detalhes", (req, res, next) =>
+  whatsappController.detalhes(req, res).catch(next)
+);
+
+adminRouter.post("/instancia", (req, res, next) =>
+  whatsappController.criarInstancia(req, res).catch(next)
+);
+
+adminRouter.post("/webhook", (req, res, next) =>
+  whatsappController.configurarWebhook(req, res).catch(next)
+);
+
+adminRouter.post("/reiniciar", (req, res, next) =>
+  whatsappController.reiniciar(req, res).catch(next)
+);
+
+adminRouter.delete("/instancia", (req, res, next) =>
+  whatsappController.excluir(req, res).catch(next)
+);
+
 module.exports = { webhookRouter, adminRouter, webhookLimiter };

@@ -1,8 +1,8 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
   LayoutGrid, MessageSquare, Users, ShieldCheck, Clock, TrendingUp,
   Download, Calendar, ArrowRight, Activity, CheckCircle2, Inbox,
-  PhoneIncoming, Timer, BarChart3
+  PhoneIncoming, Timer, BarChart3, FileText, Loader2
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -11,6 +11,7 @@ import {
 } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { EmojiIcon } from './EmojiIcon';
+import { exportarRelatorioPdf } from '../../utils/exportarPdf';
 
 ChartJS.register(
   CategoryScale, LinearScale, PointElement, LineElement,
@@ -70,9 +71,10 @@ function labelsDias(n) {
 
 function calcularMetricas(conversas, parceiros, equipe) {
 
-  const ativas = conversas.filter(c => c.statusAtendimento === 'em_atendimento').length;
-  const aguardando = conversas.filter(c => c.statusAtendimento === 'aguardando').length;
-  const finalizados = conversas.filter(c => c.statusAtendimento === 'finalizado' || c.statusAtendimento === 'resolvido').length;
+  // Status atuais: aberta | pendente | fechada.
+  const ativas = conversas.filter(c => c.statusAtendimento === 'aberta').length;
+  const aguardando = conversas.filter(c => c.statusAtendimento === 'pendente').length;
+  const finalizados = conversas.filter(c => c.statusAtendimento === 'fechada').length;
   return {
     totalAtendimentos: conversas.length,
     demandasAtivas: ativas + aguardando,
@@ -135,6 +137,36 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
     () => calcularMetricas(conversas, parceiros, equipe),
     [conversas, parceiros, equipe]
   );
+  const [gerandoPdf, setGerandoPdf] = useState(false);
+  const graficosRef = useRef(null);
+
+  const exportarPdf = useCallback(async () => {
+    setGerandoPdf(true);
+    try {
+      await exportarRelatorioPdf({
+        elemento: graficosRef.current,
+        filtros: 'Período: últimos 7 dias • Todas as instâncias • Todos os status',
+        metricas: [
+          ['Total de Atendimentos', metricas.totalAtendimentos],
+          ['Demandas Ativas', metricas.demandasAtivas],
+          ['Abertos', metricas.atendimentosAbertos],
+          ['Pendentes', metricas.atendimentosPendentes],
+          ['Fechados', metricas.atendimentosFechados],
+          ['Parceiros Ativos', metricas.parceirosPeriodo],
+          ['Equipe Online', `${metricas.equipeOnline}/${metricas.totalEquipe}`],
+        ],
+        resumo:
+          `No período, foram registrados ${metricas.totalAtendimentos} atendimento(s), ` +
+          `sendo ${metricas.atendimentosAbertos} em aberto, ${metricas.atendimentosPendentes} pendente(s) ` +
+          `e ${metricas.atendimentosFechados} fechado(s). A equipe conta com ${metricas.equipeOnline} de ` +
+          `${metricas.totalEquipe} operador(es) online e ${metricas.parceirosPeriodo} parceiro(s) ativo(s).`,
+      });
+    } catch (e) {
+      window.alert('Não foi possível gerar o PDF: ' + e.message);
+    } finally {
+      setGerandoPdf(false);
+    }
+  }, [metricas]);
 
   const doughnutData = useMemo(() => {
     const abertos   = conversas.filter(c => c.statusAtendimento === 'em_atendimento').length || 1;
@@ -166,17 +198,24 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
           <h1 className="text-2xl font-bold text-white tracking-tight font-display">Visão Geral</h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-1">Métricas, fila e desempenho da equipe Arka Tecnologia.</p>
         </div>
-        <button onClick={() => exportarRelatorio(metricas)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 text-xs font-semibold border border-orange-500/30 transition-all shrink-0">
-          <Download size={14} /> Exportar CSV
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button onClick={() => exportarRelatorio(metricas)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 text-xs font-semibold border border-orange-500/30 transition-all shrink-0">
+            <Download size={14} /> Exportar CSV
+          </button>
+          <button onClick={exportarPdf} disabled={gerandoPdf}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-semibold border border-rose-500/30 transition-all shrink-0 disabled:opacity-60">
+            {gerandoPdf ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
+            {gerandoPdf ? 'Gerando...' : 'Exportar Relatório'}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {cards.map(c => <MetricCard key={c.label} {...c} />)}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div ref={graficosRef} className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="glass-panel rounded-2xl p-5 border border-[#2A3040]">
           <h3 className="text-sm font-bold text-white font-display mb-4 flex items-center gap-2">
             <Activity size={15} className="text-emerald-400" /> Distribuição de Status

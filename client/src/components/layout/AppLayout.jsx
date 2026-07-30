@@ -9,7 +9,7 @@ import React, { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   LayoutGrid, Users, Zap, MessageSquare, ShieldCheck,
-  GitFork, MessageCircle, CalendarDays, Send, Loader2, Menu, X, WifiOff
+  GitFork, MessageCircle, CalendarDays, Send, Loader2, Menu, X, WifiOff, Settings
 } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
 import NotificacoesToast from '../NotificacoesToast';
@@ -31,6 +31,7 @@ const NAV_FERRAMENTAS = [
   { to: '/mensagens',  label: 'Mensagens Rápidas',    icon: Zap           },
   { to: '/agenda',     label: 'Agenda',                icon: CalendarDays  },
   { to: '/massa',      label: 'Envio em Massa',        icon: Send          },
+  { to: '/configuracoes', label: 'Configurações',      icon: Settings      },
 ];
 
 function ArkaLogo({ size = 32 }) {

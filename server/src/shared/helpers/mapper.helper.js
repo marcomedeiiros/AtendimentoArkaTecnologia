@@ -1,14 +1,22 @@
 const { formatarHora } = require("../helpers/cnpj.helper");
 
 function mapMensagem(m) {
+  const meta = m.metadata || {};
+  const tipo = meta.tipo || "texto";
   return {
     de: m.origem === "bot" ? "equipe" : m.origem,
     texto: m.texto,
     hora: formatarHora(m.criadoEm),
+    tipo,
+    // Dados da midia (url/base64, mimetype, nome, legenda, coords, contato)
+    // quando a mensagem nao for de texto puro.
+    midia: tipo !== "texto" ? meta : null,
   };
 }
 
 function mapConversa(c) {
+  const mensagens = c.mensagens || [];
+  const ultima = mensagens[mensagens.length - 1];
   return {
     id: c.id,
     cliente: c.cliente,
@@ -17,7 +25,19 @@ function mapConversa(c) {
     cnpj: c.cnpj,
     cnpjVerificado: c.cnpjVerificado,
     lido: c.lido,
-    mensagens: (c.mensagens || []).map(mapMensagem),
+    naoLidas: c.naoLidas ?? 0,
+    fotoUrl: c.fotoUrl || null,
+    favorita: !!c.favorita,
+    fixada: !!c.fixada,
+    arquivada: !!c.arquivada,
+    oculta: !!c.oculta,
+    atendenteId: c.atendenteId || null,
+    atendidoEm: c.atendidoEm ? c.atendidoEm.toISOString?.() || c.atendidoEm : null,
+    fechadoEm: c.fechadoEm ? c.fechadoEm.toISOString?.() || c.fechadoEm : null,
+    ultimaMensagemEm: ultima?.criadoEm
+      ? ultima.criadoEm.toISOString?.() || ultima.criadoEm
+      : null,
+    mensagens: mensagens.map(mapMensagem),
   };
 }
 

@@ -6,6 +6,7 @@ import {
   MessageSquare, Settings, AlertCircle, Pencil, Flame
 } from 'lucide-react';
 import { FluxosAPI } from '../../services/api';
+import { usePreferencia } from '../../hooks/usePreferencia';
 import { FlowMinimap } from './FlowMinimap';
 import { FlowPropertyPanel } from './FlowPropertyPanel';
 import { FlowExecutionLogs } from './FlowExecutionLogs';
@@ -136,6 +137,9 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
   const [historyIndex, setHistoryIndex] = useState(-1);
 
   const [isRunningSim, setIsRunningSim] = useState(false);
+  // Fluxos marcados como "simulando". Fica no servidor (por operador), entao o
+  // indicador verde continua piscando mesmo depois de atualizar a pagina.
+  const [simAtiva, setSimAtiva] = usePreferencia('fluxos.simulacaoAtiva', {});
   const [activeSimNodeId, setActiveSimNodeId] = useState(null);
   const [executedNodeIds, setExecutedNodeIds] = useState([]);
   const [simLogs, setSimLogs] = useState([]);
@@ -150,6 +154,17 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
 
   const containerRef = useRef(null);
 
+  // Os fluxos chegam da API depois da montagem. Sem isto, selectedFlowId ficava
+  // null para sempre: o canvas abria vazio e "Simular" nao fazia nada.
+  useEffect(() => {
+    if (!fluxos.length) return;
+    if (!fluxos.some(f => f.id === selectedFlowId)) {
+      setSelectedFlowId(fluxos[0].id);
+    }
+  }, [fluxos, selectedFlowId]);
+
+  // Depende de flow?.id (e nao de selectedFlowId) para disparar tambem quando o
+  // fluxo e resolvido pelo fallback fluxos[0].
   useEffect(() => {
     if (flow) {
       const formatted = formatNodesPositions(flow.passos || []);
@@ -160,7 +175,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
       setShowDeleteAllConfirm(false);
       pushHistory(formatted);
     }
-  }, [selectedFlowId]);
+  }, [flow?.id]);
 
   const pushHistory = (newNodes) => {
     setHistory(prev => {
@@ -477,8 +492,29 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
     pushHistory(reorderedNodes);
   };
 
+  // Chave da simulacao: `selectedFlowId` nasce null quando os fluxos ainda nao
+  // chegaram da API (o editor cai no fallback fluxos[0]), entao usamos flow.id.
+  const fluxoSimId = flow?.id || selectedFlowId;
+  const simulacaoMarcada = !!(fluxoSimId && simAtiva?.[fluxoSimId]);
+
+  const pararSimulacao = () => {
+    setIsRunningSim(false);
+    setActiveSimNodeId(null);
+    setSimAtiva(prev => {
+      const novo = { ...prev };
+      delete novo[fluxoSimId];
+      return novo;
+    });
+  };
+
   const handleRunSimulation = () => {
+    // Segundo clique enquanto esta verde: desliga o indicador.
+    if (simulacaoMarcada && !isRunningSim) {
+      pararSimulacao();
+      return;
+    }
     if (nodes.length === 0) return;
+    if (fluxoSimId) setSimAtiva(prev => ({ ...prev, [fluxoSimId]: true }));
     setIsRunningSim(true);
     setShowLogsConsole(true);
     setExecutedNodeIds([]);
@@ -643,8 +679,17 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
           <button onClick={() => setShowLogsConsole(s => !s)} className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all ${showLogsConsole ? 'bg-orange-500/20 text-orange-400 border-orange-500/40' : 'bg-slate-800 text-slate-300 border-slate-700'}`}>
             <Sparkles size={14} /> Console ({simLogs.length})
           </button>
-          <button onClick={handleRunSimulation} disabled={isRunningSim} className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-slate-950 text-xs font-bold flex items-center gap-2 shadow-md shadow-orange-500/20 disabled:opacity-50 transition-all">
-            <Play size={14} fill="currentColor" /> {isRunningSim ? 'Simulando...' : 'Simular'}
+          <button
+            onClick={handleRunSimulation}
+            title={simulacaoMarcada && !isRunningSim ? 'Clique para parar a simulação' : 'Executar simulação do fluxo'}
+            className={`px-4 py-1.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-all ${
+              simulacaoMarcada
+                ? 'bg-gradient-to-r from-emerald-500 to-green-500 text-slate-950 shadow-emerald-500/30 animate-pulse'
+                : 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-slate-950 shadow-orange-500/20'
+            }`}
+          >
+            <Play size={14} fill="currentColor" />
+            {isRunningSim ? 'Simulando...' : simulacaoMarcada ? 'Simulação ativa' : 'Simular'}
           </button>
         </div>
       </div>

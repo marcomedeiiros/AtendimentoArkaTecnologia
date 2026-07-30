@@ -11,6 +11,8 @@ const {
   sleep,
 } = require("../../shared/helpers/cnpj.helper");
 const { comLock } = require("../../shared/helpers/lock.helper");
+const { mapConversa } = require("../../shared/helpers/mapper.helper");
+const bus = require("../../shared/events/event-bus");
 const logger = require("../../config/logger");
 const env = require("../../config/env");
 const { sessao: cfgSessao, limites, palavrasChave, mensagens } = require("./chatbot.config");
@@ -151,7 +153,19 @@ class ChatbotEngine {
     } catch (error) {
       logger.warn("Falha ao enviar WhatsApp", { telefone, message: error.message });
     }
+    await this._emitirConversa(conversaId);
     return texto;
+  }
+
+  // Publica a conversa atualizada no barramento para o SSE empurrar ao front.
+  // Best-effort: uma falha aqui nunca deve interromper o atendimento.
+  async _emitirConversa(conversaId) {
+    try {
+      const conversa = await conversaRepository.findById(conversaId);
+      if (conversa) bus.emitConversa(mapConversa(conversa));
+    } catch (error) {
+      logger.warn("Falha ao emitir conversa no SSE", { conversaId, message: error.message });
+    }
   }
 
   async validarCnpjRecebido(conversa, texto) {
@@ -223,7 +237,7 @@ class ChatbotEngine {
     }
 
     await conversaRepository.update(conversa.id, {
-      statusAtendimento: "aguardando",
+      statusAtendimento: "pendente",
       lido: false,
     });
 
@@ -234,6 +248,8 @@ class ChatbotEngine {
       ativo: true,
       contexto: {},
     });
+
+    await this._emitirConversa(conversa.id);
 
     logger.info("Conversa transferida para atendimento humano", {
       conversaId: conversa.id,
@@ -520,9 +536,12 @@ class ChatbotEngine {
     texto,
     nomeCliente = "Cliente",
     waMessageId = null,
+    midia = null,
   }) {
     const textoLimpo = this.extrairTextoMensagem(texto);
-    if (!textoLimpo) return { processado: false, motivo: "mensagem_vazia" };
+    const ehMidia = !!midia && midia.tipo && midia.tipo !== "texto";
+    // Sem texto e sem midia: nada a processar.
+    if (!textoLimpo && !ehMidia) return { processado: false, motivo: "mensagem_vazia" };
 
     // A Evolution API reentrega webhooks; sem isso a mesma mensagem rodava o
     // fluxo duas vezes e o cliente recebia tudo duplicado.
@@ -530,32 +549,56 @@ class ChatbotEngine {
       return { processado: false, motivo: "mensagem_duplicada" };
     }
 
+    // Texto exibido na bolha/preview + metadata da midia (quando houver).
+    const rotulos = { imagem: "[Imagem]", video: "[Vídeo]", documento: "[Documento]", audio: "[Áudio]", localizacao: "[Localização]", contato: "[Contato]" };
+    const textoMsg = ehMidia ? (textoLimpo || rotulos[midia.tipo] || "[Mídia]") : textoLimpo;
+    const metadata = ehMidia ? midia : null;
+
     let conversa = await conversaRepository.findByTelefone(instanciaId, telefone);
     if (!conversa) {
       conversa = await conversaRepository.create({
         instanciaId,
         cliente: nomeCliente,
         telefone,
-        statusAtendimento: "aguardando",
+        statusAtendimento: "pendente",
         lido: false,
+        naoLidas: 1,
         mensagens: {
-          create: { origem: "cliente", texto: textoLimpo, waMessageId },
+          create: { origem: "cliente", texto: textoMsg, waMessageId, metadata },
         },
       });
+      // Foto de perfil (best-effort) so na criacao, para nao pesar a cada msg.
+      const fotoUrl = await evolutionApi.fetchProfilePictureUrl(telefone, instanceName);
+      if (fotoUrl) await conversaRepository.update(conversa.id, { fotoUrl });
       conversa = await conversaRepository.findById(conversa.id);
     } else {
       await conversaRepository.addMensagem(
         conversa.id,
         "cliente",
-        textoLimpo,
-        null,
+        textoMsg,
+        metadata,
         waMessageId
       );
       conversa = await conversaRepository.findById(conversa.id);
     }
 
+    // Guarda defensiva: se a releitura falhar (corrida com exclusao da conversa,
+    // por exemplo), respondemos o webhook em vez de estourar TypeError.
+    if (!conversa) {
+      logger.warn("Conversa nao encontrada apos gravar a mensagem", { telefone, waMessageId });
+      return { processado: false, motivo: "conversa_indisponivel" };
+    }
+
+    // Empurra a conversa (nova ou atualizada) ao front imediatamente.
+    await this._emitirConversa(conversa.id);
+
+    // Midia nao dispara o fluxo do bot: registramos e notificamos o atendente.
+    if (ehMidia) {
+      return { processado: true, motivo: "midia_recebida", conversaId: conversa.id };
+    }
+
     // Atendente humano assumiu: o bot nao interfere.
-    if (conversa.statusAtendimento === "em_atendimento") {
+    if (conversa.statusAtendimento === "aberta") {
       return { processado: false, motivo: "atendimento_humano", conversaId: conversa.id };
     }
 

@@ -11,11 +11,17 @@ const webhookLimiter = rateLimit({
   },
 });
 
+// O painel faz polling (status do WhatsApp, reconciliacao de conversas) e cada
+// operador aberto consome cota. Com 500/15min um unico navegador ja estourava o
+// limite e a tela exibia "back-end offline". 2000/15min (~133/min) continua
+// protegendo contra abuso e comporta varios atendentes simultaneos.
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 500,
+  max: 2000,
   standardHeaders: true,
   legacyHeaders: false,
+  // O stream SSE e uma conexao longa e unica: nao deve consumir cota.
+  skip: (req) => req.path.startsWith("/api/conversas/stream"),
   message: {
     success: false,
     error: { code: "RATE_LIMIT", message: "Limite de requisicoes excedido" },

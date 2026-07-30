@@ -10,7 +10,9 @@ datasource db {
 // NOTA: SQLite (via Prisma) nao suporta enums nativos.
 // Os campos abaixo eram enums no Postgres e viraram String.
 // Valores validos permanecem controlados pelos DTOs (zod) da aplicacao:
-//   StatusAtendimento: aguardando | em_atendimento | finalizado | resolvido
+//   StatusAtendimento: pendente | aberta | fechada
+//     (legado, migrado via backfill: aguardando->pendente, em_atendimento->aberta,
+//      finalizado/resolvido->fechada)
 //   OrigemMensagem:    cliente | equipe | sistema | bot
 //   StatusParceiro:    ativo | inativo
 //   StatusEquipe:      online | offline
@@ -30,6 +32,29 @@ model Instancia {
   logsExecucao  LogExecucaoFluxo[]
 
   @@map("instancias")
+}
+
+// Configuracoes editaveis pela tela (Evolution API, n8n). Sobrepoem o .env:
+// quem le usa o valor do banco e, se nao existir, cai no env.
+model Configuracao {
+  chave        String   @id
+  valor        String
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  @@map("configuracoes")
+}
+
+// Preferencias de interface por operador (filtros da Central, etc). Guardadas
+// como JSON serializado para nao exigir migracao a cada nova preferencia.
+model Preferencia {
+  id           String   @id @default(uuid())
+  usuarioId    String   @map("usuario_id")
+  chave        String
+  valor        String
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  @@unique([usuarioId, chave])
+  @@map("preferencias")
 }
 
 model Usuario {
@@ -132,11 +157,21 @@ model Conversa {
   instanciaId       String            @map("instancia_id")
   cliente           String
   telefone          String
-  statusAtendimento String            @default("aguardando") @map("status_atendimento")
+  statusAtendimento String            @default("pendente") @map("status_atendimento")
   cnpj              String?
   cnpjVerificado    Boolean           @default(false) @map("cnpj_verificado")
   lido              Boolean           @default(false)
+  naoLidas          Int               @default(0) @map("nao_lidas")
+  fotoUrl           String?           @map("foto_url")
+  // Flags de organizacao da lista. Arquivar/ocultar NAO apagam nada: apenas
+  // tiram a conversa da listagem padrao (controlado pelos filtros da tela).
+  favorita          Boolean           @default(false)
+  fixada            Boolean           @default(false)
+  arquivada         Boolean           @default(false)
+  oculta            Boolean           @default(false)
   atendenteId       String?           @map("atendente_id")
+  atendidoEm        DateTime?         @map("atendido_em")
+  fechadoEm         DateTime?         @map("fechado_em")
   criadoEm          DateTime          @default(now()) @map("criado_em")
   atualizadoEm      DateTime          @updatedAt @map("atualizado_em")
 

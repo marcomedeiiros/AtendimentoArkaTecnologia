@@ -19,6 +19,15 @@ import { playPing } from '../utils/sound';
 
 const ALERTA_SEM_FLUXO = 'alerta-sem-fluxo';
 
+// Ordena conversas pela mensagem mais recente (desc). Conversas sem mensagem
+// caem para o fim.
+function tsConversa(c) {
+  return c?.ultimaMensagemEm ? new Date(c.ultimaMensagemEm).getTime() : 0;
+}
+function ordenarConversas(lista) {
+  return [...lista].sort((a, b) => tsConversa(b) - tsConversa(a));
+}
+
 const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
@@ -51,7 +60,7 @@ export function AppProvider({ children }) {
       setEquipe(resolver(eq));
       setFluxos(resolver(fl));
       setParceiros(resolver(pa));
-      setConversas(resolver(co));
+      setConversas(ordenarConversas(resolver(co)));
 
       setApiOffline([eq, fl, pa, co].every(r => r.status === 'rejected'));
     } catch {
@@ -75,13 +84,79 @@ export function AppProvider({ children }) {
   const recarregarConversas = useCallback(async () => {
     try {
       const co = await ConversasAPI.listar();
-      if (Array.isArray(co)) setConversas(co);
+      if (Array.isArray(co)) setConversas(ordenarConversas(co));
       setApiOffline(false);
     } catch { /* back-end offline: mantem estado atual */ }
   }, []);
 
+  // Patch incremental vindo do SSE: substitui/insere/remove uma conversa sem
+  // recarregar a lista inteira. O disparo de som/notificacao continua no efeito
+  // de msgCountsRef, que reage a qualquer mudanca em `conversas`.
+  const aplicarEvento = useCallback((evt) => {
+    if (!evt?.type) return;
+    if (evt.type === 'conversa:delete') {
+      setConversas(prev => prev.filter(c => c.id !== evt.id));
+      return;
+    }
+    if (evt.type === 'conversa:update' && evt.conversa?.id) {
+      setConversas(prev => {
+        const existe = prev.some(c => c.id === evt.conversa.id);
+        const lista = existe
+          ? prev.map(c => (c.id === evt.conversa.id ? evt.conversa : c))
+          : [evt.conversa, ...prev];
+        return ordenarConversas(lista);
+      });
+    }
+  }, []);
+
+  // Tempo real por SSE do nosso back-end. O EventSource nao envia header
+  // Authorization, entao pegamos um ticket de uso unico antes de abrir o stream.
+  // Em queda, reconecta com backoff e reconcilia o estado via recarregarConversas.
   useEffect(() => {
-    const id = setInterval(recarregarConversas, 8000);
+    let es = null;
+    let reconnectTimer = null;
+    let parado = false;
+
+    const agendarReconexao = () => {
+      if (parado || reconnectTimer) return;
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        recarregarConversas();
+        conectar();
+      }, 5000);
+    };
+
+    const conectar = async () => {
+      if (parado) return;
+      try {
+        const resp = await ConversasAPI.streamTicket();
+        const ticket = resp?.ticket;
+        if (parado || !ticket) return agendarReconexao();
+        es = new EventSource(`/api/conversas/stream?ticket=${encodeURIComponent(ticket)}`);
+        es.onmessage = (e) => {
+          try { aplicarEvento(JSON.parse(e.data)); } catch { /* heartbeat/evento nao-json */ }
+        };
+        es.onopen = () => setApiOffline(false);
+        es.onerror = () => {
+          if (es) { es.close(); es = null; }
+          agendarReconexao();
+        };
+      } catch {
+        agendarReconexao();
+      }
+    };
+
+    conectar();
+    return () => {
+      parado = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (es) es.close();
+    };
+  }, [aplicarEvento, recarregarConversas]);
+
+  // Fallback lento: reconcilia caso algum evento SSE se perca.
+  useEffect(() => {
+    const id = setInterval(recarregarConversas, 30000);
     return () => clearInterval(id);
   }, [recarregarConversas]);
 
@@ -119,6 +194,7 @@ export function AppProvider({ children }) {
             convId: c.id,
             tipo: 'mensagem',
             cliente: c.cliente,
+            fotoUrl: c.fotoUrl || null,
             texto: ultima?.texto || 'Nova mensagem',
             em: Date.now(),
             lida: false,

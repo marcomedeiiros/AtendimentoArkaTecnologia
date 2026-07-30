@@ -3,7 +3,10 @@ import {
   MessageSquare, Send, Eye, Trash2, UserCheck, Check, X,
   CheckCircle2, Clock, Inbox, Play, Search, Zap,
   CheckCheck, WifiOff, Wifi, Bell, Pin, ChevronLeft,
-  ArrowRightLeft, AlertCircle, Users
+  ArrowRightLeft, AlertCircle, Users, RotateCcw, Layers, ArrowDown,
+  FileText, MapPin, Contact, Paperclip, Smile, Image as ImageIcon, Loader2,
+  SlidersHorizontal, Star, Archive, EyeOff, MoreVertical,
+  ZoomIn, ZoomOut, Maximize2, Download
 } from 'lucide-react';
 import { EmojiIcon, FormattedMessage } from './EmojiIcon';
 import { useMensagensRapidas } from './MensagensRapidas';
@@ -11,15 +14,8 @@ import Avatar from '../Avatar';
 import Portal from '../Portal';
 import { useAppContext } from '../../context/AppContext';
 import { ConversasAPI } from '../../services/api';
+import { usePreferencia } from '../../hooks/usePreferencia';
 import { wallpaperStyle as WHATSAPP_BG, COR_FUNDO_CHAT } from '../../utils/wallpaper';
-
-const PINOS_KEY = 'arka_conversas_fixadas';
-function lerFixados() {
-  try { return JSON.parse(localStorage.getItem(PINOS_KEY)) || []; } catch { return []; }
-}
-function salvarFixados(ids) {
-  try { localStorage.setItem(PINOS_KEY, JSON.stringify(ids)); } catch {}
-}
 
 // Atendente responsavel por cada conversa. Fica no localStorage (e nao no
 // back-end) porque a coluna atendenteId da conversa aponta para Usuario, nao
@@ -33,7 +29,7 @@ function salvarAtendentes(map) {
   try { localStorage.setItem(ATEND_KEY, JSON.stringify(map)); } catch {}
 }
 
-// "ha 5 min" para o painel de notificacoes do sino.
+// "ha 5 min" para o painel de notificacoes do sino (recebe timestamp em ms).
 function tempoRelativo(ts) {
   const s = Math.floor((Date.now() - ts) / 1000);
   if (s < 60) return 'agora';
@@ -43,6 +39,30 @@ function tempoRelativo(ts) {
   if (h < 24) return `ha ${h}h`;
   return `ha ${Math.floor(h / 24)}d`;
 }
+
+// "há 2 min / há 1 h / ontem / 12/03" a partir de um ISO (ultima mensagem).
+function tempoDesde(iso) {
+  if (!iso) return '';
+  const ms = new Date(iso).getTime();
+  if (Number.isNaN(ms)) return '';
+  const s = Math.floor((Date.now() - ms) / 1000);
+  if (s < 60) return 'agora';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `há ${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `há ${h} h`;
+  const d = Math.floor(h / 24);
+  if (d === 1) return 'ontem';
+  if (d < 7) return `há ${d} d`;
+  return new Date(ms).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+}
+
+// Metadados visuais dos 3 status (🟢 Aberta / 🟡 Pendente / 🔴 Fechada).
+const STATUS_META = {
+  pendente: { label: 'Pendente', dot: 'bg-amber-400',   chip: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+  aberta:   { label: 'Aberta',   dot: 'bg-emerald-400', chip: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+  fechada:  { label: 'Fechada',  dot: 'bg-rose-400',    chip: 'bg-rose-500/20 text-rose-400 border-rose-500/30' },
+};
 
 function limparCnpj(v) { return String(v || '').replace(/\D/g, ''); }
 function mascararCnpj(v) {
@@ -72,9 +92,10 @@ function horaAgora() {
 }
 
 const ABAS = [
-  { id: 'abertos',   label: 'Abertos',   icon: Inbox,        statusMatch: c => c.statusAtendimento === 'aguardando' || c.statusAtendimento === 'em_atendimento' },
-  { id: 'pendentes', label: 'Pendentes', icon: Clock,        statusMatch: c => c.statusAtendimento === 'aguardando' },
-  { id: 'fechados',  label: 'Fechados',  icon: CheckCircle2, statusMatch: c => c.statusAtendimento === 'finalizado' || c.statusAtendimento === 'resolvido' },
+  { id: 'todas',     label: 'Todas',     icon: Layers,       statusMatch: () => true },
+  { id: 'abertas',   label: 'Abertas',   icon: Inbox,        statusMatch: c => c.statusAtendimento === 'aberta' },
+  { id: 'pendentes', label: 'Pendentes', icon: Clock,        statusMatch: c => c.statusAtendimento === 'pendente' },
+  { id: 'fechadas',  label: 'Fechadas',  icon: CheckCircle2, statusMatch: c => c.statusAtendimento === 'fechada' },
 ];
 
 function PainelMensagensRapidas({ onSelecionar, onFechar }) {
@@ -128,35 +149,342 @@ function PainelMensagensRapidas({ onSelecionar, onFechar }) {
   );
 }
 
+// Filtros extras (combinam com a aba de status). Cada um e um "toggle".
+const FILTROS_EXTRA = [
+  { id: 'naoLidas',    label: 'Não Lidas',    testa: c => (c.naoLidas || 0) > 0 },
+  { id: 'favoritas',   label: 'Favoritas',    testa: c => !!c.favorita },
+  { id: 'semOperador', label: 'Sem Operador', testa: c => !c.atendenteId },
+  { id: 'comAnexo',    label: 'Com Anexo',    testa: c => (c.mensagens || []).some(m => m.tipo && m.tipo !== 'texto') },
+  { id: 'hoje',        label: 'Hoje',         testa: c => dentroDe(c.ultimaMensagemEm, 1) },
+  { id: 'semana',      label: 'Esta Semana',  testa: c => dentroDe(c.ultimaMensagemEm, 7) },
+];
+
+// True se o ISO cai dentro dos ultimos N dias (contando a partir de hoje 00h).
+function dentroDe(iso, dias) {
+  if (!iso) return false;
+  const inicio = new Date();
+  inicio.setHours(0, 0, 0, 0);
+  inicio.setDate(inicio.getDate() - (dias - 1));
+  return new Date(iso).getTime() >= inicio.getTime();
+}
+
+// `todas` e `fechadas` controlam a ABA correspondente: desmarcar esconde a aba
+// inteira (e as conversas daquele status somem da lista). `arquivadas`/`ocultas`
+// so filtram as conversas. Nada e apagado do banco em nenhum caso.
+const VISIBILIDADE_PADRAO = { todas: true, fechadas: true, arquivadas: false, ocultas: false };
+
+// Abas que podem ser escondidas pelos checkboxes.
+const ABA_POR_VISIBILIDADE = { todas: 'todas', fechadas: 'fechadas' };
+
+function PainelFiltros({ extras, setExtras, visib, setVisib, onLimpar, totalAtivos }) {
+  const alternarExtra = (id) =>
+    setExtras(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+  return (
+    <div className="absolute right-0 top-full mt-2 w-[min(90vw,300px)] glass-panel border border-[#2A3040] rounded-2xl shadow-2xl shadow-black/50 z-40 overflow-hidden fade-in">
+      <div className="p-3 bg-[#1E2330] border-b border-[#2A3040] flex items-center justify-between">
+        <div className="flex items-center gap-2 text-xs font-bold text-white">
+          <SlidersHorizontal size={13} className="text-orange-400" /> Filtros
+        </div>
+        {totalAtivos > 0 && (
+          <button onClick={onLimpar} className="text-[11px] text-slate-400 hover:text-rose-400 font-semibold transition-colors">
+            Limpar
+          </button>
+        )}
+      </div>
+
+      <div className="p-3 space-y-3">
+        <div>
+          <div className="text-[10px] uppercase text-slate-500 font-bold mb-1.5">Refinar</div>
+          <div className="flex flex-wrap gap-1.5">
+            {FILTROS_EXTRA.map(f => {
+              const ativo = extras.includes(f.id);
+              return (
+                <button key={f.id} onClick={() => alternarExtra(f.id)}
+                  className={`text-[11px] px-2.5 py-1 rounded-full border font-semibold transition-all ${
+                    ativo
+                      ? 'bg-orange-500/20 border-orange-500/50 text-orange-300'
+                      : 'bg-[#161922] border-[#2A3040] text-slate-400 hover:text-slate-200 hover:border-slate-600'
+                  }`}>
+                  {f.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="pt-2 border-t border-[#2A3040]">
+          <div className="text-[10px] uppercase text-slate-500 font-bold mb-1.5">Exibir na lista</div>
+          {[
+            { id: 'todas',      label: 'Mostrar Todas as Conversas' },
+            { id: 'fechadas',   label: 'Mostrar Conversas Fechadas' },
+            { id: 'arquivadas', label: 'Mostrar Conversas Arquivadas' },
+            { id: 'ocultas',    label: 'Mostrar Conversas Ocultas' },
+          ].map(op => (
+            <label key={op.id} className="flex items-center gap-2 py-1.5 cursor-pointer group">
+              <input
+                type="checkbox"
+                checked={!!visib[op.id]}
+                onChange={e => setVisib(v => ({ ...v, [op.id]: e.target.checked }))}
+                className="w-3.5 h-3.5 rounded accent-orange-500 cursor-pointer"
+              />
+              <span className="text-[11px] text-slate-300 group-hover:text-white transition-colors">{op.label}</span>
+            </label>
+          ))}
+          <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">
+            Desmarcar "Todas" ou "Fechadas" esconde a aba correspondente. Nada é
+            apagado do banco.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Skeleton (sem spinner) enquanto a lista carrega pela primeira vez.
+function SkeletonCard() {
+  return (
+    <div className="p-3.5 rounded-xl border border-[#2A3040]/60 bg-[#1E2330]/40 flex flex-col gap-2 animate-pulse">
+      <div className="flex items-center gap-2">
+        <div className="w-8 h-8 rounded-full bg-slate-700/50" />
+        <div className="h-3 w-28 rounded bg-slate-700/50" />
+        <div className="ml-auto h-2.5 w-10 rounded bg-slate-700/40" />
+      </div>
+      <div className="h-2.5 w-24 rounded bg-slate-700/40" />
+      <div className="h-8 rounded-lg bg-[#161922] border border-slate-800" />
+    </div>
+  );
+}
+
+// Visualizador de imagem em tela cheia, com zoom e arraste.
+// Substitui o antigo window.open(): os navegadores bloqueiam navegacao para
+// data: URLs (que e o formato em que a midia chega da Evolution), entao o
+// clique simplesmente nao fazia nada.
+function VisualizadorImagem({ url, legenda, nomeArquivo, onFechar }) {
+  const [zoom, setZoom] = useState(1);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const arrastando = useRef(null);
+
+  const ajustarZoom = useCallback((delta) => {
+    setZoom(z => {
+      const novo = Math.min(Math.max(z + delta, 1), 6);
+      if (novo === 1) setPos({ x: 0, y: 0 });
+      return novo;
+    });
+  }, []);
+
+  useEffect(() => {
+    const onTecla = (e) => {
+      if (e.key === 'Escape') onFechar();
+      if (e.key === '+' || e.key === '=') ajustarZoom(0.4);
+      if (e.key === '-') ajustarZoom(-0.4);
+      if (e.key === '0') { setZoom(1); setPos({ x: 0, y: 0 }); }
+    };
+    window.addEventListener('keydown', onTecla);
+    return () => window.removeEventListener('keydown', onTecla);
+  }, [onFechar, ajustarZoom]);
+
+  const aoRolar = (e) => { e.preventDefault(); ajustarZoom(e.deltaY < 0 ? 0.3 : -0.3); };
+
+  const iniciarArraste = (e) => {
+    if (zoom <= 1) return;
+    arrastando.current = { x: e.clientX - pos.x, y: e.clientY - pos.y };
+  };
+  const moverArraste = (e) => {
+    if (!arrastando.current) return;
+    setPos({ x: e.clientX - arrastando.current.x, y: e.clientY - arrastando.current.y });
+  };
+  const pararArraste = () => { arrastando.current = null; };
+
+  const btn = 'p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-200 transition-colors disabled:opacity-40';
+
+  return (
+    <Portal>
+      <div
+        className="fixed inset-0 z-[60] bg-slate-950/95 backdrop-blur-sm flex flex-col"
+        onMouseMove={moverArraste}
+        onMouseUp={pararArraste}
+        onMouseLeave={pararArraste}
+      >
+        <div className="shrink-0 flex items-center justify-between gap-3 p-3 bg-[#11141C]/90 border-b border-[#2A3040]">
+          <span className="text-xs text-slate-300 font-semibold truncate min-w-0">
+            {nomeArquivo || legenda || 'Imagem'}
+          </span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button onClick={() => ajustarZoom(-0.4)} disabled={zoom <= 1} className={btn} title="Diminuir (-)">
+              <ZoomOut size={16} />
+            </button>
+            <span className="text-[11px] text-slate-400 font-mono w-12 text-center">{Math.round(zoom * 100)}%</span>
+            <button onClick={() => ajustarZoom(0.4)} disabled={zoom >= 6} className={btn} title="Aumentar (+)">
+              <ZoomIn size={16} />
+            </button>
+            <button onClick={() => { setZoom(1); setPos({ x: 0, y: 0 }); }} className={btn} title="Tamanho original (0)">
+              <Maximize2 size={16} />
+            </button>
+            <a href={url} download={nomeArquivo || 'imagem.jpg'} className={btn} title="Baixar">
+              <Download size={16} />
+            </a>
+            <button onClick={onFechar} className={btn} title="Fechar (Esc)">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+
+        <div
+          className="flex-1 overflow-hidden flex items-center justify-center p-4"
+          onWheel={aoRolar}
+          onClick={e => { if (e.target === e.currentTarget) onFechar(); }}
+        >
+          <img
+            src={url}
+            alt={legenda || 'imagem'}
+            draggable={false}
+            onMouseDown={iniciarArraste}
+            onDoubleClick={() => (zoom > 1 ? (setZoom(1), setPos({ x: 0, y: 0 })) : ajustarZoom(1))}
+            style={{
+              transform: `translate(${pos.x}px, ${pos.y}px) scale(${zoom})`,
+              cursor: zoom > 1 ? (arrastando.current ? 'grabbing' : 'grab') : 'zoom-in',
+              transition: arrastando.current ? 'none' : 'transform 0.15s ease-out',
+            }}
+            className="max-w-full max-h-full object-contain select-none"
+          />
+        </div>
+
+        {legenda && (
+          <div className="shrink-0 p-3 bg-[#11141C]/90 border-t border-[#2A3040] text-xs text-slate-300 text-center">
+            {legenda}
+          </div>
+        )}
+      </div>
+    </Portal>
+  );
+}
+
+// Renderiza a bolha de acordo com o tipo de mídia. `escuro` = bolha do cliente
+// (fundo escuro); senão é a bolha da equipe (fundo laranja).
+function MensagemMidia({ m, escuro, onAbrirImagem }) {
+  const md = m.midia || {};
+  const semArquivo = !md.url && m.tipo !== 'localizacao' && m.tipo !== 'contato';
+
+  if (semArquivo) {
+    return (
+      <div className={`text-[11px] italic ${escuro ? 'text-slate-400' : 'text-slate-900/70'}`}>
+        {m.texto || '[Mídia indisponível]'}
+      </div>
+    );
+  }
+
+  if (m.tipo === 'imagem') {
+    return (
+      <img
+        src={md.url}
+        alt={md.caption || 'imagem'}
+        title="Clique para ampliar"
+        className="rounded-lg max-w-full max-h-72 object-contain cursor-zoom-in hover:opacity-90 transition-opacity"
+        onClick={() => onAbrirImagem?.({ url: md.url, legenda: md.caption, nomeArquivo: md.fileName })}
+      />
+    );
+  }
+  if (m.tipo === 'video') {
+    return <video src={md.url} controls className="rounded-lg max-w-full max-h-72" />;
+  }
+  if (m.tipo === 'audio') {
+    return <audio src={md.url} controls className="w-full min-w-[220px]" />;
+  }
+  if (m.tipo === 'documento') {
+    return (
+      <a href={md.url} download={md.fileName || 'documento'} target="_blank" rel="noreferrer"
+        className={`flex items-center gap-2 p-2 rounded-lg ${escuro ? 'bg-[#161922] border border-slate-700' : 'bg-slate-900/10'}`}>
+        <FileText size={20} className={escuro ? 'text-orange-400' : 'text-slate-900'} />
+        <div className="min-w-0">
+          <div className={`text-[11px] font-semibold truncate ${escuro ? 'text-slate-100' : 'text-slate-900'}`}>{md.fileName || 'Documento'}</div>
+          <div className={`text-[9px] ${escuro ? 'text-slate-400' : 'text-slate-900/60'}`}>Baixar</div>
+        </div>
+      </a>
+    );
+  }
+  if (m.tipo === 'localizacao') {
+    const link = `https://www.google.com/maps?q=${md.latitude},${md.longitude}`;
+    return (
+      <a href={link} target="_blank" rel="noreferrer"
+        className={`flex items-center gap-2 p-2 rounded-lg ${escuro ? 'bg-[#161922] border border-slate-700 text-slate-100' : 'bg-slate-900/10 text-slate-900'}`}>
+        <MapPin size={18} /> <span className="text-[11px] font-semibold">{md.name || 'Ver localização'}</span>
+      </a>
+    );
+  }
+  if (m.tipo === 'contato') {
+    return (
+      <div className={`flex items-center gap-2 p-2 rounded-lg ${escuro ? 'bg-[#161922] border border-slate-700 text-slate-100' : 'bg-slate-900/10 text-slate-900'}`}>
+        <Contact size={18} /> <span className="text-[11px] font-semibold">{md.displayName || 'Contato'}</span>
+      </div>
+    );
+  }
+  return null;
+}
+
 const CardConversa = React.memo(function CardConversa({
-  c, selecionada, parceiros, onSelecionar, onAtender, onResolver, onEspiar, onFixar, fixado
+  c, selecionada, parceiros, whatsAppConectado,
+  onSelecionar, onAtender, onFechar, onReabrir, onEspiar, onFixar, fixado, onFlag
 }) {
-  const ehAtivo   = selecionada === c.id && c.statusAtendimento === 'em_atendimento';
+  const [menuAberto, setMenuAberto] = useState(false);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    if (!menuAberto) return;
+    const fora = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuAberto(false); };
+    document.addEventListener('mousedown', fora);
+    return () => document.removeEventListener('mousedown', fora);
+  }, [menuAberto]);
+
+  const meta      = STATUS_META[c.statusAtendimento] || STATUS_META.pendente;
+  const ehAtivo   = selecionada === c.id && (c.statusAtendimento === 'aberta' || c.statusAtendimento === 'fechada');
   const ultimaMsg = c.mensagens?.[c.mensagens.length - 1];
-  const naoLido   = !c.lido && c.statusAtendimento !== 'finalizado' && c.statusAtendimento !== 'resolvido';
-  const encerrado = c.statusAtendimento === 'finalizado' || c.statusAtendimento === 'resolvido';
+  const naoLidas  = c.naoLidas || 0;
+  const encerrado = c.statusAtendimento === 'fechada';
+  const clicavel  = c.statusAtendimento === 'aberta' || c.statusAtendimento === 'fechada';
 
   return (
     <div
-      onClick={() => { if (c.statusAtendimento === 'em_atendimento') onSelecionar(c.id); }}
-      className={`p-3.5 rounded-xl border transition-all duration-200 cursor-pointer flex flex-col gap-2 ${
+      onClick={() => { if (clicavel) onSelecionar(c.id); }}
+      className={`p-3.5 rounded-xl border transition-all duration-200 flex flex-col gap-2 ${clicavel ? 'cursor-pointer' : ''} ${
         ehAtivo
           ? 'bg-gradient-to-r from-orange-500/10 to-transparent border-orange-500/50 shadow-sm'
-          : fixado
-            ? 'bg-[#1E2330]/60 border-orange-500/25 hover:border-orange-500/40'
-            : 'bg-[#1E2330]/40 border-[#2A3040]/60 hover:border-slate-600/60'
+          : naoLidas > 0
+            ? 'bg-orange-500/[0.06] border-orange-500/30 hover:border-orange-500/50'
+            : fixado
+              ? 'bg-[#1E2330]/60 border-orange-500/25 hover:border-orange-500/40'
+              : 'bg-[#1E2330]/40 border-[#2A3040]/60 hover:border-slate-600/60'
       }`}
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <Avatar nome={c.cliente} size="sm" />
+          <Avatar nome={c.cliente} size="sm" fotoUrl={c.fotoUrl} online={whatsAppConectado} />
           <div className="flex items-center gap-1.5 min-w-0">
-            {naoLido && <span className="w-2 h-2 rounded-full bg-orange-400 shrink-0" />}
-            <span className={`font-bold text-xs truncate ${naoLido ? 'text-white' : 'text-slate-300'}`}>
+            <span className={`w-2 h-2 rounded-full shrink-0 ${meta.dot}`} title={meta.label} />
+            {c.favorita && <Star size={11} className="text-amber-400 fill-current shrink-0" title="Favorita" />}
+            {c.arquivada && <Archive size={11} className="text-slate-500 shrink-0" title="Arquivada" />}
+            {c.oculta && <EyeOff size={11} className="text-slate-500 shrink-0" title="Oculta" />}
+            <span className={`text-xs truncate ${naoLidas > 0 ? 'font-extrabold text-white' : 'font-bold text-slate-300'}`}>
               {c.cliente}
             </span>
           </div>
         </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="text-[10px] text-slate-500" title="Última mensagem">
+            {tempoDesde(c.ultimaMensagemEm)}
+          </span>
+          {naoLidas > 0 && (
+            <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-orange-500 text-slate-950 text-[10px] font-extrabold flex items-center justify-center" title={`${naoLidas} não lida(s)`}>
+              {naoLidas > 99 ? '99+' : naoLidas}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] text-slate-400 font-mono truncate">
+          {c.telefone || '-'}
+        </span>
         <div className="flex items-center gap-1 shrink-0">
           <button onClick={e => { e.stopPropagation(); onFixar(c.id); }} title={fixado ? 'Desafixar conversa' : 'Fixar no topo'}
             className={`p-1.5 rounded-lg transition-colors ${fixado ? 'bg-orange-500/20 text-orange-400' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-400'}`}>
@@ -166,17 +494,41 @@ const CardConversa = React.memo(function CardConversa({
             className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-blue-400 transition-colors">
             <Eye size={12} />
           </button>
-          {!encerrado && (
-            <button onClick={e => { e.stopPropagation(); onResolver(c.id); }} title="Resolver problema"
+          {encerrado ? (
+            <button onClick={e => { e.stopPropagation(); onReabrir(c.id); }} title="Reabrir atendimento"
               className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-emerald-500/20 text-emerald-400 transition-colors">
+              <RotateCcw size={12} />
+            </button>
+          ) : (
+            <button onClick={e => { e.stopPropagation(); onFechar(c.id); }} title="Fechar atendimento"
+              className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-rose-500/20 text-rose-400 transition-colors">
               <CheckCircle2 size={12} />
             </button>
           )}
-        </div>
-      </div>
 
-      <div className="text-[11px] text-slate-400 font-mono">
-        {c.telefone || '+55 11 99999-0000'}
+          <div className="relative" ref={menuRef}>
+            <button onClick={e => { e.stopPropagation(); setMenuAberto(v => !v); }} title="Mais ações"
+              className={`p-1.5 rounded-lg transition-colors ${menuAberto ? 'bg-slate-700 text-white' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-400'}`}>
+              <MoreVertical size={12} />
+            </button>
+            {menuAberto && (
+              <div className="absolute right-0 top-full mt-1 w-44 glass-panel border border-[#2A3040] rounded-xl shadow-2xl shadow-black/50 z-50 overflow-hidden py-1">
+                {[
+                  { id: 'favorita',  ativo: c.favorita,  on: 'Desfavoritar',  off: 'Favoritar',        Icon: Star },
+                  { id: 'arquivada', ativo: c.arquivada, on: 'Desarquivar',   off: 'Arquivar conversa', Icon: Archive },
+                  { id: 'oculta',    ativo: c.oculta,    on: 'Reexibir',      off: 'Ocultar conversa',  Icon: EyeOff },
+                ].map(({ id, ativo, on, off, Icon }) => (
+                  <button key={id}
+                    onClick={e => { e.stopPropagation(); onFlag(c.id, { [id]: !ativo }); setMenuAberto(false); }}
+                    className="w-full text-left px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-[#1E2330] hover:text-white transition-colors flex items-center gap-2">
+                    <Icon size={12} className={ativo ? 'text-orange-400' : 'text-slate-500'} />
+                    {ativo ? on : off}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       <div>
@@ -188,11 +540,11 @@ const CardConversa = React.memo(function CardConversa({
         }
       </div>
 
-      <div className="text-[11px] text-slate-300 truncate bg-[#161922] p-2 rounded-lg border border-slate-800">
+      <div className={`text-[11px] truncate bg-[#161922] p-2 rounded-lg border border-slate-800 ${naoLidas > 0 ? 'text-slate-100' : 'text-slate-300'}`}>
         {ultimaMsg ? ultimaMsg.texto : 'Sem mensagens'}
       </div>
 
-      {c.statusAtendimento === 'aguardando' && (
+      {c.statusAtendimento === 'pendente' && (
         <button
           onClick={e => { e.stopPropagation(); onAtender(c.id, e); }}
           className="w-full mt-1 py-2 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all"
@@ -204,13 +556,123 @@ const CardConversa = React.memo(function CardConversa({
   );
 });
 
+const EMOJIS = ['😀','😁','😂','🥰','😅','😉','👍','🙏','🎉','✅','❌','🔥','💰','📄','📎','⚠️','🤝','👏','🚀','📌'];
+
+function tipoDoArquivo(file) {
+  if (file.type.startsWith('image/')) return 'imagem';
+  if (file.type.startsWith('video/')) return 'video';
+  if (file.type.startsWith('audio/')) return 'audio';
+  return 'documento';
+}
+
 function PainelChat({
-  conversa, parceiros, conversas, setConversas, fluxos,
-  texto, setTexto, scrollRef, onEnviar, onFinalizar, onResolver,
+  conversa, parceiros,
+  texto, setTexto, scrollRef, onEnviar, onEnviarMidia, onFechar, onPendente, onReabrir,
   onMarcarLido, onApagarChat, onSolicitarCnpj, onValidarCnpjModal,
   onExecutarFluxo, fluxoSugerido, onVoltar, atendente, onTransferir
 }) {
   const [showMsgRapidas, setShowMsgRapidas] = useState(false);
+  const [showEmoji, setShowEmoji] = useState(false);
+  const [imagemAmpliada, setImagemAmpliada] = useState(null);
+  const [anexo, setAnexo] = useState(null); // { dataUrl, tipo, mimetype, fileName, progresso }
+  const [enviandoMidia, setEnviandoMidia] = useState(false);
+  const [arrastando, setArrastando] = useState(false);
+  const fileInputRef = useRef(null);
+  const cancelarRef = useRef(null);
+  // Scroll inteligente: so gruda no fim se o usuario ja estava perto do fim.
+  const [temNovas, setTemNovas] = useState(false);
+  const pertoDoFimRef = useRef(true);
+  const totalMsgRef = useRef(conversa.mensagens.length);
+  const meta = STATUS_META[conversa.statusAtendimento] || STATUS_META.pendente;
+  const encerrada = conversa.statusAtendimento === 'fechada';
+
+  // Le o arquivo como data URL (base64) para preview e envio.
+  const selecionarArquivo = useCallback((file) => {
+    if (!file) return;
+    const MAX = 25 * 1024 * 1024; // 25MB
+    if (file.size > MAX) { window.alert('Arquivo muito grande (máx. 25MB).'); return; }
+    const reader = new FileReader();
+    reader.onload = () => setAnexo({
+      dataUrl: reader.result,
+      tipo: tipoDoArquivo(file),
+      mimetype: file.type || 'application/octet-stream',
+      fileName: file.name,
+      progresso: 0,
+    });
+    reader.readAsDataURL(file);
+  }, []);
+
+  const cancelarAnexo = useCallback(() => {
+    if (cancelarRef.current) cancelarRef.current();
+    cancelarRef.current = null;
+    setAnexo(null);
+    setEnviandoMidia(false);
+  }, []);
+
+  const enviarAnexo = useCallback(async () => {
+    if (!anexo || enviandoMidia) return;
+    setEnviandoMidia(true);
+    const payload = {
+      tipo: anexo.tipo,
+      media: anexo.dataUrl,
+      mimetype: anexo.mimetype,
+      fileName: anexo.fileName,
+      ...(texto.trim() ? { caption: texto.trim() } : {}),
+    };
+    const { promise, cancel } = onEnviarMidia(payload, (p) =>
+      setAnexo((a) => (a ? { ...a, progresso: p } : a))
+    );
+    cancelarRef.current = cancel;
+    try {
+      await promise;
+      setAnexo(null);
+      setTexto('');
+      setTimeout(() => irParaFim(true), 0);
+    } catch (e) {
+      if (String(e.message) !== 'cancelado') window.alert('Falha ao enviar mídia: ' + e.message);
+    } finally {
+      setEnviandoMidia(false);
+      cancelarRef.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anexo, enviandoMidia, texto, onEnviarMidia, setTexto]);
+
+  const aoRolar = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const perto = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    pertoDoFimRef.current = perto;
+    if (perto) setTemNovas(false);
+  }, [scrollRef]);
+
+  const irParaFim = useCallback((suave = true) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: suave ? 'smooth' : 'auto' });
+    pertoDoFimRef.current = true;
+    setTemNovas(false);
+  }, [scrollRef]);
+
+  // Ao trocar de conversa: vai direto pro fim (sem animacao).
+  useEffect(() => { irParaFim(false); /* eslint-disable-next-line */ }, [conversa.id]);
+
+  // Chegou mensagem nova: desce se o usuario estava lendo o fim; senao sinaliza.
+  useEffect(() => {
+    const total = conversa.mensagens.length;
+    if (total > totalMsgRef.current) {
+      if (pertoDoFimRef.current) irParaFim(true);
+      else setTemNovas(true);
+    }
+    totalMsgRef.current = total;
+  }, [conversa.mensagens.length, irParaFim]);
+
+  const enviar = useCallback(() => {
+    if (anexo) { enviarAnexo(); return; }
+    if (!texto.trim()) return;
+    onEnviar(texto);
+    // Envio do operador sempre desce a conversa.
+    setTimeout(() => irParaFim(true), 0);
+  }, [anexo, enviarAnexo, onEnviar, texto, irParaFim]);
 
   const ehParceiro = conversa.cnpjVerificado &&
     parceiros.some(p => p.cnpj === limparCnpj(conversa.cnpj) && p.status === 'ativo');
@@ -226,18 +688,15 @@ function PainelChat({
             className="lg:hidden p-1.5 -ml-1 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
             <ChevronLeft size={18} />
           </button>
-          <Avatar nome={conversa.cliente} size="md" />
+          <Avatar nome={conversa.cliente} size="md" fotoUrl={conversa.fotoUrl} />
           <div>
           <div className="font-bold text-sm text-white flex items-center gap-2 flex-wrap">
             {conversa.cliente}
             <span className="text-xs font-normal text-slate-400 font-mono">({conversa.telefone})</span>
          
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-              conversa.statusAtendimento === 'resolvido'
-                ? 'bg-emerald-500/20 text-emerald-400'
-                : 'bg-blue-500/20 text-blue-400'
-            }`}>
-              {conversa.statusAtendimento === 'resolvido' ? 'Resolvido' : 'Em atendimento'}
+            <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold border ${meta.chip}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
+              {meta.label}
             </span>
           </div>
           <div className="mt-1 flex items-center gap-2 flex-wrap">
@@ -271,7 +730,7 @@ function PainelChat({
             </>
           )}
 
-          {!conversa.lido && (
+          {conversa.naoLidas > 0 && (
             <button onClick={() => onMarcarLido(conversa.id)}
               title="Marcar como lido"
               className="px-2.5 py-1.5 rounded-lg bg-slate-700/50 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-600/40 transition-all flex items-center gap-1">
@@ -279,23 +738,33 @@ function PainelChat({
             </button>
           )}
 
-          {conversa.statusAtendimento !== 'resolvido' && (
-            <button onClick={() => onResolver(conversa.id)}
-              title="Marcar como resolvido"
+          {encerrada ? (
+            <button onClick={() => onReabrir(conversa.id)}
+              title="Reabrir atendimento"
               className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 text-xs font-semibold border border-emerald-500/30 transition-all flex items-center gap-1">
-              <CheckCircle2 size={13} /> Resolver
+              <RotateCcw size={13} /> Reabrir
             </button>
+          ) : (
+            <>
+              {conversa.statusAtendimento !== 'pendente' && (
+                <button onClick={() => onPendente(conversa.id)}
+                  title="Devolver para a fila (Pendente)"
+                  className="px-2.5 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 text-xs font-semibold border border-amber-500/30 transition-all flex items-center gap-1">
+                  <Clock size={13} /> Pendente
+                </button>
+              )}
+              <button onClick={() => onFechar(conversa.id)}
+                title="Fechar atendimento"
+                className="px-2.5 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 text-xs font-semibold border border-rose-500/30 transition-all flex items-center gap-1">
+                <CheckCircle2 size={13} /> Fechar
+              </button>
+            </>
           )}
 
           <button onClick={onTransferir}
             title="Transferir conversa para outro atendente"
             className="px-2.5 py-1.5 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 text-xs font-semibold border border-purple-500/30 transition-all flex items-center gap-1">
             <ArrowRightLeft size={13} /> Transferir
-          </button>
-
-          <button onClick={() => onFinalizar(conversa.id)}
-            className="px-2.5 py-1.5 rounded-lg bg-slate-500/15 hover:bg-slate-500/25 text-slate-300 text-xs font-semibold border border-slate-500/30 transition-all flex items-center gap-1">
-            <Check size={13} /> Concluir
           </button>
 
           <button onClick={() => onApagarChat(conversa.id)}
@@ -305,7 +774,18 @@ function PainelChat({
         </div>
       </div>
 
-      <div ref={scrollRef} style={WHATSAPP_BG} className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div ref={scrollRef} onScroll={aoRolar}
+        onDragOver={(e) => { e.preventDefault(); if (!arrastando) setArrastando(true); }}
+        onDragLeave={(e) => { e.preventDefault(); setArrastando(false); }}
+        onDrop={(e) => { e.preventDefault(); setArrastando(false); const f = e.dataTransfer.files?.[0]; if (f) selecionarArquivo(f); }}
+        style={WHATSAPP_BG} className="flex-1 overflow-y-auto p-4 space-y-3 relative">
+        {arrastando && (
+          <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/70 border-2 border-dashed border-orange-500 rounded-xl pointer-events-none">
+            <div className="text-orange-300 font-bold text-sm flex items-center gap-2">
+              <Paperclip size={18} /> Solte o arquivo para anexar
+            </div>
+          </div>
+        )}
         {conversa.mensagens.map((m, i) => (
           <div key={i} className={`flex ${m.de === 'cliente' ? 'justify-start' : m.de === 'sistema' ? 'justify-center' : 'justify-end'}`}>
             {m.de === 'sistema' ? (
@@ -321,7 +801,14 @@ function PainelChat({
                 <div className={`text-[10px] font-semibold ${m.de === 'cliente' ? 'text-slate-400' : 'text-slate-900/80'}`}>
                   {m.de === 'cliente' ? conversa.cliente : 'Arka Tecnologia'}
                 </div>
-                <FormattedMessage text={m.texto} />
+                {m.tipo && m.tipo !== 'texto' ? (
+                  <>
+                    <MensagemMidia m={m} escuro={m.de === 'cliente'} onAbrirImagem={setImagemAmpliada} />
+                    {m.midia?.caption && <FormattedMessage text={m.midia.caption} />}
+                  </>
+                ) : (
+                  <FormattedMessage text={m.texto} />
+                )}
                 <div className={`text-[9px] text-right ${m.de === 'cliente' ? 'text-slate-400' : 'text-slate-900/70'}`}>
                   {m.hora}
                 </div>
@@ -330,6 +817,17 @@ function PainelChat({
           </div>
         ))}
       </div>
+
+      {temNovas && (
+        <div className="relative">
+          <button
+            onClick={() => irParaFim(true)}
+            className="absolute -top-10 left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 rounded-full bg-orange-500 text-slate-950 text-[11px] font-bold shadow-lg shadow-black/30 flex items-center gap-1 hover:bg-orange-400 transition-colors"
+          >
+            Novas mensagens <ArrowDown size={13} />
+          </button>
+        </div>
+      )}
 
       {fluxoSugerido && (
         <div className="mx-4 mb-2 p-3 rounded-xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-between gap-3">
@@ -347,6 +845,32 @@ function PainelChat({
         </div>
       )}
 
+      {/* Preview do anexo + barra de progresso */}
+      {anexo && (
+        <div className="mx-3 mb-2 p-2.5 rounded-xl bg-[#161922] border border-[#2A3040] flex items-center gap-3">
+          {anexo.tipo === 'imagem' ? (
+            <img src={anexo.dataUrl} alt="preview" className="w-12 h-12 rounded-lg object-cover shrink-0" />
+          ) : (
+            <div className="w-12 h-12 rounded-lg bg-[#1E2330] border border-slate-700 flex items-center justify-center shrink-0 text-orange-400">
+              {anexo.tipo === 'video' ? <Play size={18} /> : anexo.tipo === 'audio' ? <Zap size={18} /> : <FileText size={18} />}
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="text-[11px] font-semibold text-white truncate">{anexo.fileName}</div>
+            <div className="text-[10px] text-slate-500 uppercase">{anexo.tipo}</div>
+            {enviandoMidia && (
+              <div className="mt-1 h-1.5 rounded-full bg-slate-700 overflow-hidden">
+                <div className="h-full bg-orange-500 transition-all" style={{ width: `${anexo.progresso || 0}%` }} />
+              </div>
+            )}
+          </div>
+          <button onClick={cancelarAnexo} title={enviandoMidia ? 'Cancelar envio' : 'Remover anexo'}
+            className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-rose-400 shrink-0">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       <div className="p-3 bg-[#1E2330]/80 border-t border-[#2A3040] flex items-center gap-2 relative">
         {showMsgRapidas && (
           <PainelMensagensRapidas
@@ -354,6 +878,40 @@ function PainelChat({
             onFechar={() => setShowMsgRapidas(false)}
           />
         )}
+
+        {showEmoji && (
+          <div className="absolute bottom-full left-2 mb-2 p-2 glass-panel border border-[#2A3040] rounded-2xl shadow-2xl z-30 grid grid-cols-5 gap-1 w-56">
+            {EMOJIS.map(e => (
+              <button key={e} onClick={() => { setTexto(t => t + e); setShowEmoji(false); }}
+                className="text-lg rounded-lg hover:bg-[#1E2330] p-1 transition-colors">{e}</button>
+            ))}
+          </div>
+        )}
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          onChange={e => { const f = e.target.files?.[0]; if (f) selecionarArquivo(f); e.target.value = ''; }}
+        />
+
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          title="Anexar arquivo"
+          className="p-2.5 rounded-xl border bg-[#161922] border-[#2A3040] text-slate-400 hover:text-orange-400 hover:border-orange-500/30 transition-all"
+        >
+          <Paperclip size={15} />
+        </button>
+
+        <button
+          onClick={() => setShowEmoji(v => !v)}
+          title="Emoji"
+          className={`p-2.5 rounded-xl border transition-all ${
+            showEmoji ? 'bg-orange-500/20 border-orange-500/40 text-orange-400' : 'bg-[#161922] border-[#2A3040] text-slate-400 hover:text-orange-400 hover:border-orange-500/30'
+          }`}
+        >
+          <Smile size={15} />
+        </button>
 
         <button
           onClick={() => setShowMsgRapidas(v => !v)}
@@ -367,34 +925,55 @@ function PainelChat({
           <Zap size={15} />
         </button>
 
-        <input
+        <textarea
           value={texto}
+          rows={1}
           onChange={e => setTexto(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && !e.shiftKey && onEnviar(texto)}
-          placeholder="Digite sua mensagem ou CNPJ para consultar..."
-          className="flex-1 bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50 transition-colors"
+          onKeyDown={e => {
+            // Enter envia; Ctrl/Cmd+Enter envia; Shift+Enter quebra linha.
+            if (e.key === 'Enter' && (!e.shiftKey || e.ctrlKey || e.metaKey)) {
+              e.preventDefault();
+              enviar();
+            }
+          }}
+          placeholder={anexo ? 'Legenda (opcional)...' : 'Digite sua mensagem ou CNPJ...  (Enter envia · Shift+Enter quebra linha)'}
+          className="flex-1 resize-none max-h-32 bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50 transition-colors"
         />
         <button
-          onClick={() => onEnviar(texto)}
-          className="p-2.5 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 transition-colors shadow-md shadow-orange-500/20"
+          onClick={enviar}
+          disabled={enviandoMidia}
+          className="p-2.5 rounded-xl bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-slate-950 transition-colors shadow-md shadow-orange-500/20 self-end"
         >
-          <Send size={15} />
+          {enviandoMidia ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
         </button>
       </div>
+
+      {imagemAmpliada && (
+        <VisualizadorImagem
+          url={imagemAmpliada.url}
+          legenda={imagemAmpliada.legenda}
+          nomeArquivo={imagemAmpliada.nomeArquivo}
+          onFechar={() => setImagemAmpliada(null)}
+        />
+      )}
     </>
   );
 }
 
 export default function AtendimentoView({ conversas, setConversas, fluxos, parceiros, equipe = [] }) {
-  const { whatsAppConectado, historico = [], marcarNotificacoesLidas, limparHistorico } = useAppContext();
-  const [abaAtual,      setAbaAtual]     = useState('abertos');
+  const { whatsAppConectado, carregando, historico = [], marcarNotificacoesLidas, limparHistorico } = useAppContext();
+  const [abaAtual,      setAbaAtual]     = usePreferencia('central.aba', 'todas');
   const [selecionada,   setSelecionada]  = useState(null);
   const [texto,         setTexto]        = useState('');
   const [espiandoChat,  setEspiandoChat] = useState(null);
   const [modalCnpj,     setModalCnpj]    = useState(false);
   const [inputCnpj,     setInputCnpj]    = useState('');
   const [busca,         setBusca]        = useState('');
-  const [fixados,       setFixados]      = useState(lerFixados);
+  // Persistidos por operador: sobrevivem ao F5 e acompanham a reconexao.
+  const [filtrosExtra,  setFiltrosExtra] = usePreferencia('central.filtrosExtra', []);
+  const [visibilidade,  setVisibilidade] = usePreferencia('central.visibilidade', VISIBILIDADE_PADRAO);
+  const [showFiltros,   setShowFiltros]  = useState(false);
+  const filtrosRef = useRef(null);
   const [sinoTocando,   setSinoTocando]  = useState(false);
   const [showNotif,     setShowNotif]    = useState(false);
   const [atendentes,    setAtendentes]   = useState(lerAtendentes);
@@ -427,6 +1006,16 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     return () => document.removeEventListener('mousedown', onDoc);
   }, [showNotif]);
 
+  // Clicar fora fecha o painel de filtros.
+  useEffect(() => {
+    if (!showFiltros) return;
+    const onDoc = (e) => {
+      if (filtrosRef.current && !filtrosRef.current.contains(e.target)) setShowFiltros(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [showFiltros]);
+
   // Transfere a conversa para um membro da equipe (persistido em localStorage).
   const transferirConversa = useCallback((conv, membro) => {
     setAtendentes(prev => {
@@ -437,13 +1026,24 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     setTransferindo(null);
   }, []);
 
+  // Flags agora vivem no banco (antes: localStorage). Otimista + confirma na API.
+  const atualizarFlag = useCallback(async (id, flags) => {
+    setConversas(prev => prev.map(c => c.id === id ? { ...c, ...flags } : c));
+    try {
+      const atualizada = await ConversasAPI.atualizarFlags(id, flags);
+      if (atualizada?.id) setConversas(prev => prev.map(c => c.id === atualizada.id ? atualizada : c));
+    } catch {
+      // Falhou: desfaz o otimismo invertendo as flags aplicadas.
+      setConversas(prev => prev.map(c =>
+        c.id === id ? { ...c, ...Object.fromEntries(Object.entries(flags).map(([k, v]) => [k, !v])) } : c
+      ));
+    }
+  }, [setConversas]);
+
   const alternarFixado = useCallback((id) => {
-    setFixados(prev => {
-      const novo = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
-      salvarFixados(novo);
-      return novo;
-    });
-  }, []);
+    const atual = conversas.find(c => c.id === id);
+    atualizarFlag(id, { fixada: !atual?.fixada });
+  }, [conversas, atualizarFlag]);
 
   // Sino + som: dispara quando o total de mensagens de clientes aumenta
   // (nova mensagem recebida via polling do AppContext).
@@ -465,11 +1065,14 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     totalMsgClienteRef.current = totalMsgCliente;
   }, [totalMsgCliente]);
 
+  // Ao abrir uma conversa com nao-lidas, marca como lida (zera o badge).
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (!conversa) return;
+    if ((conversa.statusAtendimento === 'aberta' || conversa.statusAtendimento === 'fechada') && conversa.naoLidas > 0) {
+      marcarComoLido(conversa.id);
     }
-  }, [conversa?.mensagens?.length, selecionada]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selecionada]);
 
   useEffect(() => {
     if (!selecionada) return;
@@ -480,14 +1083,48 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   }, [abaAtual, conversas]);
 
   const conversasFiltradas = conversas.filter(c => {
+    // Visibilidade: esconde da lista sem apagar nada do banco.
+    if (c.arquivada && !visibilidade.arquivadas) return false;
+    if (c.oculta && !visibilidade.ocultas) return false;
+    // Sem excecao por aba: desmarcado significa escondido em qualquer lugar.
+    if (c.statusAtendimento === 'fechada' && !visibilidade.fechadas) return false;
+
     const aba = ABAS.find(a => a.id === abaAtual);
     if (!aba?.statusMatch(c)) return false;
+
+    // Filtros extras: todos os marcados precisam bater (AND).
+    for (const id of filtrosExtra) {
+      const f = FILTROS_EXTRA.find(x => x.id === id);
+      if (f && !f.testa(c)) return false;
+    }
+
     if (!busca.trim()) return true;
     const q = busca.toLowerCase();
+    const qDigitos = q.replace(/\D/g, '');
     return c.cliente.toLowerCase().includes(q) ||
            (c.telefone || '').includes(q) ||
+           (qDigitos && limparCnpj(c.cnpj).includes(qDigitos)) ||
+           (c.cnpj && mascararCnpj(c.cnpj).toLowerCase().includes(q)) ||
            c.mensagens.some(m => m.texto.toLowerCase().includes(q));
-  }).sort((a, b) => (fixados.includes(b.id) ? 1 : 0) - (fixados.includes(a.id) ? 1 : 0));
+  }).sort((a, b) => (b.fixada ? 1 : 0) - (a.fixada ? 1 : 0));
+
+  // Abas realmente exibidas: os checkboxes escondem "Todas" e "Fechadas".
+  const abasVisiveis = ABAS.filter(a => {
+    const chave = Object.keys(ABA_POR_VISIBILIDADE).find(k => ABA_POR_VISIBILIDADE[k] === a.id);
+    return chave ? visibilidade[chave] : true;
+  });
+
+  // Se a aba atual foi escondida, cai para a primeira disponivel.
+  useEffect(() => {
+    if (!abasVisiveis.some(a => a.id === abaAtual) && abasVisiveis.length > 0) {
+      setAbaAtual(abasVisiveis[0].id);
+    }
+  }, [abasVisiveis, abaAtual]);
+
+  // Badge do botao: quantos filtros fogem do padrao.
+  const totalFiltrosAtivos =
+    filtrosExtra.length +
+    Object.keys(VISIBILIDADE_PADRAO).filter(k => visibilidade[k] !== VISIBILIDADE_PADRAO[k]).length;
 
   const contadores = ABAS.reduce((acc, aba) => {
     acc[aba.id] = conversas.filter(aba.statusMatch).length;
@@ -502,34 +1139,41 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
 
   const atenderConversa = useCallback(async (id, e) => {
     if (e) e.stopPropagation();
-    setAbaAtual('abertos');
+    setAbaAtual('abertas');
     setSelecionada(id);
     setConversas(prev => prev.map(c =>
-      c.id === id ? { ...c, statusAtendimento: 'em_atendimento', lido: true } : c
+      c.id === id ? { ...c, statusAtendimento: 'aberta', lido: true, naoLidas: 0 } : c
     ));
     try { aplicarConversa(await ConversasAPI.atender(id)); } catch {}
   }, [setConversas, aplicarConversa]);
 
-  const finalizarAtendimento = useCallback(async (id) => {
-    if (!window.confirm('Deseja concluir e finalizar este atendimento?')) return;
+  const fecharConversa = useCallback(async (id) => {
     setSelecionada(null);
+    setAbaAtual('fechadas');
     setConversas(prev => prev.map(c =>
-      c.id === id ? { ...c, statusAtendimento: 'finalizado' } : c
+      c.id === id ? { ...c, statusAtendimento: 'fechada', lido: true, naoLidas: 0 } : c
     ));
-    try { aplicarConversa(await ConversasAPI.atualizarStatus(id, 'finalizado')); } catch {}
+    try { aplicarConversa(await ConversasAPI.fechar(id)); } catch {}
   }, [setConversas, aplicarConversa]);
 
-  const resolverAtendimento = useCallback(async (id) => {
-    setSelecionada(null);
-    setAbaAtual('fechados');
+  const moverPendente = useCallback(async (id) => {
     setConversas(prev => prev.map(c =>
-      c.id === id ? { ...c, statusAtendimento: 'resolvido', lido: true } : c
+      c.id === id ? { ...c, statusAtendimento: 'pendente' } : c
     ));
-    try { aplicarConversa(await ConversasAPI.atualizarStatus(id, 'resolvido')); } catch {}
+    try { aplicarConversa(await ConversasAPI.pendente(id)); } catch {}
+  }, [setConversas, aplicarConversa]);
+
+  const reabrirConversa = useCallback(async (id) => {
+    setAbaAtual('abertas');
+    setSelecionada(id);
+    setConversas(prev => prev.map(c =>
+      c.id === id ? { ...c, statusAtendimento: 'aberta', fechadoEm: null } : c
+    ));
+    try { aplicarConversa(await ConversasAPI.reabrir(id)); } catch {}
   }, [setConversas, aplicarConversa]);
 
   const marcarComoLido = useCallback(async (id) => {
-    setConversas(prev => prev.map(c => c.id === id ? { ...c, lido: true } : c));
+    setConversas(prev => prev.map(c => c.id === id ? { ...c, lido: true, naoLidas: 0 } : c));
     try { aplicarConversa(await ConversasAPI.marcarLido(id)); } catch {}
   }, [setConversas, aplicarConversa]);
 
@@ -562,6 +1206,16 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     // O back-end persiste, detecta CNPJ e devolve a conversa completa.
     try { aplicarConversa(await ConversasAPI.enviarMensagem(id, txt.trim())); } catch {}
   }, [conversa, setConversas, aplicarConversa]);
+
+  // Envio de mídia com progresso/cancelamento. Devolve { promise, cancel } para
+  // o PainelChat controlar a barra e o botão de cancelar. A conversa atualizada
+  // volta pela resposta (e também via SSE).
+  const enviarMidia = useCallback((payload, onProgress) => {
+    if (!conversa) return { promise: Promise.reject(new Error('sem conversa')), cancel: () => {} };
+    const { promise, cancel } = ConversasAPI.enviarMidia(conversa.id, payload, onProgress);
+    promise.then(atualizada => { if (atualizada) aplicarConversa(atualizada); }).catch(() => {});
+    return { promise, cancel };
+  }, [conversa, aplicarConversa]);
 
   const solicitarCnpjBot = useCallback(async () => {
     if (!conversa) return;
@@ -618,7 +1272,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     : null;
 
   const chatAberto = !!conversa &&
-    (conversa.statusAtendimento === 'em_atendimento' || conversa.statusAtendimento === 'resolvido');
+    (conversa.statusAtendimento === 'aberta' || conversa.statusAtendimento === 'fechada');
 
   return (
     <div className="fade-in space-y-4 h-full flex flex-col">
@@ -681,7 +1335,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                       <button
                         key={n.id}
                         onClick={() => {
-                          if (n.convId) { setAbaAtual('abertos'); setSelecionada(n.convId); }
+                          if (n.convId) { setAbaAtual('todas'); setSelecionada(n.convId); }
                           setShowNotif(false);
                         }}
                         className="w-full text-left p-3 flex items-start gap-2.5 hover:bg-[#1E2330]/70 transition-colors"
@@ -722,8 +1376,9 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
 
         <div className={`${chatAberto ? 'hidden lg:flex' : 'flex'} lg:col-span-4 glass-panel rounded-2xl flex-col overflow-hidden border border-[#2A3040] min-h-[420px] lg:min-h-0`}>
        
-          <div className="grid grid-cols-3 bg-[#1E2330]/80 border-b border-[#2A3040]">
-            {ABAS.map(aba => {
+          <div className="grid bg-[#1E2330]/80 border-b border-[#2A3040]"
+            style={{ gridTemplateColumns: `repeat(${Math.max(abasVisiveis.length, 1)}, minmax(0, 1fr))` }}>
+            {abasVisiveis.map(aba => {
               const Icon  = aba.icon;
               const count = contadores[aba.id];
               const ativo = abaAtual === aba.id;
@@ -747,8 +1402,8 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
             })}
           </div>
 
-          <div className="p-2 border-b border-[#2A3040]">
-            <div className="relative">
+          <div className="p-2 border-b border-[#2A3040] flex items-center gap-2">
+            <div className="relative flex-1">
               <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
               <input
                 value={busca}
@@ -757,35 +1412,74 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                 className="w-full bg-[#161922] border border-[#2A3040] rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50"
               />
             </div>
+
+            <div className="relative shrink-0" ref={filtrosRef}>
+              <button
+                onClick={() => setShowFiltros(v => !v)}
+                title="Filtros da lista"
+                className={`relative p-2 rounded-xl border transition-all ${
+                  showFiltros || totalFiltrosAtivos > 0
+                    ? 'bg-orange-500/20 border-orange-500/40 text-orange-400'
+                    : 'bg-[#161922] border-[#2A3040] text-slate-400 hover:text-orange-400 hover:border-orange-500/30'
+                }`}
+              >
+                <SlidersHorizontal size={14} />
+                {totalFiltrosAtivos > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-0.5 rounded-full bg-orange-500 text-slate-950 text-[9px] font-extrabold flex items-center justify-center">
+                    {totalFiltrosAtivos}
+                  </span>
+                )}
+              </button>
+
+              {showFiltros && (
+                <PainelFiltros
+                  extras={filtrosExtra}
+                  setExtras={setFiltrosExtra}
+                  visib={visibilidade}
+                  setVisib={setVisibilidade}
+                  totalAtivos={totalFiltrosAtivos}
+                  onLimpar={() => { setFiltrosExtra([]); setVisibilidade(VISIBILIDADE_PADRAO); }}
+                />
+              )}
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            {conversasFiltradas.map(c => (
-              <CardConversa
-                key={c.id}
-                c={c}
-                selecionada={selecionada}
-                parceiros={parceiros}
-                onSelecionar={setSelecionada}
-                onAtender={atenderConversa}
-                onResolver={resolverAtendimento}
-                onEspiar={setEspiandoChat}
-                onFixar={alternarFixado}
-                fixado={fixados.includes(c.id)}
-              />
-            ))}
-            {conversasFiltradas.length === 0 && (
-              <div className="p-8 text-center text-slate-400 text-xs">
-                {abaAtual === 'abertos'   && 'Nenhuma conversa aberta.'}
-                {abaAtual === 'pendentes' && 'Nenhuma conversa pendente na fila.'}
-                {abaAtual === 'fechados'  && 'Nenhum atendimento finalizado.'}
+            {carregando && conversas.length === 0
+              ? Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)
+              : conversasFiltradas.map(c => (
+                <CardConversa
+                  key={c.id}
+                  c={c}
+                  selecionada={selecionada}
+                  parceiros={parceiros}
+                  whatsAppConectado={whatsAppConectado}
+                  onSelecionar={setSelecionada}
+                  onAtender={atenderConversa}
+                  onFechar={fecharConversa}
+                  onReabrir={reabrirConversa}
+                  onEspiar={setEspiandoChat}
+                  onFixar={alternarFixado}
+                  onFlag={atualizarFlag}
+                  fixado={!!c.fixada}
+                />
+              ))}
+            {!carregando && conversasFiltradas.length === 0 && (
+              <div className="flex flex-col items-center justify-center text-center py-14 px-6 text-slate-400">
+                <div className="inline-flex p-4 rounded-2xl bg-[#1E2330] border border-[#2A3040] mb-3 text-slate-500">
+                  <Inbox size={30} />
+                </div>
+                <p className="text-xs font-semibold text-slate-300">Nenhuma conversa encontrada.</p>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  {busca.trim() ? 'Ajuste a busca ou os filtros.' : 'As novas conversas aparecem aqui automaticamente.'}
+                </p>
               </div>
             )}
           </div>
         </div>
 
         <div className={`${chatAberto ? 'flex' : 'hidden lg:flex'} lg:col-span-8 glass-panel rounded-2xl flex-col overflow-hidden border border-[#2A3040] min-h-[70vh] lg:min-h-0`}>
-          {!conversa || (conversa.statusAtendimento !== 'em_atendimento' && conversa.statusAtendimento !== 'resolvido') ? (
+          {!conversa || (conversa.statusAtendimento !== 'aberta' && conversa.statusAtendimento !== 'fechada') ? (
             <div
               className="flex-1 flex items-center justify-center relative overflow-hidden"
               style={WHATSAPP_BG}
@@ -824,15 +1518,14 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
             <PainelChat
               conversa={conversa}
               parceiros={parceiros}
-              conversas={conversas}
-              setConversas={setConversas}
-              fluxos={fluxos}
               texto={texto}
               setTexto={setTexto}
               scrollRef={scrollRef}
               onEnviar={enviarResposta}
-              onFinalizar={finalizarAtendimento}
-              onResolver={resolverAtendimento}
+              onEnviarMidia={enviarMidia}
+              onFechar={fecharConversa}
+              onPendente={moverPendente}
+              onReabrir={reabrirConversa}
               onMarcarLido={marcarComoLido}
               onApagarChat={apagarChat}
               onSolicitarCnpj={solicitarCnpjBot}

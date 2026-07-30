@@ -18,6 +18,10 @@ class ConversaController {
     return conversaService.enviarMensagem(req.params.id, req.body.texto).then((data) => success(res, data));
   }
 
+  enviarMidia(req, res) {
+    return conversaService.enviarMidia(req.params.id, req.body).then((data) => success(res, data));
+  }
+
   solicitarCnpj(req, res) {
     return conversaService.solicitarCnpj(req.params.id).then((data) => success(res, data));
   }
@@ -28,6 +32,10 @@ class ConversaController {
 
   atualizarStatus(req, res) {
     return conversaService.atualizarStatus(req.params.id, req.body.status).then((data) => success(res, data));
+  }
+
+  atualizarFlags(req, res) {
+    return conversaService.atualizarFlags(req.params.id, req.body).then((data) => success(res, data));
   }
 
   marcarLido(req, res) {

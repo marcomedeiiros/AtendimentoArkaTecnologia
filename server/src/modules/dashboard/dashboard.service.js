@@ -18,18 +18,17 @@ class DashboardService {
     );
 
     const atendimentosAtivos =
-      (mapStatus.aguardando || 0) + (mapStatus.em_atendimento || 0);
+      (mapStatus.pendente || 0) + (mapStatus.aberta || 0);
 
     return {
       clientesWhatsapp: contatos,
       atendimentosAtivos,
-      atendimentosFinalizados:
-        (mapStatus.finalizado || 0) + (mapStatus.resolvido || 0),
+      atendimentosFinalizados: mapStatus.fechada || 0,
       validacoesCnpj,
       parceirosAtivos,
       equipeOnline,
       totalEquipe: await prisma.equipe.count(),
-      filaAguardando: mapStatus.aguardando || 0,
+      filaAguardando: mapStatus.pendente || 0,
     };
   }
 }

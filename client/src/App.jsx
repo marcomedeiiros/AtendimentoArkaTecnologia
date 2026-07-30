@@ -23,6 +23,7 @@ import ParceirosPage    from './pages/ParceirosPage';
 import MensagensPage    from './pages/MensagensPage';
 import AgendaPage       from './pages/AgendaPage';
 import MassaPage        from './pages/MassaPage';
+import ConfiguracoesPage from './pages/ConfiguracoesPage';
 
 export default function App() {
   return (
@@ -36,6 +37,7 @@ export default function App() {
             <Route path="/contatos"    element={<ContatosPage />} />
             <Route path="/fluxos"      element={<FluxosPage />} />
             <Route path="/whatsapp"    element={<WhatsAppPage />} />
+            <Route path="/configuracoes" element={<ConfiguracoesPage />} />
             <Route path="/equipe"      element={<EquipePage />} />
             <Route path="/parceiros"   element={<ParceirosPage />} />
             <Route path="/mensagens"   element={<MensagensPage />} />

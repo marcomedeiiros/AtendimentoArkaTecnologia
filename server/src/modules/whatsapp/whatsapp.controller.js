@@ -36,6 +36,42 @@ class WhatsAppController {
       .obterQrcode(req.query.instance)
       .then((data) => success(res, data));
   }
+
+  detalhes(req, res) {
+    return whatsappService
+      .obterDetalhes(req.query.instance)
+      .then((data) => success(res, data));
+  }
+
+  criarInstancia(req, res) {
+    return whatsappService
+      .criarInstancia({
+        instanceName: req.body?.instance,
+        baseUrlPublica: req.body?.baseUrlPublica,
+      })
+      .then((data) => success(res, data, 201));
+  }
+
+  configurarWebhook(req, res) {
+    return whatsappService
+      .configurarWebhook({
+        instanceName: req.body?.instance,
+        baseUrlPublica: req.body?.baseUrlPublica,
+      })
+      .then((data) => success(res, data));
+  }
+
+  reiniciar(req, res) {
+    return whatsappService
+      .reiniciar(req.body?.instance || req.query.instance)
+      .then((data) => success(res, data));
+  }
+
+  excluir(req, res) {
+    return whatsappService
+      .excluir(req.body?.instance || req.query.instance)
+      .then((data) => success(res, data));
+  }
 }
 
 module.exports = new WhatsAppController();

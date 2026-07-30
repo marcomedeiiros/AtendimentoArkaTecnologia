@@ -18,6 +18,9 @@ const fluxoRoutes = require("./modules/fluxos/fluxo.routes");
 const conversaRoutes = require("./modules/conversas/conversa.routes");
 const dashboardRoutes = require("./modules/dashboard/dashboard.routes");
 const chatbotRoutes = require("./modules/chatbot/chatbot.routes");
+const n8nRoutes = require("./modules/n8n/n8n.routes");
+const configuracaoRoutes = require("./modules/configuracoes/configuracao.routes");
+const preferenciaRoutes = require("./modules/preferencias/preferencia.routes");
 const {
   webhookRouter,
   adminRouter,
@@ -29,7 +32,7 @@ function createApp() {
   const app = express();
 
   app.use(cors({ origin: env.corsOrigin }));
-  app.use(express.json({ limit: "2mb" }));
+  app.use(express.json({ limit: "30mb" })); // mídia enviada em base64 passa de 2mb
   app.use(apiLimiter);
 
   app.get("/health", (req, res) => {
@@ -47,6 +50,9 @@ function createApp() {
   app.use("/api/conversas", conversaRoutes);
   app.use("/api/dashboard", dashboardRoutes);
   app.use("/api/chatbot", chatbotRoutes);
+  app.use("/api/n8n", n8nRoutes);
+  app.use("/api/configuracoes", configuracaoRoutes);
+  app.use("/api/preferencias", preferenciaRoutes);
   app.use("/api/whatsapp", adminRouter);
 
   const mountWebhook = (path) => {

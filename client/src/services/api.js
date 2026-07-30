@@ -116,10 +116,42 @@ export const EquipeAPI = {
 };
 
 // ── WhatsApp API ──
+const qs = (instance) => (instance ? `?instance=${encodeURIComponent(instance)}` : '');
 export const WhatsAppAPI = {
-  status: () => request('/whatsapp/status'),
-  conectar: () => request('/whatsapp/conectar', { method: 'POST' }),
-  desconectar: () => request('/whatsapp/desconectar', { method: 'POST' }),
+  status: (instance) => request(`/whatsapp/status${qs(instance)}`),
+  detalhes: (instance) => request(`/whatsapp/detalhes${qs(instance)}`),
+  qrcode: (instance) => request(`/whatsapp/qrcode${qs(instance)}`),
+  conectar: (instance) => request('/whatsapp/conectar', { method: 'POST', body: JSON.stringify({ instance }) }),
+  desconectar: (instance) => request('/whatsapp/desconectar', { method: 'POST', body: JSON.stringify({ instance }) }),
+  reiniciar: (instance) => request('/whatsapp/reiniciar', { method: 'POST', body: JSON.stringify({ instance }) }),
+  excluir: (instance) => request('/whatsapp/instancia', { method: 'DELETE', body: JSON.stringify({ instance }) }),
+};
+
+// ── n8n API ──
+export const N8nAPI = {
+  status: () => request('/n8n/status'),
+  listar: () => request('/n8n/workflows'),
+  criar: (nome) => request('/n8n/workflows', { method: 'POST', body: JSON.stringify({ nome }) }),
+  renomear: (id, nome) => request(`/n8n/workflows/${id}`, { method: 'PUT', body: JSON.stringify({ nome }) }),
+  alternarAtivo: (id, ativo) => request(`/n8n/workflows/${id}/ativo`, { method: 'PATCH', body: JSON.stringify({ ativo }) }),
+  executar: (id, payload = {}) => request(`/n8n/workflows/${id}/executar`, { method: 'POST', body: JSON.stringify({ payload }) }),
+  remover: (id) => request(`/n8n/workflows/${id}`, { method: 'DELETE' }),
+};
+
+// ── Preferências de interface (por operador) ──
+export const PreferenciasAPI = {
+  obter: (chave) => request(`/preferencias/${encodeURIComponent(chave)}`),
+  salvar: (chave, valor) => request(`/preferencias/${encodeURIComponent(chave)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ valor }),
+  }),
+};
+
+// ── Configurações API ──
+export const ConfiguracoesAPI = {
+  obter: () => request('/configuracoes'),
+  salvar: (valores) => request('/configuracoes', { method: 'PUT', body: JSON.stringify(valores) }),
+  testar: (servico) => request(`/configuracoes/testar/${servico}`, { method: 'POST' }),
 };
 
 // ── Conversas API ──
@@ -130,6 +162,41 @@ export const ConversasAPI = {
   solicitarCnpj: (id) => request(`/conversas/${id}/solicitar-cnpj`, { method: 'POST' }),
   validarCnpj: (id, cnpj) => request(`/conversas/${id}/validar-cnpj`, { method: 'POST', body: JSON.stringify({ cnpj }) }),
   atualizarStatus: (id, status) => request(`/conversas/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  // Atalhos de status (os 3 estados da Central).
+  pendente: (id) => request(`/conversas/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'pendente' }) }),
+  fechar: (id) => request(`/conversas/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'fechada' }) }),
+  reabrir: (id) => request(`/conversas/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'aberta' }) }),
   marcarLido: (id) => request(`/conversas/${id}/lido`, { method: 'PATCH' }),
+  // Favoritar / fixar / arquivar / ocultar — persistido no banco (nao apaga nada).
+  atualizarFlags: (id, flags) => request(`/conversas/${id}/flags`, { method: 'PATCH', body: JSON.stringify(flags) }),
   remover: (id) => request(`/conversas/${id}`, { method: 'DELETE' }),
+  // Ticket de uso unico para autenticar o EventSource (SSE) sem JWT na URL.
+  streamTicket: () => request('/conversas/stream-ticket', { method: 'POST' }),
+  // Envio de midia via XHR: expoe progresso de upload e permite cancelar.
+  // Retorna { promise, cancel }.
+  enviarMidia: (id, payload, onProgress) => {
+    const xhr = new XMLHttpRequest();
+    const promise = new Promise((resolve, reject) => {
+      xhr.open('POST', `${API_BASE}/conversas/${id}/midia`);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      const token = getToken();
+      if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
+      };
+      xhr.onload = () => {
+        let data = null;
+        try { data = JSON.parse(xhr.responseText); } catch { /* resposta vazia */ }
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(data && data.data !== undefined ? data.data : data);
+        } else {
+          reject(new Error(data?.error?.message || `Erro ${xhr.status} ao enviar mídia`));
+        }
+      };
+      xhr.onerror = () => reject(new Error('Falha de rede ao enviar mídia'));
+      xhr.onabort = () => reject(new Error('cancelado'));
+      xhr.send(JSON.stringify(payload));
+    });
+    return { promise, cancel: () => xhr.abort() };
+  },
 };

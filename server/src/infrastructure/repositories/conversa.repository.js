@@ -5,10 +5,16 @@ class ConversaRepository {
     const where = {};
     if (filtros.status) where.statusAtendimento = filtros.status;
     if (filtros.instanciaId) where.instanciaId = filtros.instanciaId;
+    // Arquivadas/ocultas continuam no banco; so somem da listagem quando o
+    // filtro correspondente estiver desligado.
+    if (filtros.arquivada !== undefined) where.arquivada = filtros.arquivada;
+    if (filtros.oculta !== undefined) where.oculta = filtros.oculta;
+    if (filtros.favorita !== undefined) where.favorita = filtros.favorita;
     if (filtros.busca) {
       where.OR = [
         { cliente: { contains: filtros.busca } },
         { telefone: { contains: filtros.busca } },
+        { cnpj: { contains: filtros.busca } },
       ];
     }
 
@@ -36,7 +42,7 @@ class ConversaRepository {
       where: {
         instanciaId,
         telefone,
-        statusAtendimento: { in: ["aguardando", "em_atendimento"] },
+        statusAtendimento: { in: ["pendente", "aberta"] },
       },
       include: { mensagens: { orderBy: { criadoEm: "asc" } }, sessao: true },
       orderBy: { atualizadoEm: "desc" },
@@ -62,9 +68,31 @@ class ConversaRepository {
     return prisma.conversa.delete({ where: { id } });
   }
 
-  addMensagem(conversaId, origem, texto, metadata = null, waMessageId = null) {
-    return prisma.mensagem.create({
-      data: { conversaId, origem, texto, metadata, waMessageId },
+  // Cria a mensagem E "toca" a conversa na mesma transacao. Sem o update, o
+  // @updatedAt nao muda ao chegar mensagem nova e a conversa nao sobe na lista
+  // (ordenada por atualizadoEm). Mensagem do cliente ainda incrementa o
+  // contador de nao-lidas usado pelo badge numerico.
+  async addMensagem(conversaId, origem, texto, metadata = null, waMessageId = null) {
+    const [mensagem] = await prisma.$transaction([
+      prisma.mensagem.create({
+        data: { conversaId, origem, texto, metadata, waMessageId },
+      }),
+      prisma.conversa.update({
+        where: { id: conversaId },
+        data:
+          origem === "cliente"
+            ? { atualizadoEm: new Date(), naoLidas: { increment: 1 }, lido: false }
+            : { atualizadoEm: new Date() },
+      }),
+    ]);
+    return mensagem;
+  }
+
+  zerarNaoLidas(id) {
+    return prisma.conversa.update({
+      where: { id },
+      data: { naoLidas: 0, lido: true },
+      include: { mensagens: { orderBy: { criadoEm: "asc" } } },
     });
   }
 

@@ -1,0 +1,21 @@
+# Dependencias
+node_modules/
+
+# Build
+client/dist/
+
+# Segredos e variaveis de ambiente
+.env
+.env.*
+!.env.example
+
+# Backups gerados ao mexer em schema/configuracao
+*.bak-*
+server/prisma/*.db.bak-*
+
+# Banco local de desenvolvimento
+server/prisma/dev.db-journal
+
+# Logs
+*.log
+npm-debug.log*

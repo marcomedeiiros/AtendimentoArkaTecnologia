@@ -251,7 +251,7 @@ async function main() {
         instanciaId: instancia.id,
         cliente: "Joao Pereira",
         telefone: "5511987654321",
-        statusAtendimento: "aguardando",
+        statusAtendimento: "pendente",
         lido: false,
         mensagens: {
           create: [
