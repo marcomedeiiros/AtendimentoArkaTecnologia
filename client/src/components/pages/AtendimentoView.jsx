@@ -6,7 +6,7 @@ import {
   ArrowRightLeft, AlertCircle, Users, RotateCcw, Layers, ArrowDown,
   FileText, MapPin, Contact, Paperclip, Smile, Image as ImageIcon, Loader2,
   SlidersHorizontal, Star, Archive, EyeOff, MoreVertical,
-  ZoomIn, ZoomOut, Maximize2, Download, CornerUpLeft, Share2, Pencil
+  ZoomIn, ZoomOut, Maximize2, Download, CornerUpLeft, Share2, Pencil, MoreHorizontal
 } from 'lucide-react';
 import { EmojiIcon, FormattedMessage } from './EmojiIcon';
 import { useMensagensRapidas } from './MensagensRapidas';
@@ -285,17 +285,21 @@ function MenuMensagem({ m, ehPropria, onResponder, onEncaminhar, onEditar }) {
   const item = 'w-full text-left px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-[#1E2330] hover:text-white transition-colors flex items-center gap-2';
 
   return (
-    <div className="relative shrink-0" ref={ref}>
+    <div className="relative shrink-0 self-center" ref={ref}>
       <button
         onClick={() => setAberto(v => !v)}
         title="Mais ações"
-        className={`p-0.5 rounded transition-opacity ${ehPropria ? 'text-slate-900/60 hover:text-slate-900' : 'text-slate-500 hover:text-slate-200'} ${aberto ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+        className={`p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-[#1E2330] transition-all ${
+          aberto ? 'opacity-100 bg-[#1E2330] text-white' : 'opacity-0 group-hover:opacity-100'
+        }`}
       >
-        <MoreVertical size={13} />
+        <MoreHorizontal size={15} />
       </button>
 
       {aberto && (
-        <div className="absolute right-0 top-full mt-1 w-40 glass-panel border border-[#2A3040] rounded-xl shadow-2xl shadow-black/50 z-50 overflow-hidden py-1">
+        <div className={`absolute top-full mt-1 w-40 glass-panel border border-[#2A3040] rounded-xl shadow-2xl shadow-black/50 z-50 overflow-hidden py-1 ${
+          ehPropria ? 'left-0' : 'right-0'
+        }`}>
           <button className={item} onClick={() => { onResponder(m); setAberto(false); }}>
             <CornerUpLeft size={12} className="text-slate-500" /> Responder
           </button>
@@ -870,28 +874,29 @@ function PainelChat({
           </div>
         )}
         {conversa.mensagens.map((m, i) => (
-          <div key={i} className={`flex ${m.de === 'cliente' ? 'justify-start' : m.de === 'sistema' ? 'justify-center' : 'justify-end'}`}>
+          <div key={i} className={`group flex items-center gap-1 ${m.de === 'cliente' ? 'justify-start' : m.de === 'sistema' ? 'justify-center' : 'justify-end'}`}>
+            {/* Nas mensagens enviadas por nos (direita), o menu fica a ESQUERDA da bolha */}
+            {m.de !== 'cliente' && m.de !== 'sistema' && (
+              <MenuMensagem
+                m={m}
+                ehPropria
+                onResponder={setRespondendoA}
+                onEncaminhar={setEncaminhando}
+                onEditar={iniciarEdicao}
+              />
+            )}
             {m.de === 'sistema' ? (
               <div className="text-[10px] text-slate-500 bg-[#1E2330] border border-[#2A3040] px-3 py-1.5 rounded-full">
                 {m.texto}
               </div>
             ) : (
-              <div className={`group max-w-[80%] p-3.5 rounded-2xl text-xs shadow-md space-y-1 ${
+              <div className={`max-w-[80%] p-3.5 rounded-2xl text-xs shadow-md space-y-1 ${
                 m.de === 'cliente'
                   ? 'bg-[#1E2330] text-slate-100 border border-[#2A3040] rounded-tl-sm'
                   : 'bg-gradient-to-r from-orange-500 to-amber-500 text-slate-950 font-medium rounded-tr-sm'
               }`}>
-                <div className="flex items-start justify-between gap-2">
-                  <div className={`text-[10px] font-semibold ${m.de === 'cliente' ? 'text-slate-400' : 'text-slate-900/80'}`}>
-                    {m.de === 'cliente' ? conversa.cliente : 'Arka Tecnologia'}
-                  </div>
-                  <MenuMensagem
-                    m={m}
-                    ehPropria={m.de !== 'cliente'}
-                    onResponder={setRespondendoA}
-                    onEncaminhar={setEncaminhando}
-                    onEditar={iniciarEdicao}
-                  />
+                <div className={`text-[10px] font-semibold ${m.de === 'cliente' ? 'text-slate-400' : 'text-slate-900/80'}`}>
+                  {m.de === 'cliente' ? conversa.cliente : 'Arka Tecnologia'}
                 </div>
 
                 {/* Trecho citado (recurso "responder") */}
@@ -924,6 +929,17 @@ function PainelChat({
                   <StatusMensagem status={m.status} escuro={m.de === 'cliente'} />
                 </div>
               </div>
+            )}
+
+            {/* Nas mensagens do cliente (esquerda), o menu fica a DIREITA da bolha */}
+            {m.de === 'cliente' && (
+              <MenuMensagem
+                m={m}
+                ehPropria={false}
+                onResponder={setRespondendoA}
+                onEncaminhar={setEncaminhando}
+                onEditar={iniciarEdicao}
+              />
             )}
           </div>
         ))}

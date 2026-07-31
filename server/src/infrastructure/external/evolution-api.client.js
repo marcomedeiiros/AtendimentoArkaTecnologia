@@ -118,7 +118,8 @@ class EvolutionApiClient {
         url: webhookUrl,
         byEvents: false,
         base64: true, // envia a midia em base64 junto do evento
-        events: eventos || ["MESSAGES_UPSERT", "CONNECTION_UPDATE"],
+        // MESSAGES_UPDATE traz os ACKs de entrega/leitura (os risquinhos).
+        events: eventos || ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "CONNECTION_UPDATE"],
       };
     }
     return this.request("POST", "/instance/create", body);
@@ -133,7 +134,8 @@ class EvolutionApiClient {
         url,
         webhookByEvents: false,
         webhookBase64: true,
-        events: eventos || ["MESSAGES_UPSERT", "CONNECTION_UPDATE"],
+        // MESSAGES_UPDATE traz os ACKs de entrega/leitura (os risquinhos).
+        events: eventos || ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "CONNECTION_UPDATE"],
       },
     });
   }
