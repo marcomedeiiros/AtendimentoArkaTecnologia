@@ -29,6 +29,22 @@ webhookRouter.get("/", (req, res, next) =>
   whatsappController.verificar(req, res).catch(next)
 );
 
+/**
+ * @openapi
+ * /api/webhook/v1/whatsapp/responder:
+ *   post:
+ *     tags: [WhatsApp]
+ *     security: [{ webhookToken: [] }]
+ *     summary: Envia uma resposta ao cliente (usado pelo n8n)
+ *     description: >
+ *       Recebe { telefone | conversaId, texto } e envia pelo WhatsApp,
+ *       registrando a mensagem na conversa. Autenticado pelo mesmo
+ *       webhook secret usado no recebimento, para o n8n chamar sem JWT.
+ */
+webhookRouter.post("/responder", (req, res, next) =>
+  whatsappController.responder(req, res).catch(next)
+);
+
 const adminRouter = require("express").Router();
 adminRouter.use(authMiddleware);
 

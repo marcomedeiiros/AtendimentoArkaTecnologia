@@ -82,22 +82,62 @@ Você apenas transforma a instrução recebida em uma resposta natural, mantendo
 
 ## Como isso se encaixa no projeto
 
-Hoje o WhatsApp funciona assim (n8n **fora** do caminho das mensagens):
+O fluxo em produção é este — **o n8n manda em quem responde**:
 
 ```
-Cliente ⇄ Evolution API ──webhook──▶ Arka (motor de fluxos local) ──▶ Evolution ⇄ Cliente
+Cliente ⇄ Evolution ──webhook──▶ Arka (registra na Central)
+                                    │
+                                    └── encaminha ──▶ n8n (decide)
+                                                        │
+Cliente ⇄ Evolution ◀── POST /responder ◀───────────────┘
 ```
 
-O motor local (`server/src/modules/chatbot/`) casa o texto com o **gatilho** de um
-fluxo e executa os passos — **sem IA**.
+O motor de fluxos local **não envia mais nada por conta própria**. Ele registra a
+conversa (para o atendente ver na Central) e encaminha o evento ao n8n.
 
-Para este agente entrar em operação, o n8n precisa passar a receber os eventos e
-responder. Isso exige uma decisão de arquitetura que ainda **não foi tomada**:
+### Configuração
 
-| Opção | Efeito |
+Em **Configurações → Quem responde o cliente**:
+
+| Modo | Comportamento |
 |---|---|
-| n8n no caminho das mensagens | O webhook da Evolution passa a chamar o n8n, que decide e responde. O motor local sai de cena. |
-| n8n em paralelo | O Arka continua respondendo; o n8n cuida de casos específicos. Exige regra de quem responde o quê, para o cliente não receber resposta dupla. |
+| **n8n no controle** *(padrão)* | Encaminha ao n8n; o bot local nunca envia nada sozinho. |
+| Somente humano | Só registra na Central. Nenhuma resposta automática. |
+| Fluxos do Arka | Motor local responde por gatilho (comportamento antigo). |
 
-Enquanto essa decisão não for tomada, este arquivo serve apenas como registro do
-prompt — colar no n8n **não** faz o agente atender sozinho.
+E em **Configurações → n8n → "Webhook que recebe as mensagens"**, cole a URL do
+*Webhook Trigger* do seu workflow.
+
+### O que o n8n recebe
+
+```json
+{
+  "evento": "mensagem_recebida",
+  "conversaId": "uuid",
+  "instancia": "arka-wapi-oficial",
+  "telefone": "5527999999999",
+  "nomeCliente": "Fulano",
+  "texto": "oi quero um orcamento",
+  "midia": null,
+  "waMessageId": "...",
+  "statusAtendimento": "pendente",
+  "cnpj": null,
+  "recebidoEm": "2026-07-30T04:00:00.000Z"
+}
+```
+
+### Como o n8n responde ao cliente
+
+`POST http://localhost:3000/api/webhook/v1/whatsapp/responder?token=SEU_WEBHOOK_SECRET`
+
+```json
+{ "conversaId": "uuid", "texto": "Recebemos seu pedido..." }
+```
+
+Aceita `telefone` no lugar de `conversaId`. O Arka envia pelo WhatsApp e registra
+a mensagem na conversa (aparece na Central em tempo real). O `token` é o
+`WEBHOOK_SECRET` do `server/.env` — o mesmo do webhook de entrada.
+
+> Se o n8n estiver fora do ar ou o webhook não estiver configurado, **nada é
+> enviado ao cliente**: a mensagem fica registrada na Central para o atendente
+> humano assumir. É o comportamento desejado — nunca responder sem controle.

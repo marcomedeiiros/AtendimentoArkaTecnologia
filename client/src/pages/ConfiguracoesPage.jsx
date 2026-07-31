@@ -14,8 +14,16 @@ const CAMPOS = {
   n8n: [
     { chave: 'n8n.url',    label: 'URL do n8n', placeholder: 'http://localhost:5678', mono: true },
     { chave: 'n8n.apiKey', label: 'API Key',    placeholder: 'gerada em Settings > API no n8n', segredo: true },
+    { chave: 'n8n.webhookFluxo', label: 'Webhook que recebe as mensagens', placeholder: 'http://localhost:5678/webhook/atendimento', mono: true },
   ],
 };
+
+// Quem responde o cliente quando chega uma mensagem.
+const MODOS = [
+  { id: 'n8n',    titulo: 'n8n no controle',   desc: 'Cada mensagem é encaminhada ao n8n, que decide e responde. O bot local nunca envia nada sozinho.' },
+  { id: 'humano', titulo: 'Somente humano',    desc: 'A conversa só é registrada na Central. Nenhuma resposta automática é enviada.' },
+  { id: 'local',  titulo: 'Fluxos do Arka',    desc: 'O motor de fluxos local responde por gatilho (comportamento antigo, sem n8n).' },
+];
 
 function Campo({ def, valor, onChange }) {
   return (
@@ -155,6 +163,39 @@ export default function ConfiguracoesPage() {
         Campos de API Key aparecem mascarados. Deixe como está para manter a chave atual;
         digite um valor novo apenas se quiser trocá-la.
       </p>
+
+      {!carregando && (
+        <div className="glass-panel p-6 rounded-2xl border border-[#2A3040] space-y-3">
+          <h3 className="font-bold text-sm text-white font-display flex items-center gap-2">
+            <MessageCircle size={16} className="text-orange-400" /> Quem responde o cliente
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {MODOS.map(m => {
+              const ativo = (valores['atendimento.modo'] || 'n8n') === m.id;
+              return (
+                <button
+                  key={m.id}
+                  onClick={() => onChange('atendimento.modo', m.id)}
+                  className={`text-left p-4 rounded-xl border transition-all ${
+                    ativo
+                      ? 'bg-orange-500/15 border-orange-500/50'
+                      : 'bg-[#161922] border-[#2A3040] hover:border-slate-600'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`w-2.5 h-2.5 rounded-full ${ativo ? 'bg-orange-400' : 'bg-slate-600'}`} />
+                    <span className={`text-xs font-bold ${ativo ? 'text-orange-300' : 'text-slate-300'}`}>{m.titulo}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">{m.desc}</p>
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[10px] text-slate-500">
+            Lembre de clicar em <strong className="text-slate-400">Salvar configurações</strong> após trocar.
+          </p>
+        </div>
+      )}
 
       {carregando ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

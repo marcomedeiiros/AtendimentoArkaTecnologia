@@ -1,6 +1,9 @@
 const chatbotService = require("../chatbot/chatbot.service");
 const evolutionApi = require("../../infrastructure/external/evolution-api.client");
 const instanciaRepository = require("../../infrastructure/repositories/instancia.repository");
+const conversaRepository = require("../../infrastructure/repositories/conversa.repository");
+const { mapConversa } = require("../../shared/helpers/mapper.helper");
+const bus = require("../../shared/events/event-bus");
 const logger = require("../../config/logger");
 const env = require("../../config/env");
 const AppError = require("../../shared/errors/AppError");
@@ -228,6 +231,46 @@ class WhatsAppService {
         habilitado: webhook?.enabled ?? webhook?.webhook?.enabled ?? null,
       },
     };
+  }
+
+  // Usado pelo n8n para responder o cliente. Envia pelo WhatsApp e registra a
+  // mensagem na conversa (para aparecer na Central e no historico).
+  async responderCliente({ conversaId, telefone, texto, instanceName }) {
+    const conteudo = String(texto || "").trim();
+    if (!conteudo) {
+      throw new AppError("Informe o texto da resposta", 400, "TEXTO_OBRIGATORIO");
+    }
+
+    let conversa = null;
+    if (conversaId) {
+      conversa = await conversaRepository.findById(conversaId);
+      if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
+    } else if (telefone) {
+      const nome = instanceName || env.evolutionApi.instance;
+      const instancia = await instanciaRepository.findByNome(nome);
+      if (instancia) {
+        conversa = await conversaRepository.findByTelefone(
+          instancia.id,
+          limparTelefone(String(telefone))
+        );
+      }
+    }
+
+    if (!conversa && !telefone) {
+      throw new AppError("Informe conversaId ou telefone", 400, "DESTINO_OBRIGATORIO");
+    }
+
+    const destino = conversa?.telefone || limparTelefone(String(telefone));
+    await evolutionApi.sendText(destino, conteudo, instanceName || env.evolutionApi.instance);
+
+    // Origem "bot": a bolha aparece como automacao, nao como um atendente.
+    if (conversa) {
+      await conversaRepository.addMensagem(conversa.id, "bot", conteudo);
+      const atualizada = await conversaRepository.findById(conversa.id);
+      if (atualizada) bus.emitConversa(mapConversa(atualizada));
+    }
+
+    return { enviado: true, telefone: destino, conversaId: conversa?.id || null };
   }
 
   // Cria a instancia na Evolution e ja registra o webhook apontando pro Arka.

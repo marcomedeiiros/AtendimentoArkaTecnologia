@@ -12,6 +12,8 @@ const {
 } = require("../../shared/helpers/cnpj.helper");
 const { comLock } = require("../../shared/helpers/lock.helper");
 const { mapConversa } = require("../../shared/helpers/mapper.helper");
+const configuracaoService = require("../configuracoes/configuracao.service");
+const n8nClient = require("../../infrastructure/external/n8n.client");
 const bus = require("../../shared/events/event-bus");
 const logger = require("../../config/logger");
 const env = require("../../config/env");
@@ -591,6 +593,35 @@ class ChatbotEngine {
 
     // Empurra a conversa (nova ou atualizada) ao front imediatamente.
     await this._emitirConversa(conversa.id);
+
+    // Quem responde o cliente e definido em Configuracoes. Fora do modo "local",
+    // o motor NAO envia nada por conta propria: a mensagem fica registrada na
+    // Central e o n8n (ou o atendente) decide o que fazer.
+    const modo = await configuracaoService.modoAtendimento();
+    if (modo !== "local") {
+      let encaminhamento = { encaminhado: false, motivo: "modo_humano" };
+      if (modo === "n8n") {
+        encaminhamento = await n8nClient.encaminharMensagem({
+          evento: "mensagem_recebida",
+          conversaId: conversa.id,
+          instancia: instanceName,
+          telefone,
+          nomeCliente: conversa.cliente,
+          texto: textoMsg,
+          midia: metadata,
+          waMessageId,
+          statusAtendimento: conversa.statusAtendimento,
+          cnpj: conversa.cnpj || null,
+          recebidoEm: new Date().toISOString(),
+        });
+      }
+      return {
+        processado: true,
+        motivo: `controlado_por_${modo}`,
+        conversaId: conversa.id,
+        ...encaminhamento,
+      };
+    }
 
     // Midia nao dispara o fluxo do bot: registramos e notificamos o atendente.
     if (ehMidia) {

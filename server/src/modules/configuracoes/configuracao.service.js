@@ -9,6 +9,13 @@ const DEFINICOES = {
   "evolution.instance": { padrao: () => env.evolutionApi.instance, segredo: false },
   "n8n.url":            { padrao: () => process.env.N8N_URL || "http://localhost:5678", segredo: false },
   "n8n.apiKey":         { padrao: () => process.env.N8N_API_KEY || "", segredo: true },
+  // URL do webhook do n8n que recebe cada mensagem entrante.
+  "n8n.webhookFluxo":   { padrao: () => process.env.N8N_WEBHOOK_FLUXO || "", segredo: false },
+  // Quem responde o cliente:
+  //   n8n   -> encaminha ao n8n; o bot local NUNCA envia nada por conta propria
+  //   local -> motor de fluxos do proprio Arka responde (comportamento antigo)
+  //   humano-> so registra a conversa; ninguem responde automaticamente
+  "atendimento.modo":   { padrao: () => process.env.ATENDIMENTO_MODO || "n8n", segredo: false },
 };
 
 // Mascara em ASCII puro: caracteres como "•" se corrompem dependendo da
@@ -57,7 +64,15 @@ class ConfiguracaoService {
     return {
       url: String(c["n8n.url"] || "").replace(/\/$/, ""),
       apiKey: c["n8n.apiKey"],
+      webhookFluxo: String(c["n8n.webhookFluxo"] || "").trim(),
     };
+  }
+
+  // "n8n" | "local" | "humano" -- ver DEFINICOES.
+  async modoAtendimento() {
+    const c = await this._carregar();
+    const modo = String(c["atendimento.modo"] || "n8n").toLowerCase();
+    return ["n8n", "local", "humano"].includes(modo) ? modo : "n8n";
   }
 
   // Listagem para a tela: mascara segredos, mas informa se ja existe valor.

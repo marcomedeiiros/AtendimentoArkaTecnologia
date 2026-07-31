@@ -116,6 +116,33 @@ class N8nClient {
     try { return JSON.parse(texto); } catch { return { resposta: texto }; }
   }
 
+  // Encaminha a mensagem recebida do cliente para o webhook do n8n, que decide
+  // e responde. Best-effort: uma falha aqui nao pode derrubar o webhook da
+  // Evolution -- a conversa ja foi registrada e aparece na Central de qualquer
+  // forma, para o atendente humano assumir.
+  async encaminharMensagem(payload) {
+    const { webhookFluxo } = await this._config();
+    if (!webhookFluxo) {
+      return { encaminhado: false, motivo: "webhook_do_n8n_nao_configurado" };
+    }
+
+    try {
+      const resp = await fetch(webhookFluxo, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!resp.ok) {
+        logger.warn("n8n recusou a mensagem encaminhada", { status: resp.status });
+        return { encaminhado: false, motivo: `n8n_respondeu_${resp.status}` };
+      }
+      return { encaminhado: true };
+    } catch (error) {
+      logger.warn("Falha ao encaminhar mensagem ao n8n", { message: error.message });
+      return { encaminhado: false, motivo: "n8n_inacessivel" };
+    }
+  }
+
   // Ping de conexao: /workflows exige credencial valida, entao serve de teste.
   async testarConexao() {
     const inicio = Date.now();

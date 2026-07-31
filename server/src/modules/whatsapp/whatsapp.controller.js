@@ -43,6 +43,17 @@ class WhatsAppController {
       .then((data) => success(res, data));
   }
 
+  responder(req, res) {
+    return whatsappService
+      .responderCliente({
+        conversaId: req.body?.conversaId,
+        telefone: req.body?.telefone,
+        texto: req.body?.texto,
+        instanceName: req.body?.instance || req.instanceName,
+      })
+      .then((data) => success(res, data));
+  }
+
   criarInstancia(req, res) {
     return whatsappService
       .criarInstancia({
