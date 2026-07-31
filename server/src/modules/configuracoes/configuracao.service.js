@@ -12,10 +12,14 @@ const DEFINICOES = {
   // URL do webhook do n8n que recebe cada mensagem entrante.
   "n8n.webhookFluxo":   { padrao: () => process.env.N8N_WEBHOOK_FLUXO || "", segredo: false },
   // Quem responde o cliente:
+  //   local -> motor de fluxos do proprio Arka responde por gatilho (padrao)
   //   n8n   -> encaminha ao n8n; o bot local NUNCA envia nada por conta propria
-  //   local -> motor de fluxos do proprio Arka responde (comportamento antigo)
   //   humano-> so registra a conversa; ninguem responde automaticamente
-  "atendimento.modo":   { padrao: () => process.env.ATENDIMENTO_MODO || "n8n", segredo: false },
+  //
+  // O padrao e "local" de proposito: numa instalacao nova o n8n ainda nao tem
+  // webhook configurado, e com "n8n" os fluxos do Arka ficariam mudos sem que o
+  // motivo fosse obvio. Troque em Configuracoes quando o workflow estiver pronto.
+  "atendimento.modo":   { padrao: () => process.env.ATENDIMENTO_MODO || "local", segredo: false },
 };
 
 // Mascara em ASCII puro: caracteres como "•" se corrompem dependendo da
