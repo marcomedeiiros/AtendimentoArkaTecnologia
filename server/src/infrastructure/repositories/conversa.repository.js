@@ -72,10 +72,10 @@ class ConversaRepository {
   // @updatedAt nao muda ao chegar mensagem nova e a conversa nao sobe na lista
   // (ordenada por atualizadoEm). Mensagem do cliente ainda incrementa o
   // contador de nao-lidas usado pelo badge numerico.
-  async addMensagem(conversaId, origem, texto, metadata = null, waMessageId = null) {
+  async addMensagem(conversaId, origem, texto, metadata = null, waMessageId = null, extras = {}) {
     const [mensagem] = await prisma.$transaction([
       prisma.mensagem.create({
-        data: { conversaId, origem, texto, metadata, waMessageId },
+        data: { conversaId, origem, texto, metadata, waMessageId, ...extras },
       }),
       prisma.conversa.update({
         where: { id: conversaId },
@@ -86,6 +86,37 @@ class ConversaRepository {
       }),
     ]);
     return mensagem;
+  }
+
+  // Vincula o id da Evolution a mensagem recem-criada, para o ACK
+  // (messages.update) conseguir encontra-la depois.
+  vincularWaMessageId(id, waMessageId, status = "enviada") {
+    return prisma.mensagem.update({
+      where: { id },
+      data: { waMessageId, status },
+    });
+  }
+
+  // Nao rebaixa o status: um "entregue" atrasado nao pode apagar um "lida".
+  async atualizarStatusPorWaId(waMessageId, status) {
+    const ordem = { enviando: 0, enviada: 1, entregue: 2, lida: 3 };
+    const msg = await prisma.mensagem.findUnique({ where: { waMessageId } });
+    if (!msg) return null;
+    if (status !== "erro" && (ordem[status] ?? 0) <= (ordem[msg.status] ?? -1)) {
+      return msg;
+    }
+    return prisma.mensagem.update({ where: { id: msg.id }, data: { status } });
+  }
+
+  findMensagem(id) {
+    return prisma.mensagem.findUnique({ where: { id } });
+  }
+
+  editarMensagem(id, texto) {
+    return prisma.mensagem.update({
+      where: { id },
+      data: { texto, editadaEm: new Date() },
+    });
   }
 
   zerarNaoLidas(id) {

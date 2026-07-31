@@ -76,6 +76,10 @@ class WhatsAppService {
       return this._processarConexao(body, instance);
     }
 
+    if (event === "messages.update" || event === "MESSAGES_UPDATE") {
+      return this._processarAck(body);
+    }
+
     if (
       event === "messages.upsert" ||
       event === "MESSAGES_UPSERT" ||
@@ -99,6 +103,39 @@ class WhatsAppService {
     }
 
     return { recebido: true, evento: "connection.update", conectado, state };
+  }
+
+  // ACK de entrega/leitura das mensagens que NOS enviamos. A Evolution manda o
+  // status em maiusculas (Baileys); traduzimos para o vocabulario da UI.
+  async _processarAck(body) {
+    const data = body?.data || body;
+    const waMessageId = data?.key?.id || data?.keyId || null;
+    const bruto = String(data?.status || data?.update?.status || "").toUpperCase();
+
+    const MAPA = {
+      PENDING: "enviando",
+      SERVER_ACK: "enviada",
+      DELIVERY_ACK: "entregue",
+      READ: "lida",
+      PLAYED: "lida",
+      ERROR: "erro",
+    };
+    const status = MAPA[bruto];
+
+    if (!waMessageId || !status) {
+      return { recebido: true, processado: false, motivo: "ack_sem_dados", bruto };
+    }
+
+    const msg = await conversaRepository.atualizarStatusPorWaId(waMessageId, status);
+    if (!msg) {
+      // Mensagem que nao saiu daqui (ex.: enviada pelo celular do atendente).
+      return { recebido: true, processado: false, motivo: "mensagem_desconhecida" };
+    }
+
+    const conversa = await conversaRepository.findById(msg.conversaId);
+    if (conversa) bus.emitConversa(mapConversa(conversa));
+
+    return { recebido: true, processado: true, status, waMessageId };
   }
 
   async _processarMensagem(body, instanceName) {

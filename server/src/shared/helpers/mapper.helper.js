@@ -4,9 +4,14 @@ function mapMensagem(m) {
   const meta = m.metadata || {};
   const tipo = meta.tipo || "texto";
   return {
+    id: m.id,
     de: m.origem === "bot" ? "equipe" : m.origem,
     texto: m.texto,
     hora: formatarHora(m.criadoEm),
+    // Risquinhos: so faz sentido no que sai daqui.
+    status: m.origem === "cliente" ? null : m.status || null,
+    respondendoAId: m.respondendoAId || null,
+    editada: !!m.editadaEm,
     tipo,
     // Dados da midia (url/base64, mimetype, nome, legenda, coords, contato)
     // quando a mensagem nao for de texto puro.

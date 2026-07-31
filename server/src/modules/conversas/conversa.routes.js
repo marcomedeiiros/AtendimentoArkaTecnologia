@@ -27,6 +27,12 @@ router.post("/:id/mensagens", validate(enviarMensagemSchema), (req, res, next) =
 router.post("/:id/midia", validate(enviarMidiaSchema), (req, res, next) =>
   conversaController.enviarMidia(req, res).catch(next)
 );
+router.post("/mensagens/encaminhar", (req, res, next) =>
+  conversaController.encaminharMensagem(req, res).catch(next)
+);
+router.patch("/mensagens/:mensagemId", (req, res, next) =>
+  conversaController.editarMensagem(req, res).catch(next)
+);
 router.post("/:id/solicitar-cnpj", (req, res, next) =>
   conversaController.solicitarCnpj(req, res).catch(next)
 );

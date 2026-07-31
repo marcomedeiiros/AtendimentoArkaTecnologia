@@ -6,7 +6,7 @@ import {
   ArrowRightLeft, AlertCircle, Users, RotateCcw, Layers, ArrowDown,
   FileText, MapPin, Contact, Paperclip, Smile, Image as ImageIcon, Loader2,
   SlidersHorizontal, Star, Archive, EyeOff, MoreVertical,
-  ZoomIn, ZoomOut, Maximize2, Download
+  ZoomIn, ZoomOut, Maximize2, Download, CornerUpLeft, Share2, Pencil
 } from 'lucide-react';
 import { EmojiIcon, FormattedMessage } from './EmojiIcon';
 import { useMensagensRapidas } from './MensagensRapidas';
@@ -256,6 +256,63 @@ function SkeletonCard() {
   );
 }
 
+// Risquinhos de entrega, como no WhatsApp:
+//   relogio = saindo | 1 risco = enviada | 2 riscos = entregue | 2 azuis = lida
+function StatusMensagem({ status, escuro }) {
+  if (!status) return null;
+  const base = escuro ? 'text-slate-400' : 'text-slate-900/70';
+
+  if (status === 'enviando') return <Clock size={12} className={base} title="Enviando" />;
+  if (status === 'erro') return <AlertCircle size={12} className="text-rose-400" title="Falha no envio" />;
+  if (status === 'enviada') return <Check size={13} className={base} title="Enviada" />;
+  if (status === 'entregue') return <CheckCheck size={13} className={base} title="Entregue" />;
+  if (status === 'lida') return <CheckCheck size={13} className="text-sky-400" title="Lida" />;
+  return null;
+}
+
+// Menu de tres pontinhos da bolha: responder, encaminhar, editar.
+function MenuMensagem({ m, ehPropria, onResponder, onEncaminhar, onEditar }) {
+  const [aberto, setAberto] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!aberto) return;
+    const fora = (e) => { if (ref.current && !ref.current.contains(e.target)) setAberto(false); };
+    document.addEventListener('mousedown', fora);
+    return () => document.removeEventListener('mousedown', fora);
+  }, [aberto]);
+
+  const item = 'w-full text-left px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-[#1E2330] hover:text-white transition-colors flex items-center gap-2';
+
+  return (
+    <div className="relative shrink-0" ref={ref}>
+      <button
+        onClick={() => setAberto(v => !v)}
+        title="Mais ações"
+        className={`p-0.5 rounded transition-opacity ${ehPropria ? 'text-slate-900/60 hover:text-slate-900' : 'text-slate-500 hover:text-slate-200'} ${aberto ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+      >
+        <MoreVertical size={13} />
+      </button>
+
+      {aberto && (
+        <div className="absolute right-0 top-full mt-1 w-40 glass-panel border border-[#2A3040] rounded-xl shadow-2xl shadow-black/50 z-50 overflow-hidden py-1">
+          <button className={item} onClick={() => { onResponder(m); setAberto(false); }}>
+            <CornerUpLeft size={12} className="text-slate-500" /> Responder
+          </button>
+          <button className={item} onClick={() => { onEncaminhar(m); setAberto(false); }}>
+            <Share2 size={12} className="text-slate-500" /> Encaminhar
+          </button>
+          {ehPropria && m.tipo === 'texto' && (
+            <button className={item} onClick={() => { onEditar(m); setAberto(false); }}>
+              <Pencil size={12} className="text-slate-500" /> Editar
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Visualizador de imagem em tela cheia, com zoom e arraste.
 // Substitui o antigo window.open(): os navegadores bloqueiam navegacao para
 // data: URLs (que e o formato em que a midia chega da Evolution), entao o
@@ -441,7 +498,9 @@ const CardConversa = React.memo(function CardConversa({
   const ultimaMsg = c.mensagens?.[c.mensagens.length - 1];
   const naoLidas  = c.naoLidas || 0;
   const encerrado = c.statusAtendimento === 'fechada';
-  const clicavel  = c.statusAtendimento === 'aberta' || c.statusAtendimento === 'fechada';
+  // Qualquer conversa abre para leitura -- inclusive pendente, que antes so
+  // era acessivel depois de clicar em ATENDER.
+  const clicavel  = true;
 
   return (
     <div
@@ -569,11 +628,26 @@ function PainelChat({
   conversa, parceiros,
   texto, setTexto, scrollRef, onEnviar, onEnviarMidia, onFechar, onPendente, onReabrir,
   onMarcarLido, onApagarChat, onSolicitarCnpj, onValidarCnpjModal,
-  onExecutarFluxo, fluxoSugerido, onVoltar, atendente, onTransferir
+  onExecutarFluxo, fluxoSugerido, onVoltar, atendente, onTransferir,
+  onEditar, onEncaminharPara, conversas, onAtender
 }) {
   const [showMsgRapidas, setShowMsgRapidas] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
   const [imagemAmpliada, setImagemAmpliada] = useState(null);
+  const [respondendoA, setRespondendoA] = useState(null);   // mensagem citada
+  const [encaminhando, setEncaminhando] = useState(null);   // mensagem a encaminhar
+  const [editando, setEditando] = useState(null);           // { id, textoOriginal }
+
+  const iniciarEdicao = useCallback((m) => {
+    setEditando({ id: m.id, textoOriginal: m.texto });
+    setRespondendoA(null);
+    setTexto(m.texto);
+  }, [setTexto]);
+
+  const cancelarEdicao = useCallback(() => {
+    setEditando(null);
+    setTexto('');
+  }, [setTexto]);
   const [anexo, setAnexo] = useState(null); // { dataUrl, tipo, mimetype, fileName, progresso }
   const [enviandoMidia, setEnviandoMidia] = useState(false);
   const [arrastando, setArrastando] = useState(false);
@@ -669,10 +743,19 @@ function PainelChat({
   const enviar = useCallback(() => {
     if (anexo) { enviarAnexo(); return; }
     if (!texto.trim()) return;
-    onEnviar(texto);
+
+    if (editando) {
+      onEditar(editando.id, texto.trim());
+      setEditando(null);
+      setTexto('');
+      return;
+    }
+
+    onEnviar(texto, respondendoA?.id || null);
+    setRespondendoA(null);
     // Envio do operador sempre desce a conversa.
     setTimeout(() => irParaFim(true), 0);
-  }, [anexo, enviarAnexo, onEnviar, texto, irParaFim]);
+  }, [anexo, enviarAnexo, onEnviar, onEditar, texto, irParaFim, respondendoA, editando, setTexto]);
 
   const ehParceiro = conversa.cnpjVerificado &&
     parceiros.some(p => p.cnpj === limparCnpj(conversa.cnpj) && p.status === 'ativo');
@@ -793,14 +876,39 @@ function PainelChat({
                 {m.texto}
               </div>
             ) : (
-              <div className={`max-w-[80%] p-3.5 rounded-2xl text-xs shadow-md space-y-1 ${
+              <div className={`group max-w-[80%] p-3.5 rounded-2xl text-xs shadow-md space-y-1 ${
                 m.de === 'cliente'
                   ? 'bg-[#1E2330] text-slate-100 border border-[#2A3040] rounded-tl-sm'
                   : 'bg-gradient-to-r from-orange-500 to-amber-500 text-slate-950 font-medium rounded-tr-sm'
               }`}>
-                <div className={`text-[10px] font-semibold ${m.de === 'cliente' ? 'text-slate-400' : 'text-slate-900/80'}`}>
-                  {m.de === 'cliente' ? conversa.cliente : 'Arka Tecnologia'}
+                <div className="flex items-start justify-between gap-2">
+                  <div className={`text-[10px] font-semibold ${m.de === 'cliente' ? 'text-slate-400' : 'text-slate-900/80'}`}>
+                    {m.de === 'cliente' ? conversa.cliente : 'Arka Tecnologia'}
+                  </div>
+                  <MenuMensagem
+                    m={m}
+                    ehPropria={m.de !== 'cliente'}
+                    onResponder={setRespondendoA}
+                    onEncaminhar={setEncaminhando}
+                    onEditar={iniciarEdicao}
+                  />
                 </div>
+
+                {/* Trecho citado (recurso "responder") */}
+                {m.respondendoAId && (() => {
+                  const orig = conversa.mensagens.find(x => x.id === m.respondendoAId);
+                  if (!orig) return null;
+                  return (
+                    <div className={`text-[10px] px-2 py-1 rounded-lg border-l-2 mb-1 truncate ${
+                      m.de === 'cliente'
+                        ? 'bg-[#161922] border-orange-500/60 text-slate-400'
+                        : 'bg-slate-900/10 border-slate-900/40 text-slate-900/70'
+                    }`}>
+                      {orig.texto}
+                    </div>
+                  );
+                })()}
+
                 {m.tipo && m.tipo !== 'texto' ? (
                   <>
                     <MensagemMidia m={m} escuro={m.de === 'cliente'} onAbrirImagem={setImagemAmpliada} />
@@ -809,8 +917,11 @@ function PainelChat({
                 ) : (
                   <FormattedMessage text={m.texto} />
                 )}
-                <div className={`text-[9px] text-right ${m.de === 'cliente' ? 'text-slate-400' : 'text-slate-900/70'}`}>
-                  {m.hora}
+
+                <div className={`text-[9px] flex items-center justify-end gap-1 ${m.de === 'cliente' ? 'text-slate-400' : 'text-slate-900/70'}`}>
+                  {m.editada && <span className="italic">editada</span>}
+                  <span>{m.hora}</span>
+                  <StatusMensagem status={m.status} escuro={m.de === 'cliente'} />
                 </div>
               </div>
             )}
@@ -843,6 +954,84 @@ function PainelChat({
             <Play size={12} /> Disparar
           </button>
         </div>
+      )}
+
+      {/* Conversa ainda na fila: leitura liberada, com atalho para assumir */}
+      {conversa.statusAtendimento === 'pendente' && (
+        <div className="mx-3 mb-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3">
+          <span className="text-[11px] text-amber-300">
+            Esta conversa está <strong>na fila</strong>. Você pode ler e responder assumir registra você como responsável.
+          </span>
+          <button onClick={() => onAtender(conversa.id)}
+            className="shrink-0 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[11px] font-bold flex items-center gap-1.5">
+            <UserCheck size={13} /> Atender
+          </button>
+        </div>
+      )}
+
+      {/* Respondendo a uma mensagem (citação) */}
+      {respondendoA && (
+        <div className="mx-3 mb-2 p-2.5 rounded-xl bg-[#161922] border border-[#2A3040] border-l-4 border-l-orange-500 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[10px] font-bold text-orange-400 mb-0.5 flex items-center gap-1">
+              <CornerUpLeft size={11} /> Respondendo {respondendoA.de === 'cliente' ? conversa.cliente : 'você'}
+            </div>
+            <div className="text-[11px] text-slate-400 truncate">{respondendoA.texto}</div>
+          </div>
+          <button onClick={() => setRespondendoA(null)} className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 shrink-0">
+            <X size={13} />
+          </button>
+        </div>
+      )}
+
+      {/* Editando uma mensagem já enviada */}
+      {editando && (
+        <div className="mx-3 mb-2 p-2.5 rounded-xl bg-[#161922] border border-[#2A3040] border-l-4 border-l-sky-500 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[10px] font-bold text-sky-400 mb-0.5 flex items-center gap-1">
+              <Pencil size={11} /> Editando mensagem
+            </div>
+            <div className="text-[11px] text-slate-400 truncate">{editando.textoOriginal}</div>
+          </div>
+          <button onClick={cancelarEdicao} className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 shrink-0">
+            <X size={13} />
+          </button>
+        </div>
+      )}
+
+      {/* Escolher a conversa de destino ao encaminhar */}
+      {encaminhando && (
+        <Portal>
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-[55] p-4">
+            <div className="glass-panel border border-[#2A3040] rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-[80vh]">
+              <div className="p-4 bg-[#1E2330] border-b border-[#2A3040] flex items-center justify-between rounded-t-2xl">
+                <div className="flex items-center gap-2 text-sm font-bold text-white">
+                  <Share2 size={16} className="text-orange-400" /> Encaminhar para
+                </div>
+                <button onClick={() => setEncaminhando(null)} className="text-slate-400 hover:text-white"><X size={16} /></button>
+              </div>
+              <div className="p-3 text-[11px] text-slate-400 border-b border-[#2A3040] truncate">
+                “{encaminhando.texto}”
+              </div>
+              <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                {(conversas || []).filter(c => c.id !== conversa.id).map(c => (
+                  <button key={c.id}
+                    onClick={() => { onEncaminharPara(encaminhando.id, c.id); setEncaminhando(null); }}
+                    className="w-full text-left p-3 rounded-xl bg-[#161922] border border-[#2A3040] hover:border-orange-500/40 hover:bg-[#1E2330] transition-all flex items-center gap-3">
+                    <Avatar nome={c.cliente} size="sm" fotoUrl={c.fotoUrl} />
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-white truncate">{c.cliente}</div>
+                      <div className="text-[10px] text-slate-500 font-mono">{c.telefone}</div>
+                    </div>
+                  </button>
+                ))}
+                {(conversas || []).filter(c => c.id !== conversa.id).length === 0 && (
+                  <div className="text-center text-xs text-slate-500 py-8">Nenhuma outra conversa disponível.</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </Portal>
       )}
 
       {/* Preview do anexo + barra de progresso */}
@@ -1195,7 +1384,23 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     }
   }, [setConversas, selecionada]);
 
-  const enviarResposta = useCallback(async (txt) => {
+  const editarMensagem = useCallback(async (mensagemId, texto) => {
+    try {
+      aplicarConversa(await ConversasAPI.editarMensagem(mensagemId, texto));
+    } catch (e) {
+      window.alert('Não foi possível editar: ' + e.message);
+    }
+  }, [aplicarConversa]);
+
+  const encaminharMensagem = useCallback(async (mensagemId, conversaDestinoId) => {
+    try {
+      aplicarConversa(await ConversasAPI.encaminharMensagem(mensagemId, conversaDestinoId));
+    } catch (e) {
+      window.alert('Não foi possível encaminhar: ' + e.message);
+    }
+  }, [aplicarConversa]);
+
+  const enviarResposta = useCallback(async (txt, respondendoAId = null) => {
     if (!txt.trim() || !conversa) return;
     const id = conversa.id;
     // Otimista: mostra a mensagem da equipe na hora.
@@ -1204,7 +1409,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     ));
     setTexto('');
     // O back-end persiste, detecta CNPJ e devolve a conversa completa.
-    try { aplicarConversa(await ConversasAPI.enviarMensagem(id, txt.trim())); } catch {}
+    try { aplicarConversa(await ConversasAPI.enviarMensagem(id, txt.trim(), respondendoAId)); } catch {}
   }, [conversa, setConversas, aplicarConversa]);
 
   // Envio de mídia com progresso/cancelamento. Devolve { promise, cancel } para
@@ -1271,8 +1476,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       ))
     : null;
 
-  const chatAberto = !!conversa &&
-    (conversa.statusAtendimento === 'aberta' || conversa.statusAtendimento === 'fechada');
+  const chatAberto = !!conversa;
 
   return (
     <div className="fade-in space-y-4 h-full flex flex-col">
@@ -1479,7 +1683,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
         </div>
 
         <div className={`${chatAberto ? 'flex' : 'hidden lg:flex'} lg:col-span-8 glass-panel rounded-2xl flex-col overflow-hidden border border-[#2A3040] min-h-[70vh] lg:min-h-0`}>
-          {!conversa || (conversa.statusAtendimento !== 'aberta' && conversa.statusAtendimento !== 'fechada') ? (
+          {!conversa ? (
             <div
               className="flex-1 flex items-center justify-center relative overflow-hidden"
               style={WHATSAPP_BG}
@@ -1535,6 +1739,10 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               onVoltar={() => setSelecionada(null)}
               atendente={atendentes[conversa.id]}
               onTransferir={() => setTransferindo(conversa)}
+              onEditar={editarMensagem}
+              onEncaminharPara={encaminharMensagem}
+              onAtender={atenderConversa}
+              conversas={conversas}
             />
           )}
         </div>

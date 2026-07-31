@@ -196,6 +196,13 @@ model Mensagem {
   // Id da mensagem na Evolution API. A unicidade e o que impede o mesmo
   // webhook reentregue de rodar o fluxo duas vezes.
   waMessageId String?       @unique @map("wa_message_id")
+  // Ciclo de vida da mensagem que NOS enviamos, alimentado pelo evento
+  // messages.update da Evolution: enviando | enviada | entregue | lida | erro.
+  // Null nas mensagens recebidas do cliente (nao ha o que confirmar).
+  status         String?
+  // Mensagem citada (recurso "responder" do WhatsApp).
+  respondendoAId String?    @map("respondendo_a_id")
+  editadaEm      DateTime?  @map("editada_em")
   criadoEm   DateTime       @default(now()) @map("criado_em")
 
   conversa Conversa @relation(fields: [conversaId], references: [id], onDelete: Cascade)

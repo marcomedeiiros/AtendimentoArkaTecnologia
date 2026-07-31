@@ -165,10 +165,21 @@ class EvolutionApiClient {
     }
   }
 
-  async sendText(number, text, instance = this.defaultInstance) {
+  // `quoted` reproduz o "responder" do WhatsApp: { key, message } da original.
+  async sendText(number, text, instance = this.defaultInstance, quoted = null) {
     return this.request("POST", `/message/sendText/${instance}`, {
       number,
       text,
+      ...(quoted ? { quoted } : {}),
+    });
+  }
+
+  // Edicao de mensagem ja enviada (WhatsApp permite ate ~15 min).
+  async editarMensagem({ number, key, texto }, instance = this.defaultInstance) {
+    return this.request("POST", `/chat/updateMessage/${instance}`, {
+      number,
+      key,
+      text: texto,
     });
   }
 

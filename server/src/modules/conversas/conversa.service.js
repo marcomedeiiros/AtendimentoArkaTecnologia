@@ -45,9 +45,25 @@ class ConversaService {
     return this._emitir(atualizada);
   }
 
-  async enviarMensagem(id, texto, origem = "equipe") {
+  async enviarMensagem(id, texto, origem = "equipe", respondendoAId = null) {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
+
+    // "Responder" do WhatsApp: cita a mensagem original na bolha do cliente.
+    let quoted = null;
+    if (respondendoAId) {
+      const citada = await conversaRepository.findMensagem(respondendoAId);
+      if (citada?.waMessageId) {
+        quoted = {
+          key: {
+            remoteJid: `${conversa.telefone}@s.whatsapp.net`,
+            fromMe: citada.origem !== "cliente",
+            id: citada.waMessageId,
+          },
+          message: { conversation: citada.texto },
+        };
+      }
+    }
 
     const cnpjNumeros = limparCnpj(texto);
     let mensagensExtras = [];
@@ -68,13 +84,25 @@ class ConversaService {
       );
     }
 
-    await conversaRepository.addMensagem(id, origem === "equipe" ? "equipe" : "bot", texto.trim());
+    const msgLocal = await conversaRepository.addMensagem(
+      id,
+      origem === "equipe" ? "equipe" : "bot",
+      texto.trim(),
+      null,
+      null,
+      { status: "enviando", respondendoAId: respondendoAId || null }
+    );
 
     for (const msg of mensagensExtras) {
       await this._enviarWhatsApp(conversa.telefone, msg.texto);
     }
 
-    await this._enviarWhatsApp(conversa.telefone, texto.trim());
+    const envio = await this._enviarWhatsApp(conversa.telefone, texto.trim(), quoted);
+    await conversaRepository.vincularWaMessageId(
+      msgLocal.id,
+      envio.waMessageId,
+      envio.ok ? "enviada" : "erro"
+    );
 
     const atualizada = await conversaRepository.findById(id);
     return this._emitir(atualizada);
@@ -127,6 +155,70 @@ class ConversaService {
 
     const atualizada = await conversaRepository.findById(id);
     return this._emitir(atualizada);
+  }
+
+  // Encaminha uma mensagem existente para outra conversa (o WhatsApp reenvia o
+  // conteudo; nao existe "forward nativo" pela API, entao reenviamos o texto).
+  async encaminharMensagem(mensagemId, conversaDestinoId) {
+    const original = await conversaRepository.findMensagem(mensagemId);
+    if (!original) throw new AppError("Mensagem nao encontrada", 404, "NOT_FOUND");
+
+    const destino = await conversaRepository.findById(conversaDestinoId);
+    if (!destino) throw new AppError("Conversa de destino nao encontrada", 404, "NOT_FOUND");
+
+    const meta = original.metadata || null;
+    if (meta?.tipo && meta.tipo !== "texto" && meta.url) {
+      return this.enviarMidia(conversaDestinoId, {
+        tipo: meta.tipo,
+        media: meta.url,
+        mimetype: meta.mimetype,
+        fileName: meta.fileName,
+        caption: meta.caption,
+      });
+    }
+
+    return this.enviarMensagem(conversaDestinoId, original.texto, "equipe");
+  }
+
+  // Edicao de mensagem propria, como no WhatsApp. Se a Evolution recusar
+  // (versao sem suporte ou janela de 15 min expirada), nada e alterado.
+  async editarMensagem(mensagemId, novoTexto) {
+    const msg = await conversaRepository.findMensagem(mensagemId);
+    if (!msg) throw new AppError("Mensagem nao encontrada", 404, "NOT_FOUND");
+    if (msg.origem === "cliente") {
+      throw new AppError("Só é possível editar mensagens enviadas por você", 400, "EDICAO_NAO_PERMITIDA");
+    }
+
+    const texto = String(novoTexto || "").trim();
+    if (!texto) throw new AppError("Informe o novo texto", 400, "TEXTO_OBRIGATORIO");
+
+    const conversa = await conversaRepository.findById(msg.conversaId);
+
+    if (msg.waMessageId) {
+      try {
+        await evolutionApi.editarMensagem(
+          {
+            number: conversa.telefone,
+            key: {
+              remoteJid: `${conversa.telefone}@s.whatsapp.net`,
+              fromMe: true,
+              id: msg.waMessageId,
+            },
+            texto,
+          },
+          env.evolutionApi.instance
+        );
+      } catch (err) {
+        throw new AppError(
+          `Nao foi possivel editar no WhatsApp: ${err.message}`,
+          502,
+          "EDICAO_FALHOU"
+        );
+      }
+    }
+
+    await conversaRepository.editarMensagem(mensagemId, texto);
+    return this._emitir(await conversaRepository.findById(msg.conversaId));
   }
 
   async solicitarCnpj(id) {
@@ -213,11 +305,15 @@ class ConversaService {
     return dto;
   }
 
-  async _enviarWhatsApp(telefone, texto) {
+  // Envia e devolve o id da mensagem na Evolution, necessario para casar os
+  // ACKs de entrega/leitura (messages.update) com a mensagem local.
+  async _enviarWhatsApp(telefone, texto, quoted = null) {
     try {
-      await evolutionApi.sendText(telefone, texto, env.evolutionApi.instance);
+      const r = await evolutionApi.sendText(telefone, texto, env.evolutionApi.instance, quoted);
+      return { ok: true, waMessageId: r?.key?.id || null };
     } catch {
       // nao bloqueia operacao administrativa se Evolution estiver offline
+      return { ok: false, waMessageId: null };
     }
   }
 }

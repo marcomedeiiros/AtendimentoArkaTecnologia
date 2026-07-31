@@ -56,6 +56,8 @@ services:
       WEBHOOK_GLOBAL_BY_EVENTS: "false"
       WEBHOOK_EVENTS_MESSAGES_UPSERT: "true"
       WEBHOOK_EVENTS_CONNECTION_UPDATE: "true"
+      # ACK de entrega/leitura -- alimenta os risquinhos das mensagens enviadas.
+      WEBHOOK_EVENTS_MESSAGES_UPDATE: "true"
       # Manda a midia ja em base64 no evento (imagem/audio chegam prontos).
       WEBHOOK_BASE64: "true"
     volumes:

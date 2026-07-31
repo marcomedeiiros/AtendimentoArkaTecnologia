@@ -149,11 +149,21 @@ class ChatbotEngine {
   }
 
   async enviarBot(conversaId, telefone, texto, instanceName) {
-    await conversaRepository.addMensagem(conversaId, "bot", texto);
+    const msg = await conversaRepository.addMensagem(conversaId, "bot", texto, null, null, {
+      status: "enviando",
+    });
     try {
-      await evolutionApi.sendText(telefone, texto, instanceName || env.evolutionApi.instance);
+      const r = await evolutionApi.sendText(
+        telefone,
+        texto,
+        instanceName || env.evolutionApi.instance
+      );
+      // Guardar o id da Evolution e o que permite os ACKs de entrega/leitura
+      // (messages.update) encontrarem esta mensagem depois.
+      await conversaRepository.vincularWaMessageId(msg.id, r?.key?.id || null, "enviada");
     } catch (error) {
       logger.warn("Falha ao enviar WhatsApp", { telefone, message: error.message });
+      await conversaRepository.vincularWaMessageId(msg.id, null, "erro");
     }
     await this._emitirConversa(conversaId);
     return texto;

@@ -15,7 +15,21 @@ class ConversaController {
   }
 
   enviarMensagem(req, res) {
-    return conversaService.enviarMensagem(req.params.id, req.body.texto).then((data) => success(res, data));
+    return conversaService
+      .enviarMensagem(req.params.id, req.body.texto, "equipe", req.body.respondendoAId)
+      .then((data) => success(res, data));
+  }
+
+  encaminharMensagem(req, res) {
+    return conversaService
+      .encaminharMensagem(req.body.mensagemId, req.body.conversaDestinoId)
+      .then((data) => success(res, data));
+  }
+
+  editarMensagem(req, res) {
+    return conversaService
+      .editarMensagem(req.params.mensagemId, req.body.texto)
+      .then((data) => success(res, data));
   }
 
   enviarMidia(req, res) {
