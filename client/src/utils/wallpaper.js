@@ -17,7 +17,7 @@
  * Menos VEU = padrao mais visivel.
  */
 
-const ARQUIVO_WALLPAPER = '/wallpaper.svg';
+const ARQUIVO_WALLPAPER = '/wallpaper.jpg';
 
 // O veu e um seguro de legibilidade, nao a fonte da discricao: o wallpaper do
 // WhatsApp ja vem com o traco bem claro. Um veu alto (0.9) sobre uma imagem que
