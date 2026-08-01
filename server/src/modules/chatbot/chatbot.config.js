@@ -47,24 +47,15 @@ const config = {
     sair: ["sair", "cancelar", "encerrar", "parar", "tchau"],
   },
 
-  mensagens: {
-    menuCabecalho:
-      "Ola! Sou o assistente virtual da Arka Tecnologia.\nComo posso ajudar? Responda com o numero da opcao:",
-    menuRodape:
-      'Se preferir, digite *atendente* para falar com uma pessoa do nosso time.',
-    naoEntendi: "Nao entendi. Escolha uma das opcoes abaixo:",
-    semFluxos:
-      "Ola! Recebemos sua mensagem e um de nossos atendentes vai responder em instantes.",
-    transferindo:
-      "Certo! Ja estou chamando um atendente. Aguarde um instante que em breve alguem assume por aqui.",
-    encerrado:
-      "Atendimento encerrado. Quando precisar, e so mandar uma mensagem que eu comeco de novo.",
-    cnpjInvalido:
-      "Esse CNPJ nao parece valido. Envie os 14 digitos, por exemplo: 11.222.333/0001-81",
-    cnpjSolicitar: "Para continuar, informe o CNPJ da sua empresa (14 digitos).",
-    erroInterno:
-      "Tive um problema para continuar seu atendimento. Ja estou chamando um atendente para te ajudar.",
-  },
+  // NAO existe mais um bloco `mensagens` aqui.
+  //
+  // O motor tinha textos proprios (menu numerado, "nao entendi", "chamando um
+  // atendente", "atendimento encerrado", pedido de CNPJ, erro interno) que iam
+  // para o cliente sem estarem em nenhum fluxo. Quem decide o que o cliente le
+  // e voce, pelos passos do fluxo na tela -- entao esses textos foram removidos
+  // do codigo, e nao apenas desligados.
+  //
+  // Sem gatilho reconhecido, o bot fica calado e a conversa vai para a fila.
 };
 
 module.exports = config;
