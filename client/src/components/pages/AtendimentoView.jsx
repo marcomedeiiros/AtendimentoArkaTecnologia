@@ -358,12 +358,13 @@ function PainelTv({ conversas, onFechar }) {
 
 // Tela exibida quando nenhuma conversa esta aberta.
 //
-// Fundo escuro de proposito, sem o papel de parede: assim o vazio pertence
-// visualmente a moldura do app, e a area clara com wallpaper passa a significar
-// "tem conversa aberta aqui". Da para saber em que estado se esta de relance.
+// Usa o mesmo papel de parede da area de conversas, para o painel nao piscar de
+// aparencia quando uma conversa abre. Sobre o wallpaper, o texto sozinho se
+// perderia no meio dos doodles -- por isso ele vive dentro de um cartao opaco,
+// que e o que garante contraste independente do trecho da imagem que cair atras.
 function TelaSemConversa() {
   return (
-    <div className="flex-1 flex items-center justify-center relative overflow-hidden bg-gradient-to-br from-grafite-800 via-grafite-900 to-grafite-800">
+    <div className="flex-1 flex items-center justify-center relative overflow-hidden" style={WHATSAPP_BG}>
 
       {/* Baloezinhos de conversa ao fundo, nas cores do WhatsApp escuro */}
       <div className="absolute top-8 left-8 w-32 h-10 rounded-2xl rounded-tl-sm bg-grafite-600 opacity-60" />
@@ -373,7 +374,7 @@ function TelaSemConversa() {
       <div className="absolute bottom-12 left-10 w-28 h-10 rounded-2xl rounded-tl-sm bg-grafite-600 opacity-60" />
       <div className="absolute bottom-36 right-20 w-20 h-10 rounded-2xl rounded-tr-sm bg-bolha opacity-40" />
 
-      <div className="relative z-10 text-center p-8 max-w-sm">
+      <div className="relative z-10 text-center px-8 py-9 max-w-sm rounded-2xl bg-grafite-800/95 border border-linha shadow-2xl">
         <div className="inline-flex p-5 rounded-2xl bg-grafite-700 border border-linha mb-5 text-acao">
           <MessageSquare size={38} />
         </div>
