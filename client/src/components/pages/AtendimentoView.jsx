@@ -3,7 +3,7 @@ import {
   MessageSquare, Send, Eye, Trash2, UserCheck, Check, X,
   CheckCircle2, Clock, Inbox, Play, Search, Zap,
   CheckCheck, WifiOff, Wifi, Bell, Pin, ChevronLeft,
-  ArrowRightLeft, AlertCircle, Users, RotateCcw, Layers, ArrowDown,
+  ArrowRightLeft, AlertCircle, Users, RotateCcw, Layers, ArrowDown, Tv,
   FileText, MapPin, Contact, Paperclip, Smile, Image as ImageIcon, Loader2,
   SlidersHorizontal, Star, Archive, EyeOff, MoreVertical,
   ZoomIn, ZoomOut, Maximize2, Download, CornerUpLeft, Share2, Pencil, MoreHorizontal
@@ -240,6 +240,110 @@ function PainelFiltros({ extras, setExtras, visib, setVisib, onLimpar, totalAtiv
         </div>
       </div>
     </div>
+  );
+}
+
+// Painel de parede: a fila de pendentes numa TV, lida a varios metros.
+// Tudo aqui e dimensionado para distancia -- tipografia grande, poucos itens
+// por tela e nenhum controle pequeno. Atualiza sozinho pelo SSE, como a lista.
+function PainelTv({ conversas, onFechar }) {
+  const [agora, setAgora] = useState(Date.now());
+
+  // Relogio + recalculo do tempo de espera.
+  useEffect(() => {
+    const id = setInterval(() => setAgora(Date.now()), 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const onTecla = (e) => { if (e.key === 'Escape') onFechar(); };
+    window.addEventListener('keydown', onTecla);
+    return () => window.removeEventListener('keydown', onTecla);
+  }, [onFechar]);
+
+  // Espera longa = vermelho. E o dado que importa numa parede: quem esta
+  // esperando demais precisa saltar aos olhos.
+  const urgencia = (iso) => {
+    if (!iso) return { cor: 'text-quieto', borda: 'border-linha' };
+    const min = (agora - new Date(iso).getTime()) / 60000;
+    if (min >= 15) return { cor: 'text-falha-400', borda: 'border-falha/60' };
+    if (min >= 5)  return { cor: 'text-espera',    borda: 'border-espera/50' };
+    return { cor: 'text-ativo-400', borda: 'border-linha' };
+  };
+
+  const hora = new Date(agora).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+  return (
+    <Portal>
+      <div className="fixed inset-0 z-[70] bg-grafite-900 flex flex-col">
+        <div className="shrink-0 flex items-center justify-between gap-6 px-10 py-6 border-b border-linha bg-grafite-800">
+          <div className="flex items-center gap-5">
+            <span className="relative flex h-4 w-4">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-espera opacity-60" />
+              <span className="relative inline-flex rounded-full h-4 w-4 bg-espera" />
+            </span>
+            <h1 className="text-4xl font-bold text-white tracking-tight font-display">
+              Aguardando atendimento
+            </h1>
+            <span className="px-5 py-1.5 rounded-full bg-espera text-grafite-900 text-3xl font-extrabold tabular-nums">
+              {conversas.length}
+            </span>
+          </div>
+          <div className="flex items-center gap-6">
+            <span className="text-3xl font-bold text-texto-suave tabular-nums">{hora}</span>
+            <button onClick={onFechar}
+              className="px-5 py-3 rounded-xl bg-grafite-600 hover:bg-grafite-500 text-texto text-lg font-bold flex items-center gap-2 transition-colors">
+              <X size={22} /> Sair
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-8">
+          {conversas.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center gap-6 text-center">
+              <div className="p-10 rounded-full bg-ativo/10 border-4 border-ativo/30 text-ativo">
+                <CheckCircle2 size={90} />
+              </div>
+              <p className="text-5xl font-bold text-white font-display">Fila vazia</p>
+              <p className="text-2xl text-texto-suave">Nenhum cliente aguardando atendimento.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-6">
+              {conversas.map(c => {
+                const u = urgencia(c.ultimaMensagemEm);
+                const ultima = c.mensagens?.[c.mensagens.length - 1];
+                return (
+                  <div key={c.id}
+                    className={`bg-grafite-700 rounded-3xl border-2 ${u.borda} p-7 flex flex-col gap-4`}>
+                    <div className="flex items-center gap-5 min-w-0">
+                      <Avatar nome={c.cliente} size="lg" fotoUrl={c.fotoUrl} className="scale-150 ml-2 mr-3" />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-3xl font-bold text-white truncate">{c.cliente}</div>
+                        <div className="text-xl text-texto-suave font-mono truncate">{c.telefone}</div>
+                      </div>
+                      {c.naoLidas > 0 && (
+                        <span className="shrink-0 min-w-[52px] h-[52px] px-3 rounded-full bg-espera text-grafite-900 text-2xl font-extrabold flex items-center justify-center tabular-nums">
+                          {c.naoLidas > 99 ? '99+' : c.naoLidas}
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-xl text-texto-suave line-clamp-2 leading-snug">
+                      {ultima ? ultima.texto : 'Sem mensagens'}
+                    </p>
+
+                    <div className={`flex items-center gap-2 text-2xl font-bold ${u.cor}`}>
+                      <Clock size={24} />
+                      esperando {tempoDesde(c.ultimaMensagemEm).replace('há ', '')}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </Portal>
   );
 }
 
@@ -1180,7 +1284,28 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   const [filtrosExtra,  setFiltrosExtra] = usePreferencia('central.filtrosExtra', []);
   const [visibilidade,  setVisibilidade] = usePreferencia('central.visibilidade', VISIBILIDADE_PADRAO);
   const [showFiltros,   setShowFiltros]  = useState(false);
+  const [modoTv, setModoTv] = useState(false);
   const filtrosRef = useRef(null);
+
+  // Pede tela cheia de verdade ao navegador: numa TV, a barra do sistema e o
+  // cabecalho do Windows roubam espaco util. Se o navegador recusar, o painel
+  // ainda abre por cima de tudo.
+  const abrirModoTv = useCallback(async () => {
+    setModoTv(true);
+    try { await document.documentElement.requestFullscreen?.(); } catch { /* permissao negada */ }
+  }, []);
+
+  const fecharModoTv = useCallback(async () => {
+    setModoTv(false);
+    try { if (document.fullscreenElement) await document.exitFullscreen?.(); } catch { /* ignora */ }
+  }, []);
+
+  // Sair da tela cheia pelo F11/Esc do navegador tambem fecha o painel.
+  useEffect(() => {
+    const onFs = () => { if (!document.fullscreenElement) setModoTv(false); };
+    document.addEventListener('fullscreenchange', onFs);
+    return () => document.removeEventListener('fullscreenchange', onFs);
+  }, []);
   const [sinoTocando,   setSinoTocando]  = useState(false);
   const [showNotif,     setShowNotif]    = useState(false);
   const [atendentes,    setAtendentes]   = useState(lerAtendentes);
@@ -1513,6 +1638,17 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
         <div className="self-start sm:self-auto flex items-center gap-2">
           {/* Sino de notificacoes: abre o painel; NAO toca som ao clicar
               (o som so dispara quando chega mensagem, via AppContext). */}
+          {/* Modo TV: so na aba Pendentes, que e a fila projetada na parede. */}
+          {abaAtual === 'pendentes' && (
+            <button
+              onClick={abrirModoTv}
+              title="Exibir a fila em tela cheia (TV)"
+              className="flex items-center justify-center w-9 h-9 rounded-full border bg-grafite-700 border-linha text-texto-suave hover:text-white hover:border-acao/50 transition-colors"
+            >
+              <Tv size={16} />
+            </button>
+          )}
+
           <div className="relative" ref={sinoRef}>
             <button
               onClick={alternarNotif}
@@ -1816,6 +1952,15 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
           </div>
         </div>
         </Portal>
+      )}
+
+      {modoTv && (
+        <PainelTv
+          conversas={conversas
+            .filter(c => c.statusAtendimento === 'pendente' && !c.arquivada && !c.oculta)
+            .sort((a, b) => new Date(a.ultimaMensagemEm || 0) - new Date(b.ultimaMensagemEm || 0))}
+          onFechar={fecharModoTv}
+        />
       )}
 
       {transferindo && (
