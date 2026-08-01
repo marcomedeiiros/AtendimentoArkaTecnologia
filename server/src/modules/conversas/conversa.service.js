@@ -45,9 +45,30 @@ class ConversaService {
     return this._emitir(atualizada);
   }
 
+  // So a conversa ABERTA aceita mensagem do operador.
+  //
+  // Em "pendente" ninguem assumiu o atendimento ainda: responder dali passaria
+  // por cima da fila e deixaria a conversa sem dono, alem de permitir que dois
+  // atendentes respondessem o mesmo cliente sem saber um do outro. Em "fechada"
+  // o atendimento ja foi encerrado.
+  //
+  // A checagem olha a origem porque o bot e o n8n tambem passam por aqui, com
+  // origem "bot" -- e esses precisam continuar respondendo na fila.
+  _exigirAberta(conversa, origem) {
+    if (origem !== "equipe") return;
+    if (conversa.statusAtendimento === "aberta") return;
+
+    const motivo =
+      conversa.statusAtendimento === "pendente"
+        ? "Assuma a conversa em Atender antes de responder."
+        : "Conversa fechada. Reabra antes de responder.";
+    throw new AppError(motivo, 409, "CONVERSA_NAO_ABERTA");
+  }
+
   async enviarMensagem(id, texto, origem = "equipe", respondendoAId = null) {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
+    this._exigirAberta(conversa, origem);
 
     // "Responder" do WhatsApp: cita a mensagem original na bolha do cliente.
     let quoted = null;
@@ -115,6 +136,7 @@ class ConversaService {
   async enviarMidia(id, payload, origem = "equipe") {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
+    this._exigirAberta(conversa, origem);
 
     const { tipo, media, mimetype, fileName, caption, latitude, longitude, name, address } = payload;
     const rotulos = {

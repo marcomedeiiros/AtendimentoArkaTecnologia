@@ -6,7 +6,7 @@ import {
   ArrowRightLeft, AlertCircle, Users, RotateCcw, Layers, ArrowDown, Tv,
   FileText, MapPin, Contact, Paperclip, Smile, Image as ImageIcon, Loader2,
   SlidersHorizontal, Star, Archive, EyeOff, MoreVertical,
-  ZoomIn, ZoomOut, Maximize2, Download, CornerUpLeft, Share2, Pencil, MoreHorizontal
+  ZoomIn, ZoomOut, Maximize2, Download, CornerUpLeft, Share2, Pencil, MoreHorizontal, Lock
 } from 'lucide-react';
 import { EmojiIcon, FormattedMessage } from './EmojiIcon';
 import { useMensagensRapidas } from './MensagensRapidas';
@@ -1130,7 +1130,7 @@ function PainelChat({
       {conversa.statusAtendimento === 'pendente' && (
         <div className="mx-3 mb-2 p-2.5 rounded-xl bg-espera/10 border border-espera/30 flex items-center justify-between gap-3">
           <span className="text-[11px] text-espera-400">
-            Esta conversa está <strong>na fila</strong>. Você pode ler e responder assumir registra você como responsável.
+            Esta conversa ainda não foi assumida.<strong>na fila</strong>.
           </span>
           <button onClick={() => onAtender(conversa.id)}
             className="shrink-0 px-3 py-1.5 rounded-lg bg-ativo hover:bg-ativo-400 text-slate-950 text-[11px] font-bold flex items-center gap-1.5">
@@ -1230,6 +1230,33 @@ function PainelChat({
         </div>
       )}
 
+      {/* Responder exige a conversa ABERTA. Em vez de deixar o campo la e negar
+          o envio depois de a pessoa digitar, trocamos a barra inteira pela acao
+          que destrava o chat -- o unico caminho valido dali vira um clique. */}
+      {conversa.statusAtendimento !== 'aberta' ? (
+        <div className="p-3 bg-grafite-600/80 border-t border-linha flex items-center justify-center gap-3">
+          <Lock size={14} className="text-quieto shrink-0" />
+          <span className="text-[11px] text-texto-suave">
+            {conversa.statusAtendimento === 'pendente'
+              ? 'Esta conversa ainda não foi assumida.'
+              : 'Esta conversa está fechada.'}
+          </span>
+          <button
+            onClick={() =>
+              conversa.statusAtendimento === 'pendente'
+                ? onAtender(conversa.id)
+                : onReabrir(conversa.id)
+            }
+            className="px-3.5 py-2 rounded-xl bg-acao hover:bg-acao-200 text-slate-950 text-[11px] font-bold inline-flex items-center gap-1.5 shadow-md shadow-acao/20 transition-colors"
+          >
+            {conversa.statusAtendimento === 'pendente' ? (
+              <><UserCheck size={13} /> Atender para responder</>
+            ) : (
+              <><RotateCcw size={13} /> Reabrir para responder</>
+            )}
+          </button>
+        </div>
+      ) : (
       <div className="p-3 bg-grafite-600/80 border-t border-linha flex items-center gap-2 relative">
         {showMsgRapidas && (
           <PainelMensagensRapidas
@@ -1306,6 +1333,7 @@ function PainelChat({
           {enviandoMidia ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
         </button>
       </div>
+      )}
 
       {imagemAmpliada && (
         <VisualizadorImagem
