@@ -373,14 +373,17 @@ function TelaSemConversa() {
       <div className="absolute bottom-12 left-10 w-28 h-10 rounded-2xl rounded-tl-sm bg-grafite-600 opacity-60" />
       <div className="absolute bottom-36 right-20 w-20 h-10 rounded-2xl rounded-tr-sm bg-bolha opacity-40" />
 
+      {/* A sombra descola o texto do papel de parede sem precisar de um cartao
+          atras: escura e bem espalhada, ela escurece os doodles logo ao redor
+          das letras e some antes de virar um contorno visivel. */}
       <div className="relative z-10 text-center px-8 py-9 max-w-sm">
-        <div className="inline-flex p-5 rounded-2xl bg-grafite-700 border border-linha mb-5 text-acao">
+        <div className="inline-flex p-5 rounded-2xl bg-grafite-700 border border-linha mb-5 text-acao shadow-xl shadow-grafite-900/60">
           <MessageSquare size={38} />
         </div>
-        <h3 className="text-base font-bold text-texto font-display mb-2">
+        <h3 className="text-base font-bold text-texto font-display mb-2 [text-shadow:0_2px_10px_rgba(0,0,0,0.85)]">
           Nenhum Atendimento Selecionado
         </h3>
-        <p className="text-xs text-texto-suave leading-relaxed">
+        <p className="text-xs text-texto-suave leading-relaxed [text-shadow:0_1px_8px_rgba(0,0,0,0.85)]">
           Selecione uma conversa ou clique em{' '}
           <strong className="text-acao">"ATENDER CONVERSA"</strong> para iniciar o chat.
         </p>
