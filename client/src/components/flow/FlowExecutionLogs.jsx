@@ -55,7 +55,7 @@ export function FlowExecutionLogs({ logs, isRunning, onClear, onClose, activeNod
                   ? 'bg-falha/10 border-falha/30 text-falha-400'
                   : log.type === 'running'
                   ? 'bg-acao/10 border-acao/30 text-acao-200'
-                  : 'bg-slate-900 border-slate-800 text-slate-300'
+                  : 'bg-slate-900 border-linha text-slate-300'
               }`}
             >
               <div className="flex items-start gap-2 min-w-0 flex-1">

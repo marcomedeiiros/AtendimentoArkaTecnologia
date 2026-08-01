@@ -206,7 +206,7 @@ function PainelFiltros({ extras, setExtras, visib, setVisib, onLimpar, totalAtiv
                   className={`text-[11px] px-2.5 py-1 rounded-full border font-semibold transition-all ${
                     ativo
                       ? 'bg-acao/20 border-acao/50 text-acao-200'
-                      : 'bg-grafite-700 border-linha text-slate-400 hover:text-slate-200 hover:border-slate-600'
+                      : 'bg-grafite-700 border-linha text-slate-400 hover:text-slate-200 hover:border-linha-forte'
                   }`}>
                   {f.label}
                 </button>
@@ -253,7 +253,7 @@ function SkeletonCard() {
         <div className="ml-auto h-2.5 w-10 rounded bg-slate-700/40" />
       </div>
       <div className="h-2.5 w-24 rounded bg-slate-700/40" />
-      <div className="h-8 rounded-lg bg-grafite-700 border border-slate-800" />
+      <div className="h-8 rounded-lg bg-grafite-700 border border-linha" />
     </div>
   );
 }
@@ -457,7 +457,7 @@ function MensagemMidia({ m, escuro, onAbrirImagem }) {
   if (m.tipo === 'documento') {
     return (
       <a href={md.url} download={md.fileName || 'documento'} target="_blank" rel="noreferrer"
-        className={`flex items-center gap-2 p-2 rounded-lg ${escuro ? 'bg-grafite-700 border border-slate-700' : 'bg-slate-900/10'}`}>
+        className={`flex items-center gap-2 p-2 rounded-lg ${escuro ? 'bg-grafite-700 border border-linha' : 'bg-slate-900/10'}`}>
         <FileText size={20} className={escuro ? 'text-acao-200' : 'text-slate-900'} />
         <div className="min-w-0">
           <div className={`text-[11px] font-semibold truncate ${escuro ? 'text-slate-100' : 'text-slate-900'}`}>{md.fileName || 'Documento'}</div>
@@ -470,14 +470,14 @@ function MensagemMidia({ m, escuro, onAbrirImagem }) {
     const link = `https://www.google.com/maps?q=${md.latitude},${md.longitude}`;
     return (
       <a href={link} target="_blank" rel="noreferrer"
-        className={`flex items-center gap-2 p-2 rounded-lg ${escuro ? 'bg-grafite-700 border border-slate-700 text-slate-100' : 'bg-slate-900/10 text-slate-900'}`}>
+        className={`flex items-center gap-2 p-2 rounded-lg ${escuro ? 'bg-grafite-700 border border-linha text-slate-100' : 'bg-slate-900/10 text-slate-900'}`}>
         <MapPin size={18} /> <span className="text-[11px] font-semibold">{md.name || 'Ver localização'}</span>
       </a>
     );
   }
   if (m.tipo === 'contato') {
     return (
-      <div className={`flex items-center gap-2 p-2 rounded-lg ${escuro ? 'bg-grafite-700 border border-slate-700 text-slate-100' : 'bg-slate-900/10 text-slate-900'}`}>
+      <div className={`flex items-center gap-2 p-2 rounded-lg ${escuro ? 'bg-grafite-700 border border-linha text-slate-100' : 'bg-slate-900/10 text-slate-900'}`}>
         <Contact size={18} /> <span className="text-[11px] font-semibold">{md.displayName || 'Contato'}</span>
       </div>
     );
@@ -518,7 +518,7 @@ const CardConversa = React.memo(function CardConversa({
             ? 'bg-acao/[0.06] border-acao/30 hover:border-acao/50'
             : fixado
               ? 'bg-grafite-600/60 border-acao/25 hover:border-acao/40'
-              : 'bg-grafite-600/40 border-linha/60 hover:border-slate-600/60'
+              : 'bg-grafite-600/40 border-linha/60 hover:border-linha-forte'
       }`}
     >
       <div className="flex items-center justify-between gap-2">
@@ -605,7 +605,7 @@ const CardConversa = React.memo(function CardConversa({
         }
       </div>
 
-      <div className={`text-[11px] truncate bg-grafite-700 p-2 rounded-lg border border-slate-800 ${naoLidas > 0 ? 'text-slate-100' : 'text-slate-300'}`}>
+      <div className={`text-[11px] truncate bg-grafite-700 p-2 rounded-lg border border-linha ${naoLidas > 0 ? 'text-slate-100' : 'text-slate-300'}`}>
         {ultimaMsg ? ultimaMsg.texto : 'Sem mensagens'}
       </div>
 
@@ -822,7 +822,7 @@ function PainelChat({
           {conversa.naoLidas > 0 && (
             <button onClick={() => onMarcarLido(conversa.id)}
               title="Marcar como lido"
-              className="px-2.5 py-1.5 rounded-lg bg-slate-700/50 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-600/40 transition-all flex items-center gap-1">
+              className="px-2.5 py-1.5 rounded-lg bg-slate-700/50 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-linha transition-all flex items-center gap-1">
               <CheckCheck size={13} /> Lido
             </button>
           )}
@@ -909,7 +909,7 @@ function PainelChat({
                     <div className={`text-[10px] px-2 py-1 rounded-lg border-l-2 mb-1 truncate ${
                       m.de === 'cliente'
                         ? 'bg-grafite-700 border-acao/60 text-slate-400'
-                        : 'bg-slate-900/10 border-slate-900/40 text-slate-900/70'
+                        : 'bg-slate-900/10 border-linha text-slate-900/70'
                     }`}>
                       {orig.texto}
                     </div>
@@ -1058,7 +1058,7 @@ function PainelChat({
           {anexo.tipo === 'imagem' ? (
             <img src={anexo.dataUrl} alt="preview" className="w-12 h-12 rounded-lg object-cover shrink-0" />
           ) : (
-            <div className="w-12 h-12 rounded-lg bg-grafite-600 border border-slate-700 flex items-center justify-center shrink-0 text-acao-200">
+            <div className="w-12 h-12 rounded-lg bg-grafite-600 border border-linha flex items-center justify-center shrink-0 text-acao-200">
               {anexo.tipo === 'video' ? <Play size={18} /> : anexo.tipo === 'audio' ? <Zap size={18} /> : <FileText size={18} />}
             </div>
           )}
@@ -1499,7 +1499,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   return (
     <div className="fade-in space-y-4 h-full flex flex-col">
   
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-linha">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight font-display">
             Central de Atendimentos
@@ -1520,7 +1520,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               className={`relative flex items-center justify-center w-9 h-9 rounded-full border transition-colors ${
                 naoLidasSino > 0
                   ? 'bg-acao/15 border-acao/40 text-acao-200'
-                  : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-white'
+                  : 'bg-slate-800/60 border-linha text-slate-400 hover:text-white'
               } ${sinoTocando ? 'animate-bounce' : ''}`}
             >
               <Bell size={15} className={sinoTocando ? 'fill-current' : ''} />
@@ -1862,7 +1862,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                     <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold shrink-0 ${
                       m.status === 'online'
                         ? 'bg-ativo/15 text-ativo-400 border-ativo/30'
-                        : 'bg-slate-700/40 text-slate-400 border-slate-600/40'
+                        : 'bg-slate-700/40 text-slate-400 border-linha'
                     }`}>
                       {m.status === 'online' ? 'Online' : 'Offline'}
                     </span>

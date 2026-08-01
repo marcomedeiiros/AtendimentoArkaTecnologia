@@ -162,7 +162,7 @@ export function FlowPropertyPanel({ node, onClose, onChangeNode, onDeleteNode, o
             )}
 
             {node.tipo === 'delay' && (
-              <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+              <div className="p-3.5 rounded-xl bg-slate-900 border border-linha space-y-2">
                 <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">⏳ Tempo de Espera (segundos)</label>
                 <input
                   type="number" step="0.5" min="0.5"

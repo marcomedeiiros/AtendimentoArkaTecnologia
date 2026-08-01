@@ -17,7 +17,7 @@ const STATUS_UI = {
   Online:        { badge: 'bg-ativo/20 text-ativo-400', box: 'bg-ativo/15 text-ativo-400 border border-ativo/30' },
   Conectando:    { badge: 'bg-espera/20 text-espera-400',     box: 'bg-espera/15 text-espera-400 border border-espera/30' },
   Desconectado:  { badge: 'bg-falha/20 text-falha-400',       box: 'bg-falha/15 text-falha-400 border border-falha/30' },
-  Offline:       { badge: 'bg-slate-500/20 text-slate-400',     box: 'bg-slate-500/15 text-slate-400 border border-slate-500/30' },
+  Offline:       { badge: 'bg-slate-500/20 text-slate-400',     box: 'bg-slate-500/15 text-slate-400 border border-linha-forte' },
 };
 
 function formatarDuracao(desde) {
@@ -161,11 +161,11 @@ export default function WhatsAppPage() {
     });
   }
 
-  const botaoSec = 'px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all disabled:opacity-60 bg-grafite-700 border border-linha text-slate-300 hover:text-white hover:border-slate-600';
+  const botaoSec = 'px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all disabled:opacity-60 bg-grafite-700 border border-linha text-slate-300 hover:text-white hover:border-linha-forte';
 
   return (
     <div className="fade-in space-y-6">
-      <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+      <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-linha">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight font-display">Integração WhatsApp API</h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-1">Gerencie a conexão oficial via WhatsApp Web, webhooks e sincronização de dados.</p>
@@ -288,29 +288,29 @@ export default function WhatsAppPage() {
           </div>
 
           <div className="grid grid-cols-2 gap-3 text-xs">
-            <div className="p-3 rounded-xl bg-grafite-600 border border-slate-800">
+            <div className="p-3 rounded-xl bg-grafite-600 border border-linha">
               <div className="text-slate-500 text-[10px] uppercase mb-0.5">Status</div>
               <div className="text-slate-200 font-semibold">{status}</div>
             </div>
-            <div className="p-3 rounded-xl bg-grafite-600 border border-slate-800">
+            <div className="p-3 rounded-xl bg-grafite-600 border border-linha">
               <div className="text-slate-500 text-[10px] uppercase mb-0.5">Versão Evolution</div>
               <div className="text-slate-200 font-semibold">{detalhes?.versao || '-'}</div>
             </div>
-            <div className="p-3 rounded-xl bg-grafite-600 border border-slate-800">
+            <div className="p-3 rounded-xl bg-grafite-600 border border-linha">
               <div className="text-slate-500 text-[10px] uppercase mb-0.5">Tempo Online</div>
               <div className="text-slate-200 font-semibold">{conectado ? formatarDuracao(detalhes?.conectadoDesde) : '-'}</div>
             </div>
-            <div className="p-3 rounded-xl bg-grafite-600 border border-slate-800">
+            <div className="p-3 rounded-xl bg-grafite-600 border border-linha">
               <div className="text-slate-500 text-[10px] uppercase mb-0.5">Última Sincronização</div>
               <div className="text-slate-200 font-semibold">{formatarHora(detalhes?.ultimaSincronizacao)}</div>
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-grafite-600 border border-slate-800">
+          <div className="p-3 rounded-xl bg-grafite-600 border border-linha">
             <div className="text-slate-500 text-[10px] uppercase mb-1.5">Eventos do Webhook</div>
             <div className="flex flex-wrap gap-1.5">
               {(detalhes?.webhook?.eventos?.length ? detalhes.webhook.eventos : ['-']).map(ev => (
-                <span key={ev} className="text-[10px] px-2 py-0.5 rounded-full bg-grafite-700 border border-slate-700 text-slate-300 font-mono">
+                <span key={ev} className="text-[10px] px-2 py-0.5 rounded-full bg-grafite-700 border border-linha text-slate-300 font-mono">
                   {ev}
                 </span>
               ))}
@@ -322,7 +322,7 @@ export default function WhatsAppPage() {
             {copiado ? 'Token copiado!' : 'Copiar Token'}
           </button>
 
-          <div className="p-3 rounded-xl bg-grafite-600 border border-slate-800 text-xs text-slate-400 flex items-center gap-2">
+          <div className="p-3 rounded-xl bg-grafite-600 border border-linha text-xs text-slate-400 flex items-center gap-2">
             <EmojiIcon name="lock" label="" size="sm" />
             <span>Validação de CNPJ Arka Tecnologia habilitada.</span>
           </div>

@@ -84,18 +84,21 @@
   animation: pulseGlow 2s ease-in-out infinite;
 }
 
+/* Bordas na propria familia de cor (#2A3942), como o WhatsApp Web faz.
+   Antes eram branco translucido: sobre o fundo verde-azulado, o branco puro
+   virava uma nevoa acinzentada que nao pertencia a paleta. */
 .glass-panel {
   background: rgba(24, 34, 41, 0.82);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid #2A3942;
 }
 
 .glass-card {
   background: rgba(32, 44, 51, 0.6);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid #2A3942;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 

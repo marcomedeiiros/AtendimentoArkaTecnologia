@@ -85,7 +85,7 @@ const CATEGORIAS = {
   consulta: { label: 'Consulta', color: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
   encerramento: { label: 'Encerramento', color: 'bg-falha/15 text-falha-400 border-falha/30' },
   suporte: { label: 'Suporte', color: 'bg-purple-500/15 text-purple-400 border-purple-500/30' },
-  geral: { label: 'Geral', color: 'bg-slate-600/30 text-slate-300 border-slate-600/40' },
+  geral: { label: 'Geral', color: 'bg-slate-600/30 text-slate-300 border-linha' },
 };
 
 function ModalEdicao({ msg, onSalvar, onFechar }) {
@@ -186,7 +186,7 @@ function CardMensagem({ msg, onEditar, onRemover, onCopiar, copiado }) {
   const cat = CATEGORIAS[msg.categoria] || CATEGORIAS.geral;
 
   return (
-    <div className="glass-panel p-4 rounded-2xl border border-linha space-y-3 hover:border-slate-600/60 transition-all">
+    <div className="glass-panel p-4 rounded-2xl border border-linha space-y-3 hover:border-linha-forte transition-all">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="p-2 rounded-xl bg-grafite-600 border border-linha shrink-0">
@@ -311,7 +311,7 @@ export default function MensagensRapidas({ onUsarMensagem }) {
   return (
     <div className="fade-in space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-linha">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight font-display">
             Mensagens Rápidas

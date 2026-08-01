@@ -17,6 +17,12 @@ export default {
       // marca em carvao sem cor); cor saturada so aparece onde significa ESTADO.
       // Isso vale para uma ferramenta usada o dia inteiro: o atendente precisa
       // ler status num relance, e nao competir com decoracao.
+      // Sem isto, qualquer `border` sem cor explicita cai no cinza-claro padrao
+      // do Tailwind (#E5E7EB) e vira uma linha esbranquiçada sobre o tema
+      // escuro -- fora da paleta.
+      borderColor: {
+        DEFAULT: '#2A3942',
+      },
       colors: {
         // Neutros do WhatsApp Web (tema escuro). Sao verde-azulados, nao cinza
         // puro: e o que da o ar de "produto de mensageria" em vez de painel

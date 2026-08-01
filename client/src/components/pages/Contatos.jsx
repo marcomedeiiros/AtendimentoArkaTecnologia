@@ -20,7 +20,7 @@ const TAGS_CORES = {
   parceiro:  'bg-ativo/15 text-ativo-400 border-ativo/30',
   suporte:   'bg-purple-500/15 text-purple-400 border-purple-500/30',
   vip:       'bg-espera/15 text-espera-400 border-espera/30',
-  inativo:   'bg-slate-600/30 text-slate-400 border-slate-600/40',
+  inativo:   'bg-slate-600/30 text-slate-400 border-linha',
 };
 const TAGS_DISPONIVEIS = Object.keys(TAGS_CORES);
 
@@ -168,11 +168,11 @@ const ItemContatoWhatsApp = React.memo(function ItemContatoWhatsApp({ contato, o
           <span className="hidden sm:inline">Conversar</span>
         </button>
         <button onClick={() => onEditar(contato)} title="Editar contato"
-          className="p-2 rounded-xl bg-slate-800/80 hover:bg-blue-500/20 text-blue-400 border border-slate-700 transition-colors">
+          className="p-2 rounded-xl bg-slate-800/80 hover:bg-blue-500/20 text-blue-400 border border-linha transition-colors">
           <Pencil size={13}/>
         </button>
         <button onClick={() => onRemover(contato.id)} title="Remover contato"
-          className="p-2 rounded-xl bg-slate-800/80 hover:bg-falha/20 text-falha-400 border border-slate-700 transition-colors">
+          className="p-2 rounded-xl bg-slate-800/80 hover:bg-falha/20 text-falha-400 border border-linha transition-colors">
           <Trash2 size={13}/>
         </button>
       </div>
@@ -341,7 +341,7 @@ export default function Contatos({ conversas = [], setConversas, setAba }) {
 
   return (
     <div className="fade-in space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-linha">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight font-display">Contatos (WhatsApp)</h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-1">

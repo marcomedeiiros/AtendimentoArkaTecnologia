@@ -113,7 +113,7 @@ export default function PainelN8n() {
 
         <div className="flex items-center gap-2">
           <button onClick={carregar} disabled={carregando}
-            className="px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2 bg-grafite-700 border border-linha text-slate-300 hover:text-white hover:border-slate-600 transition-all disabled:opacity-60">
+            className="px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2 bg-grafite-700 border border-linha text-slate-300 hover:text-white hover:border-linha-forte transition-all disabled:opacity-60">
             <RefreshCw size={14} className={carregando ? 'animate-spin' : ''} /> Atualizar
           </button>
           <button onClick={criar} disabled={!conectado || ocupadoId === 'novo'}
@@ -165,7 +165,7 @@ export default function PainelN8n() {
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center border shrink-0 ${
                   w.ativo
                     ? 'bg-ativo/15 text-ativo-400 border-ativo/30'
-                    : 'bg-slate-700/30 text-slate-500 border-slate-700'
+                    : 'bg-slate-700/30 text-slate-500 border-linha'
                 }`}>
                   <Workflow size={18} />
                 </div>

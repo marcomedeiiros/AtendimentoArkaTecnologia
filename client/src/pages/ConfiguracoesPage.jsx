@@ -62,7 +62,7 @@ function CardServico({ titulo, Icon, campos, valores, onChange, onTestar, teste,
       ))}
 
       <button onClick={onTestar} disabled={testando}
-        className="w-full px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 bg-grafite-700 border border-linha text-slate-300 hover:text-white hover:border-slate-600 transition-all disabled:opacity-60">
+        className="w-full px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 bg-grafite-700 border border-linha text-slate-300 hover:text-white hover:border-linha-forte transition-all disabled:opacity-60">
         {testando ? <Loader2 size={14} className="animate-spin" /> : <Plug size={14} />}
         Testar conexão
       </button>
@@ -139,7 +139,7 @@ export default function ConfiguracoesPage() {
 
   return (
     <div className="fade-in space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-linha">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight font-display flex items-center gap-2">
             <Settings size={22} className="text-acao-200" /> Configurações
@@ -179,7 +179,7 @@ export default function ConfiguracoesPage() {
                   className={`text-left p-4 rounded-xl border transition-all ${
                     ativo
                       ? 'bg-acao/15 border-acao/50'
-                      : 'bg-grafite-700 border-linha hover:border-slate-600'
+                      : 'bg-grafite-700 border-linha hover:border-linha-forte'
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-1">
@@ -229,13 +229,13 @@ export default function ConfiguracoesPage() {
               <Database size={16} className="text-blue-400" /> Banco de Dados
             </h3>
             <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="p-3 rounded-xl bg-grafite-600 border border-slate-800">
+              <div className="p-3 rounded-xl bg-grafite-600 border border-linha">
                 <div className="text-slate-500 text-[10px] uppercase mb-0.5">Status</div>
                 <div className={sistema.banco.conectado ? 'text-ativo-400 font-semibold' : 'text-falha-400 font-semibold'}>
                   {sistema.banco.conectado ? 'Conectado' : 'Offline'}
                 </div>
               </div>
-              <div className="p-3 rounded-xl bg-grafite-600 border border-slate-800">
+              <div className="p-3 rounded-xl bg-grafite-600 border border-linha">
                 <div className="text-slate-500 text-[10px] uppercase mb-0.5">Tipo</div>
                 <div className="text-slate-200 font-semibold">{sistema.banco.tipo}</div>
               </div>
@@ -253,7 +253,7 @@ export default function ConfiguracoesPage() {
                 ['Node', sistema.servidor.node],
                 ['Versão do app', sistema.versaoApp],
               ].map(([k, v]) => (
-                <div key={k} className="p-3 rounded-xl bg-grafite-600 border border-slate-800">
+                <div key={k} className="p-3 rounded-xl bg-grafite-600 border border-linha">
                   <div className="text-slate-500 text-[10px] uppercase mb-0.5">{k}</div>
                   <div className="text-slate-200 font-semibold">{v}</div>
                 </div>

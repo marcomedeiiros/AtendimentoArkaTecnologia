@@ -258,7 +258,7 @@ export default function EnvioEmMassa({ conversas = [] }) {
   return (
     <div className="fade-in space-y-6">
    
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-linha">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight font-display">Envio em Massa</h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-1">
@@ -375,7 +375,7 @@ export default function EnvioEmMassa({ conversas = [] }) {
             )}
 
             <div className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center gap-2 ${
-              status === 'idle'      ? 'bg-slate-800 border-slate-700 text-slate-400' :
+              status === 'idle'      ? 'bg-slate-800 border-linha text-slate-400' :
               status === 'enviando'  ? 'bg-acao/10 border-acao/30 text-acao-200' :
               status === 'pausado'   ? 'bg-espera/10  border-espera/30  text-espera-400'  :
               status === 'concluido' ? 'bg-ativo/10 border-ativo/30 text-ativo-400' : ''
@@ -408,7 +408,7 @@ export default function EnvioEmMassa({ conversas = [] }) {
               )}
               {status === 'concluido' && (
                 <button onClick={resetar}
-                  className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 flex items-center justify-center gap-2 transition-all">
+                  className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-linha flex items-center justify-center gap-2 transition-all">
                   <RotateCcw size={13} /> Nova Campanha
                 </button>
               )}

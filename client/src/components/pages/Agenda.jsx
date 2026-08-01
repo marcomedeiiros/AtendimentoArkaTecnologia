@@ -211,7 +211,7 @@ function CardCompromisso({ comp, onEditar, onRemover, onToggleConcluido }) {
   const prio  = PRIORIDADES[comp.prioridade] || PRIORIDADES.media;
 
   return (
-    <div className={`glass-panel p-3.5 rounded-xl border transition-all ${comp.concluido ? 'border-ativo/30 opacity-70' : 'border-linha hover:border-slate-600/60'}`}>
+    <div className={`glass-panel p-3.5 rounded-xl border transition-all ${comp.concluido ? 'border-ativo/30 opacity-70' : 'border-linha hover:border-linha-forte'}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-start gap-2.5 min-w-0 flex-1">
           <button onClick={() => onToggleConcluido(comp.id)} className="mt-0.5 shrink-0">
@@ -324,7 +324,7 @@ export default function Agenda() {
 
   return (
     <div className="fade-in space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-linha">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight font-display">Agenda</h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-1">

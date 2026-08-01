@@ -50,7 +50,7 @@ export default function EquipePage() {
 
   return (
     <div className="fade-in space-y-6">
-      <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+      <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-linha">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight font-display">Gestão da Equipe de Atendimento</h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-1">Gerencie os operadores e atendentes autorizados da Arka Tecnologia.</p>
@@ -113,7 +113,7 @@ export default function EquipePage() {
               className={`w-full py-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
                 e.status === 'online'
                   ? 'bg-ativo/15 border-ativo/30 text-ativo-400'
-                  : 'bg-slate-800 border-slate-700 text-slate-400'
+                  : 'bg-slate-800 border-linha text-slate-400'
               }`}
             >
               <Circle size={8} fill="currentColor" />

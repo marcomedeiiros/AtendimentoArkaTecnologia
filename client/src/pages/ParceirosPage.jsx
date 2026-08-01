@@ -87,7 +87,7 @@ export default function ParceirosPage() {
 
   return (
     <div className="fade-in space-y-6">
-      <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+      <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-linha">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight font-display">Parceiros Cadastrados (CNPJ & Nome)</h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-1">Cadastro oficial de empresas parceiras com validação automatizada de contrato.</p>
@@ -132,7 +132,7 @@ export default function ParceirosPage() {
 
       <div className="space-y-2.5">
         {filtrados.map(p => (
-          <div key={p.cnpj} className="glass-panel p-4 rounded-xl border border-linha hover:border-slate-600/60 transition-all flex items-center justify-between gap-4">
+          <div key={p.cnpj} className="glass-panel p-4 rounded-xl border border-linha hover:border-linha-forte transition-all flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 flex-1 min-w-0">
               <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
                 <Building2 size={16} />

@@ -15,7 +15,7 @@ const BLOCK_META = {
   gatilho:    { emoji: '⚡', label: 'Gatilho',       desc: 'Início da conversa', color: 'border-acao/60 bg-acao/5',  badge: 'bg-acao/20 text-acao-200 border-acao/30' },
   mensagem:   { emoji: '💬', label: 'Mensagem',       desc: 'Texto para cliente', color: 'border-blue-500/60 bg-blue-500/5',      badge: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
   condicao:   { emoji: '🔍', label: 'Validar CNPJ',   desc: 'Checar parceiro',    color: 'border-purple-500/60 bg-purple-500/5',  badge: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
-  delay:      { emoji: '⏳', label: 'Delay',          desc: 'Simula digitação',   color: 'border-slate-500/60 bg-slate-500/5',    badge: 'bg-slate-500/20 text-slate-300 border-slate-500/30' },
+  delay:      { emoji: '⏳', label: 'Delay',          desc: 'Simula digitação',   color: 'border-linha bg-slate-500/5',    badge: 'bg-slate-500/20 text-slate-300 border-linha-forte' },
   acao:       { emoji: '🚀', label: 'Ação ERP',        desc: 'Desconto / Boleto',  color: 'border-ativo/60 bg-ativo/5',badge: 'bg-ativo/20 text-ativo-400 border-ativo/30' },
   comentario: { emoji: '📝', label: 'Anotação',       desc: 'Post-it de equipe',  color: 'border-espera/60 bg-espera/10',   badge: 'bg-espera/20 text-espera-400 border-espera/30' },
 };
@@ -81,7 +81,7 @@ function SequencePanel({ nodes, onReorder, onSelectNode, selectedNodeIds }) {
             key={node.id}
             onClick={() => onSelectNode(node.id)}
             className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-all border text-xs ${
-              isSel ? 'bg-acao/15 border-acao/40 text-acao-200' : 'bg-grafite-700 border-linha text-slate-300 hover:border-slate-600 hover:text-white'
+              isSel ? 'bg-acao/15 border-acao/40 text-acao-200' : 'bg-grafite-700 border-linha text-slate-300 hover:border-linha-forte hover:text-white'
             }`}
           >
             <span className="text-sm shrink-0">{meta.emoji}</span>
@@ -670,13 +670,13 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
             <button onClick={handleUndo} disabled={historyIndex <= 0} className="p-1.5 text-slate-400 hover:text-white disabled:opacity-30"><RotateCcw size={14} /></button>
             <button onClick={handleRedo} disabled={historyIndex >= history.length - 1} className="p-1.5 text-slate-400 hover:text-white disabled:opacity-30"><RefreshCw size={14} /></button>
           </div>
-          <button onClick={handleAutoOrganize} className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 border border-slate-700 transition-colors">
+          <button onClick={handleAutoOrganize} className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 border border-linha transition-colors">
             <LayoutGrid size={14} /> Organizar
           </button>
-          <button onClick={() => setShowSequencePanel(s => !s)} className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all ${showSequencePanel ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'bg-slate-800 text-slate-300 border-slate-700'}`}>
+          <button onClick={() => setShowSequencePanel(s => !s)} className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all ${showSequencePanel ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'bg-slate-800 text-slate-300 border-linha'}`}>
             <Settings size={14} /> Sequência
           </button>
-          <button onClick={() => setShowLogsConsole(s => !s)} className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all ${showLogsConsole ? 'bg-acao/20 text-acao-200 border-acao/40' : 'bg-slate-800 text-slate-300 border-slate-700'}`}>
+          <button onClick={() => setShowLogsConsole(s => !s)} className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all ${showLogsConsole ? 'bg-acao/20 text-acao-200 border-acao/40' : 'bg-slate-800 text-slate-300 border-linha'}`}>
             <Sparkles size={14} /> Console ({simLogs.length})
           </button>
           <button
@@ -870,7 +870,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                               ? 'bg-falha border-falha-400 scale-110 shadow-falha/50'
                               : hasIncoming
                                 ? 'bg-grafite-700 border-acao hover:bg-acao'
-                                : 'bg-grafite-700 border-slate-600 hover:border-acao/60 opacity-60'
+                                : 'bg-grafite-700 border-linha-forte hover:border-acao/60 opacity-60'
                           }`}
                         title={isEdgeSel ? 'Pressione Delete para desconectar' : hasIncoming ? 'Clique para selecionar conexão' : 'Porta de entrada (sem conexão)'}
                       >

@@ -46,7 +46,7 @@ export function EmojiIcon({ name, label, size = "md", inline = false }) {
       defaultLabel: 'Parceiro Arka',
     },
     question: {
-      bg: 'bg-slate-700/40 border-slate-600/40 text-slate-300',
+      bg: 'bg-slate-700/40 border-linha text-slate-300',
       icon: HelpCircle,
       defaultLabel: 'Pendente',
     },

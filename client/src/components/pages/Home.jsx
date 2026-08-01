@@ -337,7 +337,7 @@ function NavItem({ item, aba, setAba, naFila, naoLidos }) {
 
 export function Header({ titulo, subtitulo, children }) {
   return (
-    <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+    <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-linha">
       <div>
         <h1 className="text-2xl font-bold text-white tracking-tight font-display">{titulo}</h1>
         {subtitulo && <p className="text-slate-400 text-xs sm:text-sm mt-1">{subtitulo}</p>}
@@ -402,7 +402,7 @@ function WhatsAppView({ conectado, setConectado, conversas }) {
             <input value={instancia} onChange={e => setInstancia(e.target.value)}
               className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-acao/50" />
           </div>
-          <div className="p-3 rounded-xl bg-grafite-600 border border-slate-800 text-xs text-slate-400 flex items-center gap-2">
+          <div className="p-3 rounded-xl bg-grafite-600 border border-linha text-xs text-slate-400 flex items-center gap-2">
             <EmojiIcon name="lock" label="" size="sm" />
             <span>Validação de CNPJ Arka Tecnologia habilitada.</span>
           </div>
@@ -450,7 +450,7 @@ function EquipeView({ equipe, setEquipe }) {
             <button
               onClick={() => alternarStatus(e.id)}
               className={`w-full py-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                e.status === 'online' ? 'bg-ativo/15 border-ativo/30 text-ativo-400' : 'bg-slate-800 border-slate-700 text-slate-400'
+                e.status === 'online' ? 'bg-ativo/15 border-ativo/30 text-ativo-400' : 'bg-slate-800 border-linha text-slate-400'
               }`}
             >
               <Circle size={8} fill="currentColor" /> {e.status === 'online' ? 'Online' : 'Offline'}
