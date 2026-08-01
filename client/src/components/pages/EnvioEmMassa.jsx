@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import {
   Send, Plus, Trash2, Upload, Play, Pause, StopCircle,
   CheckCircle2, XCircle, Clock, Users, MessageSquare,
@@ -151,7 +151,7 @@ export default function EnvioEmMassa({ conversas = [] }) {
       .map(c => ({
         id: 'dest_conv_' + c.id,
         nome: c.cliente,
-        telefone: c.telefone.replace(/\D/g, ''),
+        telefone: c.telefone.replace(/\D/g, '')
       }));
     setDest(prev => {
       const existentes = new Set(prev.map(d => d.telefone));
@@ -209,7 +209,7 @@ export default function EnvioEmMassa({ conversas = [] }) {
         nome:     dest.nome,
         telefone: dest.telefone,
         status:   sucesso ? 'ok' : 'erro',
-        hora:     horaAgora(),
+        hora:     horaAgora()
       };
 
       setLogs(prev => [...prev, entry]);

@@ -1,4 +1,3 @@
-import React from 'react';
 import AtendimentoView from '../components/pages/AtendimentoView';
 import { useAppContext } from '../context/AppContext';
 

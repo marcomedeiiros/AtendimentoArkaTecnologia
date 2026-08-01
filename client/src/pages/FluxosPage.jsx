@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { GitBranch, Workflow } from 'lucide-react';
 import { VisualFlowEditor } from '../components/flow/VisualFlowEditor';
 import PainelN8n from '../components/flow/PainelN8n';

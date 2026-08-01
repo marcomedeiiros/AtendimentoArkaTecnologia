@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Settings, Save, Loader2, CheckCircle2, XCircle, Plug,
   Database, Server, MessageCircle, Workflow
@@ -15,7 +15,7 @@ const CAMPOS = {
     { chave: 'n8n.url',    label: 'URL do n8n', placeholder: 'http://localhost:5678', mono: true },
     { chave: 'n8n.apiKey', label: 'API Key',    placeholder: 'gerada em Settings > API no n8n', segredo: true },
     { chave: 'n8n.webhookFluxo', label: 'Webhook que recebe as mensagens', placeholder: 'http://localhost:5678/webhook/atendimento', mono: true },
-  ],
+  ]
 };
 
 // Quem responde o cliente quando chega uma mensagem.

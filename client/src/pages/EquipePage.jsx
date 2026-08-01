@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Plus, Trash2, Circle, AlertTriangle, X } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { EquipeAPI } from '../services/api';

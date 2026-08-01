@@ -1,4 +1,3 @@
-import React from 'react';
 import { MessageSquare, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';

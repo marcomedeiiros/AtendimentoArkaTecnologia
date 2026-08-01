@@ -80,9 +80,9 @@ function NavItem({ to, label, icon: Icon, badge, onNavigate }) {
 function Sidebar({ aberto, onClose }) {
   const { conversas } = useAppContext();
 
-  const naFila = conversas.filter(c => c.statusAtendimento === 'aguardando').length;
+  const naFila = conversas.filter(c => c.statusAtendimento === 'pendente').length;
   const naoLidos = conversas.filter(
-    c => !c.lido && c.statusAtendimento !== 'finalizado' && c.statusAtendimento !== 'resolvido'
+    c => !c.lido && c.statusAtendimento !== 'fechada'
   ).length;
   const badgeAtendimento = naFila > 0 ? naFila : naoLidos;
 

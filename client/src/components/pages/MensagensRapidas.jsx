@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Zap, Plus, Pencil, Trash2, Save, X, Copy, Check,
   CreditCard, Search, Clock, HandHeart, PhoneOff, Monitor
@@ -22,7 +22,7 @@ const MENSAGENS_PADRAO = [
     categoria: 'pagamento',
     icon: 'pix',
     texto: 'Olá! Para realizar o pagamento via PIX, utilize a chave abaixo:\n\n🔑 Chave PIX: pagamentos@arkatecnologia.com.br\n\nApós o pagamento, envie o comprovante neste chat para confirmarmos. 😊',
-    editavel: true,
+    editavel: true
   },
   {
     id: 'mr_limite',
@@ -30,7 +30,7 @@ const MENSAGENS_PADRAO = [
     categoria: 'consulta',
     icon: 'search',
     texto: 'Olá! Informamos que você atingiu o limite de pesquisas disponíveis para este período.\n\nPara continuar utilizando o serviço, entre em contato com nossa equipe comercial para verificar as opções disponíveis.',
-    editavel: true,
+    editavel: true
   },
   {
     id: 'mr_tempo',
@@ -38,7 +38,7 @@ const MENSAGENS_PADRAO = [
     categoria: 'consulta',
     icon: 'clock',
     texto: 'Olá! Sua pesquisa foi encerrada automaticamente por exceder o tempo limite configurado.\n\nCaso precise de mais informações, fique à vontade para iniciar uma nova consulta ou entrar em contato com nosso suporte.',
-    editavel: true,
+    editavel: true
   },
   {
     id: 'mr_proxima',
@@ -46,7 +46,7 @@ const MENSAGENS_PADRAO = [
     categoria: 'encerramento',
     icon: 'bye',
     texto: 'Foi um prazer atendê-lo(a)! 😊\n\nSe precisar de mais alguma coisa, é só entrar em contato. Estamos sempre aqui para ajudar.\n\n*Equipe Arka Tecnologia* Até a próxima! 👋',
-    editavel: true,
+    editavel: true
   },
   {
     id: 'mr_sem_retorno',
@@ -54,7 +54,7 @@ const MENSAGENS_PADRAO = [
     categoria: 'encerramento',
     icon: 'noreturn',
     texto: 'Olá! Percebemos que não obtivemos retorno após nossos contatos.\n\nEste atendimento será encerrado por falta de resposta. Caso precise de auxílio, basta enviar uma nova mensagem será um prazer atendê-lo(a) novamente!',
-    editavel: true,
+    editavel: true
   },
   {
     id: 'mr_anydesk',
@@ -62,7 +62,7 @@ const MENSAGENS_PADRAO = [
     categoria: 'suporte',
     icon: 'monitor',
     texto: 'Olá! Para darmos continuidade ao suporte remoto, precisamos acessar seu computador via AnyDesk.\n\n📥 *Download AnyDesk:* https://anydesk.com/pt\n\n1. Baixe e instale o AnyDesk\n2. Abra o programa\n3. Envie o número de 9 dígitos que aparecer na tela\n\nAguardamos! 🛠️',
-    editavel: true,
+    editavel: true
   },
 ];
 
@@ -74,7 +74,7 @@ function IconeMensagem({ icon, size = 16 }) {
     bye: { Icon: HandHeart, color: 'text-pink-400' },
     noreturn: { Icon: PhoneOff, color: 'text-falha-400' },
     monitor: { Icon: Monitor, color: 'text-purple-400' },
-    default: { Icon: Zap, color: 'text-acao-200' },
+    default: { Icon: Zap, color: 'text-acao-200' }
   };
   const { Icon, color } = mapa[icon] || mapa.default;
   return <Icon size={size} className={color} />;
@@ -85,7 +85,7 @@ const CATEGORIAS = {
   consulta: { label: 'Consulta', color: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
   encerramento: { label: 'Encerramento', color: 'bg-falha/15 text-falha-400 border-falha/30' },
   suporte: { label: 'Suporte', color: 'bg-purple-500/15 text-purple-400 border-purple-500/30' },
-  geral: { label: 'Geral', color: 'bg-slate-600/30 text-slate-300 border-linha' },
+  geral: { label: 'Geral', color: 'bg-slate-600/30 text-slate-300 border-linha' }
 };
 
 function ModalEdicao({ msg, onSalvar, onFechar }) {
@@ -101,7 +101,7 @@ function ModalEdicao({ msg, onSalvar, onFechar }) {
       texto: texto.trim(),
       categoria,
       icon: msg?.icon || 'default',
-      editavel: true,
+      editavel: true
     });
   }
 

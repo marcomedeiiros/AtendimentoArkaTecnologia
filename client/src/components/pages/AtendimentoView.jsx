@@ -4,7 +4,7 @@ import {
   CheckCircle2, Clock, Inbox, Play, Search, Zap,
   CheckCheck, WifiOff, Wifi, Bell, Pin, ChevronLeft,
   ArrowRightLeft, AlertCircle, Users, RotateCcw, Layers, ArrowDown, Tv,
-  FileText, MapPin, Contact, Paperclip, Smile, Image as ImageIcon, Loader2,
+  FileText, MapPin, Contact, Paperclip, Smile, Image as Loader2,
   SlidersHorizontal, Star, Archive, EyeOff, MoreVertical,
   ZoomIn, ZoomOut, Maximize2, Download, CornerUpLeft, Share2, Pencil, MoreHorizontal
 } from 'lucide-react';
@@ -63,7 +63,7 @@ const STATUS_META = {
   aberta:   { label: 'Aberta',   dot: 'bg-ativo-400', chip: 'bg-ativo/20 text-ativo-400 border-ativo/30' },
   // Fechada NAO e erro: e trabalho concluido. Cor neutra, que recua na lista.
   // O vermelho fica reservado para falha de verdade (envio, conexao).
-  fechada:  { label: 'Fechada',  dot: 'bg-quieto',       chip: 'bg-quieto/20 text-quieto-400 border-quieto/30' },
+  fechada:  { label: 'Fechada',  dot: 'bg-quieto',       chip: 'bg-quieto/20 text-quieto-400 border-quieto/30' }
 };
 
 function limparCnpj(v) { return String(v || '').replace(/\D/g, ''); }
@@ -556,7 +556,7 @@ function VisualizadorImagem({ url, legenda, nomeArquivo, onFechar }) {
             style={{
               transform: `translate(${pos.x}px, ${pos.y}px) scale(${zoom})`,
               cursor: zoom > 1 ? (arrastando.current ? 'grabbing' : 'grab') : 'zoom-in',
-              transition: arrastando.current ? 'none' : 'transform 0.15s ease-out',
+              transition: arrastando.current ? 'none' : 'transform 0.15s ease-out'
             }}
             className="max-w-full max-h-full object-contain select-none"
           />
@@ -826,7 +826,7 @@ function PainelChat({
       tipo: tipoDoArquivo(file),
       mimetype: file.type || 'application/octet-stream',
       fileName: file.name,
-      progresso: 0,
+      progresso: 0
     });
     reader.readAsDataURL(file);
   }, []);
@@ -846,7 +846,7 @@ function PainelChat({
       media: anexo.dataUrl,
       mimetype: anexo.mimetype,
       fileName: anexo.fileName,
-      ...(texto.trim() ? { caption: texto.trim() } : {}),
+      ...(texto.trim() ? { caption: texto.trim() } : {})
     };
     const { promise, cancel } = onEnviarMidia(payload, (p) =>
       setAnexo((a) => (a ? { ...a, progresso: p } : a))
@@ -1230,7 +1230,11 @@ function PainelChat({
           aviso no lugar: o cabecalho ja mostra o status e o botao que destrava
           (Atender ou Reabrir). */}
       {conversa.statusAtendimento === 'aberta' && (
-      <div className="p-3 bg-grafite-600/80 border-t border-linha flex items-center gap-2 relative">
+      // Em telas estreitas os quatro botoes comiam a barra e sobravam ~136px de
+      // 334 para escrever. Com `flex-wrap` e o campo em `order-first w-full`, o
+      // texto ganha uma linha inteira so dele e os botoes descem para a de
+      // baixo. A partir de `sm` volta tudo para uma linha unica.
+      <div className="p-3 bg-grafite-600/80 border-t border-linha flex flex-wrap items-center gap-2 relative">
         {showMsgRapidas && (
           <PainelMensagensRapidas
             onSelecionar={txt => { setTexto(txt); setShowMsgRapidas(false); }}
@@ -1296,12 +1300,12 @@ function PainelChat({
             }
           }}
           placeholder={anexo ? 'Legenda (opcional)...' : 'Digite sua mensagem ou CNPJ...  (Enter envia · Shift+Enter quebra linha)'}
-          className="flex-1 resize-none max-h-32 bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 transition-colors"
+          className="order-first w-full sm:order-none sm:w-auto sm:flex-1 min-w-0 resize-none max-h-32 bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 transition-colors"
         />
         <button
           onClick={enviar}
           disabled={enviandoMidia}
-          className="p-2.5 rounded-xl bg-acao hover:bg-acao-200 disabled:opacity-50 text-slate-950 transition-colors shadow-md shadow-acao/20 self-end"
+          className="ml-auto sm:ml-0 p-2.5 rounded-xl bg-acao hover:bg-acao-200 disabled:opacity-50 text-slate-950 transition-colors shadow-md shadow-acao/20 self-end"
         >
           {enviandoMidia ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
         </button>
@@ -1328,7 +1332,10 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   const [espiandoChat,  setEspiandoChat] = useState(null);
   const [modalCnpj,     setModalCnpj]    = useState(false);
   const [inputCnpj,     setInputCnpj]    = useState('');
-  const [busca,         setBusca]        = useState('');
+  // Semente vinda de "Iniciar chat" nos Contatos (/atendimento?busca=5511...).
+  const [busca,         setBusca]        = useState(
+    () => new URLSearchParams(window.location.search).get('busca') || ''
+  );
   // Persistidos por operador: sobrevivem ao F5 e acompanham a reconexao.
   const [filtrosExtra,  setFiltrosExtra] = usePreferencia('central.filtrosExtra', []);
   const [visibilidade,  setVisibilidade] = usePreferencia('central.visibilidade', VISIBILIDADE_PADRAO);
@@ -1463,15 +1470,17 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     if (aba && !aba.statusMatch(conv)) setSelecionada(null);
   }, [abaAtual, conversas]);
 
-  const conversasFiltradas = conversas.filter(c => {
+  // Tudo que filtra a lista MENOS a aba: visibilidade, filtros extras e busca.
+  // Separado de proposito -- os contadores das abas reusam exatamente este
+  // criterio, so trocando o status. Enquanto contador e lista usavam regras
+  // diferentes, a aba anunciava "Abertas (1)" com a lista vazia embaixo, e nada
+  // na tela explicava a contradicao.
+  const passaFiltros = (c) => {
     // Visibilidade: esconde da lista sem apagar nada do banco.
     if (c.arquivada && !visibilidade.arquivadas) return false;
     if (c.oculta && !visibilidade.ocultas) return false;
     // Sem excecao por aba: desmarcado significa escondido em qualquer lugar.
     if (c.statusAtendimento === 'fechada' && !visibilidade.fechadas) return false;
-
-    const aba = ABAS.find(a => a.id === abaAtual);
-    if (!aba?.statusMatch(c)) return false;
 
     // Filtros extras: todos os marcados precisam bater (AND).
     for (const id of filtrosExtra) {
@@ -1487,7 +1496,13 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
            (qDigitos && limparCnpj(c.cnpj).includes(qDigitos)) ||
            (c.cnpj && mascararCnpj(c.cnpj).toLowerCase().includes(q)) ||
            c.mensagens.some(m => m.texto.toLowerCase().includes(q));
-  }).sort((a, b) => (b.fixada ? 1 : 0) - (a.fixada ? 1 : 0));
+  };
+
+  const visiveis = conversas.filter(passaFiltros);
+
+  const conversasFiltradas = visiveis
+    .filter(c => ABAS.find(a => a.id === abaAtual)?.statusMatch(c))
+    .sort((a, b) => (b.fixada ? 1 : 0) - (a.fixada ? 1 : 0));
 
   // Abas realmente exibidas: os checkboxes escondem "Todas" e "Fechadas".
   const abasVisiveis = ABAS.filter(a => {
@@ -1508,7 +1523,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     Object.keys(VISIBILIDADE_PADRAO).filter(k => visibilidade[k] !== VISIBILIDADE_PADRAO[k]).length;
 
   const contadores = ABAS.reduce((acc, aba) => {
-    acc[aba.id] = conversas.filter(aba.statusMatch).length;
+    acc[aba.id] = visiveis.filter(aba.statusMatch).length;
     return acc;
   }, {});
 

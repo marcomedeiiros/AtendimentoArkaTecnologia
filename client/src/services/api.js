@@ -79,12 +79,6 @@ async function request(endpoint, options = {}, _retry = true) {
 }
 
 // ── Auth API ──
-export const AuthAPI = {
-  login,
-  logout: () => setToken(null),
-  getToken,
-};
-
 // ── Contatos API ──
 export const ContatosAPI = {
   listar: (q = '') => request(`/contatos${q ? `?q=${encodeURIComponent(q)}` : ''}`),

@@ -32,6 +32,27 @@
   }
 }
 
+/* Alvo minimo de toque.
+   Varios botoes de icone sao `p-1.5` em volta de um icone de 13px, o que da
+   25x25 -- confortavel com mouse, ruim com o dedo. Pior: em Mensagens Rapidas
+   e Parceiros o "excluir" fica encostado no "editar", nesse mesmo tamanho, e um
+   erro de toque ali apaga registro.
+   Vale so ate 640px para nao inchar a densidade do painel no desktop. */
+@media (max-width: 640px) {
+  button,
+  [role='button'] {
+    min-height: 40px;
+    min-width: 40px;
+  }
+  /* Excecoes: elementos que sao botao mas precisam acompanhar o texto ou a
+     grade em volta, e que cresceriam torto com um minimo quadrado. */
+  button.emoji-badge,
+  button[data-alvo-livre] {
+    min-height: 0;
+    min-width: 0;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

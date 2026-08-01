@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 // Paleta de cores para avatares gerados a partir do nome (sem foto real).
 // Tons que combinam com o tema escuro do painel.
@@ -12,7 +12,7 @@ const CORES = [
   { bg: 'bg-cyan-500/20',    ring: 'border-cyan-500/40',    text: 'text-cyan-300' },
 ];
 
-export function iniciais(nome = '') {
+function iniciais(nome = '') {
   const partes = String(nome).trim().split(/\s+/).filter(Boolean);
   if (partes.length === 0) return '?';
   if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
@@ -28,7 +28,7 @@ function corDoNome(nome = '') {
 const TAMANHOS = {
   sm: 'w-8 h-8 text-[11px]',
   md: 'w-10 h-10 text-xs',
-  lg: 'w-12 h-12 text-sm',
+  lg: 'w-12 h-12 text-sm'
 };
 
 export default function Avatar({ nome = '', size = 'md', online = null, fotoUrl = null, className = '' }) {

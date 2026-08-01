@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   CalendarDays, Plus, Pencil, Trash2, Save, X, Clock,
-  CheckCircle2, AlertCircle, Circle, ChevronLeft, ChevronRight, Search
+  CheckCircle2, Circle, ChevronLeft, ChevronRight, Search
 } from 'lucide-react';
 import Portal from '../Portal';
 
@@ -30,13 +30,13 @@ const TIPOS = {
   ligacao:    { label: 'Ligação',       color: 'bg-ativo/20 text-ativo-400 border-ativo/30' },
   tarefa:     { label: 'Tarefa',        color: 'bg-espera/20 text-espera-400 border-espera/30' },
   followup:   { label: 'Follow-up',     color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
-  lembrete:   { label: 'Lembrete',      color: 'bg-falha/20 text-falha-400 border-falha/30' },
+  lembrete:   { label: 'Lembrete',      color: 'bg-falha/20 text-falha-400 border-falha/30' }
 };
 
 const PRIORIDADES = {
   alta:   { label: 'Alta',   dot: 'bg-falha-400' },
   media:  { label: 'Média',  dot: 'bg-espera-400' },
-  baixa:  { label: 'Baixa',  dot: 'bg-slate-400' },
+  baixa:  { label: 'Baixa',  dot: 'bg-slate-400' }
 };
 
 function ModalCompromisso({ compromisso, onSalvar, onFechar }) {
@@ -59,7 +59,7 @@ function ModalCompromisso({ compromisso, onSalvar, onFechar }) {
       prioridade,
       descricao:  descricao.trim(),
       contato:    contato.trim(),
-      concluido:  compromisso?.concluido || false,
+      concluido:  compromisso?.concluido || false
     });
   }
 

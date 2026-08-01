@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Terminal, CheckCircle2, AlertTriangle, Loader2, Play, X, Trash2, Clock } from 'lucide-react';
 
 export function FlowExecutionLogs({ logs, isRunning, onClear, onClose, activeNodeId }) {

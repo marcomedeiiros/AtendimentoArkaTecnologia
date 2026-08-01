@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Plus, Trash2, Search, Building2 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { ParceirosAPI } from '../services/api';

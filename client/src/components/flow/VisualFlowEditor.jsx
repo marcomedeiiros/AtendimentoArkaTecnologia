@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Zap, GitFork, Clock, CheckCircle2, Plus, Trash2,
+  Zap, CheckCircle2, Plus, Trash2,
   Play, RotateCcw, ZoomIn, ZoomOut, Maximize2, LayoutGrid,
-  Sparkles, Layers, RefreshCw, X, Power, ChevronUp, ChevronDown,
-  MessageSquare, Settings, AlertCircle, Pencil, Flame
+  Sparkles, Layers, RefreshCw, X, ChevronUp, ChevronDown,
+  Settings, AlertCircle, Pencil, Flame
 } from 'lucide-react';
 import { FluxosAPI } from '../../services/api';
 import { usePreferencia } from '../../hooks/usePreferencia';
@@ -17,7 +17,7 @@ const BLOCK_META = {
   condicao:   { emoji: '🔍', label: 'Validar CNPJ',   desc: 'Checar parceiro',    color: 'border-purple-500/60 bg-purple-500/5',  badge: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
   delay:      { emoji: '⏳', label: 'Delay',          desc: 'Simula digitação',   color: 'border-linha bg-slate-500/5',    badge: 'bg-slate-500/20 text-slate-300 border-linha-forte' },
   acao:       { emoji: '🚀', label: 'Ação ERP',        desc: 'Desconto / Boleto',  color: 'border-ativo/60 bg-ativo/5',badge: 'bg-ativo/20 text-ativo-400 border-ativo/30' },
-  comentario: { emoji: '📝', label: 'Anotação',       desc: 'Post-it de equipe',  color: 'border-espera/60 bg-espera/10',   badge: 'bg-espera/20 text-espera-400 border-espera/30' },
+  comentario: { emoji: '📝', label: 'Anotação',       desc: 'Post-it de equipe',  color: 'border-espera/60 bg-espera/10',   badge: 'bg-espera/20 text-espera-400 border-espera/30' }
 };
 
 
@@ -30,7 +30,7 @@ function formatNodesPositions(passos = []) {
     y: p.y ?? (180 + (idx % 2 === 0 ? 0 : 40)),
     w: p.w || (p.tipo === 'comentario' ? 240 : 220),
     h: p.h || (p.tipo === 'comentario' ? 120 : 96),
-    targetId: p.targetId || (idx < passos.length - 1 ? passos[idx + 1].id : null),
+    targetId: p.targetId || (idx < passos.length - 1 ? passos[idx + 1].id : null)
   }));
 }
 
@@ -57,7 +57,7 @@ function SequencePanel({ nodes, onReorder, onSelectNode, selectedNodeIds }) {
 
     const reconnected = newOrder.map((n, i) => ({
       ...n,
-      targetId: n.tipo === 'comentario' ? n.targetId : (newOrder[i + 1]?.tipo !== 'comentario' ? newOrder[i + 1]?.id || null : null),
+      targetId: n.tipo === 'comentario' ? n.targetId : (newOrder[i + 1]?.tipo !== 'comentario' ? newOrder[i + 1]?.id || null : null)
     }));
     const missing = nodes.filter(n => !reconnected.find(r => r.id === n.id));
     onReorder([...reconnected, ...missing]);
@@ -423,7 +423,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
       y: pos ? pos.y : -canvasOffset.y / zoom + 200,
       w: tipo === 'comentario' ? 240 : 220,
       h: tipo === 'comentario' ? 120 : 96,
-      targetId: null,
+      targetId: null
     };
     const updated = [...nodes];
     if (updated.length > 0 && tipo !== 'comentario') {
@@ -706,7 +706,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
               padding: showLibrary ? '12px' : '0px',
               opacity: showLibrary ? 1 : 0,
               transition: 'width 0.28s cubic-bezier(0.4,0,0.2,1), padding 0.28s cubic-bezier(0.4,0,0.2,1), opacity 0.2s ease',
-              overflow: 'hidden',
+              overflow: 'hidden'
             }}
           >
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1 whitespace-nowrap">

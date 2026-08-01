@@ -35,7 +35,7 @@ const VEU = 0;
 // antes de a imagem carregar e a faixa que sobra quando a area do chat nao e um
 // multiplo exato do tile. Trocar a imagem sem trocar esta cor deixa uma moldura
 // de cor errada nas bordas.
-export const COR_FUNDO_CHAT = '#03141F';
+const COR_FUNDO_CHAT = '#03141F';
 
 const veu = COR_FUNDO_CHAT + Math.round(VEU * 255).toString(16).padStart(2, '0');
 const padrao = `url("${ARQUIVO_WALLPAPER}")`;

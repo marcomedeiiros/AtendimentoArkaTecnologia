@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import { useRef } from 'react';
 import { X, Play, HelpCircle, Trash2, Variable } from 'lucide-react';
 
 const BLOCK_META = {
@@ -7,7 +7,7 @@ const BLOCK_META = {
   condicao:   { emoji: '🔍', label: 'Validar CNPJ'},
   delay:      { emoji: '⏳', label: 'Delay'       },
   acao:       { emoji: '🚀', label: 'Ação ERP'    },
-  comentario: { emoji: '📝', label: 'Anotação'    },
+  comentario: { emoji: '📝', label: 'Anotação'    }
 };
 
 const VARS = [
@@ -25,7 +25,7 @@ const typeHelpText = {
   condicao:   'Valida se o CNPJ possui contrato de parceiro ativo no banco Arka.',
   delay:      'Pausa estratégica em segundos, simulando digitação humana.',
   acao:       'Executa ação automática: desconto, geração de boleto/Pix, etc.',
-  comentario: 'Anotação interna visual para organização da equipe.',
+  comentario: 'Anotação interna visual para organização da equipe.'
 };
 
 function RichTextEditor({ value, onChange, rows = 4, placeholder }) {

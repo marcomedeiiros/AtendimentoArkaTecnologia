@@ -5,7 +5,7 @@
  via useAppContext(), eliminando prop-drilling e permitindo que
  qualquer pagina acesse o mesmo estado sem re-montar dados
  */
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { EquipeAPI, FluxosAPI, ParceirosAPI, ConversasAPI, WhatsAppAPI } from '../services/api';
 import { playPing } from '../utils/sound';
 
@@ -197,7 +197,7 @@ export function AppProvider({ children }) {
             fotoUrl: c.fotoUrl || null,
             texto: ultima?.texto || 'Nova mensagem',
             em: Date.now(),
-            lida: false,
+            lida: false
           });
         }
       });
@@ -224,7 +224,7 @@ export function AppProvider({ children }) {
           cliente: 'Automação desativada',
           texto: 'Nenhum fluxo ativo o bot não vai responder sozinho. Crie ou ative um fluxo em Fluxo de Automações.',
           em: Date.now(),
-          lida: false,
+          lida: false
         }, ...prev].slice(0, 30);
       }
       return semFluxo ? prev.filter(n => n.id !== ALERTA_SEM_FLUXO) : prev;
@@ -275,7 +275,7 @@ export function AppProvider({ children }) {
       whatsAppConectado, setWhatsAppConectado,
       notificacoes,      removerNotificacao,
       historico,         marcarNotificacoesLidas, limparHistorico,
-      apiOffline,
+      apiOffline
     }}>
       {children}
     </AppContext.Provider>

@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Workflow, Play, Power, Trash2, Plus, RefreshCw, Loader2,
-  CheckCircle2, XCircle, Clock, Pencil, ExternalLink
+  CheckCircle2, XCircle, Clock, Pencil
 } from 'lucide-react';
 import { N8nAPI } from '../../services/api';
 
@@ -22,7 +22,7 @@ function formatarDuracao(ms) {
 const STATUS_EXEC = {
   success: { label: 'Sucesso', cor: 'text-ativo-400', Icon: CheckCircle2 },
   error:   { label: 'Erro',    cor: 'text-falha-400',    Icon: XCircle },
-  running: { label: 'Rodando', cor: 'text-espera-400',   Icon: Loader2 },
+  running: { label: 'Rodando', cor: 'text-espera-400',   Icon: Loader2 }
 };
 
 export default function PainelN8n() {

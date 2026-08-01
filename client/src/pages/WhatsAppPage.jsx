@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   MessageCircle, Power, QrCode, Loader2, RefreshCw, RotateCcw,
   Trash2, Copy, Check
@@ -17,7 +17,7 @@ const STATUS_UI = {
   Online:        { badge: 'bg-ativo/20 text-ativo-400', box: 'bg-ativo/15 text-ativo-400 border border-ativo/30' },
   Conectando:    { badge: 'bg-espera/20 text-espera-400',     box: 'bg-espera/15 text-espera-400 border border-espera/30' },
   Desconectado:  { badge: 'bg-falha/20 text-falha-400',       box: 'bg-falha/15 text-falha-400 border border-falha/30' },
-  Offline:       { badge: 'bg-slate-500/20 text-slate-400',     box: 'bg-slate-500/15 text-slate-400 border border-linha-forte' },
+  Offline:       { badge: 'bg-slate-500/20 text-slate-400',     box: 'bg-slate-500/15 text-slate-400 border border-linha-forte' }
 };
 
 function formatarDuracao(desde) {

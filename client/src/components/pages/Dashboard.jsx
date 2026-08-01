@@ -1,32 +1,17 @@
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import {
-  LayoutGrid, MessageSquare, Users, ShieldCheck, Clock, TrendingUp,
-  Download, Calendar, ArrowRight, Activity, CheckCircle2, Inbox,
-  PhoneIncoming, Timer, BarChart3, FileText, Loader2
+  Users, ShieldCheck, Clock, TrendingUp,
+  Download, ArrowRight, Activity, CheckCircle2, Inbox,
+  BarChart3, FileText, Loader2
 } from 'lucide-react';
-import {
-  Chart as ChartJS,
-  CategoryScale, LinearScale, PointElement, LineElement,
-  BarElement, ArcElement, Filler, Tooltip, Legend,
-} from 'chart.js';
-import { Line, Bar, Doughnut } from 'react-chartjs-2';
+// So o Doughnut sobrou nesta tela: ele precisa de ArcElement. Escalas e
+// elementos de linha/barra ficaram registrados sem grafico que os usasse.
+import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+import { Doughnut } from 'react-chartjs-2';
 import { EmojiIcon } from './EmojiIcon';
 import { exportarRelatorioPdf } from '../../utils/exportarPdf';
 
-ChartJS.register(
-  CategoryScale, LinearScale, PointElement, LineElement,
-  BarElement, ArcElement, Filler, Tooltip, Legend
-);
-
-const C = {
-  orange: '#F97316',
-  amber:  '#F59E0B',
-  emerald:'#10B981',
-  blue:   '#3B82F6',
-  purple: '#8B5CF6',
-  rose:   '#F43F5E',
-  slate:  '#64748B',
-};
+ChartJS.register(ArcElement, Tooltip, Legend);
 
 const CHART_DEFAULTS = {
   responsive: true,
@@ -38,36 +23,14 @@ const CHART_DEFAULTS = {
       titleColor: '#F8FAFC',
       bodyColor: '#94A3B8',
       borderColor: '#2A3040',
-      borderWidth: 1,
-    },
+      borderWidth: 1
+    }
   },
   scales: {
     x: { ticks: { color: '#64748B', font: { size: 10 } }, grid: { color: '#1E2330' } },
-    y: { ticks: { color: '#64748B', font: { size: 10 } }, grid: { color: '#1E2330' } },
-  },
+    y: { ticks: { color: '#64748B', font: { size: 10 } }, grid: { color: '#1E2330' } }
+  }
 };
-
-function limparCnpj(v) { return String(v || '').replace(/\D/g, ''); }
-
-function gerarSerie(dias, base, volatilidade = 0.3) {
-  const arr = [];
-  let v = base;
-  for (let i = 0; i < dias; i++) {
-    v = Math.max(1, Math.round(v + (Math.random() - 0.5) * base * volatilidade));
-    arr.push(v);
-  }
-  return arr;
-}
-
-function labelsDias(n) {
-  const labels = [];
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    labels.push(d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }));
-  }
-  return labels;
-}
 
 function calcularMetricas(conversas, parceiros, equipe) {
 
@@ -83,7 +46,7 @@ function calcularMetricas(conversas, parceiros, equipe) {
     atendimentosFechados: finalizados,
     parceirosPeriodo: parceiros.filter(p => p.status === 'ativo').length,
     equipeOnline: equipe.filter(e => e.status === 'online').length,
-    totalEquipe: equipe.length,
+    totalEquipe: equipe.length
   };
 }
 
@@ -94,7 +57,7 @@ function MetricCard({ label, valor, icon: Icon, color, sublabel, onClick }) {
     blue:   'bg-blue-500/10 border-blue-500/30 text-blue-400',
     purple: 'bg-purple-500/10 border-purple-500/30 text-purple-400',
     amber:  'bg-espera/10 border-espera/30 text-espera-400',
-    indigo: 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400',
+    indigo: 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400'
   };
   return (
     <div onClick={onClick} className={`glass-card p-5 rounded-2xl border border-linha flex flex-col justify-between gap-3 ${onClick ? 'cursor-pointer hover:border-acao/40 transition-all' : ''}`}>
@@ -159,7 +122,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
           `No período, foram registrados ${metricas.totalAtendimentos} atendimento(s), ` +
           `sendo ${metricas.atendimentosAbertos} em aberto, ${metricas.atendimentosPendentes} pendente(s) ` +
           `e ${metricas.atendimentosFechados} fechado(s). A equipe conta com ${metricas.equipeOnline} de ` +
-          `${metricas.totalEquipe} operador(es) online e ${metricas.parceirosPeriodo} parceiro(s) ativo(s).`,
+          `${metricas.totalEquipe} operador(es) online e ${metricas.parceirosPeriodo} parceiro(s) ativo(s).`
       });
     } catch (e) {
       window.alert('Não foi possível gerar o PDF: ' + e.message);
@@ -169,9 +132,12 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
   }, [metricas]);
 
   const doughnutData = useMemo(() => {
-    const abertos   = conversas.filter(c => c.statusAtendimento === 'em_atendimento').length || 1;
-    const aguard    = conversas.filter(c => c.statusAtendimento === 'aguardando').length || 1;
-    const fechados  = conversas.filter(c => c.statusAtendimento === 'finalizado' || c.statusAtendimento === 'resolvido').length || 1;
+    // Sem `|| 1`: um zero real precisa aparecer como zero. O fallback antigo
+    // pintava uma fatia de tamanho 1 para categoria vazia, o que fazia o grafico
+    // mostrar uma divisao igual em tres partes quando nao havia nada.
+    const abertos  = conversas.filter(c => c.statusAtendimento === 'aberta').length;
+    const aguard   = conversas.filter(c => c.statusAtendimento === 'pendente').length;
+    const fechados = conversas.filter(c => c.statusAtendimento === 'fechada').length;
     return {
       labels: ['Em atendimento', 'Aguardando', 'Finalizados'],
       datasets: [{
@@ -179,8 +145,8 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
         backgroundColor: ['rgba(249,115,22,0.8)', 'rgba(245,158,11,0.8)', 'rgba(16,185,129,0.8)'],
         borderColor: ['#F97316', '#F59E0B', '#10B981'],
         borderWidth: 2,
-        hoverOffset: 6,
-      }],
+        hoverOffset: 6
+      }]
     };
   }, [conversas]);
 
@@ -227,8 +193,8 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
               cutout: '65%',
               plugins: {
                 legend: { position: 'bottom', labels: { color: '#94A3B8', font: { size: 11 }, boxWidth: 12 } },
-                tooltip: CHART_DEFAULTS.plugins.tooltip,
-              },
+                tooltip: CHART_DEFAULTS.plugins.tooltip
+              }
             }} />
           </div>
         </div>
@@ -275,7 +241,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
             </button>
           </div>
           <div className="space-y-2">
-            {conversas.filter(c => c.statusAtendimento === 'aguardando').map(c => (
+            {conversas.filter(c => c.statusAtendimento === 'pendente').map(c => (
               <div key={c.id} className="flex items-center justify-between p-3 rounded-xl bg-grafite-600/60 border border-linha/60">
                 <div>
                   <div className="font-semibold text-xs text-white">{c.cliente}</div>
@@ -284,7 +250,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                 <EmojiIcon name="clock" label="Aguardando" size="sm" />
               </div>
             ))}
-            {conversas.filter(c => c.statusAtendimento === 'aguardando').length === 0 && (
+            {conversas.filter(c => c.statusAtendimento === 'pendente').length === 0 && (
               <div className="text-xs text-slate-400 text-center py-4">Fila vazia no momento.</div>
             )}
           </div>

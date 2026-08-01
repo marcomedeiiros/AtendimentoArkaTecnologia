@@ -1,7 +1,6 @@
-import React from 'react';
 import { 
   Bot, CheckCircle2, AlertTriangle, Zap, ShieldCheck, 
-  HelpCircle, MessageSquare, Search, Lock, Sparkles, Clock, UserCheck, Flame
+  HelpCircle, MessageSquare, Lock, Sparkles, Clock, UserCheck
 } from 'lucide-react';
 
 export function EmojiIcon({ name, label, size = "md", inline = false }) {
@@ -9,7 +8,7 @@ export function EmojiIcon({ name, label, size = "md", inline = false }) {
     sm: { container: 'h-5 px-1.5 text-xs gap-1', icon: 12 },
     md: { container: 'h-6 px-2 text-xs gap-1.5', icon: 14 },
     lg: { container: 'h-8 px-3 text-sm gap-2', icon: 16 },
-    xl: { container: 'h-10 px-4 text-base gap-2.5', icon: 20 },
+    xl: { container: 'h-10 px-4 text-base gap-2.5', icon: 20 }
   };
 
   const currentSize = sizeMap[size] || sizeMap.md;
@@ -18,62 +17,62 @@ export function EmojiIcon({ name, label, size = "md", inline = false }) {
     bot: {
       bg: 'bg-gradient-to-r from-espera/20 via-acao/20 to-espera/10 border-acao/30 text-acao-200',
       icon: Sparkles,
-      defaultLabel: 'Arka IA',
+      defaultLabel: 'Arka IA'
     },
     check: {
       bg: 'bg-ativo/15 border-ativo/30 text-ativo-400',
       icon: CheckCircle2,
-      defaultLabel: 'Validado',
+      defaultLabel: 'Validado'
     },
     warning: {
       bg: 'bg-espera/15 border-espera/30 text-espera-400',
       icon: AlertTriangle,
-      defaultLabel: 'Atenção',
+      defaultLabel: 'Atenção'
     },
     danger: {
       bg: 'bg-falha/15 border-falha/30 text-falha-400',
       icon: AlertTriangle,
-      defaultLabel: 'Alerta',
+      defaultLabel: 'Alerta'
     },
     lightning: {
       bg: 'bg-gradient-to-r from-acao/20 to-espera/20 border-acao/40 text-acao-200',
       icon: Zap,
-      defaultLabel: 'Automação',
+      defaultLabel: 'Automação'
     },
     shield: {
       bg: 'bg-ativo/15 border-ativo/30 text-ativo-400',
       icon: ShieldCheck,
-      defaultLabel: 'Parceiro Arka',
+      defaultLabel: 'Parceiro Arka'
     },
     question: {
       bg: 'bg-slate-700/40 border-linha text-slate-300',
       icon: HelpCircle,
-      defaultLabel: 'Pendente',
+      defaultLabel: 'Pendente'
     },
     inbox: {
       bg: 'bg-blue-500/15 border-blue-500/30 text-blue-400',
       icon: MessageSquare,
-      defaultLabel: 'Fila',
+      defaultLabel: 'Fila'
     },
     chat: {
       bg: 'bg-indigo-500/15 border-indigo-500/30 text-indigo-400',
       icon: MessageSquare,
-      defaultLabel: 'Chat',
+      defaultLabel: 'Chat'
     },
     lock: {
       bg: 'bg-purple-500/15 border-purple-500/30 text-purple-400',
       icon: Lock,
-      defaultLabel: 'Seguro',
+      defaultLabel: 'Seguro'
     },
     clock: {
       bg: 'bg-espera/15 border-espera/30 text-espera-400',
       icon: Clock,
-      defaultLabel: 'Aguardando',
+      defaultLabel: 'Aguardando'
     },
     user: {
       bg: 'bg-ativo/15 border-ativo/30 text-ativo-400',
       icon: UserCheck,
-      defaultLabel: 'Operador',
+      defaultLabel: 'Operador'
     }
   };
 

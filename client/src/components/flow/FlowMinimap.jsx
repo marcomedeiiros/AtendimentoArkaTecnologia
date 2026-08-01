@@ -1,4 +1,3 @@
-import React from 'react';
 
 export function FlowMinimap({ nodes, canvasOffset, zoom, viewportSize, onNavigate }) {
   if (!nodes || nodes.length === 0) return null;

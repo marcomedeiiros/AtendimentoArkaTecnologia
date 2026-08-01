@@ -1,4 +1,3 @@
-import React from 'react';
 import EnvioEmMassa from '../components/pages/EnvioEmMassa';
 import { useAppContext } from '../context/AppContext';
 

@@ -180,7 +180,7 @@ const ItemContatoWhatsApp = React.memo(function ItemContatoWhatsApp({ contato, o
   );
 });
 
-export default function Contatos({ conversas = [], setConversas, setAba }) {
+export default function Contatos({ setAba }) {
   const [contatos,     setContatos]   = useState([]);
   const [carregando,   setCarregando] = useState(true);
   const [modalAberto,  setModal]      = useState(false);
@@ -280,25 +280,17 @@ export default function Contatos({ conversas = [], setConversas, setAba }) {
     }
   }, [contatos]);
 
+  // Leva para a Central ja procurando por este contato.
+  //
+  // Antes esta funcao montava uma conversa no estado do navegador, com id
+  // inventado ('c_'+timestamp) e status que nao existe mais. Nada disso ia para
+  // o banco: a conversa parecia criada e sumia no F5 seguinte. Conversa de
+  // verdade nasce quando chega mensagem pelo webhook -- nao da para fabricar
+  // uma daqui. Entao apenas navegamos com a busca preenchida: se ja existe
+  // conversa com esse numero ela aparece; se nao existe, nada e inventado.
   function iniciarChat(contato) {
-    if (!setConversas) return;
-    const id = 'c_' + Date.now();
-    const nova = {
-      id,
-      cliente:          contato.nome,
-      telefone:         mascararTel(contato.telefone),
-      statusAtendimento:'aguardando',
-      cnpj:             null,
-      cnpjVerificado:   false,
-      lido:             false,
-      mensagens:        [{
-        de:   'sistema',
-        texto:`Conversa iniciada a partir dos contatos.`,
-        hora: new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),
-      }],
-    };
-    setConversas(prev => [nova, ...prev]);
-    if (setAba) setAba('atendimento');
+    if (!setAba) return;
+    setAba(`atendimento?busca=${encodeURIComponent(limparTel(contato.telefone))}`);
   }
 
   const listaFiltrada = useMemo(() => {
