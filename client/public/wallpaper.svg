@@ -1,11 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="360" height="360" viewBox="0 0 360 360">
   <!--
-    Papel de parede das conversas (estilo WhatsApp doodle).
-    Fundo azul-petroleo escuro com icones em contorno sutil.
-    Para trocar a cor do traco, edite a variavel do <g> abaixo.
+    Papel de parede das conversas (estilo WhatsApp Web, tema claro).
+    Fundo bege claro com os icones em contorno cinza suave.
+
+    O traco e de baixo contraste de proposito: o papel de parede nao pode
+    competir com o texto das mensagens. Para escurecer/clarear o padrao, mude
+    somente o atributo "stroke" do grupo abaixo.
   -->
-  <rect width="360" height="360" fill="#16232B"/>
-  <g fill="none" stroke="#2C4250" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+  <rect width="360" height="360" fill="#EFEAE2"/>
+  <g fill="none" stroke="#D5CEC4" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
 
     <!-- balao de conversa -->
     <g transform="translate(26,30)">

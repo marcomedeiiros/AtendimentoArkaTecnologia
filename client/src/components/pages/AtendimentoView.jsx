@@ -1001,16 +1001,19 @@ function PainelChat({
               />
             )}
             {m.de === 'sistema' ? (
-              <div className="text-[10px] text-slate-500 bg-grafite-600 border border-linha px-3 py-1.5 rounded-full">
+              <div className="text-[10px] text-grafite-900/60 bg-white/80 border border-grafite-900/10 px-3 py-1.5 rounded-full">
                 {m.texto}
               </div>
             ) : (
               <div className={`max-w-[80%] p-3.5 rounded-2xl text-xs shadow-md space-y-1 ${
+                /* Sobre o papel de parede claro, as bolhas seguem o WhatsApp Web:
+                   recebida em branco, enviada em verde claro, ambas com texto
+                   escuro. Bolha escura aqui ficaria pesada e fora do padrao. */
                 m.de === 'cliente'
-                  ? 'bg-grafite-600 text-slate-100 border border-linha rounded-tl-sm'
-                  : 'bg-gradient-to-r from-acao to-espera text-slate-950 font-medium rounded-tr-sm'
+                  ? 'bg-white text-grafite-900 rounded-tl-sm'
+                  : 'bg-[#D9FDD3] text-grafite-900 rounded-tr-sm'
               }`}>
-                <div className={`text-[10px] font-semibold ${m.de === 'cliente' ? 'text-slate-400' : 'text-slate-900/80'}`}>
+                <div className="text-[10px] font-semibold text-grafite-900/60">
                   {m.de === 'cliente' ? conversa.cliente : 'Arka Tecnologia'}
                 </div>
 
@@ -1031,17 +1034,17 @@ function PainelChat({
 
                 {m.tipo && m.tipo !== 'texto' ? (
                   <>
-                    <MensagemMidia m={m} escuro={m.de === 'cliente'} onAbrirImagem={setImagemAmpliada} />
+                    <MensagemMidia m={m} escuro={false} onAbrirImagem={setImagemAmpliada} />
                     {m.midia?.caption && <FormattedMessage text={m.midia.caption} />}
                   </>
                 ) : (
                   <FormattedMessage text={m.texto} />
                 )}
 
-                <div className={`text-[9px] flex items-center justify-end gap-1 ${m.de === 'cliente' ? 'text-slate-400' : 'text-slate-900/70'}`}>
+                <div className="text-[9px] flex items-center justify-end gap-1 text-grafite-900/55">
                   {m.editada && <span className="italic">editada</span>}
                   <span>{m.hora}</span>
-                  <StatusMensagem status={m.status} escuro={m.de === 'cliente'} />
+                  <StatusMensagem status={m.status} escuro={false} />
                 </div>
               </div>
             )}
@@ -1860,22 +1863,22 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               />
 
               {/* Bolhas decorativas de chat ao fundo */}
-              <div className="absolute top-8 left-8 w-32 h-10 rounded-2xl rounded-tl-sm bg-[#1F2C34] opacity-20" />
-              <div className="absolute top-20 right-10 w-40 h-10 rounded-2xl rounded-tr-sm bg-[#005C4B] opacity-15" />
-              <div className="absolute top-36 left-14 w-24 h-10 rounded-2xl rounded-tl-sm bg-[#1F2C34] opacity-20" />
-              <div className="absolute bottom-24 right-8 w-36 h-10 rounded-2xl rounded-tr-sm bg-[#005C4B] opacity-15" />
-              <div className="absolute bottom-12 left-10 w-28 h-10 rounded-2xl rounded-tl-sm bg-[#1F2C34] opacity-20" />
-              <div className="absolute bottom-36 right-20 w-20 h-10 rounded-2xl rounded-tr-sm bg-[#005C4B] opacity-10" />
+              <div className="absolute top-8 left-8 w-32 h-10 rounded-2xl rounded-tl-sm bg-white opacity-70" />
+              <div className="absolute top-20 right-10 w-40 h-10 rounded-2xl rounded-tr-sm bg-[#D9FDD3] opacity-80" />
+              <div className="absolute top-36 left-14 w-24 h-10 rounded-2xl rounded-tl-sm bg-white opacity-70" />
+              <div className="absolute bottom-24 right-8 w-36 h-10 rounded-2xl rounded-tr-sm bg-[#D9FDD3] opacity-80" />
+              <div className="absolute bottom-12 left-10 w-28 h-10 rounded-2xl rounded-tl-sm bg-white opacity-70" />
+              <div className="absolute bottom-36 right-20 w-20 h-10 rounded-2xl rounded-tr-sm bg-[#D9FDD3] opacity-60" />
 
               {/* Conteúdo central */}
               <div className="relative z-10 text-center p-8 max-w-sm">
-                <div className="inline-flex p-5 rounded-2xl bg-[#1F2C34]/80 border border-[#2A3B45]/60 mb-5 text-[#25D366] shadow-lg shadow-black/30">
+                <div className="inline-flex p-5 rounded-2xl bg-white border border-grafite-900/10 mb-5 text-acao shadow-lg shadow-black/10">
                   <MessageSquare size={38} />
                 </div>
-                <h3 className="text-base font-bold text-[#E9Edef] font-display mb-2">
+                <h3 className="text-base font-bold text-grafite-900 font-display mb-2">
                   Nenhum Atendimento Selecionado
                 </h3>
-                <p className="text-xs text-[#8696A0] leading-relaxed">
+                <p className="text-xs text-grafite-900/60 leading-relaxed">
                   Selecione uma conversa ou clique em{' '}
                   <strong className="text-[#25D366]">"ATENDER CONVERSA"</strong> para iniciar o chat.
                 </p>
