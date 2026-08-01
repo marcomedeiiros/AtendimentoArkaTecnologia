@@ -5,6 +5,14 @@
 const minutos = (n) => n * 60 * 1000;
 
 const config = {
+  // O bot so envia o que estiver escrito nos PASSOS DO FLUXO. As mensagens
+  // embutidas abaixo (menu, "nao entendi", "chamando um atendente", etc.) sao
+  // iniciativa do motor, nao do fluxo -- por isso ficam DESLIGADAS por padrao.
+  // Sem gatilho reconhecido a conversa simplesmente vai para a fila, em vez de
+  // o bot despejar um menu que ninguem configurou.
+  // Ligue com CHATBOT_RESPOSTAS_AUTOMATICAS=true no .env se quiser o antigo.
+  respostasAutomaticas: process.env.CHATBOT_RESPOSTAS_AUTOMATICAS === "true",
+
   sessao: {
     // Depois desse tempo sem mensagem, a sessao expira e o cliente recomeca
     // do zero em vez de cair no meio de um fluxo antigo.

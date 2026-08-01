@@ -17,7 +17,13 @@ const n8nClient = require("../../infrastructure/external/n8n.client");
 const bus = require("../../shared/events/event-bus");
 const logger = require("../../config/logger");
 const env = require("../../config/env");
-const { sessao: cfgSessao, limites, palavrasChave, mensagens } = require("./chatbot.config");
+const {
+  sessao: cfgSessao,
+  limites,
+  palavrasChave,
+  mensagens,
+  respostasAutomaticas,
+} = require("./chatbot.config");
 
 // Estados possiveis de `sessao.aguardando`:
 //   cnpj   -> proxima mensagem do cliente e tratada como CNPJ
@@ -169,6 +175,16 @@ class ChatbotEngine {
     return texto;
   }
 
+  // Mensagem de iniciativa do MOTOR (menu, "nao entendi", avisos) -- nao veio de
+  // nenhum passo de fluxo. So sai se respostasAutomaticas estiver ligado.
+  async enviarAutomatico(conversaId, telefone, texto, instanceName) {
+    if (!respostasAutomaticas) {
+      logger.debug("Resposta automatica suprimida (bot so responde pelo fluxo)", { conversaId });
+      return null;
+    }
+    return this.enviarBot(conversaId, telefone, texto, instanceName);
+  }
+
   // Publica a conversa atualizada no barramento para o SSE empurrar ao front.
   // Best-effort: uma falha aqui nunca deve interromper o atendimento.
   async _emitirConversa(conversaId) {
@@ -209,6 +225,13 @@ class ChatbotEngine {
   async enviarMenu(ctx, fluxos, cabecalho) {
     const { conversa, telefone, instanciaId, instanceName } = ctx;
 
+    // O menu e invencao do motor, nao esta em nenhum fluxo. Com as respostas
+    // automaticas desligadas, a mensagem sem gatilho vai direto para a fila e
+    // quem responde e o atendente (ou um fluxo, quando o gatilho casar).
+    if (!respostasAutomaticas) {
+      return this.transferirParaHumano(ctx, { avisar: false, motivo: "sem_gatilho" });
+    }
+
     if (!fluxos.length) {
       await this.enviarBot(conversa.id, telefone, mensagens.semFluxos, instanceName);
       return this.transferirParaHumano(ctx, { avisar: false });
@@ -245,7 +268,7 @@ class ChatbotEngine {
     const { conversa, telefone, instanciaId, instanceName } = ctx;
 
     if (avisar) {
-      await this.enviarBot(conversa.id, telefone, mensagens.transferindo, instanceName);
+      await this.enviarAutomatico(conversa.id, telefone, mensagens.transferindo, instanceName);
     }
 
     await conversaRepository.update(conversa.id, {
@@ -280,7 +303,7 @@ class ChatbotEngine {
   async encerrarSessao(ctx) {
     const { conversa, telefone, instanciaId, instanceName } = ctx;
 
-    await this.enviarBot(conversa.id, telefone, mensagens.encerrado, instanceName);
+    await this.enviarAutomatico(conversa.id, telefone, mensagens.encerrado, instanceName);
     await sessaoRepository.upsert(instanciaId, conversa.id, telefone, {
       fluxoAtualId: null,
       passoAtualId: null,
@@ -325,7 +348,11 @@ class ChatbotEngine {
           proximo = this.proximoPasso(fluxo.passos, passo);
         } else {
           aguardando = AGUARDANDO.CNPJ;
-          resposta = this.textoDoPasso(passo) || mensagens.cnpjSolicitar;
+          // O texto tem que vir do passo. So caimos no padrao do motor quando
+          // as respostas automaticas estao ligadas.
+          resposta =
+            this.textoDoPasso(passo) ||
+            (respostasAutomaticas ? mensagens.cnpjSolicitar : "");
         }
         break;
       }
@@ -482,7 +509,7 @@ class ChatbotEngine {
         const tentativas = (sessao.contexto?.tentativasCnpj || 0) + 1;
 
         if (tentativas >= limites.maxTentativasCnpj) {
-          await this.enviarBot(
+          await this.enviarAutomatico(
             conversa.id,
             telefone,
             "Nao consegui validar o CNPJ informado.",
@@ -492,7 +519,7 @@ class ChatbotEngine {
         }
 
         const restantes = limites.maxTentativasCnpj - tentativas;
-        await this.enviarBot(
+        await this.enviarAutomatico(
           conversa.id,
           telefone,
           `${mensagens.cnpjInvalido}\n(Voce ainda tem ${restantes} tentativa${restantes > 1 ? "s" : ""}, ou digite *atendente*.)`,
@@ -759,7 +786,7 @@ class ChatbotEngine {
         stack: error.stack,
       });
 
-      await this.enviarBot(conversa.id, telefone, mensagens.erroInterno, instanceName).catch(
+      await this.enviarAutomatico(conversa.id, telefone, mensagens.erroInterno, instanceName).catch(
         () => {}
       );
       await this.transferirParaHumano(ctx, { avisar: false, motivo: "erro_interno" }).catch(
