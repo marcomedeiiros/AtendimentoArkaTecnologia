@@ -8,6 +8,24 @@
     somente o atributo "stroke" do grupo abaixo.
   -->
   <rect width="360" height="360" fill="#EFEAE2"/>
+
+  <!-- Pontinhos e estrelinhas preenchem os vazios, como no padrao original:
+       sem eles o tile fica ralo e a repeticao a cada 360px fica obvia. -->
+  <g fill="#DED8CE">
+    <circle cx="76" cy="18" r="3"/>   <circle cx="152" cy="60" r="2.4"/>
+    <circle cx="248" cy="16" r="2.6"/><circle cx="336" cy="52" r="3"/>
+    <circle cx="18" cy="76" r="2.4"/> <circle cx="140" cy="92" r="3"/>
+    <circle cx="214" cy="88" r="2.4"/><circle cx="308" cy="118" r="2.8"/>
+    <circle cx="92" cy="140" r="2.6"/><circle cx="196" cy="146" r="3"/>
+    <circle cx="286" cy="196" r="2.4"/><circle cx="36" cy="204" r="3"/>
+    <circle cx="118" cy="200" r="2.4"/><circle cx="228" cy="188" r="2.8"/>
+    <circle cx="330" cy="242" r="2.6"/><circle cx="70" cy="278" r="3"/>
+    <circle cx="164" cy="268" r="2.4"/><circle cx="252" cy="286" r="2.8"/>
+    <circle cx="16" cy="330" r="2.6"/><circle cx="106" cy="352" r="2.4"/>
+    <circle cx="204" cy="344" r="3"/> <circle cx="296" cy="356" r="2.4"/>
+    <circle cx="352" cy="300" r="2.8"/><circle cx="188" cy="118" r="2.2"/>
+  </g>
+
   <g fill="none" stroke="#D5CEC4" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
 
     <!-- balao de conversa -->
