@@ -15,7 +15,7 @@ import Portal from '../Portal';
 import { useAppContext } from '../../context/AppContext';
 import { ConversasAPI } from '../../services/api';
 import { usePreferencia } from '../../hooks/usePreferencia';
-import { wallpaperStyle as WHATSAPP_BG, COR_FUNDO_CHAT } from '../../utils/wallpaper';
+import { wallpaperStyle as WHATSAPP_BG } from '../../utils/wallpaper';
 
 // Atendente responsavel por cada conversa. Fica no localStorage (e nao no
 // back-end) porque a coluna atendenteId da conversa aponta para Usuario, nao
@@ -1854,13 +1854,8 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               className="flex-1 flex items-center justify-center relative overflow-hidden"
               style={WHATSAPP_BG}
             >
-              {/* Gradient overlay */}
-              <div
-                className="absolute inset-0 opacity-60 pointer-events-none"
-                style={{
-                  backgroundImage: `linear-gradient(to bottom right, ${COR_FUNDO_CHAT}, transparent, ${COR_FUNDO_CHAT})`,
-                }}
-              />
+              {/* Sem camada de gradiente por cima: ela lavava o papel de
+                  parede nos cantos e criava um brilho que nao existe no chat. */}
 
               {/* Bolhas decorativas de chat ao fundo */}
               <div className="absolute top-8 left-8 w-32 h-10 rounded-2xl rounded-tl-sm bg-white opacity-70" />
@@ -1872,7 +1867,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
 
               {/* Conteúdo central */}
               <div className="relative z-10 text-center p-8 max-w-sm">
-                <div className="inline-flex p-5 rounded-2xl bg-white border border-grafite-900/10 mb-5 text-acao shadow-lg shadow-black/10">
+                <div className="inline-flex p-5 rounded-2xl bg-white border border-grafite-900/10 mb-5 text-acao">
                   <MessageSquare size={38} />
                 </div>
                 <h3 className="text-base font-bold text-grafite-900 font-display mb-2">
