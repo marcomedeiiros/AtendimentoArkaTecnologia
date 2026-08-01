@@ -1126,19 +1126,6 @@ function PainelChat({
         </div>
       )}
 
-      {/* Conversa ainda na fila: leitura liberada, com atalho para assumir */}
-      {conversa.statusAtendimento === 'pendente' && (
-        <div className="mx-3 mb-2 p-2.5 rounded-xl bg-espera/10 border border-espera/30 flex items-center justify-between gap-3">
-          <span className="text-[11px] text-espera-400">
-            Esta conversa ainda não foi assumida.<strong>na fila</strong>.
-          </span>
-          <button onClick={() => onAtender(conversa.id)}
-            className="shrink-0 px-3 py-1.5 rounded-lg bg-ativo hover:bg-ativo-400 text-slate-950 text-[11px] font-bold flex items-center gap-1.5">
-            <UserCheck size={13} /> Atender
-          </button>
-        </div>
-      )}
-
       {/* Respondendo a uma mensagem (citação) */}
       {respondendoA && (
         <div className="mx-3 mb-2 p-2.5 rounded-xl bg-grafite-700 border border-linha border-l-4 border-l-acao flex items-center justify-between gap-3">
