@@ -3,12 +3,12 @@ import React, { useState, useEffect } from 'react';
 // Paleta de cores para avatares gerados a partir do nome (sem foto real).
 // Tons que combinam com o tema escuro do painel.
 const CORES = [
-  { bg: 'bg-orange-500/20',  ring: 'border-orange-500/40',  text: 'text-orange-300' },
+  { bg: 'bg-osso/20',  ring: 'border-osso/40',  text: 'text-osso-200' },
   { bg: 'bg-blue-500/20',    ring: 'border-blue-500/40',    text: 'text-blue-300' },
-  { bg: 'bg-emerald-500/20', ring: 'border-emerald-500/40', text: 'text-emerald-300' },
+  { bg: 'bg-ativo/20', ring: 'border-ativo/40', text: 'text-ativo-400' },
   { bg: 'bg-purple-500/20',  ring: 'border-purple-500/40',  text: 'text-purple-300' },
   { bg: 'bg-pink-500/20',    ring: 'border-pink-500/40',    text: 'text-pink-300' },
-  { bg: 'bg-amber-500/20',   ring: 'border-amber-500/40',   text: 'text-amber-300' },
+  { bg: 'bg-espera/20',   ring: 'border-espera/40',   text: 'text-espera-400' },
   { bg: 'bg-cyan-500/20',    ring: 'border-cyan-500/40',    text: 'text-cyan-300' },
 ];
 
@@ -58,8 +58,8 @@ export default function Avatar({ nome = '', size = 'md', online = null, fotoUrl 
       )}
       {online !== null && (
         <span
-          className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#161922] ${
-            online ? 'bg-emerald-400' : 'bg-slate-500'
+          className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-grafite-700 ${
+            online ? 'bg-ativo-400' : 'bg-slate-500'
           }`}
         />
       )}

@@ -16,12 +16,12 @@ export default function NotificacoesToast() {
         <div
           key={n.id}
           onClick={() => { navigate('/atendimento'); removerNotificacao(n.id); }}
-          className="fade-in cursor-pointer glass-panel border border-orange-500/40 rounded-2xl shadow-2xl shadow-black/40 p-3 flex items-start gap-3 hover:border-orange-500/70 transition-colors"
+          className="fade-in cursor-pointer glass-panel border border-osso/40 rounded-2xl shadow-2xl shadow-black/40 p-3 flex items-start gap-3 hover:border-osso/70 transition-colors"
         >
           <Avatar nome={n.cliente} size="sm" fotoUrl={n.fotoUrl} />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 text-xs font-bold text-white">
-              <MessageSquare size={12} className="text-orange-400 shrink-0" />
+              <MessageSquare size={12} className="text-osso-200 shrink-0" />
               <span className="truncate">{n.cliente} lhe enviou uma mensagem</span>
             </div>
             <p className="text-[11px] text-slate-400 truncate mt-0.5">{n.texto}</p>

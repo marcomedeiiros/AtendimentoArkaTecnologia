@@ -89,15 +89,15 @@ function calcularMetricas(conversas, parceiros, equipe) {
 
 function MetricCard({ label, valor, icon: Icon, color, sublabel, onClick }) {
   const map = {
-    orange: 'bg-orange-500/10 border-orange-500/30 text-orange-400',
-    emerald:'bg-emerald-500/10 border-emerald-500/30 text-emerald-400',
+    orange: 'bg-osso/10 border-osso/30 text-osso-200',
+    emerald:'bg-ativo/10 border-ativo/30 text-ativo-400',
     blue:   'bg-blue-500/10 border-blue-500/30 text-blue-400',
     purple: 'bg-purple-500/10 border-purple-500/30 text-purple-400',
-    amber:  'bg-amber-500/10 border-amber-500/30 text-amber-400',
+    amber:  'bg-espera/10 border-espera/30 text-espera-400',
     indigo: 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400',
   };
   return (
-    <div onClick={onClick} className={`glass-card p-5 rounded-2xl border border-[#2A3040] flex flex-col justify-between gap-3 ${onClick ? 'cursor-pointer hover:border-orange-500/40 transition-all' : ''}`}>
+    <div onClick={onClick} className={`glass-card p-5 rounded-2xl border border-linha flex flex-col justify-between gap-3 ${onClick ? 'cursor-pointer hover:border-osso/40 transition-all' : ''}`}>
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-slate-400">{label}</span>
         <span className={`p-2 rounded-xl border ${map[color] || map.orange}`}><Icon size={15} /></span>
@@ -200,11 +200,11 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button onClick={() => exportarRelatorio(metricas)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 text-xs font-semibold border border-orange-500/30 transition-all shrink-0">
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-osso/10 hover:bg-osso/20 text-osso-200 text-xs font-semibold border border-osso/30 transition-all shrink-0">
             <Download size={14} /> Exportar CSV
           </button>
           <button onClick={exportarPdf} disabled={gerandoPdf}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-semibold border border-rose-500/30 transition-all shrink-0 disabled:opacity-60">
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-falha/10 hover:bg-falha/20 text-falha-400 text-xs font-semibold border border-falha/30 transition-all shrink-0 disabled:opacity-60">
             {gerandoPdf ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
             {gerandoPdf ? 'Gerando...' : 'Exportar Relatório'}
           </button>
@@ -216,9 +216,9 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
       </div>
 
       <div ref={graficosRef} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="glass-panel rounded-2xl p-5 border border-[#2A3040]">
+        <div className="glass-panel rounded-2xl p-5 border border-linha">
           <h3 className="text-sm font-bold text-white font-display mb-4 flex items-center gap-2">
-            <Activity size={15} className="text-emerald-400" /> Distribuição de Status
+            <Activity size={15} className="text-ativo-400" /> Distribuição de Status
           </h3>
           <div style={{ height: 220 }} className="flex items-center justify-center">
             <Doughnut data={doughnutData} options={{
@@ -233,9 +233,9 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
           </div>
         </div>
 
-        <div className="glass-panel rounded-2xl p-5 border border-[#2A3040] flex flex-col justify-center gap-3">
+        <div className="glass-panel rounded-2xl p-5 border border-linha flex flex-col justify-center gap-3">
           <h3 className="text-sm font-bold text-white font-display flex items-center gap-2">
-            <TrendingUp size={15} className="text-orange-400" /> Situação atual
+            <TrendingUp size={15} className="text-osso-200" /> Situação atual
           </h3>
           <p className="text-xs text-slate-400 leading-relaxed">
             O histórico por período (7/30/90 dias) aparecerá aqui assim que os atendimentos
@@ -250,9 +250,9 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
           { icon: Clock,        color: 'amber',   label: 'Pendentes', val: metricas.atendimentosPendentes },
           { icon: CheckCircle2, color: 'emerald', label: 'Fechados',  val: metricas.atendimentosFechados  },
         ].map(({ icon: Icon, color, label, val }) => {
-          const map = { blue:'bg-blue-500/10 border-blue-500/30 text-blue-400', amber:'bg-amber-500/10 border-amber-500/30 text-amber-400', emerald:'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' };
+          const map = { blue:'bg-blue-500/10 border-blue-500/30 text-blue-400', amber:'bg-espera/10 border-espera/30 text-espera-400', emerald:'bg-ativo/10 border-ativo/30 text-ativo-400' };
           return (
-            <div key={label} className="glass-panel p-5 rounded-2xl border border-[#2A3040] flex items-center gap-4">
+            <div key={label} className="glass-panel p-5 rounded-2xl border border-linha flex items-center gap-4">
               <div className={`p-3 rounded-xl border ${map[color]}`}><Icon size={18} /></div>
               <div>
                 <div className="text-2xl font-bold text-white font-display">{val}</div>
@@ -264,19 +264,19 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="glass-panel rounded-2xl p-5 border border-[#2A3040]">
+        <div className="glass-panel rounded-2xl p-5 border border-linha">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <EmojiIcon name="inbox" label="Fila de Espera" size="md" />
             </div>
             <button onClick={() => setAba('atendimento')}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 text-xs font-semibold border border-orange-500/30 transition-all">
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-osso/10 hover:bg-osso/20 text-osso-200 text-xs font-semibold border border-osso/30 transition-all">
               Central <ArrowRight size={12} />
             </button>
           </div>
           <div className="space-y-2">
             {conversas.filter(c => c.statusAtendimento === 'aguardando').map(c => (
-              <div key={c.id} className="flex items-center justify-between p-3 rounded-xl bg-[#1E2330]/60 border border-[#2A3040]/60">
+              <div key={c.id} className="flex items-center justify-between p-3 rounded-xl bg-grafite-600/60 border border-linha/60">
                 <div>
                   <div className="font-semibold text-xs text-white">{c.cliente}</div>
                   <div className="text-[11px] text-slate-400 font-mono">{c.telefone || '+55 11 99999-0000'}</div>
@@ -290,19 +290,19 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
           </div>
         </div>
 
-        <div className="glass-panel rounded-2xl p-5 border border-[#2A3040]">
+        <div className="glass-panel rounded-2xl p-5 border border-linha">
           <div className="flex items-center gap-2 mb-4">
-            <Users size={15} className="text-orange-400" />
+            <Users size={15} className="text-osso-200" />
             <h3 className="text-sm font-bold text-white font-display">Equipe</h3>
             <span className="ml-auto text-xs text-slate-400">
-              <span className="text-emerald-400 font-semibold">{metricas.equipeOnline}</span>/{metricas.totalEquipe} online
+              <span className="text-ativo-400 font-semibold">{metricas.equipeOnline}</span>/{metricas.totalEquipe} online
             </span>
           </div>
           <div className="space-y-2">
             {equipe.map(e => (
               <div key={e.id} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-orange-500/15 text-orange-400 text-xs font-bold flex items-center justify-center border border-orange-500/30">
+                  <div className="w-7 h-7 rounded-lg bg-osso/15 text-osso-200 text-xs font-bold flex items-center justify-center border border-osso/30">
                     {e.nome.charAt(0)}
                   </div>
                   <div>
@@ -310,7 +310,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                     <div className="text-[10px] text-slate-500">{e.cargo}</div>
                   </div>
                 </div>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${e.status === 'online' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-700 text-slate-400'}`}>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${e.status === 'online' ? 'bg-ativo/15 text-ativo-400' : 'bg-slate-700 text-slate-400'}`}>
                   {e.status === 'online' ? 'Online' : 'Offline'}
                 </span>
               </div>

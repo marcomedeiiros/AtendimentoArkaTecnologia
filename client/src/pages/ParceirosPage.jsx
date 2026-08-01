@@ -94,30 +94,30 @@ export default function ParceirosPage() {
         </div>
       </div>
 
-      <div className="glass-panel p-5 rounded-2xl border border-[#2A3040] space-y-3">
+      <div className="glass-panel p-5 rounded-2xl border border-linha space-y-3">
         <div className="flex flex-wrap gap-2.5">
           <input
             value={cnpjInput}
             onChange={e => { setCnpjInput(mascararCnpj(e.target.value)); setErro(''); }}
             onKeyDown={e => e.key === 'Enter' && adicionar()}
             placeholder="00.000.000/0000-00"
-            className="w-48 bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2 text-xs text-white font-mono placeholder-slate-500 focus:outline-none focus:border-orange-500/50"
+            className="w-48 bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white font-mono placeholder-slate-500 focus:outline-none focus:border-osso/50"
           />
           <input
             value={nome}
             onChange={e => setNome(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && adicionar()}
             placeholder="Razão Social / Nome da Empresa"
-            className="flex-1 min-w-[200px] bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50"
+            className="flex-1 min-w-[200px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50"
           />
           <button
             onClick={adicionar}
-            className="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-orange-500/20 transition-all"
+            className="px-4 py-2 rounded-xl bg-osso hover:bg-osso-200 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-osso/20 transition-all"
           >
             <Plus size={15} /> Cadastrar Parceiro
           </button>
         </div>
-        {erro && <div className="text-xs text-rose-400 font-semibold">{erro}</div>}
+        {erro && <div className="text-xs text-falha-400 font-semibold">{erro}</div>}
       </div>
 
       <div className="relative max-w-md">
@@ -126,13 +126,13 @@ export default function ParceirosPage() {
           value={busca}
           onChange={e => setBusca(e.target.value)}
           placeholder="Pesquisar parceiro por Nome (Razão Social) ou CNPJ..."
-          className="w-full bg-[#161922] border border-[#2A3040] rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50"
+          className="w-full bg-grafite-700 border border-linha rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50"
         />
       </div>
 
       <div className="space-y-2.5">
         {filtrados.map(p => (
-          <div key={p.cnpj} className="glass-panel p-4 rounded-xl border border-[#2A3040] hover:border-slate-600/60 transition-all flex items-center justify-between gap-4">
+          <div key={p.cnpj} className="glass-panel p-4 rounded-xl border border-linha hover:border-slate-600/60 transition-all flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 flex-1 min-w-0">
               <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
                 <Building2 size={16} />
@@ -147,15 +147,15 @@ export default function ParceirosPage() {
                 onClick={() => alternarStatus(p.cnpj)}
                 className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
                   p.status === 'ativo'
-                    ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                    : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                    ? 'bg-ativo/15 text-ativo-400 border border-ativo/30'
+                    : 'bg-falha/15 text-falha-400 border border-falha/30'
                 }`}
               >
                 {p.status === 'ativo' ? 'Ativo' : 'Inativo'}
               </button>
               <button
                 onClick={() => remover(p.cnpj)}
-                className="text-rose-400 hover:bg-slate-800 p-1.5 rounded-lg transition-colors"
+                className="text-falha-400 hover:bg-slate-800 p-1.5 rounded-lg transition-colors"
                 title="Excluir parceiro"
               >
                 <Trash2 size={13} />
@@ -165,7 +165,7 @@ export default function ParceirosPage() {
         ))}
 
         {filtrados.length === 0 && (
-          <div className="text-xs text-slate-400 text-center py-10 glass-panel rounded-2xl border border-[#2A3040]">
+          <div className="text-xs text-slate-400 text-center py-10 glass-panel rounded-2xl border border-linha">
             Nenhum parceiro encontrado para &quot;{busca}&quot;.
           </div>
         )}

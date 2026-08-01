@@ -14,9 +14,9 @@ const QR_REFRESH_MS = 25000;
 const STATUS_POLL_MS = 20000;
 
 const STATUS_UI = {
-  Online:        { badge: 'bg-emerald-500/20 text-emerald-400', box: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' },
-  Conectando:    { badge: 'bg-amber-500/20 text-amber-400',     box: 'bg-amber-500/15 text-amber-400 border border-amber-500/30' },
-  Desconectado:  { badge: 'bg-rose-500/20 text-rose-400',       box: 'bg-rose-500/15 text-rose-400 border border-rose-500/30' },
+  Online:        { badge: 'bg-ativo/20 text-ativo-400', box: 'bg-ativo/15 text-ativo-400 border border-ativo/30' },
+  Conectando:    { badge: 'bg-espera/20 text-espera-400',     box: 'bg-espera/15 text-espera-400 border border-espera/30' },
+  Desconectado:  { badge: 'bg-falha/20 text-falha-400',       box: 'bg-falha/15 text-falha-400 border border-falha/30' },
   Offline:       { badge: 'bg-slate-500/20 text-slate-400',     box: 'bg-slate-500/15 text-slate-400 border border-slate-500/30' },
 };
 
@@ -161,7 +161,7 @@ export default function WhatsAppPage() {
     });
   }
 
-  const botaoSec = 'px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all disabled:opacity-60 bg-[#161922] border border-[#2A3040] text-slate-300 hover:text-white hover:border-slate-600';
+  const botaoSec = 'px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all disabled:opacity-60 bg-grafite-700 border border-linha text-slate-300 hover:text-white hover:border-slate-600';
 
   return (
     <div className="fade-in space-y-6">
@@ -172,7 +172,7 @@ export default function WhatsAppPage() {
         </div>
       </div>
 
-      <div className="glass-panel p-6 rounded-2xl border border-[#2A3040] flex flex-wrap items-center justify-between gap-4">
+      <div className="glass-panel p-6 rounded-2xl border border-linha flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className={`w-12 h-12 rounded-2xl flex items-center justify-center overflow-hidden ${ui.box}`}>
             {detalhes?.perfil?.foto
@@ -199,7 +199,7 @@ export default function WhatsAppPage() {
             <RotateCcw size={14} /> Reconectar
           </button>
           <button onClick={excluirInstancia} disabled={ocupado}
-            className="px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all disabled:opacity-60 bg-rose-500/15 border border-rose-500/30 text-rose-400 hover:bg-rose-500/25"
+            className="px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all disabled:opacity-60 bg-falha/15 border border-falha/30 text-falha-400 hover:bg-falha/25"
             title="Excluir instância na Evolution">
             <Trash2 size={14} /> Excluir Instância
           </button>
@@ -208,8 +208,8 @@ export default function WhatsAppPage() {
             disabled={ocupado}
             className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all disabled:opacity-60 ${
               conectado
-                ? 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30'
-                : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20'
+                ? 'bg-falha/15 hover:bg-falha/25 text-falha-400 border border-falha/30'
+                : 'bg-ativo hover:bg-ativo-400 text-slate-950 shadow-md shadow-ativo/20'
             }`}
           >
             {ocupado ? <Loader2 size={15} className="animate-spin" /> : <Power size={15} />}
@@ -219,14 +219,14 @@ export default function WhatsAppPage() {
       </div>
 
       {aviso && (
-        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300">
+        <div className="p-3 rounded-xl bg-espera/10 border border-espera/30 text-xs text-espera-400">
           {aviso}
         </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-        <div className="glass-panel p-6 rounded-2xl border border-[#2A3040] text-center flex flex-col items-center justify-center">
+        <div className="glass-panel p-6 rounded-2xl border border-linha text-center flex flex-col items-center justify-center">
           <h3 className="font-bold text-sm text-white font-display mb-1">QR Code de Autenticação</h3>
           <p className="text-xs text-slate-400 mb-4">Escaneie no app do WhatsApp: Dispositivos Conectados</p>
 
@@ -244,7 +244,7 @@ export default function WhatsAppPage() {
 
           {pairingCode && (
             <div className="mb-3 text-xs text-slate-300">
-              Código de pareamento: <span className="font-mono font-bold text-orange-400 tracking-widest">{pairingCode}</span>
+              Código de pareamento: <span className="font-mono font-bold text-osso-200 tracking-widest">{pairingCode}</span>
             </div>
           )}
 
@@ -253,7 +253,7 @@ export default function WhatsAppPage() {
           ) : (
             <div className="flex items-center gap-2 flex-wrap justify-center">
               <button onClick={gerarQr} disabled={carregandoQr}
-                className="px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-all disabled:opacity-60">
+                className="px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-2 bg-ativo hover:bg-ativo-400 text-slate-950 transition-all disabled:opacity-60">
                 <QrCode size={14} /> Gerar QR
               </button>
               <button onClick={gerarQr} disabled={carregandoQr} className={botaoSec} title="Renovar o QR Code">
@@ -267,7 +267,7 @@ export default function WhatsAppPage() {
           )}
         </div>
 
-        <div className="glass-panel p-6 rounded-2xl border border-[#2A3040] space-y-4">
+        <div className="glass-panel p-6 rounded-2xl border border-linha space-y-4">
           <h3 className="font-bold text-sm text-white font-display">Configurações de Webhook</h3>
           <div>
             <label className="text-xs text-slate-400 block mb-1.5 font-medium">URL do Webhook (Recebimento)</label>
@@ -275,7 +275,7 @@ export default function WhatsAppPage() {
               value={detalhes?.webhook?.url || ''}
               readOnly
               placeholder="Nenhum webhook configurado na instância"
-              className="w-full bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-orange-500/50"
+              className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-osso/50"
             />
           </div>
           <div>
@@ -283,34 +283,34 @@ export default function WhatsAppPage() {
             <input
               value={instancia}
               onChange={e => setInstancia(e.target.value)}
-              className="w-full bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-orange-500/50"
+              className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-osso/50"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3 text-xs">
-            <div className="p-3 rounded-xl bg-[#1E2330] border border-slate-800">
+            <div className="p-3 rounded-xl bg-grafite-600 border border-slate-800">
               <div className="text-slate-500 text-[10px] uppercase mb-0.5">Status</div>
               <div className="text-slate-200 font-semibold">{status}</div>
             </div>
-            <div className="p-3 rounded-xl bg-[#1E2330] border border-slate-800">
+            <div className="p-3 rounded-xl bg-grafite-600 border border-slate-800">
               <div className="text-slate-500 text-[10px] uppercase mb-0.5">Versão Evolution</div>
               <div className="text-slate-200 font-semibold">{detalhes?.versao || '-'}</div>
             </div>
-            <div className="p-3 rounded-xl bg-[#1E2330] border border-slate-800">
+            <div className="p-3 rounded-xl bg-grafite-600 border border-slate-800">
               <div className="text-slate-500 text-[10px] uppercase mb-0.5">Tempo Online</div>
               <div className="text-slate-200 font-semibold">{conectado ? formatarDuracao(detalhes?.conectadoDesde) : '-'}</div>
             </div>
-            <div className="p-3 rounded-xl bg-[#1E2330] border border-slate-800">
+            <div className="p-3 rounded-xl bg-grafite-600 border border-slate-800">
               <div className="text-slate-500 text-[10px] uppercase mb-0.5">Última Sincronização</div>
               <div className="text-slate-200 font-semibold">{formatarHora(detalhes?.ultimaSincronizacao)}</div>
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-[#1E2330] border border-slate-800">
+          <div className="p-3 rounded-xl bg-grafite-600 border border-slate-800">
             <div className="text-slate-500 text-[10px] uppercase mb-1.5">Eventos do Webhook</div>
             <div className="flex flex-wrap gap-1.5">
               {(detalhes?.webhook?.eventos?.length ? detalhes.webhook.eventos : ['-']).map(ev => (
-                <span key={ev} className="text-[10px] px-2 py-0.5 rounded-full bg-[#161922] border border-slate-700 text-slate-300 font-mono">
+                <span key={ev} className="text-[10px] px-2 py-0.5 rounded-full bg-grafite-700 border border-slate-700 text-slate-300 font-mono">
                   {ev}
                 </span>
               ))}
@@ -318,11 +318,11 @@ export default function WhatsAppPage() {
           </div>
 
           <button onClick={copiarToken} disabled={!detalhes?.token} className={`${botaoSec} w-full justify-center`}>
-            {copiado ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+            {copiado ? <Check size={14} className="text-ativo-400" /> : <Copy size={14} />}
             {copiado ? 'Token copiado!' : 'Copiar Token'}
           </button>
 
-          <div className="p-3 rounded-xl bg-[#1E2330] border border-slate-800 text-xs text-slate-400 flex items-center gap-2">
+          <div className="p-3 rounded-xl bg-grafite-600 border border-slate-800 text-xs text-slate-400 flex items-center gap-2">
             <EmojiIcon name="lock" label="" size="sm" />
             <span>Validação de CNPJ Arka Tecnologia habilitada.</span>
           </div>

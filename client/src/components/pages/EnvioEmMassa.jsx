@@ -54,13 +54,13 @@ function FormContato({ onAdicionar }) {
     <div className="flex flex-wrap gap-2">
       <input value={nome} onChange={e => setNome(e.target.value)}
         placeholder="Nome do destinatário"
-        className="flex-1 min-w-[160px] bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50" />
+        className="flex-1 min-w-[160px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50" />
       <input value={telefone} onChange={e => setTelefone(e.target.value)}
         onPaste={onPaste}
         placeholder="Telefone (ex: 11987654321)"
-        className="w-44 bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50 font-mono" />
+        className="w-44 bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50 font-mono" />
       <button onClick={adicionar}
-        className="px-3 py-2 rounded-xl bg-orange-500/15 hover:bg-orange-500/25 text-orange-400 text-xs font-semibold border border-orange-500/30 flex items-center gap-1.5 transition-all">
+        className="px-3 py-2 rounded-xl bg-osso/15 hover:bg-osso/25 text-osso-200 text-xs font-semibold border border-osso/30 flex items-center gap-1.5 transition-all">
         <Plus size={13} /> Adicionar
       </button>
     </div>
@@ -72,24 +72,24 @@ function BarraProgresso({ total, enviados, erros, status }) {
   const pctErro = total > 0 ? Math.round((erros    / total) * 100) : 0;
 
   const corBarra =
-    status === 'concluido' ? 'bg-emerald-500' :
-    status === 'pausado'   ? 'bg-amber-500'   :
-    status === 'enviando'  ? 'bg-orange-500'  : 'bg-slate-600';
+    status === 'concluido' ? 'bg-ativo' :
+    status === 'pausado'   ? 'bg-espera'   :
+    status === 'enviando'  ? 'bg-osso'  : 'bg-slate-600';
 
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between text-xs">
         <span className="font-semibold text-white">{pct}% concluído</span>
         <span className="text-slate-400">
-          <span className="text-emerald-400 font-semibold">{enviados}</span> enviados ·{' '}
-          <span className="text-rose-400 font-semibold">{erros}</span> erros ·{' '}
+          <span className="text-ativo-400 font-semibold">{enviados}</span> enviados ·{' '}
+          <span className="text-falha-400 font-semibold">{erros}</span> erros ·{' '}
           {total} total
         </span>
       </div>
-      <div className="h-3 bg-[#1E2330] rounded-full overflow-hidden border border-[#2A3040] flex">
+      <div className="h-3 bg-grafite-600 rounded-full overflow-hidden border border-linha flex">
         <div className={`h-full transition-all duration-500 ${corBarra}`} style={{ width: `${pct}%` }} />
         {pctErro > 0 && (
-          <div className="h-full bg-rose-500/70" style={{ width: `${pctErro}%` }} />
+          <div className="h-full bg-falha/70" style={{ width: `${pctErro}%` }} />
         )}
       </div>
     </div>
@@ -98,12 +98,12 @@ function BarraProgresso({ total, enviados, erros, status }) {
 
 function ItemLog({ entry }) {
   const icone =
-    entry.status === 'ok'      ? <CheckCircle2 size={12} className="text-emerald-400 shrink-0" /> :
-    entry.status === 'erro'    ? <XCircle      size={12} className="text-rose-400    shrink-0" /> :
-    entry.status === 'pulado'  ? <AlertTriangle size={12} className="text-amber-400  shrink-0" /> :
+    entry.status === 'ok'      ? <CheckCircle2 size={12} className="text-ativo-400 shrink-0" /> :
+    entry.status === 'erro'    ? <XCircle      size={12} className="text-falha-400    shrink-0" /> :
+    entry.status === 'pulado'  ? <AlertTriangle size={12} className="text-espera-400  shrink-0" /> :
                                  <Clock        size={12} className="text-slate-400   shrink-0" />;
   return (
-    <div className="flex items-center gap-2 py-1 border-b border-[#2A3040]/50 last:border-0">
+    <div className="flex items-center gap-2 py-1 border-b border-linha/50 last:border-0">
       {icone}
       <span className="flex-1 text-[11px] text-slate-300 truncate">{entry.nome}</span>
       <span className="text-[10px] text-slate-500 font-mono shrink-0">{entry.hora}</span>
@@ -267,7 +267,7 @@ export default function EnvioEmMassa({ conversas = [] }) {
         </div>
         {status === 'concluido' && (
           <button onClick={() => exportarLog(logs, campanha)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-semibold border border-emerald-500/30 transition-all">
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-ativo/10 hover:bg-ativo/20 text-ativo-400 text-xs font-semibold border border-ativo/30 transition-all">
             <Download size={14} /> Exportar Relatório
           </button>
         )}
@@ -275,16 +275,16 @@ export default function EnvioEmMassa({ conversas = [] }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-7 space-y-4">
-          <div className="glass-panel rounded-2xl p-5 border border-[#2A3040] space-y-4">
+          <div className="glass-panel rounded-2xl p-5 border border-linha space-y-4">
             <h3 className="text-sm font-bold text-white font-display flex items-center gap-2">
-              <FileText size={15} className="text-orange-400" /> Configuração da Campanha
+              <FileText size={15} className="text-osso-200" /> Configuração da Campanha
             </h3>
             <div>
               <label className="text-xs text-slate-400 font-medium block mb-1.5">Nome da Campanha</label>
               <input value={campanha} onChange={e => setCampanha(e.target.value)}
                 placeholder="Ex: Promoção Julho 2026..."
                 disabled={emExecucao}
-                className="w-full bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50 disabled:opacity-50" />
+                className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50 disabled:opacity-50" />
             </div>
             <div>
               <label className="text-xs text-slate-400 font-medium block mb-1.5">
@@ -293,7 +293,7 @@ export default function EnvioEmMassa({ conversas = [] }) {
               <textarea value={mensagem} onChange={e => setMensagem(e.target.value)} rows={6}
                 placeholder="Digite a mensagem que será enviada para todos os destinatários..."
                 disabled={emExecucao}
-                className="w-full bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50 resize-none disabled:opacity-50 font-mono leading-relaxed" />
+                className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50 resize-none disabled:opacity-50 font-mono leading-relaxed" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -301,26 +301,26 @@ export default function EnvioEmMassa({ conversas = [] }) {
                 <input type="number" min={1} max={60} value={intervaloDe}
                   onChange={e => setIntervaloDe(Number(e.target.value))}
                   disabled={emExecucao}
-                  className="w-full bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-orange-500/50 disabled:opacity-50" />
+                  className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-osso/50 disabled:opacity-50" />
               </div>
               <div>
                 <label className="text-xs text-slate-400 font-medium block mb-1.5">Intervalo máximo (s)</label>
                 <input type="number" min={1} max={120} value={intervaloAte}
                   onChange={e => setIntervaloAte(Number(e.target.value))}
                   disabled={emExecucao}
-                  className="w-full bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-orange-500/50 disabled:opacity-50" />
+                  className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-osso/50 disabled:opacity-50" />
               </div>
             </div>
-            <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 text-[11px] text-amber-400 flex items-start gap-2">
+            <div className="p-3 rounded-xl bg-espera/5 border border-espera/20 text-[11px] text-espera-400 flex items-start gap-2">
               <AlertTriangle size={13} className="shrink-0 mt-0.5" />
               Intervalo aleatório entre envios evita bloqueio por spam. Recomendado: mínimo 2s / máximo 8s.
             </div>
           </div>
 
-          <div className="glass-panel rounded-2xl p-5 border border-[#2A3040] space-y-4">
+          <div className="glass-panel rounded-2xl p-5 border border-linha space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-white font-display flex items-center gap-2">
-                <Users size={15} className="text-orange-400" /> Destinatários ({destinatarios.length})
+                <Users size={15} className="text-osso-200" /> Destinatários ({destinatarios.length})
               </h3>
               <button onClick={importarDasConversas}
                 disabled={emExecucao || conversas.length === 0}
@@ -333,13 +333,13 @@ export default function EnvioEmMassa({ conversas = [] }) {
 
             <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
               {destinatarios.map(d => (
-                <div key={d.id} className="flex items-center justify-between px-3 py-2 rounded-xl bg-[#1E2330] border border-[#2A3040]">
+                <div key={d.id} className="flex items-center justify-between px-3 py-2 rounded-xl bg-grafite-600 border border-linha">
                   <div>
                     <span className="text-xs font-semibold text-white">{d.nome}</span>
                     <span className="text-[11px] text-slate-400 font-mono ml-2">{d.telefone}</span>
                   </div>
                   {!emExecucao && (
-                    <button onClick={() => removerContato(d.id)} className="text-rose-400 hover:bg-slate-800 p-1 rounded-lg transition-colors">
+                    <button onClick={() => removerContato(d.id)} className="text-falha-400 hover:bg-slate-800 p-1 rounded-lg transition-colors">
                       <X size={12} />
                     </button>
                   )}
@@ -352,7 +352,7 @@ export default function EnvioEmMassa({ conversas = [] }) {
 
             {destinatarios.length > 0 && !emExecucao && (
               <button onClick={() => setDest([])}
-                className="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 transition-colors">
+                className="text-xs text-falha-400 hover:text-falha-400 flex items-center gap-1 transition-colors">
                 <Trash2 size={11} /> Limpar todos
               </button>
             )}
@@ -360,9 +360,9 @@ export default function EnvioEmMassa({ conversas = [] }) {
         </div>
 
         <div className="lg:col-span-5 space-y-4">
-          <div className="glass-panel rounded-2xl p-5 border border-[#2A3040] space-y-4">
+          <div className="glass-panel rounded-2xl p-5 border border-linha space-y-4">
             <h3 className="text-sm font-bold text-white font-display flex items-center gap-2">
-              <Send size={15} className="text-orange-400" /> Controle de Envio
+              <Send size={15} className="text-osso-200" /> Controle de Envio
             </h3>
 
             {(emExecucao || status === 'concluido') && (
@@ -376,9 +376,9 @@ export default function EnvioEmMassa({ conversas = [] }) {
 
             <div className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center gap-2 ${
               status === 'idle'      ? 'bg-slate-800 border-slate-700 text-slate-400' :
-              status === 'enviando'  ? 'bg-orange-500/10 border-orange-500/30 text-orange-400' :
-              status === 'pausado'   ? 'bg-amber-500/10  border-amber-500/30  text-amber-400'  :
-              status === 'concluido' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : ''
+              status === 'enviando'  ? 'bg-osso/10 border-osso/30 text-osso-200' :
+              status === 'pausado'   ? 'bg-espera/10  border-espera/30  text-espera-400'  :
+              status === 'concluido' ? 'bg-ativo/10 border-ativo/30 text-ativo-400' : ''
             }`}>
               {status === 'idle'      && <><Clock size={13} /> Aguardando início</>}
               {status === 'enviando'  && <><Send  size={13} className="animate-pulse" /> Enviando... ({indiceAtual}/{destinatarios.length})</>}
@@ -390,18 +390,18 @@ export default function EnvioEmMassa({ conversas = [] }) {
               {status === 'idle' && (
                 <button onClick={iniciarEnvio}
                   disabled={!mensagem.trim() || destinatarios.length === 0}
-                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-slate-950 text-xs font-bold flex items-center justify-center gap-2 shadow-md shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-osso to-espera hover:from-osso-200 hover:to-espera-400 text-slate-950 text-xs font-bold flex items-center justify-center gap-2 shadow-md shadow-osso/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
                   <Play size={13} fill="currentColor" /> Iniciar Envio
                 </button>
               )}
               {emExecucao && (
                 <>
                   <button onClick={pausarResumir}
-                    className="flex-1 py-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 text-xs font-bold border border-amber-500/30 flex items-center justify-center gap-2 transition-all">
+                    className="flex-1 py-2.5 rounded-xl bg-espera/15 hover:bg-espera/25 text-espera-400 text-xs font-bold border border-espera/30 flex items-center justify-center gap-2 transition-all">
                     {status === 'pausado' ? <><Play size={13} /> Retomar</> : <><Pause size={13} /> Pausar</>}
                   </button>
                   <button onClick={pararEnvio}
-                    className="py-2.5 px-3 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 text-xs font-bold border border-rose-500/30 flex items-center gap-1 transition-all">
+                    className="py-2.5 px-3 rounded-xl bg-falha/15 hover:bg-falha/25 text-falha-400 text-xs font-bold border border-falha/30 flex items-center gap-1 transition-all">
                     <StopCircle size={13} /> Parar
                   </button>
                 </>
@@ -416,10 +416,10 @@ export default function EnvioEmMassa({ conversas = [] }) {
           </div>
 
           {logs.length > 0 && (
-            <div className="glass-panel rounded-2xl p-4 border border-[#2A3040] space-y-2">
+            <div className="glass-panel rounded-2xl p-4 border border-linha space-y-2">
               <div className="flex items-center justify-between mb-1">
                 <h3 className="text-xs font-bold text-white flex items-center gap-2">
-                  <MessageSquare size={13} className="text-orange-400" /> Log de Envios
+                  <MessageSquare size={13} className="text-osso-200" /> Log de Envios
                 </h3>
                 <span className="text-[10px] text-slate-500">{logs.length} registros</span>
               </div>

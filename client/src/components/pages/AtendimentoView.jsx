@@ -59,9 +59,11 @@ function tempoDesde(iso) {
 
 // Metadados visuais dos 3 status (🟢 Aberta / 🟡 Pendente / 🔴 Fechada).
 const STATUS_META = {
-  pendente: { label: 'Pendente', dot: 'bg-amber-400',   chip: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
-  aberta:   { label: 'Aberta',   dot: 'bg-emerald-400', chip: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
-  fechada:  { label: 'Fechada',  dot: 'bg-rose-400',    chip: 'bg-rose-500/20 text-rose-400 border-rose-500/30' },
+  pendente: { label: 'Pendente', dot: 'bg-espera-400',   chip: 'bg-espera/20 text-espera-400 border-espera/30' },
+  aberta:   { label: 'Aberta',   dot: 'bg-ativo-400', chip: 'bg-ativo/20 text-ativo-400 border-ativo/30' },
+  // Fechada NAO e erro: e trabalho concluido. Cor neutra, que recua na lista.
+  // O vermelho fica reservado para falha de verdade (envio, conexao).
+  fechada:  { label: 'Fechada',  dot: 'bg-quieto',       chip: 'bg-quieto/20 text-quieto-400 border-quieto/30' },
 };
 
 function limparCnpj(v) { return String(v || '').replace(/\D/g, ''); }
@@ -108,10 +110,10 @@ function PainelMensagensRapidas({ onSelecionar, onFechar }) {
   );
 
   return (
-    <div className="absolute bottom-full left-0 right-0 mb-2 glass-panel border border-[#2A3040] rounded-2xl shadow-2xl z-30 overflow-hidden">
-      <div className="p-3 bg-[#1E2330] border-b border-[#2A3040] flex items-center justify-between gap-2">
+    <div className="absolute bottom-full left-0 right-0 mb-2 glass-panel border border-linha rounded-2xl shadow-2xl z-30 overflow-hidden">
+      <div className="p-3 bg-grafite-600 border-b border-linha flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Zap size={13} className="text-orange-400" />
+          <Zap size={13} className="text-osso-200" />
           <span className="text-xs font-bold text-white">Mensagens Rápidas</span>
         </div>
         <div className="flex items-center gap-2 flex-1 max-w-xs">
@@ -122,7 +124,7 @@ function PainelMensagensRapidas({ onSelecionar, onFechar }) {
               onChange={e => setBusca(e.target.value)}
               placeholder="Buscar..."
               autoFocus
-              className="w-full bg-[#161922] border border-[#2A3040] rounded-lg pl-7 pr-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50"
+              className="w-full bg-grafite-700 border border-linha rounded-lg pl-7 pr-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50"
             />
           </div>
           <button onClick={onFechar} className="text-slate-400 hover:text-white transition-colors p-1">
@@ -135,9 +137,9 @@ function PainelMensagensRapidas({ onSelecionar, onFechar }) {
           <button
             key={m.id}
             onClick={() => onSelecionar(m.texto)}
-            className="w-full text-left p-2.5 rounded-xl hover:bg-[#1E2330] border border-transparent hover:border-orange-500/30 transition-all group"
+            className="w-full text-left p-2.5 rounded-xl hover:bg-grafite-600 border border-transparent hover:border-osso/30 transition-all group"
           >
-            <div className="font-semibold text-xs text-white group-hover:text-orange-400 transition-colors">{m.titulo}</div>
+            <div className="font-semibold text-xs text-white group-hover:text-osso-200 transition-colors">{m.titulo}</div>
             <div className="text-[10px] text-slate-400 truncate mt-0.5">{m.texto}</div>
           </button>
         ))}
@@ -181,13 +183,13 @@ function PainelFiltros({ extras, setExtras, visib, setVisib, onLimpar, totalAtiv
     setExtras(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
   return (
-    <div className="absolute right-0 top-full mt-2 w-[min(90vw,300px)] glass-panel border border-[#2A3040] rounded-2xl shadow-2xl shadow-black/50 z-40 overflow-hidden fade-in">
-      <div className="p-3 bg-[#1E2330] border-b border-[#2A3040] flex items-center justify-between">
+    <div className="absolute right-0 top-full mt-2 w-[min(90vw,300px)] glass-panel border border-linha rounded-2xl shadow-2xl shadow-black/50 z-40 overflow-hidden fade-in">
+      <div className="p-3 bg-grafite-600 border-b border-linha flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs font-bold text-white">
-          <SlidersHorizontal size={13} className="text-orange-400" /> Filtros
+          <SlidersHorizontal size={13} className="text-osso-200" /> Filtros
         </div>
         {totalAtivos > 0 && (
-          <button onClick={onLimpar} className="text-[11px] text-slate-400 hover:text-rose-400 font-semibold transition-colors">
+          <button onClick={onLimpar} className="text-[11px] text-slate-400 hover:text-falha-400 font-semibold transition-colors">
             Limpar
           </button>
         )}
@@ -203,8 +205,8 @@ function PainelFiltros({ extras, setExtras, visib, setVisib, onLimpar, totalAtiv
                 <button key={f.id} onClick={() => alternarExtra(f.id)}
                   className={`text-[11px] px-2.5 py-1 rounded-full border font-semibold transition-all ${
                     ativo
-                      ? 'bg-orange-500/20 border-orange-500/50 text-orange-300'
-                      : 'bg-[#161922] border-[#2A3040] text-slate-400 hover:text-slate-200 hover:border-slate-600'
+                      ? 'bg-osso/20 border-osso/50 text-osso-200'
+                      : 'bg-grafite-700 border-linha text-slate-400 hover:text-slate-200 hover:border-slate-600'
                   }`}>
                   {f.label}
                 </button>
@@ -213,7 +215,7 @@ function PainelFiltros({ extras, setExtras, visib, setVisib, onLimpar, totalAtiv
           </div>
         </div>
 
-        <div className="pt-2 border-t border-[#2A3040]">
+        <div className="pt-2 border-t border-linha">
           <div className="text-[10px] uppercase text-slate-500 font-bold mb-1.5">Exibir na lista</div>
           {[
             { id: 'todas',      label: 'Mostrar Todas as Conversas' },
@@ -226,7 +228,7 @@ function PainelFiltros({ extras, setExtras, visib, setVisib, onLimpar, totalAtiv
                 type="checkbox"
                 checked={!!visib[op.id]}
                 onChange={e => setVisib(v => ({ ...v, [op.id]: e.target.checked }))}
-                className="w-3.5 h-3.5 rounded accent-orange-500 cursor-pointer"
+                className="w-3.5 h-3.5 rounded accent-osso cursor-pointer"
               />
               <span className="text-[11px] text-slate-300 group-hover:text-white transition-colors">{op.label}</span>
             </label>
@@ -244,14 +246,14 @@ function PainelFiltros({ extras, setExtras, visib, setVisib, onLimpar, totalAtiv
 // Skeleton (sem spinner) enquanto a lista carrega pela primeira vez.
 function SkeletonCard() {
   return (
-    <div className="p-3.5 rounded-xl border border-[#2A3040]/60 bg-[#1E2330]/40 flex flex-col gap-2 animate-pulse">
+    <div className="p-3.5 rounded-xl border border-linha/60 bg-grafite-600/40 flex flex-col gap-2 animate-pulse">
       <div className="flex items-center gap-2">
         <div className="w-8 h-8 rounded-full bg-slate-700/50" />
         <div className="h-3 w-28 rounded bg-slate-700/50" />
         <div className="ml-auto h-2.5 w-10 rounded bg-slate-700/40" />
       </div>
       <div className="h-2.5 w-24 rounded bg-slate-700/40" />
-      <div className="h-8 rounded-lg bg-[#161922] border border-slate-800" />
+      <div className="h-8 rounded-lg bg-grafite-700 border border-slate-800" />
     </div>
   );
 }
@@ -263,10 +265,10 @@ function StatusMensagem({ status, escuro }) {
   const base = escuro ? 'text-slate-400' : 'text-slate-900/70';
 
   if (status === 'enviando') return <Clock size={12} className={base} title="Enviando" />;
-  if (status === 'erro') return <AlertCircle size={12} className="text-rose-400" title="Falha no envio" />;
+  if (status === 'erro') return <AlertCircle size={12} className="text-falha-400" title="Falha no envio" />;
   if (status === 'enviada') return <Check size={13} className={base} title="Enviada" />;
   if (status === 'entregue') return <CheckCheck size={13} className={base} title="Entregue" />;
-  if (status === 'lida') return <CheckCheck size={13} className="text-sky-400" title="Lida" />;
+  if (status === 'lida') return <CheckCheck size={13} className="text-lida-400" title="Lida" />;
   return null;
 }
 
@@ -282,22 +284,22 @@ function MenuMensagem({ m, ehPropria, onResponder, onEncaminhar, onEditar }) {
     return () => document.removeEventListener('mousedown', fora);
   }, [aberto]);
 
-  const item = 'w-full text-left px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-[#1E2330] hover:text-white transition-colors flex items-center gap-2';
+  const item = 'w-full text-left px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-grafite-600 hover:text-white transition-colors flex items-center gap-2';
 
   return (
     <div className="relative shrink-0 self-center" ref={ref}>
       <button
         onClick={() => setAberto(v => !v)}
         title="Mais ações"
-        className={`p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-[#1E2330] transition-all ${
-          aberto ? 'opacity-100 bg-[#1E2330] text-white' : 'opacity-0 group-hover:opacity-100'
+        className={`p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-grafite-600 transition-all ${
+          aberto ? 'opacity-100 bg-grafite-600 text-white' : 'opacity-0 group-hover:opacity-100'
         }`}
       >
         <MoreHorizontal size={15} />
       </button>
 
       {aberto && (
-        <div className={`absolute top-full mt-1 w-40 glass-panel border border-[#2A3040] rounded-xl shadow-2xl shadow-black/50 z-50 overflow-hidden py-1 ${
+        <div className={`absolute top-full mt-1 w-40 glass-panel border border-linha rounded-xl shadow-2xl shadow-black/50 z-50 overflow-hidden py-1 ${
           ehPropria ? 'left-0' : 'right-0'
         }`}>
           <button className={item} onClick={() => { onResponder(m); setAberto(false); }}>
@@ -367,7 +369,7 @@ function VisualizadorImagem({ url, legenda, nomeArquivo, onFechar }) {
         onMouseUp={pararArraste}
         onMouseLeave={pararArraste}
       >
-        <div className="shrink-0 flex items-center justify-between gap-3 p-3 bg-[#11141C]/90 border-b border-[#2A3040]">
+        <div className="shrink-0 flex items-center justify-between gap-3 p-3 bg-grafite-800/90 border-b border-linha">
           <span className="text-xs text-slate-300 font-semibold truncate min-w-0">
             {nomeArquivo || legenda || 'Imagem'}
           </span>
@@ -412,7 +414,7 @@ function VisualizadorImagem({ url, legenda, nomeArquivo, onFechar }) {
         </div>
 
         {legenda && (
-          <div className="shrink-0 p-3 bg-[#11141C]/90 border-t border-[#2A3040] text-xs text-slate-300 text-center">
+          <div className="shrink-0 p-3 bg-grafite-800/90 border-t border-linha text-xs text-slate-300 text-center">
             {legenda}
           </div>
         )}
@@ -455,8 +457,8 @@ function MensagemMidia({ m, escuro, onAbrirImagem }) {
   if (m.tipo === 'documento') {
     return (
       <a href={md.url} download={md.fileName || 'documento'} target="_blank" rel="noreferrer"
-        className={`flex items-center gap-2 p-2 rounded-lg ${escuro ? 'bg-[#161922] border border-slate-700' : 'bg-slate-900/10'}`}>
-        <FileText size={20} className={escuro ? 'text-orange-400' : 'text-slate-900'} />
+        className={`flex items-center gap-2 p-2 rounded-lg ${escuro ? 'bg-grafite-700 border border-slate-700' : 'bg-slate-900/10'}`}>
+        <FileText size={20} className={escuro ? 'text-osso-200' : 'text-slate-900'} />
         <div className="min-w-0">
           <div className={`text-[11px] font-semibold truncate ${escuro ? 'text-slate-100' : 'text-slate-900'}`}>{md.fileName || 'Documento'}</div>
           <div className={`text-[9px] ${escuro ? 'text-slate-400' : 'text-slate-900/60'}`}>Baixar</div>
@@ -468,14 +470,14 @@ function MensagemMidia({ m, escuro, onAbrirImagem }) {
     const link = `https://www.google.com/maps?q=${md.latitude},${md.longitude}`;
     return (
       <a href={link} target="_blank" rel="noreferrer"
-        className={`flex items-center gap-2 p-2 rounded-lg ${escuro ? 'bg-[#161922] border border-slate-700 text-slate-100' : 'bg-slate-900/10 text-slate-900'}`}>
+        className={`flex items-center gap-2 p-2 rounded-lg ${escuro ? 'bg-grafite-700 border border-slate-700 text-slate-100' : 'bg-slate-900/10 text-slate-900'}`}>
         <MapPin size={18} /> <span className="text-[11px] font-semibold">{md.name || 'Ver localização'}</span>
       </a>
     );
   }
   if (m.tipo === 'contato') {
     return (
-      <div className={`flex items-center gap-2 p-2 rounded-lg ${escuro ? 'bg-[#161922] border border-slate-700 text-slate-100' : 'bg-slate-900/10 text-slate-900'}`}>
+      <div className={`flex items-center gap-2 p-2 rounded-lg ${escuro ? 'bg-grafite-700 border border-slate-700 text-slate-100' : 'bg-slate-900/10 text-slate-900'}`}>
         <Contact size={18} /> <span className="text-[11px] font-semibold">{md.displayName || 'Contato'}</span>
       </div>
     );
@@ -511,12 +513,12 @@ const CardConversa = React.memo(function CardConversa({
       onClick={() => { if (clicavel) onSelecionar(c.id); }}
       className={`p-3.5 rounded-xl border transition-all duration-200 flex flex-col gap-2 ${clicavel ? 'cursor-pointer' : ''} ${
         ehAtivo
-          ? 'bg-gradient-to-r from-orange-500/10 to-transparent border-orange-500/50 shadow-sm'
+          ? 'bg-gradient-to-r from-osso/10 to-transparent border-osso/50 shadow-sm'
           : naoLidas > 0
-            ? 'bg-orange-500/[0.06] border-orange-500/30 hover:border-orange-500/50'
+            ? 'bg-osso/[0.06] border-osso/30 hover:border-osso/50'
             : fixado
-              ? 'bg-[#1E2330]/60 border-orange-500/25 hover:border-orange-500/40'
-              : 'bg-[#1E2330]/40 border-[#2A3040]/60 hover:border-slate-600/60'
+              ? 'bg-grafite-600/60 border-osso/25 hover:border-osso/40'
+              : 'bg-grafite-600/40 border-linha/60 hover:border-slate-600/60'
       }`}
     >
       <div className="flex items-center justify-between gap-2">
@@ -524,7 +526,7 @@ const CardConversa = React.memo(function CardConversa({
           <Avatar nome={c.cliente} size="sm" fotoUrl={c.fotoUrl} online={whatsAppConectado} />
           <div className="flex items-center gap-1.5 min-w-0">
             <span className={`w-2 h-2 rounded-full shrink-0 ${meta.dot}`} title={meta.label} />
-            {c.favorita && <Star size={11} className="text-amber-400 fill-current shrink-0" title="Favorita" />}
+            {c.favorita && <Star size={11} className="text-espera-400 fill-current shrink-0" title="Favorita" />}
             {c.arquivada && <Archive size={11} className="text-slate-500 shrink-0" title="Arquivada" />}
             {c.oculta && <EyeOff size={11} className="text-slate-500 shrink-0" title="Oculta" />}
             <span className={`text-xs truncate ${naoLidas > 0 ? 'font-extrabold text-white' : 'font-bold text-slate-300'}`}>
@@ -537,7 +539,7 @@ const CardConversa = React.memo(function CardConversa({
             {tempoDesde(c.ultimaMensagemEm)}
           </span>
           {naoLidas > 0 && (
-            <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-orange-500 text-slate-950 text-[10px] font-extrabold flex items-center justify-center" title={`${naoLidas} não lida(s)`}>
+            <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-espera text-grafite-900 text-[10px] font-extrabold flex items-center justify-center" title={`${naoLidas} não lida(s)`}>
               {naoLidas > 99 ? '99+' : naoLidas}
             </span>
           )}
@@ -550,7 +552,7 @@ const CardConversa = React.memo(function CardConversa({
         </span>
         <div className="flex items-center gap-1 shrink-0">
           <button onClick={e => { e.stopPropagation(); onFixar(c.id); }} title={fixado ? 'Desafixar conversa' : 'Fixar no topo'}
-            className={`p-1.5 rounded-lg transition-colors ${fixado ? 'bg-orange-500/20 text-orange-400' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-400'}`}>
+            className={`p-1.5 rounded-lg transition-colors ${fixado ? 'bg-osso/20 text-osso-200' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-400'}`}>
             <Pin size={12} className={fixado ? 'fill-current' : ''} />
           </button>
           <button onClick={e => { e.stopPropagation(); onEspiar(c); }} title="Espiar conversa"
@@ -559,12 +561,12 @@ const CardConversa = React.memo(function CardConversa({
           </button>
           {encerrado ? (
             <button onClick={e => { e.stopPropagation(); onReabrir(c.id); }} title="Reabrir atendimento"
-              className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-emerald-500/20 text-emerald-400 transition-colors">
+              className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-ativo/20 text-ativo-400 transition-colors">
               <RotateCcw size={12} />
             </button>
           ) : (
             <button onClick={e => { e.stopPropagation(); onFechar(c.id); }} title="Fechar atendimento"
-              className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-rose-500/20 text-rose-400 transition-colors">
+              className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-falha/20 text-falha-400 transition-colors">
               <CheckCircle2 size={12} />
             </button>
           )}
@@ -575,7 +577,7 @@ const CardConversa = React.memo(function CardConversa({
               <MoreVertical size={12} />
             </button>
             {menuAberto && (
-              <div className="absolute right-0 top-full mt-1 w-44 glass-panel border border-[#2A3040] rounded-xl shadow-2xl shadow-black/50 z-50 overflow-hidden py-1">
+              <div className="absolute right-0 top-full mt-1 w-44 glass-panel border border-linha rounded-xl shadow-2xl shadow-black/50 z-50 overflow-hidden py-1">
                 {[
                   { id: 'favorita',  ativo: c.favorita,  on: 'Desfavoritar',  off: 'Favoritar',        Icon: Star },
                   { id: 'arquivada', ativo: c.arquivada, on: 'Desarquivar',   off: 'Arquivar conversa', Icon: Archive },
@@ -583,8 +585,8 @@ const CardConversa = React.memo(function CardConversa({
                 ].map(({ id, ativo, on, off, Icon }) => (
                   <button key={id}
                     onClick={e => { e.stopPropagation(); onFlag(c.id, { [id]: !ativo }); setMenuAberto(false); }}
-                    className="w-full text-left px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-[#1E2330] hover:text-white transition-colors flex items-center gap-2">
-                    <Icon size={12} className={ativo ? 'text-orange-400' : 'text-slate-500'} />
+                    className="w-full text-left px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-grafite-600 hover:text-white transition-colors flex items-center gap-2">
+                    <Icon size={12} className={ativo ? 'text-osso-200' : 'text-slate-500'} />
                     {ativo ? on : off}
                   </button>
                 ))}
@@ -603,14 +605,14 @@ const CardConversa = React.memo(function CardConversa({
         }
       </div>
 
-      <div className={`text-[11px] truncate bg-[#161922] p-2 rounded-lg border border-slate-800 ${naoLidas > 0 ? 'text-slate-100' : 'text-slate-300'}`}>
+      <div className={`text-[11px] truncate bg-grafite-700 p-2 rounded-lg border border-slate-800 ${naoLidas > 0 ? 'text-slate-100' : 'text-slate-300'}`}>
         {ultimaMsg ? ultimaMsg.texto : 'Sem mensagens'}
       </div>
 
       {c.statusAtendimento === 'pendente' && (
         <button
           onClick={e => { e.stopPropagation(); onAtender(c.id, e); }}
-          className="w-full mt-1 py-2 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all"
+          className="w-full mt-1 py-2 px-3 rounded-lg bg-ativo hover:bg-ativo-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-ativo/20 transition-all"
         >
           <UserCheck size={13} /> ATENDER CONVERSA
         </button>
@@ -769,7 +771,7 @@ function PainelChat({
 
   return (
     <>
-      <div className="p-4 bg-[#1E2330]/80 border-b border-[#2A3040] flex flex-wrap items-center justify-between gap-3">
+      <div className="p-4 bg-grafite-600/80 border-b border-linha flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 sm:gap-3">
           <button onClick={onVoltar} title="Voltar para a lista"
             className="lg:hidden p-1.5 -ml-1 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
@@ -807,7 +809,7 @@ function PainelChat({
           {!conversa.cnpjVerificado && (
             <>
               <button onClick={onSolicitarCnpj}
-                className="px-2.5 py-1.5 rounded-lg bg-orange-500/15 hover:bg-orange-500/25 text-orange-400 text-xs font-semibold border border-orange-500/30 transition-all">
+                className="px-2.5 py-1.5 rounded-lg bg-osso/15 hover:bg-osso/25 text-osso-200 text-xs font-semibold border border-osso/30 transition-all">
                 🤖 Pedir CNPJ
               </button>
               <button onClick={onValidarCnpjModal}
@@ -828,7 +830,7 @@ function PainelChat({
           {encerrada ? (
             <button onClick={() => onReabrir(conversa.id)}
               title="Reabrir atendimento"
-              className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 text-xs font-semibold border border-emerald-500/30 transition-all flex items-center gap-1">
+              className="px-2.5 py-1.5 rounded-lg bg-ativo/15 hover:bg-ativo/25 text-ativo-400 text-xs font-semibold border border-ativo/30 transition-all flex items-center gap-1">
               <RotateCcw size={13} /> Reabrir
             </button>
           ) : (
@@ -836,13 +838,13 @@ function PainelChat({
               {conversa.statusAtendimento !== 'pendente' && (
                 <button onClick={() => onPendente(conversa.id)}
                   title="Devolver para a fila (Pendente)"
-                  className="px-2.5 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 text-xs font-semibold border border-amber-500/30 transition-all flex items-center gap-1">
+                  className="px-2.5 py-1.5 rounded-lg bg-espera/15 hover:bg-espera/25 text-espera-400 text-xs font-semibold border border-espera/30 transition-all flex items-center gap-1">
                   <Clock size={13} /> Pendente
                 </button>
               )}
               <button onClick={() => onFechar(conversa.id)}
                 title="Fechar atendimento"
-                className="px-2.5 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 text-xs font-semibold border border-rose-500/30 transition-all flex items-center gap-1">
+                className="px-2.5 py-1.5 rounded-lg bg-falha/15 hover:bg-falha/25 text-falha-400 text-xs font-semibold border border-falha/30 transition-all flex items-center gap-1">
                 <CheckCircle2 size={13} /> Fechar
               </button>
             </>
@@ -855,7 +857,7 @@ function PainelChat({
           </button>
 
           <button onClick={() => onApagarChat(conversa.id)}
-            className="p-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 transition-all">
+            className="p-1.5 rounded-lg bg-falha/15 hover:bg-falha/25 text-falha-400 border border-falha/30 transition-all">
             <Trash2 size={13} />
           </button>
         </div>
@@ -867,8 +869,8 @@ function PainelChat({
         onDrop={(e) => { e.preventDefault(); setArrastando(false); const f = e.dataTransfer.files?.[0]; if (f) selecionarArquivo(f); }}
         style={WHATSAPP_BG} className="flex-1 overflow-y-auto p-4 space-y-3 relative">
         {arrastando && (
-          <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/70 border-2 border-dashed border-orange-500 rounded-xl pointer-events-none">
-            <div className="text-orange-300 font-bold text-sm flex items-center gap-2">
+          <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/70 border-2 border-dashed border-osso rounded-xl pointer-events-none">
+            <div className="text-osso-200 font-bold text-sm flex items-center gap-2">
               <Paperclip size={18} /> Solte o arquivo para anexar
             </div>
           </div>
@@ -886,14 +888,14 @@ function PainelChat({
               />
             )}
             {m.de === 'sistema' ? (
-              <div className="text-[10px] text-slate-500 bg-[#1E2330] border border-[#2A3040] px-3 py-1.5 rounded-full">
+              <div className="text-[10px] text-slate-500 bg-grafite-600 border border-linha px-3 py-1.5 rounded-full">
                 {m.texto}
               </div>
             ) : (
               <div className={`max-w-[80%] p-3.5 rounded-2xl text-xs shadow-md space-y-1 ${
                 m.de === 'cliente'
-                  ? 'bg-[#1E2330] text-slate-100 border border-[#2A3040] rounded-tl-sm'
-                  : 'bg-gradient-to-r from-orange-500 to-amber-500 text-slate-950 font-medium rounded-tr-sm'
+                  ? 'bg-grafite-600 text-slate-100 border border-linha rounded-tl-sm'
+                  : 'bg-gradient-to-r from-osso to-espera text-slate-950 font-medium rounded-tr-sm'
               }`}>
                 <div className={`text-[10px] font-semibold ${m.de === 'cliente' ? 'text-slate-400' : 'text-slate-900/80'}`}>
                   {m.de === 'cliente' ? conversa.cliente : 'Arka Tecnologia'}
@@ -906,7 +908,7 @@ function PainelChat({
                   return (
                     <div className={`text-[10px] px-2 py-1 rounded-lg border-l-2 mb-1 truncate ${
                       m.de === 'cliente'
-                        ? 'bg-[#161922] border-orange-500/60 text-slate-400'
+                        ? 'bg-grafite-700 border-osso/60 text-slate-400'
                         : 'bg-slate-900/10 border-slate-900/40 text-slate-900/70'
                     }`}>
                       {orig.texto}
@@ -949,7 +951,7 @@ function PainelChat({
         <div className="relative">
           <button
             onClick={() => irParaFim(true)}
-            className="absolute -top-10 left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 rounded-full bg-orange-500 text-slate-950 text-[11px] font-bold shadow-lg shadow-black/30 flex items-center gap-1 hover:bg-orange-400 transition-colors"
+            className="absolute -top-10 left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 rounded-full bg-osso text-slate-950 text-[11px] font-bold shadow-lg shadow-black/30 flex items-center gap-1 hover:bg-osso-200 transition-colors"
           >
             Novas mensagens <ArrowDown size={13} />
           </button>
@@ -957,7 +959,7 @@ function PainelChat({
       )}
 
       {fluxoSugerido && (
-        <div className="mx-4 mb-2 p-3 rounded-xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-between gap-3">
+        <div className="mx-4 mb-2 p-3 rounded-xl bg-osso/10 border border-osso/30 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <EmojiIcon name="lightning" label="" size="sm" />
             <div>
@@ -966,7 +968,7 @@ function PainelChat({
             </div>
           </div>
           <button onClick={() => onExecutarFluxo(fluxoSugerido)}
-            className="px-3 py-1.5 rounded-lg bg-orange-500 text-slate-950 text-xs font-bold flex items-center gap-1 hover:bg-orange-400 transition-colors shadow-sm">
+            className="px-3 py-1.5 rounded-lg bg-osso text-slate-950 text-xs font-bold flex items-center gap-1 hover:bg-osso-200 transition-colors shadow-sm">
             <Play size={12} /> Disparar
           </button>
         </div>
@@ -974,12 +976,12 @@ function PainelChat({
 
       {/* Conversa ainda na fila: leitura liberada, com atalho para assumir */}
       {conversa.statusAtendimento === 'pendente' && (
-        <div className="mx-3 mb-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3">
-          <span className="text-[11px] text-amber-300">
+        <div className="mx-3 mb-2 p-2.5 rounded-xl bg-espera/10 border border-espera/30 flex items-center justify-between gap-3">
+          <span className="text-[11px] text-espera-400">
             Esta conversa está <strong>na fila</strong>. Você pode ler e responder assumir registra você como responsável.
           </span>
           <button onClick={() => onAtender(conversa.id)}
-            className="shrink-0 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[11px] font-bold flex items-center gap-1.5">
+            className="shrink-0 px-3 py-1.5 rounded-lg bg-ativo hover:bg-ativo-400 text-slate-950 text-[11px] font-bold flex items-center gap-1.5">
             <UserCheck size={13} /> Atender
           </button>
         </div>
@@ -987,9 +989,9 @@ function PainelChat({
 
       {/* Respondendo a uma mensagem (citação) */}
       {respondendoA && (
-        <div className="mx-3 mb-2 p-2.5 rounded-xl bg-[#161922] border border-[#2A3040] border-l-4 border-l-orange-500 flex items-center justify-between gap-3">
+        <div className="mx-3 mb-2 p-2.5 rounded-xl bg-grafite-700 border border-linha border-l-4 border-l-osso flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[10px] font-bold text-orange-400 mb-0.5 flex items-center gap-1">
+            <div className="text-[10px] font-bold text-osso-200 mb-0.5 flex items-center gap-1">
               <CornerUpLeft size={11} /> Respondendo {respondendoA.de === 'cliente' ? conversa.cliente : 'você'}
             </div>
             <div className="text-[11px] text-slate-400 truncate">{respondendoA.texto}</div>
@@ -1002,9 +1004,9 @@ function PainelChat({
 
       {/* Editando uma mensagem já enviada */}
       {editando && (
-        <div className="mx-3 mb-2 p-2.5 rounded-xl bg-[#161922] border border-[#2A3040] border-l-4 border-l-sky-500 flex items-center justify-between gap-3">
+        <div className="mx-3 mb-2 p-2.5 rounded-xl bg-grafite-700 border border-linha border-l-4 border-l-lida flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[10px] font-bold text-sky-400 mb-0.5 flex items-center gap-1">
+            <div className="text-[10px] font-bold text-lida-400 mb-0.5 flex items-center gap-1">
               <Pencil size={11} /> Editando mensagem
             </div>
             <div className="text-[11px] text-slate-400 truncate">{editando.textoOriginal}</div>
@@ -1019,21 +1021,21 @@ function PainelChat({
       {encaminhando && (
         <Portal>
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-[55] p-4">
-            <div className="glass-panel border border-[#2A3040] rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-[80vh]">
-              <div className="p-4 bg-[#1E2330] border-b border-[#2A3040] flex items-center justify-between rounded-t-2xl">
+            <div className="glass-panel border border-linha rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-[80vh]">
+              <div className="p-4 bg-grafite-600 border-b border-linha flex items-center justify-between rounded-t-2xl">
                 <div className="flex items-center gap-2 text-sm font-bold text-white">
-                  <Share2 size={16} className="text-orange-400" /> Encaminhar para
+                  <Share2 size={16} className="text-osso-200" /> Encaminhar para
                 </div>
                 <button onClick={() => setEncaminhando(null)} className="text-slate-400 hover:text-white"><X size={16} /></button>
               </div>
-              <div className="p-3 text-[11px] text-slate-400 border-b border-[#2A3040] truncate">
+              <div className="p-3 text-[11px] text-slate-400 border-b border-linha truncate">
                 “{encaminhando.texto}”
               </div>
               <div className="flex-1 overflow-y-auto p-2 space-y-1">
                 {(conversas || []).filter(c => c.id !== conversa.id).map(c => (
                   <button key={c.id}
                     onClick={() => { onEncaminharPara(encaminhando.id, c.id); setEncaminhando(null); }}
-                    className="w-full text-left p-3 rounded-xl bg-[#161922] border border-[#2A3040] hover:border-orange-500/40 hover:bg-[#1E2330] transition-all flex items-center gap-3">
+                    className="w-full text-left p-3 rounded-xl bg-grafite-700 border border-linha hover:border-osso/40 hover:bg-grafite-600 transition-all flex items-center gap-3">
                     <Avatar nome={c.cliente} size="sm" fotoUrl={c.fotoUrl} />
                     <div className="min-w-0">
                       <div className="text-xs font-bold text-white truncate">{c.cliente}</div>
@@ -1052,11 +1054,11 @@ function PainelChat({
 
       {/* Preview do anexo + barra de progresso */}
       {anexo && (
-        <div className="mx-3 mb-2 p-2.5 rounded-xl bg-[#161922] border border-[#2A3040] flex items-center gap-3">
+        <div className="mx-3 mb-2 p-2.5 rounded-xl bg-grafite-700 border border-linha flex items-center gap-3">
           {anexo.tipo === 'imagem' ? (
             <img src={anexo.dataUrl} alt="preview" className="w-12 h-12 rounded-lg object-cover shrink-0" />
           ) : (
-            <div className="w-12 h-12 rounded-lg bg-[#1E2330] border border-slate-700 flex items-center justify-center shrink-0 text-orange-400">
+            <div className="w-12 h-12 rounded-lg bg-grafite-600 border border-slate-700 flex items-center justify-center shrink-0 text-osso-200">
               {anexo.tipo === 'video' ? <Play size={18} /> : anexo.tipo === 'audio' ? <Zap size={18} /> : <FileText size={18} />}
             </div>
           )}
@@ -1065,18 +1067,18 @@ function PainelChat({
             <div className="text-[10px] text-slate-500 uppercase">{anexo.tipo}</div>
             {enviandoMidia && (
               <div className="mt-1 h-1.5 rounded-full bg-slate-700 overflow-hidden">
-                <div className="h-full bg-orange-500 transition-all" style={{ width: `${anexo.progresso || 0}%` }} />
+                <div className="h-full bg-osso transition-all" style={{ width: `${anexo.progresso || 0}%` }} />
               </div>
             )}
           </div>
           <button onClick={cancelarAnexo} title={enviandoMidia ? 'Cancelar envio' : 'Remover anexo'}
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-rose-400 shrink-0">
+            className="p-1.5 rounded-lg bg-slate-800 hover:bg-falha/20 text-falha-400 shrink-0">
             <X size={14} />
           </button>
         </div>
       )}
 
-      <div className="p-3 bg-[#1E2330]/80 border-t border-[#2A3040] flex items-center gap-2 relative">
+      <div className="p-3 bg-grafite-600/80 border-t border-linha flex items-center gap-2 relative">
         {showMsgRapidas && (
           <PainelMensagensRapidas
             onSelecionar={txt => { setTexto(txt); setShowMsgRapidas(false); }}
@@ -1085,10 +1087,10 @@ function PainelChat({
         )}
 
         {showEmoji && (
-          <div className="absolute bottom-full left-2 mb-2 p-2 glass-panel border border-[#2A3040] rounded-2xl shadow-2xl z-30 grid grid-cols-5 gap-1 w-56">
+          <div className="absolute bottom-full left-2 mb-2 p-2 glass-panel border border-linha rounded-2xl shadow-2xl z-30 grid grid-cols-5 gap-1 w-56">
             {EMOJIS.map(e => (
               <button key={e} onClick={() => { setTexto(t => t + e); setShowEmoji(false); }}
-                className="text-lg rounded-lg hover:bg-[#1E2330] p-1 transition-colors">{e}</button>
+                className="text-lg rounded-lg hover:bg-grafite-600 p-1 transition-colors">{e}</button>
             ))}
           </div>
         )}
@@ -1103,7 +1105,7 @@ function PainelChat({
         <button
           onClick={() => fileInputRef.current?.click()}
           title="Anexar arquivo"
-          className="p-2.5 rounded-xl border bg-[#161922] border-[#2A3040] text-slate-400 hover:text-orange-400 hover:border-orange-500/30 transition-all"
+          className="p-2.5 rounded-xl border bg-grafite-700 border-linha text-slate-400 hover:text-osso-200 hover:border-osso/30 transition-all"
         >
           <Paperclip size={15} />
         </button>
@@ -1112,7 +1114,7 @@ function PainelChat({
           onClick={() => setShowEmoji(v => !v)}
           title="Emoji"
           className={`p-2.5 rounded-xl border transition-all ${
-            showEmoji ? 'bg-orange-500/20 border-orange-500/40 text-orange-400' : 'bg-[#161922] border-[#2A3040] text-slate-400 hover:text-orange-400 hover:border-orange-500/30'
+            showEmoji ? 'bg-osso/20 border-osso/40 text-osso-200' : 'bg-grafite-700 border-linha text-slate-400 hover:text-osso-200 hover:border-osso/30'
           }`}
         >
           <Smile size={15} />
@@ -1123,8 +1125,8 @@ function PainelChat({
           title="Mensagens rápidas"
           className={`p-2.5 rounded-xl border transition-all ${
             showMsgRapidas
-              ? 'bg-orange-500/20 border-orange-500/40 text-orange-400'
-              : 'bg-[#161922] border-[#2A3040] text-slate-400 hover:text-orange-400 hover:border-orange-500/30'
+              ? 'bg-osso/20 border-osso/40 text-osso-200'
+              : 'bg-grafite-700 border-linha text-slate-400 hover:text-osso-200 hover:border-osso/30'
           }`}
         >
           <Zap size={15} />
@@ -1142,12 +1144,12 @@ function PainelChat({
             }
           }}
           placeholder={anexo ? 'Legenda (opcional)...' : 'Digite sua mensagem ou CNPJ...  (Enter envia · Shift+Enter quebra linha)'}
-          className="flex-1 resize-none max-h-32 bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50 transition-colors"
+          className="flex-1 resize-none max-h-32 bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50 transition-colors"
         />
         <button
           onClick={enviar}
           disabled={enviandoMidia}
-          className="p-2.5 rounded-xl bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-slate-950 transition-colors shadow-md shadow-orange-500/20 self-end"
+          className="p-2.5 rounded-xl bg-osso hover:bg-osso-200 disabled:opacity-50 text-slate-950 transition-colors shadow-md shadow-osso/20 self-end"
         >
           {enviandoMidia ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
         </button>
@@ -1517,32 +1519,32 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               title="Notificacoes"
               className={`relative flex items-center justify-center w-9 h-9 rounded-full border transition-colors ${
                 naoLidasSino > 0
-                  ? 'bg-orange-500/15 border-orange-500/40 text-orange-400'
+                  ? 'bg-osso/15 border-osso/40 text-osso-200'
                   : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-white'
               } ${sinoTocando ? 'animate-bounce' : ''}`}
             >
               <Bell size={15} className={sinoTocando ? 'fill-current' : ''} />
               {naoLidasSino > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-orange-500 text-slate-950 text-[9px] font-extrabold flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-osso text-slate-950 text-[9px] font-extrabold flex items-center justify-center">
                   {naoLidasSino}
                 </span>
               )}
             </button>
 
             {showNotif && (
-              <div className="absolute right-0 top-full mt-2 w-[min(88vw,340px)] glass-panel border border-[#2A3040] rounded-2xl shadow-2xl shadow-black/50 z-50 overflow-hidden fade-in">
-                <div className="p-3 bg-[#1E2330] border-b border-[#2A3040] flex items-center justify-between">
+              <div className="absolute right-0 top-full mt-2 w-[min(88vw,340px)] glass-panel border border-linha rounded-2xl shadow-2xl shadow-black/50 z-50 overflow-hidden fade-in">
+                <div className="p-3 bg-grafite-600 border-b border-linha flex items-center justify-between">
                   <div className="flex items-center gap-2 text-xs font-bold text-white">
-                    <Bell size={13} className="text-orange-400" /> Notificacoes
+                    <Bell size={13} className="text-osso-200" /> Notificacoes
                   </div>
                   {historico.length > 0 && (
                     <button onClick={() => limparHistorico && limparHistorico()}
-                      className="text-[11px] text-slate-400 hover:text-rose-400 transition-colors font-semibold">
+                      className="text-[11px] text-slate-400 hover:text-falha-400 transition-colors font-semibold">
                       Limpar
                     </button>
                   )}
                 </div>
-                <div className="max-h-80 overflow-y-auto divide-y divide-[#2A3040]/60">
+                <div className="max-h-80 overflow-y-auto divide-y divide-linha/60">
                   {historico.length === 0 && (
                     <div className="text-center text-slate-500 text-xs py-10">
                       <Bell size={26} className="text-slate-600 mx-auto mb-2" />
@@ -1558,9 +1560,9 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                           if (n.convId) { setAbaAtual('todas'); setSelecionada(n.convId); }
                           setShowNotif(false);
                         }}
-                        className="w-full text-left p-3 flex items-start gap-2.5 hover:bg-[#1E2330]/70 transition-colors"
+                        className="w-full text-left p-3 flex items-start gap-2.5 hover:bg-grafite-600/70 transition-colors"
                       >
-                        <span className={`mt-0.5 shrink-0 ${ehAlerta ? 'text-amber-400' : 'text-orange-400'}`}>
+                        <span className={`mt-0.5 shrink-0 ${ehAlerta ? 'text-espera-400' : 'text-osso-200'}`}>
                           {ehAlerta ? <AlertCircle size={15} /> : <MessageSquare size={15} />}
                         </span>
                         <div className="min-w-0 flex-1">
@@ -1582,8 +1584,8 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
             title={whatsAppConectado ? 'WhatsApp conectado' : 'WhatsApp desconectado configure em Integração WhatsApp'}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${
               whatsAppConectado
-                ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400'
-                : 'bg-rose-500/15 border-rose-500/40 text-rose-400'
+                ? 'bg-ativo/15 border-ativo/40 text-ativo-400'
+                : 'bg-falha/15 border-falha/40 text-falha-400'
             }`}
           >
             {whatsAppConectado ? <Wifi size={14} /> : <WifiOff size={14} />}
@@ -1594,9 +1596,9 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-0 lg:min-h-[550px]">
 
-        <div className={`${chatAberto ? 'hidden lg:flex' : 'flex'} lg:col-span-4 glass-panel rounded-2xl flex-col overflow-hidden border border-[#2A3040] min-h-[420px] lg:min-h-0`}>
+        <div className={`${chatAberto ? 'hidden lg:flex' : 'flex'} lg:col-span-4 glass-panel rounded-2xl flex-col overflow-hidden border border-linha min-h-[420px] lg:min-h-0`}>
        
-          <div className="grid bg-[#1E2330]/80 border-b border-[#2A3040]"
+          <div className="grid bg-grafite-600/80 border-b border-linha"
             style={{ gridTemplateColumns: `repeat(${Math.max(abasVisiveis.length, 1)}, minmax(0, 1fr))` }}>
             {abasVisiveis.map(aba => {
               const Icon  = aba.icon;
@@ -1606,7 +1608,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                 <button key={aba.id} onClick={() => setAbaAtual(aba.id)}
                   className={`py-3 px-2 text-[11px] font-bold transition-all border-b-2 flex flex-col items-center justify-center gap-0.5 ${
                     ativo
-                      ? 'border-orange-500 text-orange-400 bg-[#161922]'
+                      ? 'border-osso text-osso-200 bg-grafite-700'
                       : 'border-transparent text-slate-400 hover:text-slate-200'
                   }`}
                 >
@@ -1614,7 +1616,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                     <Icon size={12} />
                     <span>{aba.label}</span>
                   </div>
-                  <span className={`text-[10px] font-semibold ${ativo ? 'text-orange-300' : 'text-slate-500'}`}>
+                  <span className={`text-[10px] font-semibold ${ativo ? 'text-osso-200' : 'text-slate-500'}`}>
                     ({count})
                   </span>
                 </button>
@@ -1622,14 +1624,14 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
             })}
           </div>
 
-          <div className="p-2 border-b border-[#2A3040] flex items-center gap-2">
+          <div className="p-2 border-b border-linha flex items-center gap-2">
             <div className="relative flex-1">
               <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
               <input
                 value={busca}
                 onChange={e => setBusca(e.target.value)}
                 placeholder="Buscar conversa..."
-                className="w-full bg-[#161922] border border-[#2A3040] rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50"
+                className="w-full bg-grafite-700 border border-linha rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50"
               />
             </div>
 
@@ -1639,13 +1641,13 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                 title="Filtros da lista"
                 className={`relative p-2 rounded-xl border transition-all ${
                   showFiltros || totalFiltrosAtivos > 0
-                    ? 'bg-orange-500/20 border-orange-500/40 text-orange-400'
-                    : 'bg-[#161922] border-[#2A3040] text-slate-400 hover:text-orange-400 hover:border-orange-500/30'
+                    ? 'bg-osso/20 border-osso/40 text-osso-200'
+                    : 'bg-grafite-700 border-linha text-slate-400 hover:text-osso-200 hover:border-osso/30'
                 }`}
               >
                 <SlidersHorizontal size={14} />
                 {totalFiltrosAtivos > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-0.5 rounded-full bg-orange-500 text-slate-950 text-[9px] font-extrabold flex items-center justify-center">
+                  <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-0.5 rounded-full bg-osso text-slate-950 text-[9px] font-extrabold flex items-center justify-center">
                     {totalFiltrosAtivos}
                   </span>
                 )}
@@ -1686,7 +1688,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               ))}
             {!carregando && conversasFiltradas.length === 0 && (
               <div className="flex flex-col items-center justify-center text-center py-14 px-6 text-slate-400">
-                <div className="inline-flex p-4 rounded-2xl bg-[#1E2330] border border-[#2A3040] mb-3 text-slate-500">
+                <div className="inline-flex p-4 rounded-2xl bg-grafite-600 border border-linha mb-3 text-slate-500">
                   <Inbox size={30} />
                 </div>
                 <p className="text-xs font-semibold text-slate-300">Nenhuma conversa encontrada.</p>
@@ -1698,7 +1700,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
           </div>
         </div>
 
-        <div className={`${chatAberto ? 'flex' : 'hidden lg:flex'} lg:col-span-8 glass-panel rounded-2xl flex-col overflow-hidden border border-[#2A3040] min-h-[70vh] lg:min-h-0`}>
+        <div className={`${chatAberto ? 'flex' : 'hidden lg:flex'} lg:col-span-8 glass-panel rounded-2xl flex-col overflow-hidden border border-linha min-h-[70vh] lg:min-h-0`}>
           {!conversa ? (
             <div
               className="flex-1 flex items-center justify-center relative overflow-hidden"
@@ -1767,8 +1769,8 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       {espiandoChat && (
         <Portal>
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
-          <div className="glass-panel border border-[#2A3040] rounded-2xl w-full max-w-lg shadow-2xl fade-in my-auto flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh]">
-            <div className="p-4 bg-[#1E2330] border-b border-[#2A3040] flex items-center justify-between shrink-0 rounded-t-2xl">
+          <div className="glass-panel border border-linha rounded-2xl w-full max-w-lg shadow-2xl fade-in my-auto flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh]">
+            <div className="p-4 bg-grafite-600 border-b border-linha flex items-center justify-between shrink-0 rounded-t-2xl">
               <div className="flex items-center gap-2 font-bold text-sm text-white min-w-0">
                 <Eye className="text-blue-400 shrink-0" size={16} />
                 <span className="truncate">Espiando: {espiandoChat.cliente}</span>
@@ -1778,7 +1780,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
             <div className="p-4 flex-1 overflow-y-auto min-h-0 space-y-2 text-xs">
               {espiandoChat.mensagens.map((m, idx) => (
                 <div key={idx} className={`p-2.5 rounded-xl ${
-                  m.de === 'cliente' ? 'bg-[#1E2330] text-slate-200' : 'bg-orange-500/10 text-orange-200 border border-orange-500/20'
+                  m.de === 'cliente' ? 'bg-grafite-600 text-slate-200' : 'bg-osso/10 text-osso-200 border border-osso/20'
                 }`}>
                   <div className="text-[10px] text-slate-400 mb-1">
                     {m.de === 'cliente' ? espiandoChat.cliente : 'Arka'} • {m.hora}
@@ -1787,7 +1789,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                 </div>
               ))}
             </div>
-            <div className="p-4 bg-[#1E2330] border-t border-[#2A3040] flex justify-end shrink-0 rounded-b-2xl">
+            <div className="p-4 bg-grafite-600 border-t border-linha flex justify-end shrink-0 rounded-b-2xl">
               <button onClick={() => setEspiandoChat(null)} className="px-3 py-2 sm:py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold">Fechar</button>
             </div>
           </div>
@@ -1798,18 +1800,18 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       {modalCnpj && (
         <Portal>
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
-          <div className="glass-panel border border-[#2A3040] rounded-2xl w-full max-w-md p-5 sm:p-6 space-y-4 shadow-2xl fade-in my-auto">
+          <div className="glass-panel border border-linha rounded-2xl w-full max-w-md p-5 sm:p-6 space-y-4 shadow-2xl fade-in my-auto">
             <h3 className="text-base font-bold text-white font-display">Validar CNPJ do Cliente</h3>
             <p className="text-xs text-slate-400">Insira o CNPJ para pesquisar o status do parceiro.</p>
             <input
               value={inputCnpj}
               onChange={e => setInputCnpj(mascararCnpj(e.target.value))}
               placeholder="00.000.000/0000-00"
-              className="w-full bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder-slate-500 focus:outline-none focus:border-orange-500/50"
+              className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder-slate-500 focus:outline-none focus:border-osso/50"
             />
             <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
               <button onClick={() => setModalCnpj(false)} className="px-3 py-2 sm:py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold">Cancelar</button>
-              <button onClick={validarCnpjManual} className="px-4 py-2 sm:py-1.5 rounded-lg bg-orange-500 text-slate-950 text-xs font-bold">Validar</button>
+              <button onClick={validarCnpjManual} className="px-4 py-2 sm:py-1.5 rounded-lg bg-osso text-slate-950 text-xs font-bold">Validar</button>
             </div>
           </div>
         </div>
@@ -1819,8 +1821,8 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       {transferindo && (
         <Portal>
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
-          <div className="glass-panel border border-[#2A3040] rounded-2xl w-full max-w-md shadow-2xl fade-in my-auto flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh]">
-            <div className="p-4 bg-[#1E2330] border-b border-[#2A3040] flex items-center justify-between shrink-0 rounded-t-2xl">
+          <div className="glass-panel border border-linha rounded-2xl w-full max-w-md shadow-2xl fade-in my-auto flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh]">
+            <div className="p-4 bg-grafite-600 border-b border-linha flex items-center justify-between shrink-0 rounded-t-2xl">
               <div className="flex items-center gap-2 font-bold text-sm text-white min-w-0">
                 <ArrowRightLeft size={16} className="text-purple-400 shrink-0" />
                 <span className="truncate">Transferir: {transferindo.cliente}</span>
@@ -1847,7 +1849,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                     className={`w-full text-left p-3 rounded-xl border flex items-center gap-3 transition-all ${
                       atual
                         ? 'bg-purple-500/15 border-purple-500/40 cursor-default'
-                        : 'bg-[#161922] border-[#2A3040] hover:border-purple-500/40 hover:bg-[#1E2330]'
+                        : 'bg-grafite-700 border-linha hover:border-purple-500/40 hover:bg-grafite-600'
                     }`}
                   >
                     <div className="w-9 h-9 rounded-xl bg-purple-500/15 text-purple-300 font-bold text-sm flex items-center justify-center border border-purple-500/30 shrink-0">
@@ -1859,7 +1861,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                     </div>
                     <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold shrink-0 ${
                       m.status === 'online'
-                        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                        ? 'bg-ativo/15 text-ativo-400 border-ativo/30'
                         : 'bg-slate-700/40 text-slate-400 border-slate-600/40'
                     }`}>
                       {m.status === 'online' ? 'Online' : 'Offline'}
@@ -1870,7 +1872,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               })}
             </div>
 
-            <div className="p-4 bg-[#1E2330] border-t border-[#2A3040] flex justify-between items-center gap-2 shrink-0 rounded-b-2xl">
+            <div className="p-4 bg-grafite-600 border-t border-linha flex justify-between items-center gap-2 shrink-0 rounded-b-2xl">
               {atendentes[transferindo.id] ? (
                 <button
                   onClick={() => {
@@ -1882,7 +1884,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                     });
                     setTransferindo(null);
                   }}
-                  className="text-[11px] text-slate-400 hover:text-rose-400 font-semibold transition-colors">
+                  className="text-[11px] text-slate-400 hover:text-falha-400 font-semibold transition-colors">
                   Remover atribuicao
                 </button>
               ) : <span />}

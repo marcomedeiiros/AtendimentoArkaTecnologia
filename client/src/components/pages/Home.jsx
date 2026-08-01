@@ -196,10 +196,10 @@ export default function App() {
   const abaFullScreen = aba === 'automacoes';
 
   return (
-    <div className="min-h-screen bg-[#0B0D12] text-[#F3F4F8] flex font-sans antialiased selection:bg-orange-500/30 selection:text-orange-200">
+    <div className="min-h-screen bg-grafite-900 text-[#F3F4F8] flex font-sans antialiased selection:bg-osso/30 selection:text-osso-200">
       {carregando ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 text-slate-400">
-          <Loader2 className="w-7 h-7 text-orange-500 animate-spin" />
+          <Loader2 className="w-7 h-7 text-osso animate-spin" />
           <span className="text-sm font-medium tracking-wide">Inicializando Arka Tecnologia...</span>
         </div>
       ) : (
@@ -270,10 +270,10 @@ function Sidebar({ aba, setAba, whatsAppConectado, conversas }) {
   const navSecundario = NAV.slice(4);     
 
   return (
-    <aside className="w-64 shrink-0 bg-[#11141C] border-r border-[#2A3040] flex flex-col p-4 h-screen select-none overflow-y-auto">
+    <aside className="w-64 shrink-0 bg-grafite-800 border-r border-linha flex flex-col p-4 h-screen select-none overflow-y-auto">
 
       <div className="flex items-center gap-3 px-2 py-3 mb-4 shrink-0">
-        <div className="p-2 rounded-xl bg-gradient-to-br from-orange-500/20 to-amber-500/10 border border-orange-500/30 shadow-lg shadow-orange-500/10">
+        <div className="p-2 rounded-xl bg-gradient-to-br from-osso/20 to-espera/10 border border-osso/30 shadow-lg shadow-osso/10">
           <ArkaLogo size={32} />
         </div>
         <div className="sidebar-label">
@@ -286,11 +286,11 @@ function Sidebar({ aba, setAba, whatsAppConectado, conversas }) {
         onClick={() => setAba('whatsapp')}
         className={`mx-1 mb-4 p-2.5 rounded-xl cursor-pointer border transition-all duration-200 flex items-center gap-2.5 text-xs font-semibold shrink-0 ${
           whatsAppConectado
-            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
-            : 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20'
+            ? 'bg-ativo/10 border-ativo/30 text-ativo-400 hover:bg-ativo/20'
+            : 'bg-falha/10 border-falha/30 text-falha-400 hover:bg-falha/20'
         }`}
       >
-        <span className={`w-2 h-2 rounded-full shrink-0 ${whatsAppConectado ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
+        <span className={`w-2 h-2 rounded-full shrink-0 ${whatsAppConectado ? 'bg-ativo-400 animate-pulse' : 'bg-falha-400'}`} />
         <span className="sidebar-label">{whatsAppConectado ? 'WhatsApp Conectado' : 'WhatsApp Offline'}</span>
       </div>
 
@@ -318,16 +318,16 @@ function NavItem({ item, aba, setAba, naFila, naoLidos }) {
       onClick={() => setAba(item.id)}
       className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 border ${
         ativo
-          ? 'bg-gradient-to-r from-orange-500/20 to-amber-500/10 border-orange-500/40 text-orange-400 shadow-md shadow-orange-500/5'
+          ? 'bg-gradient-to-r from-osso/20 to-espera/10 border-osso/40 text-osso-200 shadow-md shadow-osso/5'
           : 'bg-transparent border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
       }`}
     >
       <div className="flex items-center gap-3">
-        <Icon size={15} className={`shrink-0 ${ativo ? 'text-orange-400' : 'text-slate-400'}`} />
+        <Icon size={15} className={`shrink-0 ${ativo ? 'text-osso-200' : 'text-slate-400'}`} />
         <span className="sidebar-label">{item.label}</span>
       </div>
       {badge && (
-        <span className="px-2 py-0.5 rounded-full bg-orange-500 text-slate-950 font-bold text-[10px] shadow-sm">
+        <span className="px-2 py-0.5 rounded-full bg-osso text-slate-950 font-bold text-[10px] shadow-sm">
           {badge}
         </span>
       )}
@@ -355,15 +355,15 @@ function WhatsAppView({ conectado, setConectado, conversas }) {
     <div className="fade-in space-y-6">
       <Header titulo="Integração WhatsApp API" subtitulo="Gerencie a conexão oficial via WhatsApp Web, webhooks e sincronização de dados." />
 
-      <div className="glass-panel p-6 rounded-2xl border border-[#2A3040] flex flex-wrap items-center justify-between gap-4">
+      <div className="glass-panel p-6 rounded-2xl border border-linha flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${conectado ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'}`}>
+          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${conectado ? 'bg-ativo/15 text-ativo-400 border border-ativo/30' : 'bg-falha/15 text-falha-400 border border-falha/30'}`}>
             <MessageCircle size={24} />
           </div>
           <div>
             <div className="font-bold text-base text-white flex items-center gap-2 font-display">
               Instância: {instancia}
-              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${conectado ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${conectado ? 'bg-ativo/20 text-ativo-400' : 'bg-falha/20 text-falha-400'}`}>
                 {conectado ? 'ONLINE' : 'DESCONECTADO'}
               </span>
             </div>
@@ -373,7 +373,7 @@ function WhatsAppView({ conectado, setConectado, conversas }) {
         <button
           onClick={() => setConectado(!conectado)}
           className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all ${
-            conectado ? 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30' : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20'
+            conectado ? 'bg-falha/15 hover:bg-falha/25 text-falha-400 border border-falha/30' : 'bg-ativo hover:bg-ativo-400 text-slate-950 shadow-md shadow-ativo/20'
           }`}
         >
           <Power size={15} /> {conectado ? 'Desconectar WhatsApp' : 'Reconectar WhatsApp'}
@@ -381,7 +381,7 @@ function WhatsAppView({ conectado, setConectado, conversas }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="glass-panel p-6 rounded-2xl border border-[#2A3040] text-center flex flex-col items-center justify-center">
+        <div className="glass-panel p-6 rounded-2xl border border-linha text-center flex flex-col items-center justify-center">
           <h3 className="font-bold text-sm text-white font-display mb-1">QR Code de Autenticação</h3>
           <p className="text-xs text-slate-400 mb-4">Escaneie no app do WhatsApp: Dispositivos Conectados</p>
           <div className="p-4 bg-white rounded-2xl shadow-lg mb-4 inline-block">
@@ -390,19 +390,19 @@ function WhatsAppView({ conectado, setConectado, conversas }) {
           <EmojiIcon name="check" label="WhatsApp Pareado & Sincronizado" size="sm" />
         </div>
 
-        <div className="glass-panel p-6 rounded-2xl border border-[#2A3040] space-y-4">
+        <div className="glass-panel p-6 rounded-2xl border border-linha space-y-4">
           <h3 className="font-bold text-sm text-white font-display">Configurações de Webhook</h3>
           <div>
             <label className="text-xs text-slate-400 block mb-1.5 font-medium">URL do Webhook (Recebimento)</label>
             <input value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)}
-              className="w-full bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-orange-500/50" />
+              className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-osso/50" />
           </div>
           <div>
             <label className="text-xs text-slate-400 block mb-1.5 font-medium">Instância Ativa</label>
             <input value={instancia} onChange={e => setInstancia(e.target.value)}
-              className="w-full bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-orange-500/50" />
+              className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-osso/50" />
           </div>
-          <div className="p-3 rounded-xl bg-[#1E2330] border border-slate-800 text-xs text-slate-400 flex items-center gap-2">
+          <div className="p-3 rounded-xl bg-grafite-600 border border-slate-800 text-xs text-slate-400 flex items-center gap-2">
             <EmojiIcon name="lock" label="" size="sm" />
             <span>Validação de CNPJ Arka Tecnologia habilitada.</span>
           </div>
@@ -428,29 +428,29 @@ function EquipeView({ equipe, setEquipe }) {
     <div className="fade-in space-y-6">
       <Header titulo="Gestão da Equipe de Atendimento" subtitulo="Gerencie os operadores e atendentes autorizados da Arka Tecnologia." />
       <div className="flex flex-wrap gap-2.5">
-        <input value={nome}  onChange={e => setNome(e.target.value)}  placeholder="Nome do atendente"       className="flex-1 min-w-[200px] bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50" />
-        <input value={cargo} onChange={e => setCargo(e.target.value)} placeholder="Cargo (ex: Suporte N2)"  className="flex-1 min-w-[200px] bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50" />
-        <button onClick={adicionar} className="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-orange-500/20 transition-all">
+        <input value={nome}  onChange={e => setNome(e.target.value)}  placeholder="Nome do atendente"       className="flex-1 min-w-[200px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50" />
+        <input value={cargo} onChange={e => setCargo(e.target.value)} placeholder="Cargo (ex: Suporte N2)"  className="flex-1 min-w-[200px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50" />
+        <button onClick={adicionar} className="px-4 py-2 rounded-xl bg-osso hover:bg-osso-200 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-osso/20 transition-all">
           <Plus size={15} /> Adicionar Atendente
         </button>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {equipe.map(e => (
-          <div key={e.id} className="glass-panel p-4 rounded-2xl border border-[#2A3040] space-y-3">
+          <div key={e.id} className="glass-panel p-4 rounded-2xl border border-linha space-y-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-orange-500/15 text-orange-400 font-bold text-sm flex items-center justify-center border border-orange-500/30">
+              <div className="w-10 h-10 rounded-xl bg-osso/15 text-osso-200 font-bold text-sm flex items-center justify-center border border-osso/30">
                 {e.nome.charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="font-bold text-xs text-white truncate">{e.nome}</div>
                 <div className="text-[11px] text-slate-400 truncate">{e.cargo}</div>
               </div>
-              <button onClick={() => remover(e.id)} className="text-rose-400 hover:bg-slate-800 p-1.5 rounded-lg"><Trash2 size={13} /></button>
+              <button onClick={() => remover(e.id)} className="text-falha-400 hover:bg-slate-800 p-1.5 rounded-lg"><Trash2 size={13} /></button>
             </div>
             <button
               onClick={() => alternarStatus(e.id)}
               className={`w-full py-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                e.status === 'online' ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400' : 'bg-slate-800 border-slate-700 text-slate-400'
+                e.status === 'online' ? 'bg-ativo/15 border-ativo/30 text-ativo-400' : 'bg-slate-800 border-slate-700 text-slate-400'
               }`}
             >
               <Circle size={8} fill="currentColor" /> {e.status === 'online' ? 'Online' : 'Offline'}
@@ -487,29 +487,29 @@ function ParceirosView({ parceiros, setParceiros }) {
   return (
     <div className="fade-in space-y-6">
       <Header titulo="Parceiros Cadastrados (CNPJ)" subtitulo="Cadastro oficial de empresas com contrato ativo para validação automatizada." />
-      <div className="glass-panel p-5 rounded-2xl border border-[#2A3040] space-y-3">
+      <div className="glass-panel p-5 rounded-2xl border border-linha space-y-3">
         <div className="flex flex-wrap gap-2.5">
           <input value={cnpjInput} onChange={e => { setCnpjInput(mascararCnpj(e.target.value)); setErro(''); }}
             placeholder="00.000.000/0000-00"
-            className="w-48 bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2 text-xs text-white font-mono placeholder-slate-500 focus:outline-none focus:border-orange-500/50" />
+            className="w-48 bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white font-mono placeholder-slate-500 focus:outline-none focus:border-osso/50" />
           <input value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome da empresa"
-            className="flex-1 min-w-[200px] bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50" />
-          <button onClick={adicionar} className="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-orange-500/20 transition-all">
+            className="flex-1 min-w-[200px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50" />
+          <button onClick={adicionar} className="px-4 py-2 rounded-xl bg-osso hover:bg-osso-200 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-osso/20 transition-all">
             <Plus size={15} /> Cadastrar Parceiro
           </button>
         </div>
-        {erro && <div className="text-xs text-rose-400 font-semibold">{erro}</div>}
+        {erro && <div className="text-xs text-falha-400 font-semibold">{erro}</div>}
       </div>
 
       <div className="relative max-w-xs">
         <Search size={14} className="absolute left-3.5 top-3 text-slate-500" />
         <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por nome ou CNPJ"
-          className="w-full bg-[#161922] border border-[#2A3040] rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50" />
+          className="w-full bg-grafite-700 border border-linha rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50" />
       </div>
 
       <div className="space-y-2.5">
         {filtrados.map(p => (
-          <div key={p.cnpj} className="glass-panel p-4 rounded-xl border border-[#2A3040] flex items-center justify-between gap-4">
+          <div key={p.cnpj} className="glass-panel p-4 rounded-xl border border-linha flex items-center justify-between gap-4">
             <div className="flex-1 min-w-0">
               <div className="font-bold text-xs text-white">{p.razaoSocial}</div>
               <div className="text-[11px] text-slate-400 font-mono mt-0.5">{mascararCnpj(p.cnpj)}</div>
@@ -517,11 +517,11 @@ function ParceirosView({ parceiros, setParceiros }) {
             <div className="flex items-center gap-2">
               <button onClick={() => alternarStatus(p.cnpj)}
                 className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
-                  p.status === 'ativo' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                  p.status === 'ativo' ? 'bg-ativo/15 text-ativo-400 border border-ativo/30' : 'bg-falha/15 text-falha-400 border border-falha/30'
                 }`}>
                 {p.status === 'ativo' ? 'Ativo' : 'Inativo'}
               </button>
-              <button onClick={() => remover(p.cnpj)} className="text-rose-400 hover:bg-slate-800 p-1.5 rounded-lg"><Trash2 size={13} /></button>
+              <button onClick={() => remover(p.cnpj)} className="text-falha-400 hover:bg-slate-800 p-1.5 rounded-lg"><Trash2 size={13} /></button>
             </div>
           </div>
         ))}

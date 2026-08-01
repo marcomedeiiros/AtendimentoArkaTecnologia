@@ -27,15 +27,15 @@ function primeiroDiaSemana(ano, mes) { return new Date(ano, mes, 1).getDay(); }
 
 const TIPOS = {
   reuniao:    { label: 'Reunião',       color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
-  ligacao:    { label: 'Ligação',       color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
-  tarefa:     { label: 'Tarefa',        color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+  ligacao:    { label: 'Ligação',       color: 'bg-ativo/20 text-ativo-400 border-ativo/30' },
+  tarefa:     { label: 'Tarefa',        color: 'bg-espera/20 text-espera-400 border-espera/30' },
   followup:   { label: 'Follow-up',     color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
-  lembrete:   { label: 'Lembrete',      color: 'bg-rose-500/20 text-rose-400 border-rose-500/30' },
+  lembrete:   { label: 'Lembrete',      color: 'bg-falha/20 text-falha-400 border-falha/30' },
 };
 
 const PRIORIDADES = {
-  alta:   { label: 'Alta',   dot: 'bg-rose-400' },
-  media:  { label: 'Média',  dot: 'bg-amber-400' },
+  alta:   { label: 'Alta',   dot: 'bg-falha-400' },
+  media:  { label: 'Média',  dot: 'bg-espera-400' },
   baixa:  { label: 'Baixa',  dot: 'bg-slate-400' },
 };
 
@@ -67,10 +67,10 @@ function ModalCompromisso({ compromisso, onSalvar, onFechar }) {
     // Portal: evita que o transform do container `.fade-in` corte o modal.
     <Portal>
     <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
-      <div className="glass-panel border border-[#2A3040] rounded-2xl w-full max-w-lg shadow-2xl fade-in my-auto flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh]">
-        <div className="p-4 bg-[#1E2330] border-b border-[#2A3040] flex items-center justify-between shrink-0 rounded-t-2xl">
+      <div className="glass-panel border border-linha rounded-2xl w-full max-w-lg shadow-2xl fade-in my-auto flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh]">
+        <div className="p-4 bg-grafite-600 border-b border-linha flex items-center justify-between shrink-0 rounded-t-2xl">
           <div className="flex items-center gap-2 font-bold text-sm text-white min-w-0">
-            <CalendarDays size={16} className="text-orange-400 shrink-0" />
+            <CalendarDays size={16} className="text-osso-200 shrink-0" />
             <span className="truncate">{compromisso?.id ? 'Editar Compromisso' : 'Novo Compromisso'}</span>
           </div>
           <button onClick={onFechar} className="text-slate-400 hover:text-white transition-colors shrink-0 ml-2"><X size={16} /></button>
@@ -80,19 +80,19 @@ function ModalCompromisso({ compromisso, onSalvar, onFechar }) {
           <div>
             <label className="text-xs text-slate-400 font-medium block mb-1.5">Título *</label>
             <input value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ex: Reunião com cliente Arka..."
-              className="w-full bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50" />
+              className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50" />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-slate-400 font-medium block mb-1.5">Data *</label>
               <input type="date" value={data} onChange={e => setData(e.target.value)}
-                className="w-full bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-orange-500/50" />
+                className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-osso/50" />
             </div>
             <div>
               <label className="text-xs text-slate-400 font-medium block mb-1.5">Horário</label>
               <input type="time" value={hora} onChange={e => setHora(e.target.value)}
-                className="w-full bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-orange-500/50" />
+                className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-osso/50" />
             </div>
           </div>
 
@@ -100,14 +100,14 @@ function ModalCompromisso({ compromisso, onSalvar, onFechar }) {
             <div>
               <label className="text-xs text-slate-400 font-medium block mb-1.5">Tipo</label>
               <select value={tipo} onChange={e => setTipo(e.target.value)}
-                className="w-full bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-orange-500/50">
+                className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-osso/50">
                 {Object.entries(TIPOS).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
               </select>
             </div>
             <div>
               <label className="text-xs text-slate-400 font-medium block mb-1.5">Prioridade</label>
               <select value={prioridade} onChange={e => setPrioridade(e.target.value)}
-                className="w-full bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-orange-500/50">
+                className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-osso/50">
                 {Object.entries(PRIORIDADES).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
               </select>
             </div>
@@ -116,24 +116,24 @@ function ModalCompromisso({ compromisso, onSalvar, onFechar }) {
           <div>
             <label className="text-xs text-slate-400 font-medium block mb-1.5">Contato / Cliente</label>
             <input value={contato} onChange={e => setContato(e.target.value)} placeholder="Nome do cliente ou responsável..."
-              className="w-full bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50" />
+              className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50" />
           </div>
 
           <div>
             <label className="text-xs text-slate-400 font-medium block mb-1.5">Descrição</label>
             <textarea value={descricao} onChange={e => setDescricao(e.target.value)} rows={3}
               placeholder="Detalhes do compromisso..."
-              className="w-full bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50 resize-none" />
+              className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50 resize-none" />
           </div>
         </div>
 
-        <div className="p-4 bg-[#1E2330] border-t border-[#2A3040] flex flex-col-reverse sm:flex-row sm:justify-end gap-2 shrink-0 rounded-b-2xl">
+        <div className="p-4 bg-grafite-600 border-t border-linha flex flex-col-reverse sm:flex-row sm:justify-end gap-2 shrink-0 rounded-b-2xl">
           <button onClick={onFechar}
             className="px-3 py-2 sm:py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors">
             Cancelar
           </button>
           <button onClick={salvar} disabled={!titulo.trim() || !data}
-            className="px-4 py-2 sm:py-1.5 rounded-lg bg-orange-500 hover:bg-orange-400 text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+            className="px-4 py-2 sm:py-1.5 rounded-lg bg-osso hover:bg-osso-200 text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-osso/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
             <Save size={13} /> Salvar
           </button>
         </div>
@@ -169,7 +169,7 @@ function MiniCalendario({ compromissos, dataFoco, setDataFoco }) {
   for (let d = 1; d <= totalDias; d++) celulas.push(d);
 
   return (
-    <div className="glass-panel rounded-2xl p-4 border border-[#2A3040]">
+    <div className="glass-panel rounded-2xl p-4 border border-linha">
       <div className="flex items-center justify-between mb-3">
         <button onClick={() => navMes(-1)} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"><ChevronLeft size={14}/></button>
         <span className="text-xs font-bold text-white">{MESES[mes]} {ano}</span>
@@ -190,13 +190,13 @@ function MiniCalendario({ compromissos, dataFoco, setDataFoco }) {
           return (
             <button key={iso} onClick={() => setDataFoco(iso)}
               className={`relative flex flex-col items-center justify-center rounded-lg py-1 text-[11px] font-semibold transition-all ${
-                ehFoco   ? 'bg-orange-500 text-slate-950' :
-                ehHoje   ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40' :
+                ehFoco   ? 'bg-osso text-slate-950' :
+                ehHoje   ? 'bg-osso/20 text-osso-200 border border-osso/40' :
                 'text-slate-400 hover:bg-slate-800 hover:text-white'
               }`}>
               {dia}
               {temEvento && !ehFoco && (
-                <span className="absolute bottom-0.5 w-1 h-1 rounded-full bg-orange-400" />
+                <span className="absolute bottom-0.5 w-1 h-1 rounded-full bg-osso-200" />
               )}
             </button>
           );
@@ -211,13 +211,13 @@ function CardCompromisso({ comp, onEditar, onRemover, onToggleConcluido }) {
   const prio  = PRIORIDADES[comp.prioridade] || PRIORIDADES.media;
 
   return (
-    <div className={`glass-panel p-3.5 rounded-xl border transition-all ${comp.concluido ? 'border-emerald-500/30 opacity-70' : 'border-[#2A3040] hover:border-slate-600/60'}`}>
+    <div className={`glass-panel p-3.5 rounded-xl border transition-all ${comp.concluido ? 'border-ativo/30 opacity-70' : 'border-linha hover:border-slate-600/60'}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-start gap-2.5 min-w-0 flex-1">
           <button onClick={() => onToggleConcluido(comp.id)} className="mt-0.5 shrink-0">
             {comp.concluido
-              ? <CheckCircle2 size={16} className="text-emerald-400" />
-              : <Circle      size={16} className="text-slate-500 hover:text-orange-400 transition-colors" />
+              ? <CheckCircle2 size={16} className="text-ativo-400" />
+              : <Circle      size={16} className="text-slate-500 hover:text-osso-200 transition-colors" />
             }
           </button>
           <div className="min-w-0 flex-1">
@@ -252,7 +252,7 @@ function CardCompromisso({ comp, onEditar, onRemover, onToggleConcluido }) {
             <Pencil size={12} />
           </button>
           <button onClick={() => onRemover(comp.id)}
-            className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-rose-400 transition-colors">
+            className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-falha-400 transition-colors">
             <Trash2 size={12} />
           </button>
         </div>
@@ -329,11 +329,11 @@ export default function Agenda() {
           <h1 className="text-2xl font-bold text-white tracking-tight font-display">Agenda</h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-1">
             Gerencie compromissos, follow-ups e tarefas da equipe.
-            {pendentes > 0 && <span className="ml-2 text-orange-400 font-semibold">{pendentes} pendente{pendentes > 1 ? 's' : ''}</span>}
+            {pendentes > 0 && <span className="ml-2 text-osso-200 font-semibold">{pendentes} pendente{pendentes > 1 ? 's' : ''}</span>}
           </p>
         </div>
         <button onClick={() => { setEditando(null); setModalAberto(true); }}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 text-xs font-bold shadow-md shadow-orange-500/20 transition-all shrink-0">
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-osso hover:bg-osso-200 text-slate-950 text-xs font-bold shadow-md shadow-osso/20 transition-all shrink-0">
           <Plus size={14} /> Novo Compromisso
         </button>
       </div>
@@ -341,18 +341,18 @@ export default function Agenda() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-4 space-y-4">
           <MiniCalendario compromissos={compromissos} dataFoco={dataFoco} setDataFoco={d => { setDataFoco(d); setVerTodos(false); }} />
-          <div className="glass-panel rounded-2xl p-4 border border-[#2A3040] space-y-2">
+          <div className="glass-panel rounded-2xl p-4 border border-linha space-y-2">
             <div className="text-xs font-semibold text-slate-400 mb-2">Ações rápidas</div>
             <button onClick={() => { setDataFoco(hojeISO()); setVerTodos(false); }}
-              className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${!verTodos && dataFoco === hojeISO() ? 'bg-orange-500/15 border-orange-500/30 text-orange-400' : 'bg-[#1E2330] border-[#2A3040] text-slate-400 hover:text-slate-200'}`}>
+              className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${!verTodos && dataFoco === hojeISO() ? 'bg-osso/15 border-osso/30 text-osso-200' : 'bg-grafite-600 border-linha text-slate-400 hover:text-slate-200'}`}>
               📅 Hoje
             </button>
             <button onClick={() => setVerTodos(true)}
-              className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${verTodos ? 'bg-orange-500/15 border-orange-500/30 text-orange-400' : 'bg-[#1E2330] border-[#2A3040] text-slate-400 hover:text-slate-200'}`}>
+              className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${verTodos ? 'bg-osso/15 border-osso/30 text-osso-200' : 'bg-grafite-600 border-linha text-slate-400 hover:text-slate-200'}`}>
               📋 Todos os compromissos ({compromissos.length})
             </button>
             <button onClick={() => { setCompromissos(prev => prev.filter(c => !c.concluido || c.data >= hojeISO())); }}
-              className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold border bg-[#1E2330] border-[#2A3040] text-slate-400 hover:text-slate-200 transition-all">
+              className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold border bg-grafite-600 border-linha text-slate-400 hover:text-slate-200 transition-all">
               🗑️ Limpar concluídos antigos
             </button>
           </div>
@@ -363,7 +363,7 @@ export default function Agenda() {
             <div className="relative flex-1">
               <Search size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
               <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar compromisso..."
-                className="w-full bg-[#161922] border border-[#2A3040] rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50" />
+                className="w-full bg-grafite-700 border border-linha rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50" />
             </div>
             <div className="text-xs text-slate-400 shrink-0">
               {verTodos ? 'Todos' : dataFoco} - <span className="text-white font-semibold">{listagem.length}</span>
@@ -378,7 +378,7 @@ export default function Agenda() {
                 onToggleConcluido={toggleConcluido} />
             ))}
             {listagem.length === 0 && (
-              <div className="text-center text-slate-400 text-xs py-12 glass-panel rounded-2xl border border-[#2A3040]">
+              <div className="text-center text-slate-400 text-xs py-12 glass-panel rounded-2xl border border-linha">
                 <CalendarDays size={28} className="text-slate-600 mx-auto mb-2" />
                 {verTodos ? 'Nenhum compromisso cadastrado.' : 'Nenhum compromisso para este dia.'}
               </div>

@@ -58,10 +58,10 @@ export default function EquipePage() {
       </div>
 
       {erro && (
-        <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
+        <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-falha/10 border border-falha/30 text-falha-400 text-xs">
           <AlertTriangle size={16} className="shrink-0 mt-0.5" />
           <p className="flex-1">{erro}</p>
-          <button onClick={() => setErro(null)} className="text-rose-300/60 hover:text-rose-200 shrink-0">
+          <button onClick={() => setErro(null)} className="text-falha-400/60 hover:text-falha-400 shrink-0">
             <X size={14} />
           </button>
         </div>
@@ -73,18 +73,18 @@ export default function EquipePage() {
           onChange={e => setNome(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && adicionar()}
           placeholder="Nome do atendente"
-          className="flex-1 min-w-[200px] bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50"
+          className="flex-1 min-w-[200px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50"
         />
         <input
           value={cargo}
           onChange={e => setCargo(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && adicionar()}
           placeholder="Cargo (ex: Suporte N2)"
-          className="flex-1 min-w-[200px] bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50"
+          className="flex-1 min-w-[200px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50"
         />
         <button
           onClick={adicionar}
-          className="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-orange-500/20 transition-all"
+          className="px-4 py-2 rounded-xl bg-osso hover:bg-osso-200 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-osso/20 transition-all"
         >
           <Plus size={15} /> Adicionar Atendente
         </button>
@@ -92,9 +92,9 @@ export default function EquipePage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {equipe.map(e => (
-          <div key={e.id} className="glass-panel p-4 rounded-2xl border border-[#2A3040] space-y-3">
+          <div key={e.id} className="glass-panel p-4 rounded-2xl border border-linha space-y-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-orange-500/15 text-orange-400 font-bold text-sm flex items-center justify-center border border-orange-500/30">
+              <div className="w-10 h-10 rounded-xl bg-osso/15 text-osso-200 font-bold text-sm flex items-center justify-center border border-osso/30">
                 {e.nome.charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
@@ -103,7 +103,7 @@ export default function EquipePage() {
               </div>
               <button
                 onClick={() => remover(e.id)}
-                className="text-rose-400 hover:bg-slate-800 p-1.5 rounded-lg transition-colors"
+                className="text-falha-400 hover:bg-slate-800 p-1.5 rounded-lg transition-colors"
               >
                 <Trash2 size={13} />
               </button>
@@ -112,7 +112,7 @@ export default function EquipePage() {
               onClick={() => alternarStatus(e.id)}
               className={`w-full py-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
                 e.status === 'online'
-                  ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                  ? 'bg-ativo/15 border-ativo/30 text-ativo-400'
                   : 'bg-slate-800 border-slate-700 text-slate-400'
               }`}
             >
@@ -123,7 +123,7 @@ export default function EquipePage() {
         ))}
 
         {equipe.length === 0 && (
-          <div className="col-span-full text-center text-slate-400 text-xs py-12 glass-panel rounded-2xl border border-[#2A3040]">
+          <div className="col-span-full text-center text-slate-400 text-xs py-12 glass-panel rounded-2xl border border-linha">
             Nenhum atendente cadastrado ainda.
           </div>
         )}

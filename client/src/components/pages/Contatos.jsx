@@ -17,9 +17,9 @@ function mascararTel(v) {
 
 const TAGS_CORES = {
   cliente:   'bg-blue-500/15 text-blue-400 border-blue-500/30',
-  parceiro:  'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+  parceiro:  'bg-ativo/15 text-ativo-400 border-ativo/30',
   suporte:   'bg-purple-500/15 text-purple-400 border-purple-500/30',
-  vip:       'bg-amber-500/15 text-amber-400 border-amber-500/30',
+  vip:       'bg-espera/15 text-espera-400 border-espera/30',
   inativo:   'bg-slate-600/30 text-slate-400 border-slate-600/40',
 };
 const TAGS_DISPONIVEIS = Object.keys(TAGS_CORES);
@@ -53,10 +53,10 @@ function ModalContato({ contato, onSalvar, onFechar }) {
     // saia da tela em viewport baixa.
     <Portal>
     <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
-      <div className="glass-panel border border-[#2A3040] rounded-2xl w-full max-w-md shadow-2xl fade-in my-auto flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh]">
-        <div className="p-4 bg-[#1E2330] border-b border-[#2A3040] flex items-center justify-between shrink-0 rounded-t-2xl">
+      <div className="glass-panel border border-linha rounded-2xl w-full max-w-md shadow-2xl fade-in my-auto flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh]">
+        <div className="p-4 bg-grafite-600 border-b border-linha flex items-center justify-between shrink-0 rounded-t-2xl">
           <div className="flex items-center gap-2 font-bold text-sm text-white min-w-0">
-            <UserCheck size={16} className="text-orange-400 shrink-0" />
+            <UserCheck size={16} className="text-osso-200 shrink-0" />
             <span className="truncate">{contato?.id ? 'Editar Contato' : 'Novo Contato'}</span>
           </div>
           <button onClick={onFechar} className="text-slate-400 hover:text-white transition-colors shrink-0 ml-2"><X size={16}/></button>
@@ -66,41 +66,41 @@ function ModalContato({ contato, onSalvar, onFechar }) {
             <div>
               <label className="text-xs text-slate-400 font-medium block mb-1">Nome *</label>
               <input value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome completo"
-                className="w-full bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50" />
+                className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50" />
             </div>
             <div>
               <label className="text-xs text-slate-400 font-medium block mb-1">Telefone * (WhatsApp)</label>
               <input value={tel} onChange={e => setTel(e.target.value)} placeholder="(11) 98765-4321"
-                className="w-full bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50 font-mono" />
+                className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50 font-mono" />
             </div>
             <div>
               <label className="text-xs text-slate-400 font-medium block mb-1">E-mail</label>
               <input value={email} onChange={e => setEmail(e.target.value)} placeholder="email@empresa.com" type="email"
-                className="w-full bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50" />
+                className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50" />
             </div>
             <div>
               <label className="text-xs text-slate-400 font-medium block mb-1">Empresa</label>
               <input value={empresa} onChange={e => setEmpresa(e.target.value)} placeholder="Nome da empresa"
-                className="w-full bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50" />
+                className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50" />
             </div>
             <div>
               <label className="text-xs text-slate-400 font-medium block mb-1">Classificação</label>
               <select value={tag} onChange={e => setTag(e.target.value)}
-                className="w-full bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-orange-500/50">
+                className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-osso/50">
                 {TAGS_DISPONIVEIS.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase()+t.slice(1)}</option>)}
               </select>
             </div>
             <div>
               <label className="text-xs text-slate-400 font-medium block mb-1">Observações</label>
               <textarea value={obs} onChange={e => setObs(e.target.value)} rows={3} placeholder="Notas internas..."
-                className="w-full bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50 resize-none" />
+                className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50 resize-none" />
             </div>
           </div>
         </div>
-        <div className="p-4 bg-[#1E2330] border-t border-[#2A3040] flex flex-col-reverse sm:flex-row sm:justify-end gap-2 shrink-0 rounded-b-2xl">
+        <div className="p-4 bg-grafite-600 border-t border-linha flex flex-col-reverse sm:flex-row sm:justify-end gap-2 shrink-0 rounded-b-2xl">
           <button onClick={onFechar} className="px-3 py-2 sm:py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors">Cancelar</button>
           <button onClick={salvar} disabled={!nome.trim() || limparTel(tel).length < 10}
-            className="px-4 py-2 sm:py-1.5 rounded-lg bg-orange-500 hover:bg-orange-400 text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-orange-500/20 disabled:opacity-50 transition-all">
+            className="px-4 py-2 sm:py-1.5 rounded-lg bg-osso hover:bg-osso-200 text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-osso/20 disabled:opacity-50 transition-all">
             <Save size={13}/> Salvar
           </button>
         </div>
@@ -116,14 +116,14 @@ const ItemContatoWhatsApp = React.memo(function ItemContatoWhatsApp({ contato, o
   const iniciais = (contato.nome || 'CT').split(' ').slice(0,2).map(p => p[0]).join('').toUpperCase();
 
   return (
-    <div className="p-3.5 hover:bg-[#1E2330]/70 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#2A3040]/60 last:border-b-0">
+    <div className="p-3.5 hover:bg-grafite-600/70 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-linha/60 last:border-b-0">
       <div className="flex items-center gap-3.5 min-w-0 flex-1">
         <div className="relative shrink-0">
-          <div className="w-11 h-11 rounded-full bg-gradient-to-br from-orange-500/20 to-amber-500/20 border border-orange-500/30 text-orange-400 font-bold text-sm flex items-center justify-center shadow-inner">
+          <div className="w-11 h-11 rounded-full bg-gradient-to-br from-osso/20 to-espera/20 border border-osso/30 text-osso-200 font-bold text-sm flex items-center justify-center shadow-inner">
             {iniciais}
           </div>
-          <button onClick={() => onToggleFav(contato.id)} className="absolute -bottom-1 -right-1 bg-[#161922] p-0.5 rounded-full border border-[#2A3040] text-slate-500 hover:text-amber-400 transition-colors">
-            {contato.favorito ? <Star size={11} className="text-amber-400 fill-amber-400"/> : <StarOff size={11}/>}
+          <button onClick={() => onToggleFav(contato.id)} className="absolute -bottom-1 -right-1 bg-grafite-700 p-0.5 rounded-full border border-linha text-slate-500 hover:text-espera-400 transition-colors">
+            {contato.favorito ? <Star size={11} className="text-espera-400 fill-espera-400"/> : <StarOff size={11}/>}
           </button>
         </div>
 
@@ -137,7 +137,7 @@ const ItemContatoWhatsApp = React.memo(function ItemContatoWhatsApp({ contato, o
 
           <div className="flex items-center gap-3 text-xs text-slate-400 mt-1 flex-wrap font-mono">
             <span className="flex items-center gap-1 text-slate-300">
-              <Phone size={11} className="text-emerald-400 shrink-0"/>
+              <Phone size={11} className="text-ativo-400 shrink-0"/>
               {mascararTel(contato.telefone)}
             </span>
 
@@ -161,9 +161,9 @@ const ItemContatoWhatsApp = React.memo(function ItemContatoWhatsApp({ contato, o
         </div>
       </div>
 
-      <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center pt-2 sm:pt-0 border-t sm:border-t-0 border-[#2A3040]/40 w-full sm:w-auto justify-end">
+      <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center pt-2 sm:pt-0 border-t sm:border-t-0 border-linha/40 w-full sm:w-auto justify-end">
         <button onClick={() => onIniciarChat(contato)} title="Iniciar atendimento WhatsApp"
-          className="px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/30 border border-emerald-500/30 text-emerald-400 text-xs font-semibold flex items-center gap-1.5 transition-colors">
+          className="px-3 py-1.5 rounded-xl bg-ativo/15 hover:bg-ativo/30 border border-ativo/30 text-ativo-400 text-xs font-semibold flex items-center gap-1.5 transition-colors">
           <MessageSquare size={13}/>
           <span className="hidden sm:inline">Conversar</span>
         </button>
@@ -172,7 +172,7 @@ const ItemContatoWhatsApp = React.memo(function ItemContatoWhatsApp({ contato, o
           <Pencil size={13}/>
         </button>
         <button onClick={() => onRemover(contato.id)} title="Remover contato"
-          className="p-2 rounded-xl bg-slate-800/80 hover:bg-rose-500/20 text-rose-400 border border-slate-700 transition-colors">
+          className="p-2 rounded-xl bg-slate-800/80 hover:bg-falha/20 text-falha-400 border border-slate-700 transition-colors">
           <Trash2 size={13}/>
         </button>
       </div>
@@ -333,7 +333,7 @@ export default function Contatos({ conversas = [], setConversas, setAba }) {
   if (carregando) {
     return (
       <div className="flex-1 flex items-center justify-center text-slate-400 text-xs gap-2 py-24">
-        <Circle size={16} className="animate-spin text-orange-500" />
+        <Circle size={16} className="animate-spin text-osso" />
         Carregando lista de contatos do servidor...
       </div>
     );
@@ -351,25 +351,25 @@ export default function Contatos({ conversas = [], setConversas, setAba }) {
         <div className="flex items-center gap-2 shrink-0">
           <button onClick={sincronizarWhatsApp} disabled={sincronizando}
             title="Importa a agenda real do WhatsApp conectado"
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 text-xs font-bold border border-emerald-500/30 transition-all disabled:opacity-60">
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-ativo/15 hover:bg-ativo/25 text-ativo-400 text-xs font-bold border border-ativo/30 transition-all disabled:opacity-60">
             <RefreshCw size={14} className={sincronizando ? 'animate-spin' : ''} />
             {sincronizando ? 'Importando...' : 'Sincronizar do WhatsApp'}
           </button>
           <button onClick={() => { setEditando(null); setModal(true); }}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 text-xs font-bold shadow-md shadow-orange-500/20 transition-all">
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-osso hover:bg-osso-200 text-slate-950 text-xs font-bold shadow-md shadow-osso/20 transition-all">
             <Plus size={14}/> Novo Contato
           </button>
         </div>
       </div>
 
       {erroApi && (
-        <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
+        <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-falha/10 border border-falha/30 text-falha-400 text-xs">
           <AlertTriangle size={16} className="shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className="font-semibold">Operacao nao concluida</p>
-            <p className="text-rose-300/80 mt-0.5">{erroApi}</p>
+            <p className="text-falha-400/80 mt-0.5">{erroApi}</p>
           </div>
-          <button onClick={() => setErroApi(null)} className="text-rose-300/60 hover:text-rose-200 shrink-0">
+          <button onClick={() => setErroApi(null)} className="text-falha-400/60 hover:text-falha-400 shrink-0">
             <X size={14} />
           </button>
         </div>
@@ -380,16 +380,16 @@ export default function Contatos({ conversas = [], setConversas, setAba }) {
           <Search size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500"/>
           <input value={busca} onChange={e => setBusca(e.target.value)}
             placeholder="Buscar por nome, WhatsApp, empresa ou e-mail..."
-            className="w-full bg-[#161922] border border-[#2A3040] rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50" />
+            className="w-full bg-grafite-700 border border-linha rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50" />
         </div>
         <div className="flex items-center gap-2 shrink-0 flex-wrap">
           <button onClick={() => setEstrelas(v => !v)}
-            className={`p-2.5 rounded-xl border transition-all ${apenasEstrelas ? 'bg-amber-500/15 border-amber-500/30 text-amber-400' : 'bg-[#1E2330] border-[#2A3040] text-slate-400 hover:text-amber-400'}`}
+            className={`p-2.5 rounded-xl border transition-all ${apenasEstrelas ? 'bg-espera/15 border-espera/30 text-espera-400' : 'bg-grafite-600 border-linha text-slate-400 hover:text-espera-400'}`}
             title="Apenas favoritos">
             <Star size={14}/>
           </button>
           <select value={ordenacao} onChange={e => setOrdenacao(e.target.value)}
-            className="bg-[#161922] border border-[#2A3040] rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-orange-500/50">
+            className="bg-grafite-700 border border-linha rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-osso/50">
             <option value="nome">A-Z</option>
             <option value="recente">Recentes</option>
           </select>
@@ -404,8 +404,8 @@ export default function Contatos({ conversas = [], setConversas, setAba }) {
             <button key={key} onClick={() => setTagFiltro(key)}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
                 tagFiltro === key
-                  ? 'bg-orange-500/20 border-orange-500/40 text-orange-400'
-                  : 'bg-[#1E2330] border-[#2A3040] text-slate-400 hover:text-slate-200'
+                  ? 'bg-osso/20 border-osso/40 text-osso-200'
+                  : 'bg-grafite-600 border-linha text-slate-400 hover:text-slate-200'
               }`}>
               {label} ({count})
             </button>
@@ -414,7 +414,7 @@ export default function Contatos({ conversas = [], setConversas, setAba }) {
       </div>
 
       {/* Lista Vertical de Contatos Estilo WhatsApp */}
-      <div className="glass-panel border border-[#2A3040] rounded-2xl overflow-hidden divide-y divide-[#2A3040]/60 shadow-xl">
+      <div className="glass-panel border border-linha rounded-2xl overflow-hidden divide-y divide-linha/60 shadow-xl">
         {listaFiltrada.map(c => (
           <ItemContatoWhatsApp key={c.id} contato={c}
             onEditar={ct => { setEditando(ct); setModal(true); }}

@@ -16,32 +16,32 @@ export function EmojiIcon({ name, label, size = "md", inline = false }) {
 
   const configs = {
     bot: {
-      bg: 'bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-amber-500/10 border-orange-500/30 text-orange-400',
+      bg: 'bg-gradient-to-r from-espera/20 via-osso/20 to-espera/10 border-osso/30 text-osso-200',
       icon: Sparkles,
       defaultLabel: 'Arka IA',
     },
     check: {
-      bg: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400',
+      bg: 'bg-ativo/15 border-ativo/30 text-ativo-400',
       icon: CheckCircle2,
       defaultLabel: 'Validado',
     },
     warning: {
-      bg: 'bg-amber-500/15 border-amber-500/30 text-amber-400',
+      bg: 'bg-espera/15 border-espera/30 text-espera-400',
       icon: AlertTriangle,
       defaultLabel: 'Atenção',
     },
     danger: {
-      bg: 'bg-rose-500/15 border-rose-500/30 text-rose-400',
+      bg: 'bg-falha/15 border-falha/30 text-falha-400',
       icon: AlertTriangle,
       defaultLabel: 'Alerta',
     },
     lightning: {
-      bg: 'bg-gradient-to-r from-orange-500/20 to-amber-500/20 border-orange-500/40 text-orange-400',
+      bg: 'bg-gradient-to-r from-osso/20 to-espera/20 border-osso/40 text-osso-200',
       icon: Zap,
       defaultLabel: 'Automação',
     },
     shield: {
-      bg: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400',
+      bg: 'bg-ativo/15 border-ativo/30 text-ativo-400',
       icon: ShieldCheck,
       defaultLabel: 'Parceiro Arka',
     },
@@ -66,12 +66,12 @@ export function EmojiIcon({ name, label, size = "md", inline = false }) {
       defaultLabel: 'Seguro',
     },
     clock: {
-      bg: 'bg-amber-500/15 border-amber-500/30 text-amber-400',
+      bg: 'bg-espera/15 border-espera/30 text-espera-400',
       icon: Clock,
       defaultLabel: 'Aguardando',
     },
     user: {
-      bg: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400',
+      bg: 'bg-ativo/15 border-ativo/30 text-ativo-400',
       icon: UserCheck,
       defaultLabel: 'Operador',
     }

@@ -68,22 +68,22 @@ const MENSAGENS_PADRAO = [
 
 function IconeMensagem({ icon, size = 16 }) {
   const mapa = {
-    pix: { Icon: CreditCard, color: 'text-emerald-400' },
+    pix: { Icon: CreditCard, color: 'text-ativo-400' },
     search: { Icon: Search, color: 'text-blue-400' },
-    clock: { Icon: Clock, color: 'text-amber-400' },
+    clock: { Icon: Clock, color: 'text-espera-400' },
     bye: { Icon: HandHeart, color: 'text-pink-400' },
-    noreturn: { Icon: PhoneOff, color: 'text-rose-400' },
+    noreturn: { Icon: PhoneOff, color: 'text-falha-400' },
     monitor: { Icon: Monitor, color: 'text-purple-400' },
-    default: { Icon: Zap, color: 'text-orange-400' },
+    default: { Icon: Zap, color: 'text-osso-200' },
   };
   const { Icon, color } = mapa[icon] || mapa.default;
   return <Icon size={size} className={color} />;
 }
 
 const CATEGORIAS = {
-  pagamento: { label: 'Pagamento', color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
+  pagamento: { label: 'Pagamento', color: 'bg-ativo/15 text-ativo-400 border-ativo/30' },
   consulta: { label: 'Consulta', color: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
-  encerramento: { label: 'Encerramento', color: 'bg-rose-500/15 text-rose-400 border-rose-500/30' },
+  encerramento: { label: 'Encerramento', color: 'bg-falha/15 text-falha-400 border-falha/30' },
   suporte: { label: 'Suporte', color: 'bg-purple-500/15 text-purple-400 border-purple-500/30' },
   geral: { label: 'Geral', color: 'bg-slate-600/30 text-slate-300 border-slate-600/40' },
 };
@@ -111,10 +111,10 @@ function ModalEdicao({ msg, onSalvar, onFechar }) {
     // rodape com o botao Salvar nunca fique fora da tela em viewport baixa.
     <Portal>
     <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
-      <div className="glass-panel border border-[#2A3040] rounded-2xl w-full max-w-xl shadow-2xl fade-in my-auto flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh]">
-        <div className="p-4 bg-[#1E2330] border-b border-[#2A3040] flex items-center justify-between shrink-0 rounded-t-2xl">
+      <div className="glass-panel border border-linha rounded-2xl w-full max-w-xl shadow-2xl fade-in my-auto flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh]">
+        <div className="p-4 bg-grafite-600 border-b border-linha flex items-center justify-between shrink-0 rounded-t-2xl">
           <div className="flex items-center gap-2 font-bold text-sm text-white min-w-0">
-            <Zap size={16} className="text-orange-400 shrink-0" />
+            <Zap size={16} className="text-osso-200 shrink-0" />
             <span className="truncate">{msg?.id ? 'Editar Mensagem Rápida' : 'Nova Mensagem Rápida'}</span>
           </div>
           <button onClick={onFechar} className="text-slate-400 hover:text-white transition-colors shrink-0 ml-2">
@@ -129,7 +129,7 @@ function ModalEdicao({ msg, onSalvar, onFechar }) {
               value={titulo}
               onChange={e => setTitulo(e.target.value)}
               placeholder="Ex: PIX, AnyDesk, Boas-vindas..."
-              className="w-full bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50 transition-colors"
+              className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50 transition-colors"
             />
           </div>
 
@@ -138,7 +138,7 @@ function ModalEdicao({ msg, onSalvar, onFechar }) {
             <select
               value={categoria}
               onChange={e => setCategoria(e.target.value)}
-              className="w-full bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-orange-500/50"
+              className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-osso/50"
             >
               {Object.entries(CATEGORIAS).map(([key, val]) => (
                 <option key={key} value={key}>{val.label}</option>
@@ -156,12 +156,12 @@ function ModalEdicao({ msg, onSalvar, onFechar }) {
               onChange={e => setTexto(e.target.value)}
               rows={7}
               placeholder="Digite o texto completo da mensagem..."
-              className="w-full min-h-[140px] bg-[#161922] border border-[#2A3040] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50 resize-y transition-colors font-mono leading-relaxed"
+              className="w-full min-h-[140px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50 resize-y transition-colors font-mono leading-relaxed"
             />
           </div>
         </div>
 
-        <div className="p-4 bg-[#1E2330] border-t border-[#2A3040] flex flex-col-reverse sm:flex-row sm:justify-end gap-2 shrink-0 rounded-b-2xl">
+        <div className="p-4 bg-grafite-600 border-t border-linha flex flex-col-reverse sm:flex-row sm:justify-end gap-2 shrink-0 rounded-b-2xl">
           <button
             onClick={onFechar}
             className="px-3 py-2 sm:py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors"
@@ -171,7 +171,7 @@ function ModalEdicao({ msg, onSalvar, onFechar }) {
           <button
             onClick={salvar}
             disabled={!titulo.trim() || !texto.trim()}
-            className="px-4 py-2 sm:py-1.5 rounded-lg bg-orange-500 hover:bg-orange-400 text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-orange-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 sm:py-1.5 rounded-lg bg-osso hover:bg-osso-200 text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-osso/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Save size={13} /> Salvar Mensagem
           </button>
@@ -186,10 +186,10 @@ function CardMensagem({ msg, onEditar, onRemover, onCopiar, copiado }) {
   const cat = CATEGORIAS[msg.categoria] || CATEGORIAS.geral;
 
   return (
-    <div className="glass-panel p-4 rounded-2xl border border-[#2A3040] space-y-3 hover:border-slate-600/60 transition-all">
+    <div className="glass-panel p-4 rounded-2xl border border-linha space-y-3 hover:border-slate-600/60 transition-all">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="p-2 rounded-xl bg-[#1E2330] border border-[#2A3040] shrink-0">
+          <div className="p-2 rounded-xl bg-grafite-600 border border-linha shrink-0">
             <IconeMensagem icon={msg.icon} size={15} />
           </div>
           <div className="min-w-0">
@@ -207,7 +207,7 @@ function CardMensagem({ msg, onEditar, onRemover, onCopiar, copiado }) {
             className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 transition-colors"
           >
             {copiado === msg.id
-              ? <Check size={13} className="text-emerald-400" />
+              ? <Check size={13} className="text-ativo-400" />
               : <Copy size={13} className="text-slate-400" />}
           </button>
           {msg.editavel && (
@@ -222,7 +222,7 @@ function CardMensagem({ msg, onEditar, onRemover, onCopiar, copiado }) {
               <button
                 onClick={() => onRemover(msg.id)}
                 title="Remover mensagem"
-                className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-rose-400 transition-colors"
+                className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-falha-400 transition-colors"
               >
                 <Trash2 size={13} />
               </button>
@@ -231,7 +231,7 @@ function CardMensagem({ msg, onEditar, onRemover, onCopiar, copiado }) {
         </div>
       </div>
 
-      <div className="bg-[#161922] rounded-xl p-3 border border-[#2A3040]">
+      <div className="bg-grafite-700 rounded-xl p-3 border border-linha">
         <p className="text-[11px] text-slate-300 leading-relaxed line-clamp-3 whitespace-pre-line">
           {msg.texto}
         </p>
@@ -322,7 +322,7 @@ export default function MensagensRapidas({ onUsarMensagem }) {
         </div>
         <button
           onClick={abrirNova}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 text-xs font-bold shadow-md shadow-orange-500/20 transition-all shrink-0"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-osso hover:bg-osso-200 text-slate-950 text-xs font-bold shadow-md shadow-osso/20 transition-all shrink-0"
         >
           <Plus size={14} /> Nova Mensagem
         </button>
@@ -336,7 +336,7 @@ export default function MensagensRapidas({ onUsarMensagem }) {
             value={busca}
             onChange={e => setBusca(e.target.value)}
             placeholder="Buscar mensagem..."
-            className="w-full bg-[#161922] border border-[#2A3040] rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50"
+            className="w-full bg-grafite-700 border border-linha rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50"
           />
         </div>
 
@@ -344,8 +344,8 @@ export default function MensagensRapidas({ onUsarMensagem }) {
           onClick={() => setCatFiltro('todas')}
           className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
             catFiltro === 'todas'
-              ? 'bg-orange-500/20 border-orange-500/40 text-orange-400'
-              : 'bg-[#1E2330] border-[#2A3040] text-slate-400 hover:text-slate-200'
+              ? 'bg-osso/20 border-osso/40 text-osso-200'
+              : 'bg-grafite-600 border-linha text-slate-400 hover:text-slate-200'
           }`}
         >
           Todas ({mensagens.length})
@@ -359,8 +359,8 @@ export default function MensagensRapidas({ onUsarMensagem }) {
               onClick={() => setCatFiltro(key)}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
                 catFiltro === key
-                  ? 'bg-orange-500/20 border-orange-500/40 text-orange-400'
-                  : 'bg-[#1E2330] border-[#2A3040] text-slate-400 hover:text-slate-200'
+                  ? 'bg-osso/20 border-osso/40 text-osso-200'
+                  : 'bg-grafite-600 border-linha text-slate-400 hover:text-slate-200'
               }`}
             >
               {val.label} ({count})

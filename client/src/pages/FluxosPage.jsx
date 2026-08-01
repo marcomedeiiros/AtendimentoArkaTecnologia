@@ -22,15 +22,15 @@ export default function FluxosPage() {
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Barra enxuta de proposito: cada pixel aqui e altura tirada do canvas. */}
-      <div className="shrink-0 flex items-center gap-1 px-3 py-1.5 border-b border-[#2A3040] bg-[#0B0D12]">
+      <div className="shrink-0 flex items-center gap-1 px-3 py-1.5 border-b border-linha bg-grafite-900">
         {ABAS.map(({ id, label, Icon }) => (
           <button
             key={id}
             onClick={() => setAba(id)}
             className={`px-2.5 py-1 rounded-md text-[11px] font-bold flex items-center gap-1.5 transition-all ${
               aba === id
-                ? 'bg-orange-500/15 text-orange-400'
-                : 'text-slate-500 hover:text-slate-200 hover:bg-[#161922]'
+                ? 'bg-osso/15 text-osso-200'
+                : 'text-slate-500 hover:text-slate-200 hover:bg-grafite-700'
             }`}
           >
             <Icon size={12} /> {label}

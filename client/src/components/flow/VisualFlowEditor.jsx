@@ -12,12 +12,12 @@ import { FlowPropertyPanel } from './FlowPropertyPanel';
 import { FlowExecutionLogs } from './FlowExecutionLogs';
 
 const BLOCK_META = {
-  gatilho:    { emoji: '⚡', label: 'Gatilho',       desc: 'Início da conversa', color: 'border-orange-500/60 bg-orange-500/5',  badge: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
+  gatilho:    { emoji: '⚡', label: 'Gatilho',       desc: 'Início da conversa', color: 'border-osso/60 bg-osso/5',  badge: 'bg-osso/20 text-osso-200 border-osso/30' },
   mensagem:   { emoji: '💬', label: 'Mensagem',       desc: 'Texto para cliente', color: 'border-blue-500/60 bg-blue-500/5',      badge: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
   condicao:   { emoji: '🔍', label: 'Validar CNPJ',   desc: 'Checar parceiro',    color: 'border-purple-500/60 bg-purple-500/5',  badge: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
   delay:      { emoji: '⏳', label: 'Delay',          desc: 'Simula digitação',   color: 'border-slate-500/60 bg-slate-500/5',    badge: 'bg-slate-500/20 text-slate-300 border-slate-500/30' },
-  acao:       { emoji: '🚀', label: 'Ação ERP',        desc: 'Desconto / Boleto',  color: 'border-emerald-500/60 bg-emerald-500/5',badge: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
-  comentario: { emoji: '📝', label: 'Anotação',       desc: 'Post-it de equipe',  color: 'border-amber-500/60 bg-amber-500/10',   badge: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+  acao:       { emoji: '🚀', label: 'Ação ERP',        desc: 'Desconto / Boleto',  color: 'border-ativo/60 bg-ativo/5',badge: 'bg-ativo/20 text-ativo-400 border-ativo/30' },
+  comentario: { emoji: '📝', label: 'Anotação',       desc: 'Post-it de equipe',  color: 'border-espera/60 bg-espera/10',   badge: 'bg-espera/20 text-espera-400 border-espera/30' },
 };
 
 
@@ -71,7 +71,7 @@ function SequencePanel({ nodes, onReorder, onSelectNode, selectedNodeIds }) {
   return (
     <div className="space-y-1">
       <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-        <Settings size={11} className="text-orange-400" /> Sequência
+        <Settings size={11} className="text-osso-200" /> Sequência
       </div>
       {orderedNodes.map((node, idx) => {
         const meta = BLOCK_META[node.tipo] || BLOCK_META.mensagem;
@@ -81,7 +81,7 @@ function SequencePanel({ nodes, onReorder, onSelectNode, selectedNodeIds }) {
             key={node.id}
             onClick={() => onSelectNode(node.id)}
             className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-all border text-xs ${
-              isSel ? 'bg-orange-500/15 border-orange-500/40 text-orange-300' : 'bg-[#161922] border-[#2A3040] text-slate-300 hover:border-slate-600 hover:text-white'
+              isSel ? 'bg-osso/15 border-osso/40 text-osso-200' : 'bg-grafite-700 border-linha text-slate-300 hover:border-slate-600 hover:text-white'
             }`}
           >
             <span className="text-sm shrink-0">{meta.emoji}</span>
@@ -545,11 +545,11 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
   const activePropertyNode = nodes.find(n => n.id === activePropertyNodeId);
 
   return (
-    <div className="flex flex-col h-full min-h-[500px] w-full relative bg-[#0B0D12] overflow-hidden select-none font-sans">
+    <div className="flex flex-col h-full min-h-[500px] w-full relative bg-grafite-900 overflow-hidden select-none font-sans">
 
-      <div className="p-3 bg-[#11141C]/90 backdrop-blur-md border-b border-[#2A3040] flex flex-wrap items-center justify-between gap-3 z-20">
+      <div className="p-3 bg-grafite-800/90 backdrop-blur-md border-b border-linha flex flex-wrap items-center justify-between gap-3 z-20">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="p-2 rounded-xl bg-orange-500/10 text-orange-400 border border-orange-500/30">
+          <span className="p-2 rounded-xl bg-osso/10 text-osso-200 border border-osso/30">
             <Zap size={18} />
           </span>
 
@@ -560,14 +560,14 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                   <select
                     value={selectedFlowId || ''}
                     onChange={e => setSelectedFlowId(e.target.value)}
-                    className="bg-[#161922] border border-[#2A3040] rounded-xl px-3 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-orange-500 max-w-[220px] truncate"
+                    className="bg-grafite-700 border border-linha rounded-xl px-3 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-osso max-w-[220px] truncate"
                   >
                     {fluxos.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
                   </select>
                   {flow && (
                     <button
                       onClick={() => { setNomeEditado(flow.nome); setIsRenaming(true); }}
-                      className="p-1.5 rounded-xl bg-[#161922] hover:bg-[#1E2330] border border-[#2A3040] text-slate-400 hover:text-white transition-colors"
+                      className="p-1.5 rounded-xl bg-grafite-700 hover:bg-grafite-600 border border-linha text-slate-400 hover:text-white transition-colors"
                       title="Renomear este fluxo"
                     >
                       <Pencil size={13} />
@@ -586,11 +586,11 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                 onKeyDown={e => e.key === 'Enter' && handleRenameFlow()}
                 placeholder="Novo nome do fluxo"
                 autoFocus
-                className="bg-[#161922] border border-orange-500/60 rounded-xl px-3 py-1.5 text-xs font-bold text-white focus:outline-none w-48"
+                className="bg-grafite-700 border border-osso/60 rounded-xl px-3 py-1.5 text-xs font-bold text-white focus:outline-none w-48"
               />
               <button
                 onClick={handleRenameFlow}
-                className="px-2.5 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 text-xs font-bold transition-all"
+                className="px-2.5 py-1.5 rounded-xl bg-osso hover:bg-osso-200 text-slate-950 text-xs font-bold transition-all"
               >
                 Salvar
               </button>
@@ -618,7 +618,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                 setSelectedFlowId(criado.id);
               } catch {}
             }}
-            className="px-3 py-1.5 rounded-xl bg-orange-500/15 hover:bg-orange-500/25 text-orange-400 text-xs font-semibold border border-orange-500/30 flex items-center gap-1.5 transition-all"
+            className="px-3 py-1.5 rounded-xl bg-osso/15 hover:bg-osso/25 text-osso-200 text-xs font-semibold border border-osso/30 flex items-center gap-1.5 transition-all"
           >
             <Plus size={14} /> Novo Fluxo
           </button>
@@ -626,16 +626,16 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
           {fluxos.length > 0 && !showDeleteConfirm && !showDeleteAllConfirm && (
             <button
               onClick={() => setShowDeleteConfirm(true)}
-              className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-semibold border border-rose-500/30 flex items-center gap-1.5 transition-all"
+              className="px-3 py-1.5 rounded-xl bg-falha/10 hover:bg-falha/20 text-falha-400 text-xs font-semibold border border-falha/30 flex items-center gap-1.5 transition-all"
             >
               <Trash2 size={14} /> Deletar Fluxo
             </button>
           )}
           {showDeleteConfirm && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-xs">
-              <AlertCircle size={13} className="text-rose-400 shrink-0" />
-              <span className="text-rose-300 font-semibold">Excluir este fluxo?</span>
-              <button onClick={handleDeleteFlow} className="px-2 py-0.5 rounded-lg bg-rose-500 hover:bg-rose-400 text-white font-bold transition-colors">Sim</button>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-falha/15 border border-falha/40 text-xs">
+              <AlertCircle size={13} className="text-falha-400 shrink-0" />
+              <span className="text-falha-400 font-semibold">Excluir este fluxo?</span>
+              <button onClick={handleDeleteFlow} className="px-2 py-0.5 rounded-lg bg-falha hover:bg-falha-400 text-white font-bold transition-colors">Sim</button>
               <button onClick={() => setShowDeleteConfirm(false)} className="px-2 py-0.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold transition-colors">Não</button>
             </div>
           )}
@@ -643,30 +643,30 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
           {fluxos.length > 0 && !showDeleteAllConfirm && !showDeleteConfirm && (
             <button
               onClick={() => setShowDeleteAllConfirm(true)}
-              className="px-3 py-1.5 rounded-xl bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 text-xs font-semibold border border-rose-800/50 flex items-center gap-1.5 transition-all"
+              className="px-3 py-1.5 rounded-xl bg-falha-600/60 hover:bg-falha-600/80 text-falha-400 text-xs font-semibold border border-falha/50 flex items-center gap-1.5 transition-all"
               title="Apagar todos os fluxos cadastrados"
             >
-              <Flame size={14} className="text-rose-400" /> Apagar Todos
+              <Flame size={14} className="text-falha-400" /> Apagar Todos
             </button>
           )}
           {showDeleteAllConfirm && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-950 border border-rose-600 text-xs">
-              <AlertCircle size={13} className="text-rose-400 shrink-0" />
-              <span className="text-rose-200 font-bold">Apagar TODOS os fluxos?</span>
-              <button onClick={handleDeleteAllFlows} className="px-2.5 py-0.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-extrabold transition-colors">Apagar Todos</button>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-falha-600 border border-falha-600 text-xs">
+              <AlertCircle size={13} className="text-falha-400 shrink-0" />
+              <span className="text-falha-400 font-bold">Apagar TODOS os fluxos?</span>
+              <button onClick={handleDeleteAllFlows} className="px-2.5 py-0.5 rounded-lg bg-falha-600 hover:bg-falha text-white font-extrabold transition-colors">Apagar Todos</button>
               <button onClick={() => setShowDeleteAllConfirm(false)} className="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition-colors">Cancelar</button>
             </div>
           )}
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center bg-[#161922] border border-[#2A3040] rounded-xl p-1 text-xs text-slate-300">
+          <div className="flex items-center bg-grafite-700 border border-linha rounded-xl p-1 text-xs text-slate-300">
             <button onClick={() => setZoom(z => Math.max(z / 1.15, 0.25))} className="p-1.5 hover:text-white"><ZoomOut size={14} /></button>
             <span className="px-2 font-mono text-[11px] text-slate-400">{Math.round(zoom * 100)}%</span>
             <button onClick={() => setZoom(z => Math.min(z * 1.15, 2.5))} className="p-1.5 hover:text-white"><ZoomIn size={14} /></button>
-            <button onClick={() => { setZoom(1); setCanvasOffset({ x: 100, y: 100 }); }} className="p-1.5 hover:text-white border-l border-[#2A3040] ml-1" title="Resetar"><Maximize2 size={13} /></button>
+            <button onClick={() => { setZoom(1); setCanvasOffset({ x: 100, y: 100 }); }} className="p-1.5 hover:text-white border-l border-linha ml-1" title="Resetar"><Maximize2 size={13} /></button>
           </div>
-          <div className="flex items-center bg-[#161922] border border-[#2A3040] rounded-xl p-1">
+          <div className="flex items-center bg-grafite-700 border border-linha rounded-xl p-1">
             <button onClick={handleUndo} disabled={historyIndex <= 0} className="p-1.5 text-slate-400 hover:text-white disabled:opacity-30"><RotateCcw size={14} /></button>
             <button onClick={handleRedo} disabled={historyIndex >= history.length - 1} className="p-1.5 text-slate-400 hover:text-white disabled:opacity-30"><RefreshCw size={14} /></button>
           </div>
@@ -676,7 +676,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
           <button onClick={() => setShowSequencePanel(s => !s)} className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all ${showSequencePanel ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'bg-slate-800 text-slate-300 border-slate-700'}`}>
             <Settings size={14} /> Sequência
           </button>
-          <button onClick={() => setShowLogsConsole(s => !s)} className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all ${showLogsConsole ? 'bg-orange-500/20 text-orange-400 border-orange-500/40' : 'bg-slate-800 text-slate-300 border-slate-700'}`}>
+          <button onClick={() => setShowLogsConsole(s => !s)} className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all ${showLogsConsole ? 'bg-osso/20 text-osso-200 border-osso/40' : 'bg-slate-800 text-slate-300 border-slate-700'}`}>
             <Sparkles size={14} /> Console ({simLogs.length})
           </button>
           <button
@@ -684,8 +684,8 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
             title={simulacaoMarcada && !isRunningSim ? 'Clique para parar a simulação' : 'Executar simulação do fluxo'}
             className={`px-4 py-1.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-all ${
               simulacaoMarcada
-                ? 'bg-gradient-to-r from-emerald-500 to-green-500 text-slate-950 shadow-emerald-500/30 animate-pulse'
-                : 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-slate-950 shadow-orange-500/20'
+                ? 'bg-gradient-to-r from-ativo to-green-500 text-slate-950 shadow-ativo/30 animate-pulse'
+                : 'bg-gradient-to-r from-osso to-espera hover:from-osso-200 hover:to-espera-400 text-slate-950 shadow-osso/20'
             }`}
           >
             <Play size={14} fill="currentColor" />
@@ -700,7 +700,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
         <div className="relative flex-shrink-0 flex z-10">
           {/* Painel da biblioteca com animação de largura */}
           <div
-            className="bg-[#11141C] border-r border-[#2A3040] flex flex-col gap-3 select-none overflow-hidden"
+            className="bg-grafite-800 border-r border-linha flex flex-col gap-3 select-none overflow-hidden"
             style={{
               width: showLibrary ? '224px' : '0px',
               padding: showLibrary ? '12px' : '0px',
@@ -710,7 +710,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
             }}
           >
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1 whitespace-nowrap">
-              <Layers size={13} className="text-orange-400" /> Biblioteca de Blocos
+              <Layers size={13} className="text-osso-200" /> Biblioteca de Blocos
             </div>
             <div className="text-[10px] text-slate-500 -mt-1 whitespace-nowrap">Clique ou arraste para direita os blocos</div>
             {Object.entries(BLOCK_META).map(([tipo, meta]) => (
@@ -718,17 +718,17 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                 onClick={() => addNode(tipo)}
                 draggable
                 onDragStart={(e) => { e.dataTransfer.setData('tipo', tipo); e.dataTransfer.effectAllowed = 'copy'; }}
-                className="p-2.5 rounded-xl bg-[#161922] hover:bg-[#1E2330] border border-[#2A3040] hover:border-orange-500/40 text-left transition-all group flex items-center gap-2.5 whitespace-nowrap cursor-grab active:cursor-grabbing">
+                className="p-2.5 rounded-xl bg-grafite-700 hover:bg-grafite-600 border border-linha hover:border-osso/40 text-left transition-all group flex items-center gap-2.5 whitespace-nowrap cursor-grab active:cursor-grabbing">
                 <span className="text-lg leading-none">{meta.emoji}</span>
                 <div>
-                  <div className="text-xs font-semibold text-white group-hover:text-orange-400 transition-colors">{meta.label}</div>
+                  <div className="text-xs font-semibold text-white group-hover:text-osso-200 transition-colors">{meta.label}</div>
                   <div className="text-[10px] text-slate-400">{meta.desc}</div>
                 </div>
               </button>
             ))}
 
             {showSequencePanel && (
-              <div className="mt-2 border-t border-[#2A3040] pt-3">
+              <div className="mt-2 border-t border-linha pt-3">
                 <SequencePanel
                   nodes={nodes}
                   onReorder={handleReorder}
@@ -743,7 +743,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
           <button
             onClick={() => setShowLibrary(v => !v)}
             title={showLibrary ? 'Recolher biblioteca' : 'Abrir biblioteca de blocos'}
-            className="absolute top-1/2 -translate-y-1/2 -right-4 z-20 w-8 h-14 flex items-center justify-center bg-[#1E2330] border border-[#2A3040] rounded-r-xl text-slate-400 hover:text-orange-400 hover:border-orange-500/40 transition-all shadow-lg hover:shadow-orange-500/10 cursor-pointer"
+            className="absolute top-1/2 -translate-y-1/2 -right-4 z-20 w-8 h-14 flex items-center justify-center bg-grafite-600 border border-linha rounded-r-xl text-slate-400 hover:text-osso-200 hover:border-osso/40 transition-all shadow-lg hover:shadow-osso/10 cursor-pointer"
             style={{ right: '-32px' }}
           >
             <span
@@ -764,7 +764,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
           onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; if (!dragOverCanvas) setDragOverCanvas(true); }}
           onDragLeave={(e) => { if (e.target === containerRef.current) setDragOverCanvas(false); }}
           onDrop={handleCanvasDrop}
-          className={`flex-1 relative overflow-hidden bg-[#0B0D12] transition-shadow ${isPanning ? 'cursor-grabbing' : 'cursor-grab'} ${dragOverCanvas ? 'ring-2 ring-inset ring-orange-500/50' : ''}`}
+          className={`flex-1 relative overflow-hidden bg-grafite-900 transition-shadow ${isPanning ? 'cursor-grabbing' : 'cursor-grab'} ${dragOverCanvas ? 'ring-2 ring-inset ring-osso/50' : ''}`}
         >
           <div className="absolute inset-0 pointer-events-none opacity-20" style={{
             backgroundImage: `radial-gradient(#384156 1px, transparent 1px)`,
@@ -812,7 +812,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
             </svg>
 
             {marquee && (
-              <div className="absolute border border-orange-500 bg-orange-500/10 pointer-events-none rounded-md" style={{
+              <div className="absolute border border-osso bg-osso/10 pointer-events-none rounded-md" style={{
                 left: Math.min(marquee.startX, marquee.currentX), top: Math.min(marquee.startY, marquee.currentY),
                 width: Math.abs(marquee.currentX - marquee.startX), height: Math.abs(marquee.currentY - marquee.startY)
               }} />
@@ -848,11 +848,11 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                     }
                   }}
                   className={`absolute rounded-2xl transition-all duration-150 cursor-grab active:cursor-grabbing select-none
-                    ${isComment ? 'p-4 text-amber-200 shadow-lg' : 'p-4 shadow-xl'}
+                    ${isComment ? 'p-4 text-espera-400 shadow-lg' : 'p-4 shadow-xl'}
                     border-2 ${meta.color}
-                    ${isSelected  ? 'ring-2 ring-orange-500 shadow-orange-500/20' : ''}
-                    ${isExecuting ? 'ring-4 ring-amber-400 animate-pulse' : ''}
-                    ${isExecuted && !isExecuting ? 'border-emerald-500/80' : ''}
+                    ${isSelected  ? 'ring-2 ring-osso shadow-osso/20' : ''}
+                    ${isExecuting ? 'ring-4 ring-espera-400 animate-pulse' : ''}
+                    ${isExecuted && !isExecuting ? 'border-ativo/80' : ''}
                   `}
                   style={{ left: node.x, top: node.y, width: node.w || 220, minHeight: node.h || 96 }}
                 >
@@ -865,18 +865,18 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                         onClick={(e) => handleConnectPort(e, node.id)}
                         className={`absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full border-2 transition-all cursor-pointer flex items-center justify-center shadow-md z-10
                           ${connectingFromId && connectingFromId !== node.id
-                            ? 'bg-orange-500 border-orange-300 scale-125 shadow-orange-500/50'
+                            ? 'bg-osso border-osso-200 scale-125 shadow-osso/50'
                             : isEdgeSel
-                              ? 'bg-rose-500 border-rose-300 scale-110 shadow-rose-500/50'
+                              ? 'bg-falha border-falha-400 scale-110 shadow-falha/50'
                               : hasIncoming
-                                ? 'bg-[#161922] border-orange-500 hover:bg-orange-500'
-                                : 'bg-[#161922] border-slate-600 hover:border-orange-500/60 opacity-60'
+                                ? 'bg-grafite-700 border-osso hover:bg-osso'
+                                : 'bg-grafite-700 border-slate-600 hover:border-osso/60 opacity-60'
                           }`}
                         title={isEdgeSel ? 'Pressione Delete para desconectar' : hasIncoming ? 'Clique para selecionar conexão' : 'Porta de entrada (sem conexão)'}
                       >
-                        <div className={`w-2 h-2 rounded-full ${isEdgeSel ? 'bg-rose-300' : 'bg-orange-400'}`} />
+                        <div className={`w-2 h-2 rounded-full ${isEdgeSel ? 'bg-falha-400' : 'bg-osso-200'}`} />
                         {isEdgeSel && (
-                          <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[9px] bg-rose-500 text-white px-1.5 py-0.5 rounded font-bold whitespace-nowrap pointer-events-none">
+                          <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[9px] bg-falha text-white px-1.5 py-0.5 rounded font-bold whitespace-nowrap pointer-events-none">
                             Delete
                           </span>
                         )}
@@ -889,12 +889,12 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                       onMouseDown={(e) => handleOutgoingPortMouseDown(e, node.id)}
                       className={`absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full border-2 transition-all cursor-crosshair flex items-center justify-center shadow-md z-10
                         ${connectingFromId === node.id
-                          ? 'bg-emerald-500 border-emerald-300 scale-125 shadow-emerald-500/50'
-                          : 'bg-[#161922] border-emerald-500 hover:bg-emerald-500'
+                          ? 'bg-ativo border-ativo-400 scale-125 shadow-ativo/50'
+                          : 'bg-grafite-700 border-ativo hover:bg-ativo'
                         }`}
                       title="Arrastar para conectar ao próximo bloco"
                     >
-                      <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                      <div className="w-2 h-2 rounded-full bg-ativo-400" />
                     </div>
                   )}
 
@@ -907,7 +907,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                           <span className={`inline-flex text-[9px] px-1.5 py-0.5 rounded-full border font-semibold mt-0.5 ${meta.badge}`}>{meta.label}</span>
                         </div>
                       </div>
-                      {isExecuted && <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />}
+                      {isExecuted && <CheckCircle2 size={14} className="text-ativo-400 shrink-0" />}
                     </div>
                     {node.desc && (
                       <p className="text-[11px] text-slate-300 leading-snug line-clamp-2">{node.desc}</p>

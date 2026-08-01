@@ -20,9 +20,9 @@ function formatarDuracao(ms) {
 }
 
 const STATUS_EXEC = {
-  success: { label: 'Sucesso', cor: 'text-emerald-400', Icon: CheckCircle2 },
-  error:   { label: 'Erro',    cor: 'text-rose-400',    Icon: XCircle },
-  running: { label: 'Rodando', cor: 'text-amber-400',   Icon: Loader2 },
+  success: { label: 'Sucesso', cor: 'text-ativo-400', Icon: CheckCircle2 },
+  error:   { label: 'Erro',    cor: 'text-falha-400',    Icon: XCircle },
+  running: { label: 'Rodando', cor: 'text-espera-400',   Icon: Loader2 },
 };
 
 export default function PainelN8n() {
@@ -85,12 +85,12 @@ export default function PainelN8n() {
 
   return (
     <div className="space-y-4">
-      <div className="glass-panel p-5 rounded-2xl border border-[#2A3040] flex flex-wrap items-center justify-between gap-3">
+      <div className="glass-panel p-5 rounded-2xl border border-linha flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className={`w-11 h-11 rounded-2xl flex items-center justify-center border ${
             conectado
-              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-              : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+              ? 'bg-ativo/15 text-ativo-400 border-ativo/30'
+              : 'bg-falha/15 text-falha-400 border-falha/30'
           }`}>
             <Workflow size={22} />
           </div>
@@ -98,7 +98,7 @@ export default function PainelN8n() {
             <div className="font-bold text-sm text-white font-display flex items-center gap-2">
               Automações n8n
               <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                conectado ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
+                conectado ? 'bg-ativo/20 text-ativo-400' : 'bg-falha/20 text-falha-400'
               }`}>
                 {conectado ? '🟢 n8n Online' : '🔴 Offline'}
               </span>
@@ -113,18 +113,18 @@ export default function PainelN8n() {
 
         <div className="flex items-center gap-2">
           <button onClick={carregar} disabled={carregando}
-            className="px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2 bg-[#161922] border border-[#2A3040] text-slate-300 hover:text-white hover:border-slate-600 transition-all disabled:opacity-60">
+            className="px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2 bg-grafite-700 border border-linha text-slate-300 hover:text-white hover:border-slate-600 transition-all disabled:opacity-60">
             <RefreshCw size={14} className={carregando ? 'animate-spin' : ''} /> Atualizar
           </button>
           <button onClick={criar} disabled={!conectado || ocupadoId === 'novo'}
-            className="px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2 bg-orange-500 hover:bg-orange-400 text-slate-950 transition-all disabled:opacity-50">
+            className="px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2 bg-osso hover:bg-osso-200 text-slate-950 transition-all disabled:opacity-50">
             {ocupadoId === 'novo' ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Novo Workflow
           </button>
         </div>
       </div>
 
       {(erro || (!conectado && conexao?.erro)) && (
-        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300">
+        <div className="p-3 rounded-xl bg-espera/10 border border-espera/30 text-xs text-espera-400">
           {erro || conexao.erro}
         </div>
       )}
@@ -132,7 +132,7 @@ export default function PainelN8n() {
       {carregando ? (
         <div className="space-y-2">
           {[0, 1, 2].map(i => (
-            <div key={i} className="glass-panel p-4 rounded-2xl border border-[#2A3040] animate-pulse flex items-center gap-3">
+            <div key={i} className="glass-panel p-4 rounded-2xl border border-linha animate-pulse flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-slate-700/50" />
               <div className="flex-1 space-y-2">
                 <div className="h-3 w-40 rounded bg-slate-700/50" />
@@ -142,8 +142,8 @@ export default function PainelN8n() {
           ))}
         </div>
       ) : workflows.length === 0 ? (
-        <div className="glass-panel p-10 rounded-2xl border border-[#2A3040] text-center">
-          <div className="inline-flex p-4 rounded-2xl bg-[#1E2330] border border-[#2A3040] mb-3 text-slate-500">
+        <div className="glass-panel p-10 rounded-2xl border border-linha text-center">
+          <div className="inline-flex p-4 rounded-2xl bg-grafite-600 border border-linha mb-3 text-slate-500">
             <Workflow size={30} />
           </div>
           <p className="text-xs font-semibold text-slate-300">
@@ -161,10 +161,10 @@ export default function PainelN8n() {
             const st = STATUS_EXEC[w.ultimaExecucao?.status] || null;
             const ocupado = ocupadoId === w.id;
             return (
-              <div key={w.id} className="glass-panel p-4 rounded-2xl border border-[#2A3040] flex flex-wrap items-center gap-3">
+              <div key={w.id} className="glass-panel p-4 rounded-2xl border border-linha flex flex-wrap items-center gap-3">
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center border shrink-0 ${
                   w.ativo
-                    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                    ? 'bg-ativo/15 text-ativo-400 border-ativo/30'
                     : 'bg-slate-700/30 text-slate-500 border-slate-700'
                 }`}>
                   <Workflow size={18} />
@@ -174,7 +174,7 @@ export default function PainelN8n() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-bold text-white truncate">{w.nome}</span>
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                      w.ativo ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-600/30 text-slate-400'
+                      w.ativo ? 'bg-ativo/20 text-ativo-400' : 'bg-slate-600/30 text-slate-400'
                     }`}>
                       {w.status}
                     </span>
@@ -199,13 +199,13 @@ export default function PainelN8n() {
                   <button onClick={() => acao(w.id, () => N8nAPI.executar(w.id))}
                     disabled={ocupado || !w.webhookPath}
                     title={w.webhookPath ? 'Executar agora' : 'Adicione um Webhook Trigger no n8n para executar manualmente'}
-                    className="p-2 rounded-lg bg-slate-800/80 hover:bg-orange-500/20 text-orange-400 transition-colors disabled:opacity-40">
+                    className="p-2 rounded-lg bg-slate-800/80 hover:bg-osso/20 text-osso-200 transition-colors disabled:opacity-40">
                     {ocupado ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
                   </button>
                   <button onClick={() => acao(w.id, () => N8nAPI.alternarAtivo(w.id, !w.ativo))}
                     disabled={ocupado} title={w.ativo ? 'Desativar' : 'Ativar'}
                     className={`p-2 rounded-lg bg-slate-800/80 transition-colors disabled:opacity-40 ${
-                      w.ativo ? 'text-emerald-400 hover:bg-emerald-500/20' : 'text-slate-400 hover:bg-slate-700'
+                      w.ativo ? 'text-ativo-400 hover:bg-ativo/20' : 'text-slate-400 hover:bg-slate-700'
                     }`}>
                     <Power size={13} />
                   </button>
@@ -214,7 +214,7 @@ export default function PainelN8n() {
                     <Pencil size={13} />
                   </button>
                   <button onClick={() => excluir(w)} disabled={ocupado} title="Excluir workflow"
-                    className="p-2 rounded-lg bg-slate-800/80 hover:bg-rose-500/20 text-rose-400 transition-colors disabled:opacity-40">
+                    className="p-2 rounded-lg bg-slate-800/80 hover:bg-falha/20 text-falha-400 transition-colors disabled:opacity-40">
                     <Trash2 size={13} />
                   </button>
                 </div>
