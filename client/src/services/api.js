@@ -91,6 +91,8 @@ export const ContatosAPI = {
   criar: (dados) => request('/contatos', { method: 'POST', body: JSON.stringify(dados) }),
   atualizar: (id, dados) => request(`/contatos/${id}`, { method: 'PUT', body: JSON.stringify(dados) }),
   remover: (id) => request(`/contatos/${id}`, { method: 'DELETE' }),
+  // Importa a agenda real do WhatsApp conectado (via Evolution).
+  sincronizar: (instance) => request('/contatos/sincronizar', { method: 'POST', body: JSON.stringify({ instance }) }),
 };
 
 // ── Parceiros API ──
@@ -173,7 +175,7 @@ export const ConversasAPI = {
   fechar: (id) => request(`/conversas/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'fechada' }) }),
   reabrir: (id) => request(`/conversas/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'aberta' }) }),
   marcarLido: (id) => request(`/conversas/${id}/lido`, { method: 'PATCH' }),
-  // Favoritar / fixar / arquivar / ocultar — persistido no banco (nao apaga nada).
+  // Favoritar / fixar / arquivar / ocultar persistido no banco (nao apaga nada).
   atualizarFlags: (id, flags) => request(`/conversas/${id}/flags`, { method: 'PATCH', body: JSON.stringify(flags) }),
   remover: (id) => request(`/conversas/${id}`, { method: 'DELETE' }),
   // Ticket de uso unico para autenticar o EventSource (SSE) sem JWT na URL.

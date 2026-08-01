@@ -2,6 +2,7 @@ const chatbotService = require("../chatbot/chatbot.service");
 const evolutionApi = require("../../infrastructure/external/evolution-api.client");
 const instanciaRepository = require("../../infrastructure/repositories/instancia.repository");
 const conversaRepository = require("../../infrastructure/repositories/conversa.repository");
+const contatoService = require("../contatos/contato.service");
 const { mapConversa } = require("../../shared/helpers/mapper.helper");
 const bus = require("../../shared/events/event-bus");
 const logger = require("../../config/logger");
@@ -98,8 +99,21 @@ class WhatsAppService {
     const conectado = state === "open" || state === "connected";
 
     const instancia = await instanciaRepository.findByNome(instanceName);
+    const eraConectado = instancia?.conectado;
     if (instancia) {
       await instanciaRepository.updateConectado(instancia.id, conectado);
+    }
+
+    // Acabou de parear: o WhatsApp envia a agenda logo apos a conexao, entao
+    // importamos os contatos reais. Roda em segundo plano e com um atraso para
+    // dar tempo da Evolution receber a sincronizacao do aparelho.
+    if (conectado && !eraConectado) {
+      setTimeout(() => {
+        contatoService
+          .sincronizarDoWhatsApp(instanceName)
+          .then((r) => logger.info("Agenda do WhatsApp importada", r))
+          .catch((e) => logger.warn("Falha ao importar agenda", { message: e.message }));
+      }, 15000);
     }
 
     return { recebido: true, evento: "connection.update", conectado, state };

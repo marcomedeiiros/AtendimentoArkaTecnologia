@@ -20,7 +20,7 @@ function gravarCache(chave, valor) {
  * Preferência de interface persistida por operador.
  *
  * Restaura do localStorage na primeira renderização (sem piscar) e, em seguida,
- * sincroniza com o back-end — assim o estado sobrevive ao F5 e acompanha o
+ * sincroniza com o back-end assim o estado sobrevive ao F5 e acompanha o
  * operador ao reconectar de outro navegador. A escrita é adiada (debounce) para
  * não gerar uma requisição por clique.
  *

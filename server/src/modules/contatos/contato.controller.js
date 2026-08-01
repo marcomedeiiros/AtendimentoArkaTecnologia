@@ -14,6 +14,12 @@ class ContatoController {
     return contatoService.atualizar(req.params.id, req.body).then((data) => success(res, data));
   }
 
+  sincronizar(req, res) {
+    return contatoService
+      .sincronizarDoWhatsApp(req.body?.instance || req.query.instance)
+      .then((data) => success(res, data));
+  }
+
   remover(req, res) {
     return contatoService.remover(req.params.id).then((data) => success(res, data));
   }

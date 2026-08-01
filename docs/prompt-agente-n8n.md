@@ -82,7 +82,7 @@ Você apenas transforma a instrução recebida em uma resposta natural, mantendo
 
 ## Como isso se encaixa no projeto
 
-O fluxo em produção é este — **o n8n manda em quem responde**:
+O fluxo em produção é este **o n8n manda em quem responde**:
 
 ```
 Cliente ⇄ Evolution ──webhook──▶ Arka (registra na Central)
@@ -136,8 +136,8 @@ E em **Configurações → n8n → "Webhook que recebe as mensagens"**, cole a U
 
 Aceita `telefone` no lugar de `conversaId`. O Arka envia pelo WhatsApp e registra
 a mensagem na conversa (aparece na Central em tempo real). O `token` é o
-`WEBHOOK_SECRET` do `server/.env` — o mesmo do webhook de entrada.
+`WEBHOOK_SECRET` do `server/.env` o mesmo do webhook de entrada.
 
 > Se o n8n estiver fora do ar ou o webhook não estiver configurado, **nada é
 > enviado ao cliente**: a mensagem fica registrada na Central para o atendente
-> humano assumir. É o comportamento desejado — nunca responder sem controle.
+> humano assumir. É o comportamento desejado nunca responder sem controle.

@@ -19,6 +19,12 @@ class ContatoRepository {
     return prisma.contato.findUnique({ where: { id } });
   }
 
+  // Usado pela sincronizacao da agenda do WhatsApp (telefone nao e unico no
+  // schema, entao findFirst).
+  findByTelefone(telefone) {
+    return prisma.contato.findFirst({ where: { telefone } });
+  }
+
   create(data) {
     return prisma.contato.create({ data });
   }

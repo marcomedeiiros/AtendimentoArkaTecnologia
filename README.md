@@ -6,9 +6,9 @@ https://github.com/user-attachments/assets/160966dd-cf6e-4c69-93e7-f4eab1ff9d5d
 
 Central de Atendimento (estilo Chatwoot) integrada ao WhatsApp via **Evolution API**.
 
-- **client/** — painel React (Vite) → `http://localhost:5173`
-- **server/** — API Node/Express + Prisma → `http://localhost:3000`
-- **Evolution API** — ponte com o WhatsApp (Docker) → `http://localhost:8080`
+- **client/** painel React (Vite) → `http://localhost:5173`
+- **server/** API Node/Express + Prisma → `http://localhost:3000`
+- **Evolution API** ponte com o WhatsApp (Docker) → `http://localhost:8080`
 
 ---
 
@@ -17,7 +17,7 @@ Central de Atendimento (estilo Chatwoot) integrada ao WhatsApp via **Evolution A
 Para quem já tem **Node.js**, **Docker Desktop** e **WSL2** instalados.
 Rode um comando por linha (no PowerShell o `&&` não funciona).
 
-**Baixando o projeto** — escolha uma opção:
+**Baixando o projeto** escolha uma opção:
 
 - **ZIP:** no GitHub, **Code → Download ZIP** → extraia a pasta → abra o
   PowerShell dentro dela.
@@ -31,7 +31,7 @@ git clone https://github.com/marcomedeiiros/AtendimentoArkaTecnologia.git
 cd AtendimentoArkaTecnologia
 ```
 
-**1) Criar o `.env` do back-end** — ele **não vem no git** (contém segredos):
+**1) Criar o `.env` do back-end** ele **não vem no git** (contém segredos):
 
 ```bash
 cd server
@@ -51,7 +51,7 @@ node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"
 > O `docker-compose.evolution.yml` lê esse mesmo `.env` automaticamente, então a
 > chave da Evolution e a do Arka **nunca ficam fora de sincronia**.
 
-**2) Back-end** — dependências e banco:
+**2) Back-end** dependências e banco:
 
 ```bash
 npm install
@@ -87,7 +87,7 @@ tela de login).
 npm install
 ```
 
-**5) Subir tudo** — em **dois terminais separados**:
+**5) Subir tudo** em **dois terminais separados**:
 
 ```bash
 cd server
@@ -155,7 +155,7 @@ preciso túnel nem domínio público.
 
 ### 2.1. Pré-requisitos (uma vez só)
 
-**a) WSL2** — o Docker no Windows roda os containers dentro dele. Sem isso o
+**a) WSL2** o Docker no Windows roda os containers dentro dele. Sem isso o
 Docker Desktop instala mas o motor **não sobe** (`docker info` devolve erro 500).
 
 Abra o PowerShell **como Administrador** e rode:
@@ -169,7 +169,7 @@ wsl --install
 > Se acusar virtualização desabilitada, ative na BIOS:
 > **Intel VT-x / Virtualization Technology** ou **SVM Mode** (AMD).
 
-**b) Docker Desktop** — https://www.docker.com/products/docker-desktop/
+**b) Docker Desktop** https://www.docker.com/products/docker-desktop/
 
 Abra o app e espere o ícone da baleia 🐳 parar de animar.
 
@@ -241,7 +241,7 @@ docker exec arka-evolution-db psql -U evolution -d evolution -c "SELECT name, \"
 
 ## 4. Configuração
 
-As chaves ficam em `server/.env` e o compose **já usa as mesmas** — não precisa
+As chaves ficam em `server/.env` e o compose **já usa as mesmas** não precisa
 duplicar nada:
 
 | Variável | Para que serve |
@@ -255,7 +255,7 @@ Também dá para editar tudo pela tela **Configurações** do painel (Evolution 
 n8n), com botão de **Testar conexão**. O que é salvo ali **tem prioridade sobre
 o `.env`**.
 
-> ⚠️ **Nunca comite o `.env`** — ele contém segredos. Já está no `.gitignore`.
+> ⚠️ **Nunca comite o `.env`** ele contém segredos. Já está no `.gitignore`.
 
 ---
 
@@ -274,7 +274,7 @@ Essa imagem foi **despublicada** do Docker Hub. A correta é
 **`evoapicloud/evolution-api`** (já configurada no compose).
 
 **WhatsApp aparece Offline / mensagens não chegam**
-Confira se o webhook aponta para `host.docker.internal:3000` — de dentro do
+Confira se o webhook aponta para `host.docker.internal:3000` de dentro do
 container, `localhost` seria o próprio container, não a sua máquina.
 
 **Contatos e conversas vazios na Evolution**
@@ -305,5 +305,5 @@ cd client
 npm start
 ```
 
-A Evolution sobe sozinha junto com o Docker (`restart: unless-stopped`) — só o
+A Evolution sobe sozinha junto com o Docker (`restart: unless-stopped`) só o
 back-end e o painel precisam ser iniciados manualmente.

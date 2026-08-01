@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Users, Plus, Search, Trash2, Pencil, Save, X,
   Phone, MessageSquare, Star, StarOff, UserCheck, Circle, Building, Mail,
-  AlertTriangle
+  AlertTriangle, RefreshCw
 } from 'lucide-react';
 import { ContatosAPI } from '../../services/api';
 import Portal from '../Portal';
@@ -190,6 +190,27 @@ export default function Contatos({ conversas = [], setConversas, setAba }) {
   const [apenasEstrelas, setEstrelas] = useState(false);
   const [ordenacao,    setOrdenacao]  = useState('nome');
   const [erroApi,      setErroApi]    = useState(null);
+  const [sincronizando, setSincronizando] = useState(false);
+
+  // Importa a agenda real do WhatsApp conectado (via Evolution).
+  const sincronizarWhatsApp = useCallback(async () => {
+    setSincronizando(true);
+    try {
+      const r = await ContatosAPI.sincronizar();
+      const lista = await ContatosAPI.listar();
+      setContatos(Array.isArray(lista) ? lista : []);
+      setErroApi(null);
+      window.alert(
+        r.total === 0
+          ? 'A Evolution não retornou nenhum contato.\n\nIsso acontece quando o WhatsApp ainda não enviou a agenda — conecte o número e aguarde alguns instantes.'
+          : `Agenda importada!\n\n${r.criados} contato(s) novo(s)\n${r.atualizados} atualizado(s)\n${r.ignorados} ignorado(s) (grupos/inválidos)`
+      );
+    } catch (e) {
+      window.alert('Não foi possível importar a agenda: ' + e.message);
+    } finally {
+      setSincronizando(false);
+    }
+  }, []);
 
   const carregarContatosServidor = useCallback(async () => {
     setCarregando(true);
@@ -327,10 +348,18 @@ export default function Contatos({ conversas = [], setConversas, setAba }) {
             {contatos.length} contato{contatos.length !== 1 ? 's' : ''} sincronizados com a base de dados.
           </p>
         </div>
-        <button onClick={() => { setEditando(null); setModal(true); }}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 text-xs font-bold shadow-md shadow-orange-500/20 transition-all shrink-0">
-          <Plus size={14}/> Novo Contato
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button onClick={sincronizarWhatsApp} disabled={sincronizando}
+            title="Importa a agenda real do WhatsApp conectado"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 text-xs font-bold border border-emerald-500/30 transition-all disabled:opacity-60">
+            <RefreshCw size={14} className={sincronizando ? 'animate-spin' : ''} />
+            {sincronizando ? 'Importando...' : 'Sincronizar do WhatsApp'}
+          </button>
+          <button onClick={() => { setEditando(null); setModal(true); }}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 text-xs font-bold shadow-md shadow-orange-500/20 transition-all">
+            <Plus size={14}/> Novo Contato
+          </button>
+        </div>
       </div>
 
       {erroApi && (

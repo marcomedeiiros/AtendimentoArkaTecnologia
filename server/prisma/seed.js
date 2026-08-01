@@ -14,19 +14,9 @@ const SEED_PARCEIROS = [
   { cnpj: "00000000000191", razaoSocial: "Banco do Brasil SA", status: "ativo" },
 ];
 
-const SEED_CONTATOS = [
-  { nome: "Joao Pereira", telefone: "11987654321", email: "joao@email.com", tag: "cliente" },
-  { nome: "Ricardo Nunes", telefone: "21991238877", tag: "cliente" },
-  {
-    nome: "Beatriz Santos",
-    telefone: "31988771122",
-    email: "beatriz@ex.com",
-    empresa: "Empresa Exemplo LTDA",
-    tag: "parceiro",
-    favorito: true,
-    observacoes: "Renovacao contratual em andamento.",
-  },
-];
+// Os contatos NAO sao mais semeados: eles vem da agenda real do WhatsApp,
+// importada da Evolution assim que a instancia conecta (e pelo botao
+// "Sincronizar do WhatsApp" na tela de Contatos).
 
 // `descricao` = anotacao interna que aparece no editor de fluxos.
 // `texto`     = o que o cliente recebe no WhatsApp.
@@ -236,36 +226,11 @@ async function main() {
     });
   }
 
-  for (const contato of SEED_CONTATOS) {
-    const existente = await prisma.contato.findFirst({ where: { telefone: contato.telefone } });
-    if (!existente) {
-      await prisma.contato.create({ data: contato });
-    }
-  }
-
   await seedFluxos();
   await backfillTextosFluxos();
 
-  const conversaExistente = await prisma.conversa.findFirst({ where: { instanciaId: instancia.id } });
-  if (!conversaExistente) {
-    await prisma.conversa.create({
-      data: {
-        instanciaId: instancia.id,
-        cliente: "Joao Pereira",
-        telefone: "5511987654321",
-        statusAtendimento: "pendente",
-        lido: false,
-        mensagens: {
-          create: [
-            {
-              origem: "cliente",
-              texto: "Oi, boa tarde! Gostaria de um orcamento para a minha empresa.",
-            },
-          ],
-        },
-      },
-    });
-  }
+  // Nao criamos conversa de demonstracao: a Central deve mostrar apenas
+  // atendimentos reais vindos do WhatsApp.
 
   console.log("Seed concluido com sucesso.");
 }

@@ -234,6 +234,15 @@ class EvolutionApiClient {
     });
   }
 
+  // Agenda do WhatsApp sincronizada pela instancia. Depende de a instancia ter
+  // sido criada com syncFullHistory -- sem isso o WhatsApp nao envia a agenda.
+  async findContacts(instance = this.defaultInstance) {
+    const alvo = instance || (await this.instanciaPadrao());
+    const data = await this.request("POST", `/chat/findContacts/${alvo}`, {});
+    const lista = Array.isArray(data) ? data : data?.data || [];
+    return lista;
+  }
+
   // Foto de perfil do contato. Best-effort: a Evolution retorna 404/erro quando
   // o numero nao tem foto publica -- nesses casos devolvemos null e o front cai
   // para o avatar de iniciais.
