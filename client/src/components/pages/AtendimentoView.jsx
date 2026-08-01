@@ -358,65 +358,32 @@ function PainelTv({ conversas, onFechar }) {
 
 // Tela exibida quando nenhuma conversa esta aberta.
 //
-// Um vazio aqui nao e um aviso, e um convite a agir: em vez de repetir que
-// "nada esta selecionado", mostramos o que existe para fazer agora -- quantos
-// clientes aguardam, ha quanto tempo o mais antigo espera e um atalho para
-// assumi-lo. Sem a fila, vira uma confirmacao tranquila de que esta tudo em dia.
-function TelaSemConversa({ pendentes, whatsAppConectado, onAtenderMaisAntigo }) {
-  const maisAntiga = pendentes[0];
-
+// Fundo escuro de proposito, sem o papel de parede: assim o vazio pertence
+// visualmente a moldura do app, e a area clara com wallpaper passa a significar
+// "tem conversa aberta aqui". Da para saber em que estado se esta de relance.
+function TelaSemConversa() {
   return (
-    <div className="flex-1 flex items-center justify-center relative overflow-hidden" style={WHATSAPP_BG}>
-      <div className="relative z-10 text-center px-8 py-10 max-w-md">
-        {pendentes.length > 0 ? (
-          <>
-            <div className="inline-flex p-5 rounded-2xl bg-white border border-grafite-900/10 mb-5 text-espera-600">
-              <Clock size={38} />
-            </div>
-            <h3 className="text-xl font-bold text-grafite-900 font-display mb-1.5">
-              {pendentes.length === 1
-                ? '1 cliente aguardando'
-                : `${pendentes.length} clientes aguardando`}
-            </h3>
-            <p className="text-sm text-grafite-900/60 mb-6">
-              {maisAntiga.cliente} espera {tempoDesde(maisAntiga.ultimaMensagemEm)}.
-            </p>
-            <button
-              onClick={() => onAtenderMaisAntigo(maisAntiga.id)}
-              className="px-5 py-3 rounded-xl bg-acao hover:bg-acao-200 text-white text-sm font-bold inline-flex items-center gap-2 shadow-md transition-colors"
-            >
-              <UserCheck size={17} /> Atender quem espera há mais tempo
-            </button>
-            <p className="text-xs text-grafite-900/45 mt-4">
-              Ou escolha uma conversa na lista ao lado.
-            </p>
-          </>
-        ) : (
-          <>
-            <div className="inline-flex p-5 rounded-2xl bg-white border border-grafite-900/10 mb-5 text-ativo-600">
-              <CheckCircle2 size={38} />
-            </div>
-            <h3 className="text-xl font-bold text-grafite-900 font-display mb-1.5">
-              Tudo em dia
-            </h3>
-            <p className="text-sm text-grafite-900/60">
-              Ninguém na fila. As conversas novas aparecem aqui assim que
-              chegarem, sem precisar atualizar a página.
-            </p>
-          </>
-        )}
+    <div className="flex-1 flex items-center justify-center relative overflow-hidden bg-gradient-to-br from-grafite-800 via-grafite-900 to-grafite-800">
 
-        {/* Sem conexao, nada novo entra -- e isso precisa ficar explicito, ou o
-            atendente interpreta a fila vazia como "dia tranquilo". */}
-        {!whatsAppConectado && (
-          <div className="mt-7 p-3 rounded-xl bg-falha/10 border border-falha/30 text-left flex items-start gap-2.5">
-            <WifiOff size={16} className="text-falha-600 shrink-0 mt-0.5" />
-            <p className="text-xs text-grafite-900/70 leading-relaxed">
-              <strong className="text-falha-600">WhatsApp desconectado.</strong> Nenhuma
-              mensagem nova vai chegar até reconectar em Integração WhatsApp.
-            </p>
-          </div>
-        )}
+      {/* Baloezinhos de conversa ao fundo, nas cores do WhatsApp escuro */}
+      <div className="absolute top-8 left-8 w-32 h-10 rounded-2xl rounded-tl-sm bg-grafite-600 opacity-60" />
+      <div className="absolute top-20 right-10 w-40 h-10 rounded-2xl rounded-tr-sm bg-bolha opacity-50" />
+      <div className="absolute top-36 left-14 w-24 h-10 rounded-2xl rounded-tl-sm bg-grafite-600 opacity-60" />
+      <div className="absolute bottom-24 right-8 w-36 h-10 rounded-2xl rounded-tr-sm bg-bolha opacity-50" />
+      <div className="absolute bottom-12 left-10 w-28 h-10 rounded-2xl rounded-tl-sm bg-grafite-600 opacity-60" />
+      <div className="absolute bottom-36 right-20 w-20 h-10 rounded-2xl rounded-tr-sm bg-bolha opacity-40" />
+
+      <div className="relative z-10 text-center p-8 max-w-sm">
+        <div className="inline-flex p-5 rounded-2xl bg-grafite-700 border border-linha mb-5 text-acao">
+          <MessageSquare size={38} />
+        </div>
+        <h3 className="text-base font-bold text-texto font-display mb-2">
+          Nenhum Atendimento Selecionado
+        </h3>
+        <p className="text-xs text-texto-suave leading-relaxed">
+          Selecione uma conversa ou clique em{' '}
+          <strong className="text-acao">"ATENDER CONVERSA"</strong> para iniciar o chat.
+        </p>
       </div>
     </div>
   );
@@ -1916,13 +1883,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
 
         <div className={`${chatAberto ? 'flex' : 'hidden lg:flex'} lg:col-span-8 glass-panel rounded-2xl flex-col overflow-hidden border border-linha min-h-[70vh] lg:min-h-0`}>
           {!conversa ? (
-            <TelaSemConversa
-              pendentes={conversas
-                .filter(c => c.statusAtendimento === 'pendente' && !c.arquivada && !c.oculta)
-                .sort((a, b) => new Date(a.ultimaMensagemEm || 0) - new Date(b.ultimaMensagemEm || 0))}
-              whatsAppConectado={whatsAppConectado}
-              onAtenderMaisAntigo={atenderConversa}
-            />
+            <TelaSemConversa />
           ) : (
             <PainelChat
               conversa={conversa}
