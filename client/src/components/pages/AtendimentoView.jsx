@@ -113,7 +113,7 @@ function PainelMensagensRapidas({ onSelecionar, onFechar }) {
     <div className="absolute bottom-full left-0 right-0 mb-2 glass-panel border border-linha rounded-2xl shadow-2xl z-30 overflow-hidden">
       <div className="p-3 bg-grafite-600 border-b border-linha flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Zap size={13} className="text-osso-200" />
+          <Zap size={13} className="text-acao-200" />
           <span className="text-xs font-bold text-white">Mensagens Rápidas</span>
         </div>
         <div className="flex items-center gap-2 flex-1 max-w-xs">
@@ -124,7 +124,7 @@ function PainelMensagensRapidas({ onSelecionar, onFechar }) {
               onChange={e => setBusca(e.target.value)}
               placeholder="Buscar..."
               autoFocus
-              className="w-full bg-grafite-700 border border-linha rounded-lg pl-7 pr-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50"
+              className="w-full bg-grafite-700 border border-linha rounded-lg pl-7 pr-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50"
             />
           </div>
           <button onClick={onFechar} className="text-slate-400 hover:text-white transition-colors p-1">
@@ -137,9 +137,9 @@ function PainelMensagensRapidas({ onSelecionar, onFechar }) {
           <button
             key={m.id}
             onClick={() => onSelecionar(m.texto)}
-            className="w-full text-left p-2.5 rounded-xl hover:bg-grafite-600 border border-transparent hover:border-osso/30 transition-all group"
+            className="w-full text-left p-2.5 rounded-xl hover:bg-grafite-600 border border-transparent hover:border-acao/30 transition-all group"
           >
-            <div className="font-semibold text-xs text-white group-hover:text-osso-200 transition-colors">{m.titulo}</div>
+            <div className="font-semibold text-xs text-white group-hover:text-acao-200 transition-colors">{m.titulo}</div>
             <div className="text-[10px] text-slate-400 truncate mt-0.5">{m.texto}</div>
           </button>
         ))}
@@ -186,7 +186,7 @@ function PainelFiltros({ extras, setExtras, visib, setVisib, onLimpar, totalAtiv
     <div className="absolute right-0 top-full mt-2 w-[min(90vw,300px)] glass-panel border border-linha rounded-2xl shadow-2xl shadow-black/50 z-40 overflow-hidden fade-in">
       <div className="p-3 bg-grafite-600 border-b border-linha flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs font-bold text-white">
-          <SlidersHorizontal size={13} className="text-osso-200" /> Filtros
+          <SlidersHorizontal size={13} className="text-acao-200" /> Filtros
         </div>
         {totalAtivos > 0 && (
           <button onClick={onLimpar} className="text-[11px] text-slate-400 hover:text-falha-400 font-semibold transition-colors">
@@ -205,7 +205,7 @@ function PainelFiltros({ extras, setExtras, visib, setVisib, onLimpar, totalAtiv
                 <button key={f.id} onClick={() => alternarExtra(f.id)}
                   className={`text-[11px] px-2.5 py-1 rounded-full border font-semibold transition-all ${
                     ativo
-                      ? 'bg-osso/20 border-osso/50 text-osso-200'
+                      ? 'bg-acao/20 border-acao/50 text-acao-200'
                       : 'bg-grafite-700 border-linha text-slate-400 hover:text-slate-200 hover:border-slate-600'
                   }`}>
                   {f.label}
@@ -228,7 +228,7 @@ function PainelFiltros({ extras, setExtras, visib, setVisib, onLimpar, totalAtiv
                 type="checkbox"
                 checked={!!visib[op.id]}
                 onChange={e => setVisib(v => ({ ...v, [op.id]: e.target.checked }))}
-                className="w-3.5 h-3.5 rounded accent-osso cursor-pointer"
+                className="w-3.5 h-3.5 rounded accent-acao cursor-pointer"
               />
               <span className="text-[11px] text-slate-300 group-hover:text-white transition-colors">{op.label}</span>
             </label>
@@ -458,7 +458,7 @@ function MensagemMidia({ m, escuro, onAbrirImagem }) {
     return (
       <a href={md.url} download={md.fileName || 'documento'} target="_blank" rel="noreferrer"
         className={`flex items-center gap-2 p-2 rounded-lg ${escuro ? 'bg-grafite-700 border border-slate-700' : 'bg-slate-900/10'}`}>
-        <FileText size={20} className={escuro ? 'text-osso-200' : 'text-slate-900'} />
+        <FileText size={20} className={escuro ? 'text-acao-200' : 'text-slate-900'} />
         <div className="min-w-0">
           <div className={`text-[11px] font-semibold truncate ${escuro ? 'text-slate-100' : 'text-slate-900'}`}>{md.fileName || 'Documento'}</div>
           <div className={`text-[9px] ${escuro ? 'text-slate-400' : 'text-slate-900/60'}`}>Baixar</div>
@@ -513,11 +513,11 @@ const CardConversa = React.memo(function CardConversa({
       onClick={() => { if (clicavel) onSelecionar(c.id); }}
       className={`p-3.5 rounded-xl border transition-all duration-200 flex flex-col gap-2 ${clicavel ? 'cursor-pointer' : ''} ${
         ehAtivo
-          ? 'bg-gradient-to-r from-osso/10 to-transparent border-osso/50 shadow-sm'
+          ? 'bg-gradient-to-r from-acao/10 to-transparent border-acao/50 shadow-sm'
           : naoLidas > 0
-            ? 'bg-osso/[0.06] border-osso/30 hover:border-osso/50'
+            ? 'bg-acao/[0.06] border-acao/30 hover:border-acao/50'
             : fixado
-              ? 'bg-grafite-600/60 border-osso/25 hover:border-osso/40'
+              ? 'bg-grafite-600/60 border-acao/25 hover:border-acao/40'
               : 'bg-grafite-600/40 border-linha/60 hover:border-slate-600/60'
       }`}
     >
@@ -552,7 +552,7 @@ const CardConversa = React.memo(function CardConversa({
         </span>
         <div className="flex items-center gap-1 shrink-0">
           <button onClick={e => { e.stopPropagation(); onFixar(c.id); }} title={fixado ? 'Desafixar conversa' : 'Fixar no topo'}
-            className={`p-1.5 rounded-lg transition-colors ${fixado ? 'bg-osso/20 text-osso-200' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-400'}`}>
+            className={`p-1.5 rounded-lg transition-colors ${fixado ? 'bg-acao/20 text-acao-200' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-400'}`}>
             <Pin size={12} className={fixado ? 'fill-current' : ''} />
           </button>
           <button onClick={e => { e.stopPropagation(); onEspiar(c); }} title="Espiar conversa"
@@ -586,7 +586,7 @@ const CardConversa = React.memo(function CardConversa({
                   <button key={id}
                     onClick={e => { e.stopPropagation(); onFlag(c.id, { [id]: !ativo }); setMenuAberto(false); }}
                     className="w-full text-left px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-grafite-600 hover:text-white transition-colors flex items-center gap-2">
-                    <Icon size={12} className={ativo ? 'text-osso-200' : 'text-slate-500'} />
+                    <Icon size={12} className={ativo ? 'text-acao-200' : 'text-slate-500'} />
                     {ativo ? on : off}
                   </button>
                 ))}
@@ -809,7 +809,7 @@ function PainelChat({
           {!conversa.cnpjVerificado && (
             <>
               <button onClick={onSolicitarCnpj}
-                className="px-2.5 py-1.5 rounded-lg bg-osso/15 hover:bg-osso/25 text-osso-200 text-xs font-semibold border border-osso/30 transition-all">
+                className="px-2.5 py-1.5 rounded-lg bg-acao/15 hover:bg-acao/25 text-acao-200 text-xs font-semibold border border-acao/30 transition-all">
                 🤖 Pedir CNPJ
               </button>
               <button onClick={onValidarCnpjModal}
@@ -869,8 +869,8 @@ function PainelChat({
         onDrop={(e) => { e.preventDefault(); setArrastando(false); const f = e.dataTransfer.files?.[0]; if (f) selecionarArquivo(f); }}
         style={WHATSAPP_BG} className="flex-1 overflow-y-auto p-4 space-y-3 relative">
         {arrastando && (
-          <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/70 border-2 border-dashed border-osso rounded-xl pointer-events-none">
-            <div className="text-osso-200 font-bold text-sm flex items-center gap-2">
+          <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/70 border-2 border-dashed border-acao rounded-xl pointer-events-none">
+            <div className="text-acao-200 font-bold text-sm flex items-center gap-2">
               <Paperclip size={18} /> Solte o arquivo para anexar
             </div>
           </div>
@@ -895,7 +895,7 @@ function PainelChat({
               <div className={`max-w-[80%] p-3.5 rounded-2xl text-xs shadow-md space-y-1 ${
                 m.de === 'cliente'
                   ? 'bg-grafite-600 text-slate-100 border border-linha rounded-tl-sm'
-                  : 'bg-gradient-to-r from-osso to-espera text-slate-950 font-medium rounded-tr-sm'
+                  : 'bg-gradient-to-r from-acao to-espera text-slate-950 font-medium rounded-tr-sm'
               }`}>
                 <div className={`text-[10px] font-semibold ${m.de === 'cliente' ? 'text-slate-400' : 'text-slate-900/80'}`}>
                   {m.de === 'cliente' ? conversa.cliente : 'Arka Tecnologia'}
@@ -908,7 +908,7 @@ function PainelChat({
                   return (
                     <div className={`text-[10px] px-2 py-1 rounded-lg border-l-2 mb-1 truncate ${
                       m.de === 'cliente'
-                        ? 'bg-grafite-700 border-osso/60 text-slate-400'
+                        ? 'bg-grafite-700 border-acao/60 text-slate-400'
                         : 'bg-slate-900/10 border-slate-900/40 text-slate-900/70'
                     }`}>
                       {orig.texto}
@@ -951,7 +951,7 @@ function PainelChat({
         <div className="relative">
           <button
             onClick={() => irParaFim(true)}
-            className="absolute -top-10 left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 rounded-full bg-osso text-slate-950 text-[11px] font-bold shadow-lg shadow-black/30 flex items-center gap-1 hover:bg-osso-200 transition-colors"
+            className="absolute -top-10 left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 rounded-full bg-acao text-slate-950 text-[11px] font-bold shadow-lg shadow-black/30 flex items-center gap-1 hover:bg-acao-200 transition-colors"
           >
             Novas mensagens <ArrowDown size={13} />
           </button>
@@ -959,7 +959,7 @@ function PainelChat({
       )}
 
       {fluxoSugerido && (
-        <div className="mx-4 mb-2 p-3 rounded-xl bg-osso/10 border border-osso/30 flex items-center justify-between gap-3">
+        <div className="mx-4 mb-2 p-3 rounded-xl bg-acao/10 border border-acao/30 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <EmojiIcon name="lightning" label="" size="sm" />
             <div>
@@ -968,7 +968,7 @@ function PainelChat({
             </div>
           </div>
           <button onClick={() => onExecutarFluxo(fluxoSugerido)}
-            className="px-3 py-1.5 rounded-lg bg-osso text-slate-950 text-xs font-bold flex items-center gap-1 hover:bg-osso-200 transition-colors shadow-sm">
+            className="px-3 py-1.5 rounded-lg bg-acao text-slate-950 text-xs font-bold flex items-center gap-1 hover:bg-acao-200 transition-colors shadow-sm">
             <Play size={12} /> Disparar
           </button>
         </div>
@@ -989,9 +989,9 @@ function PainelChat({
 
       {/* Respondendo a uma mensagem (citação) */}
       {respondendoA && (
-        <div className="mx-3 mb-2 p-2.5 rounded-xl bg-grafite-700 border border-linha border-l-4 border-l-osso flex items-center justify-between gap-3">
+        <div className="mx-3 mb-2 p-2.5 rounded-xl bg-grafite-700 border border-linha border-l-4 border-l-acao flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[10px] font-bold text-osso-200 mb-0.5 flex items-center gap-1">
+            <div className="text-[10px] font-bold text-acao-200 mb-0.5 flex items-center gap-1">
               <CornerUpLeft size={11} /> Respondendo {respondendoA.de === 'cliente' ? conversa.cliente : 'você'}
             </div>
             <div className="text-[11px] text-slate-400 truncate">{respondendoA.texto}</div>
@@ -1024,7 +1024,7 @@ function PainelChat({
             <div className="glass-panel border border-linha rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-[80vh]">
               <div className="p-4 bg-grafite-600 border-b border-linha flex items-center justify-between rounded-t-2xl">
                 <div className="flex items-center gap-2 text-sm font-bold text-white">
-                  <Share2 size={16} className="text-osso-200" /> Encaminhar para
+                  <Share2 size={16} className="text-acao-200" /> Encaminhar para
                 </div>
                 <button onClick={() => setEncaminhando(null)} className="text-slate-400 hover:text-white"><X size={16} /></button>
               </div>
@@ -1035,7 +1035,7 @@ function PainelChat({
                 {(conversas || []).filter(c => c.id !== conversa.id).map(c => (
                   <button key={c.id}
                     onClick={() => { onEncaminharPara(encaminhando.id, c.id); setEncaminhando(null); }}
-                    className="w-full text-left p-3 rounded-xl bg-grafite-700 border border-linha hover:border-osso/40 hover:bg-grafite-600 transition-all flex items-center gap-3">
+                    className="w-full text-left p-3 rounded-xl bg-grafite-700 border border-linha hover:border-acao/40 hover:bg-grafite-600 transition-all flex items-center gap-3">
                     <Avatar nome={c.cliente} size="sm" fotoUrl={c.fotoUrl} />
                     <div className="min-w-0">
                       <div className="text-xs font-bold text-white truncate">{c.cliente}</div>
@@ -1058,7 +1058,7 @@ function PainelChat({
           {anexo.tipo === 'imagem' ? (
             <img src={anexo.dataUrl} alt="preview" className="w-12 h-12 rounded-lg object-cover shrink-0" />
           ) : (
-            <div className="w-12 h-12 rounded-lg bg-grafite-600 border border-slate-700 flex items-center justify-center shrink-0 text-osso-200">
+            <div className="w-12 h-12 rounded-lg bg-grafite-600 border border-slate-700 flex items-center justify-center shrink-0 text-acao-200">
               {anexo.tipo === 'video' ? <Play size={18} /> : anexo.tipo === 'audio' ? <Zap size={18} /> : <FileText size={18} />}
             </div>
           )}
@@ -1067,7 +1067,7 @@ function PainelChat({
             <div className="text-[10px] text-slate-500 uppercase">{anexo.tipo}</div>
             {enviandoMidia && (
               <div className="mt-1 h-1.5 rounded-full bg-slate-700 overflow-hidden">
-                <div className="h-full bg-osso transition-all" style={{ width: `${anexo.progresso || 0}%` }} />
+                <div className="h-full bg-acao transition-all" style={{ width: `${anexo.progresso || 0}%` }} />
               </div>
             )}
           </div>
@@ -1105,7 +1105,7 @@ function PainelChat({
         <button
           onClick={() => fileInputRef.current?.click()}
           title="Anexar arquivo"
-          className="p-2.5 rounded-xl border bg-grafite-700 border-linha text-slate-400 hover:text-osso-200 hover:border-osso/30 transition-all"
+          className="p-2.5 rounded-xl border bg-grafite-700 border-linha text-slate-400 hover:text-acao-200 hover:border-acao/30 transition-all"
         >
           <Paperclip size={15} />
         </button>
@@ -1114,7 +1114,7 @@ function PainelChat({
           onClick={() => setShowEmoji(v => !v)}
           title="Emoji"
           className={`p-2.5 rounded-xl border transition-all ${
-            showEmoji ? 'bg-osso/20 border-osso/40 text-osso-200' : 'bg-grafite-700 border-linha text-slate-400 hover:text-osso-200 hover:border-osso/30'
+            showEmoji ? 'bg-acao/20 border-acao/40 text-acao-200' : 'bg-grafite-700 border-linha text-slate-400 hover:text-acao-200 hover:border-acao/30'
           }`}
         >
           <Smile size={15} />
@@ -1125,8 +1125,8 @@ function PainelChat({
           title="Mensagens rápidas"
           className={`p-2.5 rounded-xl border transition-all ${
             showMsgRapidas
-              ? 'bg-osso/20 border-osso/40 text-osso-200'
-              : 'bg-grafite-700 border-linha text-slate-400 hover:text-osso-200 hover:border-osso/30'
+              ? 'bg-acao/20 border-acao/40 text-acao-200'
+              : 'bg-grafite-700 border-linha text-slate-400 hover:text-acao-200 hover:border-acao/30'
           }`}
         >
           <Zap size={15} />
@@ -1144,12 +1144,12 @@ function PainelChat({
             }
           }}
           placeholder={anexo ? 'Legenda (opcional)...' : 'Digite sua mensagem ou CNPJ...  (Enter envia · Shift+Enter quebra linha)'}
-          className="flex-1 resize-none max-h-32 bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50 transition-colors"
+          className="flex-1 resize-none max-h-32 bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 transition-colors"
         />
         <button
           onClick={enviar}
           disabled={enviandoMidia}
-          className="p-2.5 rounded-xl bg-osso hover:bg-osso-200 disabled:opacity-50 text-slate-950 transition-colors shadow-md shadow-osso/20 self-end"
+          className="p-2.5 rounded-xl bg-acao hover:bg-acao-200 disabled:opacity-50 text-slate-950 transition-colors shadow-md shadow-acao/20 self-end"
         >
           {enviandoMidia ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
         </button>
@@ -1519,13 +1519,13 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               title="Notificacoes"
               className={`relative flex items-center justify-center w-9 h-9 rounded-full border transition-colors ${
                 naoLidasSino > 0
-                  ? 'bg-osso/15 border-osso/40 text-osso-200'
+                  ? 'bg-acao/15 border-acao/40 text-acao-200'
                   : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-white'
               } ${sinoTocando ? 'animate-bounce' : ''}`}
             >
               <Bell size={15} className={sinoTocando ? 'fill-current' : ''} />
               {naoLidasSino > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-osso text-slate-950 text-[9px] font-extrabold flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-acao text-slate-950 text-[9px] font-extrabold flex items-center justify-center">
                   {naoLidasSino}
                 </span>
               )}
@@ -1535,7 +1535,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               <div className="absolute right-0 top-full mt-2 w-[min(88vw,340px)] glass-panel border border-linha rounded-2xl shadow-2xl shadow-black/50 z-50 overflow-hidden fade-in">
                 <div className="p-3 bg-grafite-600 border-b border-linha flex items-center justify-between">
                   <div className="flex items-center gap-2 text-xs font-bold text-white">
-                    <Bell size={13} className="text-osso-200" /> Notificacoes
+                    <Bell size={13} className="text-acao-200" /> Notificacoes
                   </div>
                   {historico.length > 0 && (
                     <button onClick={() => limparHistorico && limparHistorico()}
@@ -1562,7 +1562,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                         }}
                         className="w-full text-left p-3 flex items-start gap-2.5 hover:bg-grafite-600/70 transition-colors"
                       >
-                        <span className={`mt-0.5 shrink-0 ${ehAlerta ? 'text-espera-400' : 'text-osso-200'}`}>
+                        <span className={`mt-0.5 shrink-0 ${ehAlerta ? 'text-espera-400' : 'text-acao-200'}`}>
                           {ehAlerta ? <AlertCircle size={15} /> : <MessageSquare size={15} />}
                         </span>
                         <div className="min-w-0 flex-1">
@@ -1608,7 +1608,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                 <button key={aba.id} onClick={() => setAbaAtual(aba.id)}
                   className={`py-3 px-2 text-[11px] font-bold transition-all border-b-2 flex flex-col items-center justify-center gap-0.5 ${
                     ativo
-                      ? 'border-osso text-osso-200 bg-grafite-700'
+                      ? 'border-acao text-acao-200 bg-grafite-700'
                       : 'border-transparent text-slate-400 hover:text-slate-200'
                   }`}
                 >
@@ -1616,7 +1616,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                     <Icon size={12} />
                     <span>{aba.label}</span>
                   </div>
-                  <span className={`text-[10px] font-semibold ${ativo ? 'text-osso-200' : 'text-slate-500'}`}>
+                  <span className={`text-[10px] font-semibold ${ativo ? 'text-acao-200' : 'text-slate-500'}`}>
                     ({count})
                   </span>
                 </button>
@@ -1631,7 +1631,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                 value={busca}
                 onChange={e => setBusca(e.target.value)}
                 placeholder="Buscar conversa..."
-                className="w-full bg-grafite-700 border border-linha rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50"
+                className="w-full bg-grafite-700 border border-linha rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50"
               />
             </div>
 
@@ -1641,13 +1641,13 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                 title="Filtros da lista"
                 className={`relative p-2 rounded-xl border transition-all ${
                   showFiltros || totalFiltrosAtivos > 0
-                    ? 'bg-osso/20 border-osso/40 text-osso-200'
-                    : 'bg-grafite-700 border-linha text-slate-400 hover:text-osso-200 hover:border-osso/30'
+                    ? 'bg-acao/20 border-acao/40 text-acao-200'
+                    : 'bg-grafite-700 border-linha text-slate-400 hover:text-acao-200 hover:border-acao/30'
                 }`}
               >
                 <SlidersHorizontal size={14} />
                 {totalFiltrosAtivos > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-0.5 rounded-full bg-osso text-slate-950 text-[9px] font-extrabold flex items-center justify-center">
+                  <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-0.5 rounded-full bg-acao text-slate-950 text-[9px] font-extrabold flex items-center justify-center">
                     {totalFiltrosAtivos}
                   </span>
                 )}
@@ -1780,7 +1780,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
             <div className="p-4 flex-1 overflow-y-auto min-h-0 space-y-2 text-xs">
               {espiandoChat.mensagens.map((m, idx) => (
                 <div key={idx} className={`p-2.5 rounded-xl ${
-                  m.de === 'cliente' ? 'bg-grafite-600 text-slate-200' : 'bg-osso/10 text-osso-200 border border-osso/20'
+                  m.de === 'cliente' ? 'bg-grafite-600 text-slate-200' : 'bg-acao/10 text-acao-200 border border-acao/20'
                 }`}>
                   <div className="text-[10px] text-slate-400 mb-1">
                     {m.de === 'cliente' ? espiandoChat.cliente : 'Arka'} • {m.hora}
@@ -1807,11 +1807,11 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               value={inputCnpj}
               onChange={e => setInputCnpj(mascararCnpj(e.target.value))}
               placeholder="00.000.000/0000-00"
-              className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder-slate-500 focus:outline-none focus:border-osso/50"
+              className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder-slate-500 focus:outline-none focus:border-acao/50"
             />
             <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
               <button onClick={() => setModalCnpj(false)} className="px-3 py-2 sm:py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold">Cancelar</button>
-              <button onClick={validarCnpjManual} className="px-4 py-2 sm:py-1.5 rounded-lg bg-osso text-slate-950 text-xs font-bold">Validar</button>
+              <button onClick={validarCnpjManual} className="px-4 py-2 sm:py-1.5 rounded-lg bg-acao text-slate-950 text-xs font-bold">Validar</button>
             </div>
           </div>
         </div>

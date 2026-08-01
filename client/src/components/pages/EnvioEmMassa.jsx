@@ -54,13 +54,13 @@ function FormContato({ onAdicionar }) {
     <div className="flex flex-wrap gap-2">
       <input value={nome} onChange={e => setNome(e.target.value)}
         placeholder="Nome do destinatário"
-        className="flex-1 min-w-[160px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50" />
+        className="flex-1 min-w-[160px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50" />
       <input value={telefone} onChange={e => setTelefone(e.target.value)}
         onPaste={onPaste}
         placeholder="Telefone (ex: 11987654321)"
-        className="w-44 bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50 font-mono" />
+        className="w-44 bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 font-mono" />
       <button onClick={adicionar}
-        className="px-3 py-2 rounded-xl bg-osso/15 hover:bg-osso/25 text-osso-200 text-xs font-semibold border border-osso/30 flex items-center gap-1.5 transition-all">
+        className="px-3 py-2 rounded-xl bg-acao/15 hover:bg-acao/25 text-acao-200 text-xs font-semibold border border-acao/30 flex items-center gap-1.5 transition-all">
         <Plus size={13} /> Adicionar
       </button>
     </div>
@@ -74,7 +74,7 @@ function BarraProgresso({ total, enviados, erros, status }) {
   const corBarra =
     status === 'concluido' ? 'bg-ativo' :
     status === 'pausado'   ? 'bg-espera'   :
-    status === 'enviando'  ? 'bg-osso'  : 'bg-slate-600';
+    status === 'enviando'  ? 'bg-acao'  : 'bg-slate-600';
 
   return (
     <div className="space-y-2">
@@ -277,14 +277,14 @@ export default function EnvioEmMassa({ conversas = [] }) {
         <div className="lg:col-span-7 space-y-4">
           <div className="glass-panel rounded-2xl p-5 border border-linha space-y-4">
             <h3 className="text-sm font-bold text-white font-display flex items-center gap-2">
-              <FileText size={15} className="text-osso-200" /> Configuração da Campanha
+              <FileText size={15} className="text-acao-200" /> Configuração da Campanha
             </h3>
             <div>
               <label className="text-xs text-slate-400 font-medium block mb-1.5">Nome da Campanha</label>
               <input value={campanha} onChange={e => setCampanha(e.target.value)}
                 placeholder="Ex: Promoção Julho 2026..."
                 disabled={emExecucao}
-                className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50 disabled:opacity-50" />
+                className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 disabled:opacity-50" />
             </div>
             <div>
               <label className="text-xs text-slate-400 font-medium block mb-1.5">
@@ -293,7 +293,7 @@ export default function EnvioEmMassa({ conversas = [] }) {
               <textarea value={mensagem} onChange={e => setMensagem(e.target.value)} rows={6}
                 placeholder="Digite a mensagem que será enviada para todos os destinatários..."
                 disabled={emExecucao}
-                className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50 resize-none disabled:opacity-50 font-mono leading-relaxed" />
+                className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 resize-none disabled:opacity-50 font-mono leading-relaxed" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -301,14 +301,14 @@ export default function EnvioEmMassa({ conversas = [] }) {
                 <input type="number" min={1} max={60} value={intervaloDe}
                   onChange={e => setIntervaloDe(Number(e.target.value))}
                   disabled={emExecucao}
-                  className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-osso/50 disabled:opacity-50" />
+                  className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-acao/50 disabled:opacity-50" />
               </div>
               <div>
                 <label className="text-xs text-slate-400 font-medium block mb-1.5">Intervalo máximo (s)</label>
                 <input type="number" min={1} max={120} value={intervaloAte}
                   onChange={e => setIntervaloAte(Number(e.target.value))}
                   disabled={emExecucao}
-                  className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-osso/50 disabled:opacity-50" />
+                  className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-acao/50 disabled:opacity-50" />
               </div>
             </div>
             <div className="p-3 rounded-xl bg-espera/5 border border-espera/20 text-[11px] text-espera-400 flex items-start gap-2">
@@ -320,7 +320,7 @@ export default function EnvioEmMassa({ conversas = [] }) {
           <div className="glass-panel rounded-2xl p-5 border border-linha space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-white font-display flex items-center gap-2">
-                <Users size={15} className="text-osso-200" /> Destinatários ({destinatarios.length})
+                <Users size={15} className="text-acao-200" /> Destinatários ({destinatarios.length})
               </h3>
               <button onClick={importarDasConversas}
                 disabled={emExecucao || conversas.length === 0}
@@ -362,7 +362,7 @@ export default function EnvioEmMassa({ conversas = [] }) {
         <div className="lg:col-span-5 space-y-4">
           <div className="glass-panel rounded-2xl p-5 border border-linha space-y-4">
             <h3 className="text-sm font-bold text-white font-display flex items-center gap-2">
-              <Send size={15} className="text-osso-200" /> Controle de Envio
+              <Send size={15} className="text-acao-200" /> Controle de Envio
             </h3>
 
             {(emExecucao || status === 'concluido') && (
@@ -376,7 +376,7 @@ export default function EnvioEmMassa({ conversas = [] }) {
 
             <div className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center gap-2 ${
               status === 'idle'      ? 'bg-slate-800 border-slate-700 text-slate-400' :
-              status === 'enviando'  ? 'bg-osso/10 border-osso/30 text-osso-200' :
+              status === 'enviando'  ? 'bg-acao/10 border-acao/30 text-acao-200' :
               status === 'pausado'   ? 'bg-espera/10  border-espera/30  text-espera-400'  :
               status === 'concluido' ? 'bg-ativo/10 border-ativo/30 text-ativo-400' : ''
             }`}>
@@ -390,7 +390,7 @@ export default function EnvioEmMassa({ conversas = [] }) {
               {status === 'idle' && (
                 <button onClick={iniciarEnvio}
                   disabled={!mensagem.trim() || destinatarios.length === 0}
-                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-osso to-espera hover:from-osso-200 hover:to-espera-400 text-slate-950 text-xs font-bold flex items-center justify-center gap-2 shadow-md shadow-osso/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-acao to-espera hover:from-acao-200 hover:to-espera-400 text-slate-950 text-xs font-bold flex items-center justify-center gap-2 shadow-md shadow-acao/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
                   <Play size={13} fill="currentColor" /> Iniciar Envio
                 </button>
               )}
@@ -419,7 +419,7 @@ export default function EnvioEmMassa({ conversas = [] }) {
             <div className="glass-panel rounded-2xl p-4 border border-linha space-y-2">
               <div className="flex items-center justify-between mb-1">
                 <h3 className="text-xs font-bold text-white flex items-center gap-2">
-                  <MessageSquare size={13} className="text-osso-200" /> Log de Envios
+                  <MessageSquare size={13} className="text-acao-200" /> Log de Envios
                 </h3>
                 <span className="text-[10px] text-slate-500">{logs.length} registros</span>
               </div>

@@ -101,18 +101,18 @@ export default function ParceirosPage() {
             onChange={e => { setCnpjInput(mascararCnpj(e.target.value)); setErro(''); }}
             onKeyDown={e => e.key === 'Enter' && adicionar()}
             placeholder="00.000.000/0000-00"
-            className="w-48 bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white font-mono placeholder-slate-500 focus:outline-none focus:border-osso/50"
+            className="w-48 bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white font-mono placeholder-slate-500 focus:outline-none focus:border-acao/50"
           />
           <input
             value={nome}
             onChange={e => setNome(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && adicionar()}
             placeholder="Razão Social / Nome da Empresa"
-            className="flex-1 min-w-[200px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50"
+            className="flex-1 min-w-[200px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50"
           />
           <button
             onClick={adicionar}
-            className="px-4 py-2 rounded-xl bg-osso hover:bg-osso-200 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-osso/20 transition-all"
+            className="px-4 py-2 rounded-xl bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-acao/20 transition-all"
           >
             <Plus size={15} /> Cadastrar Parceiro
           </button>
@@ -126,7 +126,7 @@ export default function ParceirosPage() {
           value={busca}
           onChange={e => setBusca(e.target.value)}
           placeholder="Pesquisar parceiro por Nome (Razão Social) ou CNPJ..."
-          className="w-full bg-grafite-700 border border-linha rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50"
+          className="w-full bg-grafite-700 border border-linha rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50"
         />
       </div>
 

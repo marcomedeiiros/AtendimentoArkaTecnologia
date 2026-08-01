@@ -89,7 +89,7 @@ function calcularMetricas(conversas, parceiros, equipe) {
 
 function MetricCard({ label, valor, icon: Icon, color, sublabel, onClick }) {
   const map = {
-    orange: 'bg-osso/10 border-osso/30 text-osso-200',
+    orange: 'bg-acao/10 border-acao/30 text-acao-200',
     emerald:'bg-ativo/10 border-ativo/30 text-ativo-400',
     blue:   'bg-blue-500/10 border-blue-500/30 text-blue-400',
     purple: 'bg-purple-500/10 border-purple-500/30 text-purple-400',
@@ -97,7 +97,7 @@ function MetricCard({ label, valor, icon: Icon, color, sublabel, onClick }) {
     indigo: 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400',
   };
   return (
-    <div onClick={onClick} className={`glass-card p-5 rounded-2xl border border-linha flex flex-col justify-between gap-3 ${onClick ? 'cursor-pointer hover:border-osso/40 transition-all' : ''}`}>
+    <div onClick={onClick} className={`glass-card p-5 rounded-2xl border border-linha flex flex-col justify-between gap-3 ${onClick ? 'cursor-pointer hover:border-acao/40 transition-all' : ''}`}>
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-slate-400">{label}</span>
         <span className={`p-2 rounded-xl border ${map[color] || map.orange}`}><Icon size={15} /></span>
@@ -200,7 +200,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button onClick={() => exportarRelatorio(metricas)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-osso/10 hover:bg-osso/20 text-osso-200 text-xs font-semibold border border-osso/30 transition-all shrink-0">
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-acao/10 hover:bg-acao/20 text-acao-200 text-xs font-semibold border border-acao/30 transition-all shrink-0">
             <Download size={14} /> Exportar CSV
           </button>
           <button onClick={exportarPdf} disabled={gerandoPdf}
@@ -235,7 +235,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
 
         <div className="glass-panel rounded-2xl p-5 border border-linha flex flex-col justify-center gap-3">
           <h3 className="text-sm font-bold text-white font-display flex items-center gap-2">
-            <TrendingUp size={15} className="text-osso-200" /> Situação atual
+            <TrendingUp size={15} className="text-acao-200" /> Situação atual
           </h3>
           <p className="text-xs text-slate-400 leading-relaxed">
             O histórico por período (7/30/90 dias) aparecerá aqui assim que os atendimentos
@@ -270,7 +270,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
               <EmojiIcon name="inbox" label="Fila de Espera" size="md" />
             </div>
             <button onClick={() => setAba('atendimento')}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-osso/10 hover:bg-osso/20 text-osso-200 text-xs font-semibold border border-osso/30 transition-all">
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-acao/10 hover:bg-acao/20 text-acao-200 text-xs font-semibold border border-acao/30 transition-all">
               Central <ArrowRight size={12} />
             </button>
           </div>
@@ -292,7 +292,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
 
         <div className="glass-panel rounded-2xl p-5 border border-linha">
           <div className="flex items-center gap-2 mb-4">
-            <Users size={15} className="text-osso-200" />
+            <Users size={15} className="text-acao-200" />
             <h3 className="text-sm font-bold text-white font-display">Equipe</h3>
             <span className="ml-auto text-xs text-slate-400">
               <span className="text-ativo-400 font-semibold">{metricas.equipeOnline}</span>/{metricas.totalEquipe} online
@@ -302,7 +302,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
             {equipe.map(e => (
               <div key={e.id} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-osso/15 text-osso-200 text-xs font-bold flex items-center justify-center border border-osso/30">
+                  <div className="w-7 h-7 rounded-lg bg-acao/15 text-acao-200 text-xs font-bold flex items-center justify-center border border-acao/30">
                     {e.nome.charAt(0)}
                   </div>
                   <div>

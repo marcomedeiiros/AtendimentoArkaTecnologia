@@ -29,7 +29,7 @@ export default function FluxosPage() {
             onClick={() => setAba(id)}
             className={`px-2.5 py-1 rounded-md text-[11px] font-bold flex items-center gap-1.5 transition-all ${
               aba === id
-                ? 'bg-osso/15 text-osso-200'
+                ? 'bg-acao/15 text-acao-200'
                 : 'text-slate-500 hover:text-slate-200 hover:bg-grafite-700'
             }`}
           >

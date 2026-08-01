@@ -14,10 +14,10 @@ export function FlowExecutionLogs({ logs, isRunning, onClear, onClose, activeNod
     <div className="absolute bottom-4 left-4 z-30 w-full max-w-lg glass-panel border border-linha rounded-2xl shadow-2xl overflow-hidden fade-in">
       <div className="p-3 bg-grafite-600 border-b border-linha flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs font-bold text-white font-display">
-          <Terminal size={15} className="text-osso-200" />
+          <Terminal size={15} className="text-acao-200" />
           <span>Console de Execução em Tempo Real</span>
           {isRunning && (
-            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-osso/20 text-osso-200 font-mono">
+            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-acao/20 text-acao-200 font-mono">
               <Loader2 size={10} className="animate-spin" /> EXECUTANDO
             </span>
           )}
@@ -42,7 +42,7 @@ export function FlowExecutionLogs({ logs, isRunning, onClear, onClose, activeNod
       <div ref={scrollRef} className="p-3 max-h-56 overflow-y-auto font-mono text-[11px] space-y-2 bg-grafite-900">
         {logs.length === 0 ? (
           <div className="text-slate-500 text-center py-4 font-sans text-xs">
-            Clique no botão <strong className="text-osso-200">"Simular Execução"</strong> na barra superior para iniciar o teste.
+            Clique no botão <strong className="text-acao-200">"Simular Execução"</strong> na barra superior para iniciar o teste.
           </div>
         ) : (
           logs.map((log, index) => (
@@ -54,14 +54,14 @@ export function FlowExecutionLogs({ logs, isRunning, onClear, onClose, activeNod
                   : log.type === 'error'
                   ? 'bg-falha/10 border-falha/30 text-falha-400'
                   : log.type === 'running'
-                  ? 'bg-osso/10 border-osso/30 text-osso-200'
+                  ? 'bg-acao/10 border-acao/30 text-acao-200'
                   : 'bg-slate-900 border-slate-800 text-slate-300'
               }`}
             >
               <div className="flex items-start gap-2 min-w-0 flex-1">
                 {log.type === 'success' && <CheckCircle2 size={13} className="text-ativo-400 shrink-0 mt-0.5" />}
                 {log.type === 'error' && <AlertTriangle size={13} className="text-falha-400 shrink-0 mt-0.5" />}
-                {log.type === 'running' && <Loader2 size={13} className="text-osso-200 animate-spin shrink-0 mt-0.5" />}
+                {log.type === 'running' && <Loader2 size={13} className="text-acao-200 animate-spin shrink-0 mt-0.5" />}
                 {log.type === 'info' && <Play size={12} className="text-blue-400 shrink-0 mt-0.5" />}
                 
                 <div className="break-words leading-tight">

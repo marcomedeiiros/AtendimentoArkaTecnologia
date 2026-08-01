@@ -117,7 +117,7 @@ export default function PainelN8n() {
             <RefreshCw size={14} className={carregando ? 'animate-spin' : ''} /> Atualizar
           </button>
           <button onClick={criar} disabled={!conectado || ocupadoId === 'novo'}
-            className="px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2 bg-osso hover:bg-osso-200 text-slate-950 transition-all disabled:opacity-50">
+            className="px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2 bg-acao hover:bg-acao-200 text-slate-950 transition-all disabled:opacity-50">
             {ocupadoId === 'novo' ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Novo Workflow
           </button>
         </div>
@@ -199,7 +199,7 @@ export default function PainelN8n() {
                   <button onClick={() => acao(w.id, () => N8nAPI.executar(w.id))}
                     disabled={ocupado || !w.webhookPath}
                     title={w.webhookPath ? 'Executar agora' : 'Adicione um Webhook Trigger no n8n para executar manualmente'}
-                    className="p-2 rounded-lg bg-slate-800/80 hover:bg-osso/20 text-osso-200 transition-colors disabled:opacity-40">
+                    className="p-2 rounded-lg bg-slate-800/80 hover:bg-acao/20 text-acao-200 transition-colors disabled:opacity-40">
                     {ocupado ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
                   </button>
                   <button onClick={() => acao(w.id, () => N8nAPI.alternarAtivo(w.id, !w.ativo))}

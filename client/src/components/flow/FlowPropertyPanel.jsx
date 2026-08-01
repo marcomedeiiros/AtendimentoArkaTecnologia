@@ -52,7 +52,7 @@ function RichTextEditor({ value, onChange, rows = 4, placeholder }) {
       const v = VARS.find(v => v.tag === part);
       if (v) {
         return (
-          <span key={i} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-osso/20 border border-osso/40 text-osso-200 text-[10px] font-semibold font-mono mx-0.5 align-middle">
+          <span key={i} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-acao/20 border border-acao/40 text-acao-200 text-[10px] font-semibold font-mono mx-0.5 align-middle">
             {v.emoji} {v.label}
           </span>
         );
@@ -69,7 +69,7 @@ function RichTextEditor({ value, onChange, rows = 4, placeholder }) {
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full bg-grafite-700 border border-linha rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50 resize-none font-mono leading-relaxed"
+        className="w-full bg-grafite-700 border border-linha rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 resize-none font-mono leading-relaxed"
       />
       {value && value.includes('{{') && (
         <div className="bg-grafite-900 border border-linha rounded-xl p-3 text-xs text-slate-200 leading-relaxed">
@@ -119,7 +119,7 @@ export function FlowPropertyPanel({ node, onClose, onChangeNode, onDeleteNode, o
           <input
             value={node.titulo || ''}
             onChange={e => onChangeNode({ ...node, titulo: e.target.value })}
-            className="w-full bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50"
+            className="w-full bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50"
             placeholder="Nome da etapa"
           />
         </div>
@@ -134,7 +134,7 @@ export function FlowPropertyPanel({ node, onClose, onChangeNode, onDeleteNode, o
               rows={5}
               value={currentDesc}
               onChange={e => onChangeNode({ ...node, desc: e.target.value, texto: e.target.value })}
-              className="w-full bg-grafite-700 border border-linha rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50 resize-none"
+              className="w-full bg-grafite-700 border border-linha rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 resize-none"
               placeholder="Escreva uma nota de organização..."
             />
           ) : (
@@ -150,13 +150,13 @@ export function FlowPropertyPanel({ node, onClose, onChangeNode, onDeleteNode, o
         {!isComment && (
           <>
             {node.tipo === 'gatilho' && (
-              <div className="p-3.5 rounded-xl bg-osso/10 border border-osso/30 space-y-2">
-                <label className="text-xs font-bold text-osso-200 flex items-center gap-1.5">⚡ Palavra-Chave Gatilho</label>
+              <div className="p-3.5 rounded-xl bg-acao/10 border border-acao/30 space-y-2">
+                <label className="text-xs font-bold text-acao-200 flex items-center gap-1.5">⚡ Palavra-Chave Gatilho</label>
                 <input
                   value={node.gatilho || ''}
                   onChange={e => onChangeNode({ ...node, gatilho: e.target.value, desc: `Cliente digita "${e.target.value}"` })}
                   placeholder="ex: orçamento, boleto, suporte"
-                  className="w-full bg-grafite-700 border border-linha rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-osso/50"
+                  className="w-full bg-grafite-700 border border-linha rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-acao/50"
                 />
               </div>
             )}
@@ -175,7 +175,7 @@ export function FlowPropertyPanel({ node, onClose, onChangeNode, onDeleteNode, o
 
             <div className="space-y-2">
               <div className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                <Variable size={13} className="text-osso-200" /> Inserir Variável
+                <Variable size={13} className="text-acao-200" /> Inserir Variável
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {VARS.map(v => (
@@ -183,7 +183,7 @@ export function FlowPropertyPanel({ node, onClose, onChangeNode, onDeleteNode, o
                     key={v.tag}
                     onClick={() => insertVar(v.tag)}
                     title={`Inserir ${v.tag}`}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-grafite-600 border border-linha hover:border-osso/50 hover:bg-osso/10 text-[11px] text-slate-300 hover:text-osso-200 transition-all"
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-grafite-600 border border-linha hover:border-acao/50 hover:bg-acao/10 text-[11px] text-slate-300 hover:text-acao-200 transition-all"
                   >
                     <span>{v.emoji}</span>
                     <span className="font-medium">{v.label}</span>
@@ -213,7 +213,7 @@ export function FlowPropertyPanel({ node, onClose, onChangeNode, onDeleteNode, o
         {!isComment && (
           <button
             onClick={() => onTestSingleNode(node)}
-            className="px-3 py-2 rounded-xl bg-osso hover:bg-osso-200 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-osso/20 transition-all"
+            className="px-3 py-2 rounded-xl bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-acao/20 transition-all"
           >
             <Play size={13} /> Testar Bloco
           </button>

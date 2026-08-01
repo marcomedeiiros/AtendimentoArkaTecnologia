@@ -89,7 +89,7 @@ const SEED_FLUXOS = [
     id: 'f3', nome: 'Consulta de Horário de Suporte', gatilho: 'horário', ativo: true,
     passos: [
       { id: 'p31', tipo: 'gatilho',  titulo: 'Gatilho Recebido', desc: 'Cliente digita "horário"' },
-      { id: 'p32', tipo: 'mensagem', titulo: 'Informa Horário',  desc: 'Nosso atendimento funciona de segunda a sexta, das 8h às 18h.' },
+      { id: 'p32', tipo: 'mensagem', titulo: 'Informa Horário',  desc: 'Nacao atendimento funciona de segunda a sexta, das 8h às 18h.' },
     ],
   },
 ];
@@ -196,10 +196,10 @@ export default function App() {
   const abaFullScreen = aba === 'automacoes';
 
   return (
-    <div className="min-h-screen bg-grafite-900 text-[#F3F4F8] flex font-sans antialiased selection:bg-osso/30 selection:text-osso-200">
+    <div className="min-h-screen bg-grafite-900 text-[#F3F4F8] flex font-sans antialiased selection:bg-acao/30 selection:text-acao-200">
       {carregando ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 text-slate-400">
-          <Loader2 className="w-7 h-7 text-osso animate-spin" />
+          <Loader2 className="w-7 h-7 text-acao animate-spin" />
           <span className="text-sm font-medium tracking-wide">Inicializando Arka Tecnologia...</span>
         </div>
       ) : (
@@ -273,7 +273,7 @@ function Sidebar({ aba, setAba, whatsAppConectado, conversas }) {
     <aside className="w-64 shrink-0 bg-grafite-800 border-r border-linha flex flex-col p-4 h-screen select-none overflow-y-auto">
 
       <div className="flex items-center gap-3 px-2 py-3 mb-4 shrink-0">
-        <div className="p-2 rounded-xl bg-gradient-to-br from-osso/20 to-espera/10 border border-osso/30 shadow-lg shadow-osso/10">
+        <div className="p-2 rounded-xl bg-gradient-to-br from-acao/20 to-espera/10 border border-acao/30 shadow-lg shadow-acao/10">
           <ArkaLogo size={32} />
         </div>
         <div className="sidebar-label">
@@ -318,16 +318,16 @@ function NavItem({ item, aba, setAba, naFila, naoLidos }) {
       onClick={() => setAba(item.id)}
       className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 border ${
         ativo
-          ? 'bg-gradient-to-r from-osso/20 to-espera/10 border-osso/40 text-osso-200 shadow-md shadow-osso/5'
+          ? 'bg-gradient-to-r from-acao/20 to-espera/10 border-acao/40 text-acao-200 shadow-md shadow-acao/5'
           : 'bg-transparent border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
       }`}
     >
       <div className="flex items-center gap-3">
-        <Icon size={15} className={`shrink-0 ${ativo ? 'text-osso-200' : 'text-slate-400'}`} />
+        <Icon size={15} className={`shrink-0 ${ativo ? 'text-acao-200' : 'text-slate-400'}`} />
         <span className="sidebar-label">{item.label}</span>
       </div>
       {badge && (
-        <span className="px-2 py-0.5 rounded-full bg-osso text-slate-950 font-bold text-[10px] shadow-sm">
+        <span className="px-2 py-0.5 rounded-full bg-acao text-slate-950 font-bold text-[10px] shadow-sm">
           {badge}
         </span>
       )}
@@ -395,12 +395,12 @@ function WhatsAppView({ conectado, setConectado, conversas }) {
           <div>
             <label className="text-xs text-slate-400 block mb-1.5 font-medium">URL do Webhook (Recebimento)</label>
             <input value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)}
-              className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-osso/50" />
+              className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-acao/50" />
           </div>
           <div>
             <label className="text-xs text-slate-400 block mb-1.5 font-medium">Instância Ativa</label>
             <input value={instancia} onChange={e => setInstancia(e.target.value)}
-              className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-osso/50" />
+              className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-acao/50" />
           </div>
           <div className="p-3 rounded-xl bg-grafite-600 border border-slate-800 text-xs text-slate-400 flex items-center gap-2">
             <EmojiIcon name="lock" label="" size="sm" />
@@ -428,9 +428,9 @@ function EquipeView({ equipe, setEquipe }) {
     <div className="fade-in space-y-6">
       <Header titulo="Gestão da Equipe de Atendimento" subtitulo="Gerencie os operadores e atendentes autorizados da Arka Tecnologia." />
       <div className="flex flex-wrap gap-2.5">
-        <input value={nome}  onChange={e => setNome(e.target.value)}  placeholder="Nome do atendente"       className="flex-1 min-w-[200px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50" />
-        <input value={cargo} onChange={e => setCargo(e.target.value)} placeholder="Cargo (ex: Suporte N2)"  className="flex-1 min-w-[200px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50" />
-        <button onClick={adicionar} className="px-4 py-2 rounded-xl bg-osso hover:bg-osso-200 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-osso/20 transition-all">
+        <input value={nome}  onChange={e => setNome(e.target.value)}  placeholder="Nome do atendente"       className="flex-1 min-w-[200px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50" />
+        <input value={cargo} onChange={e => setCargo(e.target.value)} placeholder="Cargo (ex: Suporte N2)"  className="flex-1 min-w-[200px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50" />
+        <button onClick={adicionar} className="px-4 py-2 rounded-xl bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-acao/20 transition-all">
           <Plus size={15} /> Adicionar Atendente
         </button>
       </div>
@@ -438,7 +438,7 @@ function EquipeView({ equipe, setEquipe }) {
         {equipe.map(e => (
           <div key={e.id} className="glass-panel p-4 rounded-2xl border border-linha space-y-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-osso/15 text-osso-200 font-bold text-sm flex items-center justify-center border border-osso/30">
+              <div className="w-10 h-10 rounded-xl bg-acao/15 text-acao-200 font-bold text-sm flex items-center justify-center border border-acao/30">
                 {e.nome.charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
@@ -491,10 +491,10 @@ function ParceirosView({ parceiros, setParceiros }) {
         <div className="flex flex-wrap gap-2.5">
           <input value={cnpjInput} onChange={e => { setCnpjInput(mascararCnpj(e.target.value)); setErro(''); }}
             placeholder="00.000.000/0000-00"
-            className="w-48 bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white font-mono placeholder-slate-500 focus:outline-none focus:border-osso/50" />
+            className="w-48 bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white font-mono placeholder-slate-500 focus:outline-none focus:border-acao/50" />
           <input value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome da empresa"
-            className="flex-1 min-w-[200px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50" />
-          <button onClick={adicionar} className="px-4 py-2 rounded-xl bg-osso hover:bg-osso-200 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-osso/20 transition-all">
+            className="flex-1 min-w-[200px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50" />
+          <button onClick={adicionar} className="px-4 py-2 rounded-xl bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-acao/20 transition-all">
             <Plus size={15} /> Cadastrar Parceiro
           </button>
         </div>
@@ -504,7 +504,7 @@ function ParceirosView({ parceiros, setParceiros }) {
       <div className="relative max-w-xs">
         <Search size={14} className="absolute left-3.5 top-3 text-slate-500" />
         <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por nome ou CNPJ"
-          className="w-full bg-grafite-700 border border-linha rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50" />
+          className="w-full bg-grafite-700 border border-linha rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50" />
       </div>
 
       <div className="space-y-2.5">

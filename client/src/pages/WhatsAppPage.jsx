@@ -244,7 +244,7 @@ export default function WhatsAppPage() {
 
           {pairingCode && (
             <div className="mb-3 text-xs text-slate-300">
-              Código de pareamento: <span className="font-mono font-bold text-osso-200 tracking-widest">{pairingCode}</span>
+              Código de pareamento: <span className="font-mono font-bold text-acao-200 tracking-widest">{pairingCode}</span>
             </div>
           )}
 
@@ -275,7 +275,7 @@ export default function WhatsAppPage() {
               value={detalhes?.webhook?.url || ''}
               readOnly
               placeholder="Nenhum webhook configurado na instância"
-              className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-osso/50"
+              className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-acao/50"
             />
           </div>
           <div>
@@ -283,7 +283,7 @@ export default function WhatsAppPage() {
             <input
               value={instancia}
               onChange={e => setInstancia(e.target.value)}
-              className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-osso/50"
+              className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-acao/50"
             />
           </div>
 

@@ -74,7 +74,7 @@ function IconeMensagem({ icon, size = 16 }) {
     bye: { Icon: HandHeart, color: 'text-pink-400' },
     noreturn: { Icon: PhoneOff, color: 'text-falha-400' },
     monitor: { Icon: Monitor, color: 'text-purple-400' },
-    default: { Icon: Zap, color: 'text-osso-200' },
+    default: { Icon: Zap, color: 'text-acao-200' },
   };
   const { Icon, color } = mapa[icon] || mapa.default;
   return <Icon size={size} className={color} />;
@@ -114,7 +114,7 @@ function ModalEdicao({ msg, onSalvar, onFechar }) {
       <div className="glass-panel border border-linha rounded-2xl w-full max-w-xl shadow-2xl fade-in my-auto flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh]">
         <div className="p-4 bg-grafite-600 border-b border-linha flex items-center justify-between shrink-0 rounded-t-2xl">
           <div className="flex items-center gap-2 font-bold text-sm text-white min-w-0">
-            <Zap size={16} className="text-osso-200 shrink-0" />
+            <Zap size={16} className="text-acao-200 shrink-0" />
             <span className="truncate">{msg?.id ? 'Editar Mensagem Rápida' : 'Nova Mensagem Rápida'}</span>
           </div>
           <button onClick={onFechar} className="text-slate-400 hover:text-white transition-colors shrink-0 ml-2">
@@ -129,7 +129,7 @@ function ModalEdicao({ msg, onSalvar, onFechar }) {
               value={titulo}
               onChange={e => setTitulo(e.target.value)}
               placeholder="Ex: PIX, AnyDesk, Boas-vindas..."
-              className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50 transition-colors"
+              className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 transition-colors"
             />
           </div>
 
@@ -138,7 +138,7 @@ function ModalEdicao({ msg, onSalvar, onFechar }) {
             <select
               value={categoria}
               onChange={e => setCategoria(e.target.value)}
-              className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-osso/50"
+              className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-acao/50"
             >
               {Object.entries(CATEGORIAS).map(([key, val]) => (
                 <option key={key} value={key}>{val.label}</option>
@@ -156,7 +156,7 @@ function ModalEdicao({ msg, onSalvar, onFechar }) {
               onChange={e => setTexto(e.target.value)}
               rows={7}
               placeholder="Digite o texto completo da mensagem..."
-              className="w-full min-h-[140px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50 resize-y transition-colors font-mono leading-relaxed"
+              className="w-full min-h-[140px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 resize-y transition-colors font-mono leading-relaxed"
             />
           </div>
         </div>
@@ -171,7 +171,7 @@ function ModalEdicao({ msg, onSalvar, onFechar }) {
           <button
             onClick={salvar}
             disabled={!titulo.trim() || !texto.trim()}
-            className="px-4 py-2 sm:py-1.5 rounded-lg bg-osso hover:bg-osso-200 text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-osso/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 sm:py-1.5 rounded-lg bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-acao/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Save size={13} /> Salvar Mensagem
           </button>
@@ -322,7 +322,7 @@ export default function MensagensRapidas({ onUsarMensagem }) {
         </div>
         <button
           onClick={abrirNova}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-osso hover:bg-osso-200 text-slate-950 text-xs font-bold shadow-md shadow-osso/20 transition-all shrink-0"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold shadow-md shadow-acao/20 transition-all shrink-0"
         >
           <Plus size={14} /> Nova Mensagem
         </button>
@@ -336,7 +336,7 @@ export default function MensagensRapidas({ onUsarMensagem }) {
             value={busca}
             onChange={e => setBusca(e.target.value)}
             placeholder="Buscar mensagem..."
-            className="w-full bg-grafite-700 border border-linha rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50"
+            className="w-full bg-grafite-700 border border-linha rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50"
           />
         </div>
 
@@ -344,7 +344,7 @@ export default function MensagensRapidas({ onUsarMensagem }) {
           onClick={() => setCatFiltro('todas')}
           className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
             catFiltro === 'todas'
-              ? 'bg-osso/20 border-osso/40 text-osso-200'
+              ? 'bg-acao/20 border-acao/40 text-acao-200'
               : 'bg-grafite-600 border-linha text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -359,7 +359,7 @@ export default function MensagensRapidas({ onUsarMensagem }) {
               onClick={() => setCatFiltro(key)}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
                 catFiltro === key
-                  ? 'bg-osso/20 border-osso/40 text-osso-200'
+                  ? 'bg-acao/20 border-acao/40 text-acao-200'
                   : 'bg-grafite-600 border-linha text-slate-400 hover:text-slate-200'
               }`}
             >

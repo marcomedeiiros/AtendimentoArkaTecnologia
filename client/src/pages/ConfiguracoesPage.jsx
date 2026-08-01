@@ -34,7 +34,7 @@ function Campo({ def, valor, onChange }) {
         value={valor}
         onChange={e => onChange(def.chave, e.target.value)}
         placeholder={def.placeholder}
-        className={`w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-osso/50 ${def.mono ? 'font-mono' : ''}`}
+        className={`w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-acao/50 ${def.mono ? 'font-mono' : ''}`}
       />
     </div>
   );
@@ -45,7 +45,7 @@ function CardServico({ titulo, Icon, campos, valores, onChange, onTestar, teste,
     <div className="glass-panel p-6 rounded-2xl border border-linha space-y-4">
       <div className="flex items-center justify-between gap-3">
         <h3 className="font-bold text-sm text-white font-display flex items-center gap-2">
-          <Icon size={16} className="text-osso-200" /> {titulo}
+          <Icon size={16} className="text-acao-200" /> {titulo}
         </h3>
         {teste && (
           <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
@@ -142,14 +142,14 @@ export default function ConfiguracoesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight font-display flex items-center gap-2">
-            <Settings size={22} className="text-osso-200" /> Configurações
+            <Settings size={22} className="text-acao-200" /> Configurações
           </h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-1">
             Conexões com a Evolution API e o n8n. Os valores salvos aqui têm prioridade sobre o .env.
           </p>
         </div>
         <button onClick={salvar} disabled={salvando || carregando}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-osso hover:bg-osso-200 text-slate-950 text-xs font-bold transition-all shrink-0 disabled:opacity-60">
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold transition-all shrink-0 disabled:opacity-60">
           {salvando ? <Loader2 size={14} className="animate-spin" /> : salvo ? <CheckCircle2 size={14} /> : <Save size={14} />}
           {salvando ? 'Salvando...' : salvo ? 'Salvo!' : 'Salvar configurações'}
         </button>
@@ -167,7 +167,7 @@ export default function ConfiguracoesPage() {
       {!carregando && (
         <div className="glass-panel p-6 rounded-2xl border border-linha space-y-3">
           <h3 className="font-bold text-sm text-white font-display flex items-center gap-2">
-            <MessageCircle size={16} className="text-osso-200" /> Quem responde o cliente
+            <MessageCircle size={16} className="text-acao-200" /> Quem responde o cliente
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {MODOS.map(m => {
@@ -178,13 +178,13 @@ export default function ConfiguracoesPage() {
                   onClick={() => onChange('atendimento.modo', m.id)}
                   className={`text-left p-4 rounded-xl border transition-all ${
                     ativo
-                      ? 'bg-osso/15 border-osso/50'
+                      ? 'bg-acao/15 border-acao/50'
                       : 'bg-grafite-700 border-linha hover:border-slate-600'
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-1">
-                    <span className={`w-2.5 h-2.5 rounded-full ${ativo ? 'bg-osso-200' : 'bg-slate-600'}`} />
-                    <span className={`text-xs font-bold ${ativo ? 'text-osso-200' : 'text-slate-300'}`}>{m.titulo}</span>
+                    <span className={`w-2.5 h-2.5 rounded-full ${ativo ? 'bg-acao-200' : 'bg-slate-600'}`} />
+                    <span className={`text-xs font-bold ${ativo ? 'text-acao-200' : 'text-slate-300'}`}>{m.titulo}</span>
                   </div>
                   <p className="text-[11px] text-slate-400 leading-relaxed">{m.desc}</p>
                 </button>

@@ -36,7 +36,7 @@ export function FlowMinimap({ nodes, canvasOffset, zoom, viewportSize, onNavigat
     <div className="absolute bottom-4 right-4 z-20 glass-panel border border-linha rounded-xl p-2 shadow-2xl select-none hidden sm:block">
       <div className="text-[10px] font-bold text-slate-400 mb-1 flex items-center justify-between">
         <span>MINIMAP</span>
-        <span className="text-osso-200">{nodes.length} NÓS</span>
+        <span className="text-acao-200">{nodes.length} NÓS</span>
       </div>
       <div 
         className="relative bg-grafite-900 border border-linha rounded-lg overflow-hidden cursor-crosshair"
@@ -66,7 +66,7 @@ export function FlowMinimap({ nodes, canvasOffset, zoom, viewportSize, onNavigat
         ))}
 
         <div
-          className="absolute border-2 border-osso-200 bg-osso/10 pointer-events-none rounded-sm transition-all duration-75"
+          className="absolute border-2 border-acao-200 bg-acao/10 pointer-events-none rounded-sm transition-all duration-75"
           style={{
             left: Math.max(0, viewX),
             top: Math.max(0, viewY),

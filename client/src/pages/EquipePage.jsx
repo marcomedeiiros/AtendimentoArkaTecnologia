@@ -73,18 +73,18 @@ export default function EquipePage() {
           onChange={e => setNome(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && adicionar()}
           placeholder="Nome do atendente"
-          className="flex-1 min-w-[200px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50"
+          className="flex-1 min-w-[200px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50"
         />
         <input
           value={cargo}
           onChange={e => setCargo(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && adicionar()}
           placeholder="Cargo (ex: Suporte N2)"
-          className="flex-1 min-w-[200px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-osso/50"
+          className="flex-1 min-w-[200px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50"
         />
         <button
           onClick={adicionar}
-          className="px-4 py-2 rounded-xl bg-osso hover:bg-osso-200 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-osso/20 transition-all"
+          className="px-4 py-2 rounded-xl bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-acao/20 transition-all"
         >
           <Plus size={15} /> Adicionar Atendente
         </button>
@@ -94,7 +94,7 @@ export default function EquipePage() {
         {equipe.map(e => (
           <div key={e.id} className="glass-panel p-4 rounded-2xl border border-linha space-y-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-osso/15 text-osso-200 font-bold text-sm flex items-center justify-center border border-osso/30">
+              <div className="w-10 h-10 rounded-xl bg-acao/15 text-acao-200 font-bold text-sm flex items-center justify-center border border-acao/30">
                 {e.nome.charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">

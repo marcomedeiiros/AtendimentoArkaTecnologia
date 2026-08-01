@@ -16,7 +16,7 @@ export function EmojiIcon({ name, label, size = "md", inline = false }) {
 
   const configs = {
     bot: {
-      bg: 'bg-gradient-to-r from-espera/20 via-osso/20 to-espera/10 border-osso/30 text-osso-200',
+      bg: 'bg-gradient-to-r from-espera/20 via-acao/20 to-espera/10 border-acao/30 text-acao-200',
       icon: Sparkles,
       defaultLabel: 'Arka IA',
     },
@@ -36,7 +36,7 @@ export function EmojiIcon({ name, label, size = "md", inline = false }) {
       defaultLabel: 'Alerta',
     },
     lightning: {
-      bg: 'bg-gradient-to-r from-osso/20 to-espera/20 border-osso/40 text-osso-200',
+      bg: 'bg-gradient-to-r from-acao/20 to-espera/20 border-acao/40 text-acao-200',
       icon: Zap,
       defaultLabel: 'Automação',
     },

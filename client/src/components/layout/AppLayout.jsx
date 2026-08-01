@@ -55,7 +55,7 @@ function NavItem({ to, label, icon: Icon, badge, onNavigate }) {
       className={({ isActive }) =>
         `flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 border ${
           isActive
-            ? 'bg-gradient-to-r from-osso/20 to-espera/10 border-osso/40 text-osso-200 shadow-md shadow-osso/5'
+            ? 'bg-gradient-to-r from-acao/20 to-espera/10 border-acao/40 text-acao-200 shadow-md shadow-acao/5'
             : 'bg-transparent border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
         }`
       }
@@ -63,11 +63,11 @@ function NavItem({ to, label, icon: Icon, badge, onNavigate }) {
       {({ isActive }) => (
         <>
           <div className="flex items-center gap-3">
-            <Icon size={15} className={`shrink-0 ${isActive ? 'text-osso-200' : 'text-slate-400'}`} />
+            <Icon size={15} className={`shrink-0 ${isActive ? 'text-acao-200' : 'text-slate-400'}`} />
             <span>{label}</span>
           </div>
           {badge > 0 && (
-            <span className="px-2 py-0.5 rounded-full bg-osso text-slate-950 font-bold text-[10px] shadow-sm">
+            <span className="px-2 py-0.5 rounded-full bg-acao text-slate-950 font-bold text-[10px] shadow-sm">
               {badge}
             </span>
           )}
@@ -93,7 +93,7 @@ function Sidebar({ aberto, onClose }) {
         ${aberto ? 'translate-x-0 shadow-2xl shadow-black/50' : '-translate-x-full'}`}
     >
       <div className="flex items-center gap-3 px-2 py-3 mb-4 shrink-0">
-        <div className="p-2 rounded-xl bg-gradient-to-br from-osso/20 to-espera/10 border border-osso/30 shadow-lg shadow-osso/10">
+        <div className="p-2 rounded-xl bg-gradient-to-br from-acao/20 to-espera/10 border border-acao/30 shadow-lg shadow-acao/10">
           <ArkaLogo size={32} />
         </div>
         <div className="flex-1 min-w-0">
@@ -148,14 +148,14 @@ export default function AppLayout() {
   if (carregando) {
     return (
       <div className="min-h-screen bg-grafite-900 flex flex-col items-center justify-center gap-3 text-slate-400">
-        <Loader2 className="w-7 h-7 text-osso animate-spin" />
+        <Loader2 className="w-7 h-7 text-acao animate-spin" />
         <span className="text-sm font-medium tracking-wide">Inicializando Arka Tecnologia...</span>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-grafite-900 text-[#F3F4F8] flex font-sans antialiased selection:bg-osso/30 selection:text-osso-200">
+    <div className="min-h-screen bg-grafite-900 text-[#F3F4F8] flex font-sans antialiased selection:bg-acao/30 selection:text-acao-200">
       <NotificacoesToast />
       <Sidebar aberto={menuAberto} onClose={() => setMenuAberto(false)} />
 

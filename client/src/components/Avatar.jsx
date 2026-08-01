@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 // Paleta de cores para avatares gerados a partir do nome (sem foto real).
 // Tons que combinam com o tema escuro do painel.
 const CORES = [
-  { bg: 'bg-osso/20',  ring: 'border-osso/40',  text: 'text-osso-200' },
+  { bg: 'bg-acao/20',  ring: 'border-acao/40',  text: 'text-acao-200' },
   { bg: 'bg-blue-500/20',    ring: 'border-blue-500/40',    text: 'text-blue-300' },
   { bg: 'bg-ativo/20', ring: 'border-ativo/40', text: 'text-ativo-400' },
   { bg: 'bg-purple-500/20',  ring: 'border-purple-500/40',  text: 'text-purple-300' },
