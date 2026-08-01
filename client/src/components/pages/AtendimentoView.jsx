@@ -249,9 +249,10 @@ function PainelFiltros({ extras, setExtras, visib, setVisib, onLimpar, totalAtiv
 function PainelTv({ conversas, onFechar }) {
   const [agora, setAgora] = useState(Date.now());
 
-  // Relogio + recalculo do tempo de espera.
+  // 1s: o relogio da parede mostra segundos, entao precisa bater a cada tique.
+  // O mesmo estado recalcula o tempo de espera dos cartoes.
   useEffect(() => {
-    const id = setInterval(() => setAgora(Date.now()), 30000);
+    const id = setInterval(() => setAgora(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
 
@@ -271,7 +272,11 @@ function PainelTv({ conversas, onFechar }) {
     return { cor: 'text-ativo-400', borda: 'border-linha' };
   };
 
-  const hora = new Date(agora).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const d = new Date(agora);
+  const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  // "quinta-feira" -> "Quinta-feira"
+  const diaSemana = d.toLocaleDateString('pt-BR', { weekday: 'long' }).replace(/^./, l => l.toUpperCase());
+  const data = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
   return (
     <Portal>
@@ -290,7 +295,11 @@ function PainelTv({ conversas, onFechar }) {
             </span>
           </div>
           <div className="flex items-center gap-6">
-            <span className="text-3xl font-bold text-texto-suave tabular-nums">{hora}</span>
+            <div className="text-right leading-tight">
+              {/* tabular-nums evita o relogio "dancar" a cada segundo */}
+              <div className="text-4xl font-bold text-texto tabular-nums">{hora}</div>
+              <div className="text-lg text-texto-suave">{diaSemana} · {data}</div>
+            </div>
             <button onClick={onFechar}
               className="px-5 py-3 rounded-xl bg-grafite-600 hover:bg-grafite-500 text-texto text-lg font-bold flex items-center gap-2 transition-colors">
               <X size={22} /> Sair
