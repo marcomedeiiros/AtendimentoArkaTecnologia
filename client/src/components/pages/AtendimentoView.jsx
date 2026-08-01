@@ -359,8 +359,9 @@ function PainelTv({ conversas, onFechar }) {
 // Tela exibida quando nenhuma conversa esta aberta.
 //
 // Usa o mesmo papel de parede da area de conversas, para o painel nao piscar de
-// aparencia quando uma conversa abre. O texto fica solto sobre o wallpaper, sem
-// cartao: os doodles sao claros demais para atrapalhar a leitura do texto claro.
+// aparencia quando uma conversa abre. Sobre o wallpaper, o texto vive dentro de
+// um cartao opaco: ele agrupa titulo, subtitulo e icone num bloco so, em vez de
+// deixar tres elementos soltos boiando no meio dos doodles.
 function TelaSemConversa() {
   return (
     <div className="flex-1 flex items-center justify-center relative overflow-hidden" style={WHATSAPP_BG}>
@@ -373,10 +374,7 @@ function TelaSemConversa() {
       <div className="absolute bottom-12 left-10 w-28 h-10 rounded-2xl rounded-tl-sm bg-grafite-600 opacity-60" />
       <div className="absolute bottom-36 right-20 w-20 h-10 rounded-2xl rounded-tr-sm bg-bolha opacity-40" />
 
-      {/* A sombra descola o texto do papel de parede sem precisar de um cartao
-          atras: escura e bem espalhada, ela escurece os doodles logo ao redor
-          das letras e some antes de virar um contorno visivel. */}
-      <div className="relative z-10 text-center px-8 py-9 max-w-sm">
+      <div className="relative z-10 text-center px-8 py-9 max-w-sm rounded-2xl bg-grafite-800/95 border border-linha shadow-2xl">
         <div className="inline-flex p-5 rounded-2xl bg-grafite-700 border border-linha mb-5 text-acao shadow-xl shadow-grafite-900/60">
           <MessageSquare size={38} />
         </div>
