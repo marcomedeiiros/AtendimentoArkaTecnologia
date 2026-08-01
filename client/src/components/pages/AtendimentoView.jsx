@@ -6,7 +6,7 @@ import {
   ArrowRightLeft, AlertCircle, Users, RotateCcw, Layers, ArrowDown, Tv,
   FileText, MapPin, Contact, Paperclip, Smile, Image as ImageIcon, Loader2,
   SlidersHorizontal, Star, Archive, EyeOff, MoreVertical,
-  ZoomIn, ZoomOut, Maximize2, Download, CornerUpLeft, Share2, Pencil, MoreHorizontal, Lock
+  ZoomIn, ZoomOut, Maximize2, Download, CornerUpLeft, Share2, Pencil, MoreHorizontal
 } from 'lucide-react';
 import { EmojiIcon, FormattedMessage } from './EmojiIcon';
 import { useMensagensRapidas } from './MensagensRapidas';
@@ -984,7 +984,16 @@ function PainelChat({
             </button>
           ) : (
             <>
-              {conversa.statusAtendimento !== 'pendente' && (
+              {conversa.statusAtendimento === 'pendente' ? (
+                // Sem esta acao aqui, uma conversa pendente aberta vira beco sem
+                // saida: nao da para responder nem para assumir sem fechar o
+                // painel e voltar para a lista.
+                <button onClick={() => onAtender(conversa.id)}
+                  title="Assumir o atendimento (libera a resposta)"
+                  className="px-2.5 py-1.5 rounded-lg bg-ativo/15 hover:bg-ativo/25 text-ativo-400 text-xs font-semibold border border-ativo/30 transition-all flex items-center gap-1">
+                  <UserCheck size={13} /> Atender
+                </button>
+              ) : (
                 <button onClick={() => onPendente(conversa.id)}
                   title="Devolver para a fila (Pendente)"
                   className="px-2.5 py-1.5 rounded-lg bg-espera/15 hover:bg-espera/25 text-espera-400 text-xs font-semibold border border-espera/30 transition-all flex items-center gap-1">
@@ -1217,33 +1226,10 @@ function PainelChat({
         </div>
       )}
 
-      {/* Responder exige a conversa ABERTA. Em vez de deixar o campo la e negar
-          o envio depois de a pessoa digitar, trocamos a barra inteira pela acao
-          que destrava o chat -- o unico caminho valido dali vira um clique. */}
-      {conversa.statusAtendimento !== 'aberta' ? (
-        <div className="p-3 bg-grafite-600/80 border-t border-linha flex items-center justify-center gap-3">
-          <Lock size={14} className="text-quieto shrink-0" />
-          <span className="text-[11px] text-texto-suave">
-            {conversa.statusAtendimento === 'pendente'
-              ? 'Esta conversa ainda não foi assumida.'
-              : 'Esta conversa está fechada.'}
-          </span>
-          <button
-            onClick={() =>
-              conversa.statusAtendimento === 'pendente'
-                ? onAtender(conversa.id)
-                : onReabrir(conversa.id)
-            }
-            className="px-3.5 py-2 rounded-xl bg-acao hover:bg-acao-200 text-slate-950 text-[11px] font-bold inline-flex items-center gap-1.5 shadow-md shadow-acao/20 transition-colors"
-          >
-            {conversa.statusAtendimento === 'pendente' ? (
-              <><UserCheck size={13} /> Atender para responder</>
-            ) : (
-              <><RotateCcw size={13} /> Reabrir para responder</>
-            )}
-          </button>
-        </div>
-      ) : (
+      {/* Responder exige a conversa ABERTA. Fora disso a barra some inteira, sem
+          aviso no lugar: o cabecalho ja mostra o status e o botao que destrava
+          (Atender ou Reabrir). */}
+      {conversa.statusAtendimento === 'aberta' && (
       <div className="p-3 bg-grafite-600/80 border-t border-linha flex items-center gap-2 relative">
         {showMsgRapidas && (
           <PainelMensagensRapidas
