@@ -47,13 +47,25 @@ function ArkaLogo({ size = 32 }) {
   );
 }
 
+// Item da barra lateral.
+//
+// O rotulo NUNCA quebra linha. "Central de Atendimento" ocupava 147px num
+// espaco de 146 quando o badge aparecia -- um pixel de diferenca -- e a quebra
+// resultante levava o item de 38px para 54px. Na pratica: chegava notificacao e
+// o menu inteiro se mexia, empurrando os itens de baixo.
+//
+// `truncate` garante altura constante em qualquer situacao; os paddings e gaps
+// mais justos abrem folga suficiente para o texto caber por inteiro mesmo com
+// badge de dois digitos, entao a reticencia so apareceria num caso extremo --
+// e para esse caso o `title` mostra o nome completo.
 function NavItem({ to, label, icon: Icon, badge, onNavigate }) {
   return (
     <NavLink
       to={to}
       onClick={onNavigate}
+      title={label}
       className={({ isActive }) =>
-        `flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 border ${
+        `flex items-center justify-between gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 border ${
           isActive
             ? 'bg-gradient-to-r from-acao/20 to-espera/10 border-acao/40 text-acao-200 shadow-md shadow-acao/5'
             : 'bg-transparent border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
@@ -62,12 +74,15 @@ function NavItem({ to, label, icon: Icon, badge, onNavigate }) {
     >
       {({ isActive }) => (
         <>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
             <Icon size={15} className={`shrink-0 ${isActive ? 'text-acao-200' : 'text-slate-400'}`} />
-            <span>{label}</span>
+            <span className="truncate">{label}</span>
           </div>
           {badge > 0 && (
-            <span className="px-2 py-0.5 rounded-full bg-acao text-slate-950 font-bold text-[10px] shadow-sm">
+            // `leading-none`: sem isso a altura da linha do badge (20px) passava
+            // da linha do texto (16px) e era ELA quem definia a altura do item,
+            // deixando so este 4px mais alto que os vizinhos.
+            <span className="shrink-0 px-1.5 py-0.5 leading-none rounded-full bg-acao text-slate-950 font-bold text-[10px] shadow-sm">
               {badge}
             </span>
           )}
@@ -88,7 +103,10 @@ function Sidebar({ aberto, onClose }) {
 
   return (
     <aside
-      className={`w-64 shrink-0 bg-grafite-800 border-r border-linha flex flex-col p-4 h-screen select-none overflow-y-auto
+      /* 17rem, nao 16: em w-64 o rotulo mais longo do proprio menu ("Central de
+         Atendimento") pedia 147px num vao de 146. A barra era estreita demais
+         para o que ela mesma precisa exibir. */
+      className={`w-[17rem] shrink-0 bg-grafite-800 border-r border-linha flex flex-col p-4 h-screen select-none overflow-y-auto
         fixed inset-y-0 left-0 z-50 transition-transform duration-300 lg:static lg:translate-x-0
         ${aberto ? 'translate-x-0 shadow-2xl shadow-black/50' : '-translate-x-full'}`}
     >
