@@ -1034,19 +1034,19 @@ function PainelChat({
               />
             )}
             {m.de === 'sistema' ? (
-              <div className="text-[10px] text-grafite-900/60 bg-white/80 border border-grafite-900/10 px-3 py-1.5 rounded-full">
+              <div className="text-[10px] text-texto-suave bg-grafite-700/90 border border-linha px-3 py-1.5 rounded-full">
                 {m.texto}
               </div>
             ) : (
               <div className={`max-w-[80%] p-3.5 rounded-2xl text-xs shadow-md space-y-1 ${
-                /* Sobre o papel de parede claro, as bolhas seguem o WhatsApp Web:
-                   recebida em branco, enviada em verde claro, ambas com texto
-                   escuro. Bolha escura aqui ficaria pesada e fora do padrao. */
+                /* O papel de parede em uso e a arte ESCURA do WhatsApp, entao as
+                   bolhas seguem o tema escuro: recebida em #202C33, enviada em
+                   #005C4B, texto claro. Bolha branca aqui brilharia demais. */
                 m.de === 'cliente'
-                  ? 'bg-white text-grafite-900 rounded-tl-sm'
-                  : 'bg-[#D9FDD3] text-grafite-900 rounded-tr-sm'
+                  ? 'bg-grafite-600 text-texto rounded-tl-sm'
+                  : 'bg-bolha text-texto rounded-tr-sm'
               }`}>
-                <div className="text-[10px] font-semibold text-grafite-900/60">
+                <div className="text-[10px] font-semibold text-texto-suave">
                   {m.de === 'cliente' ? conversa.cliente : 'Arka Tecnologia'}
                 </div>
 
@@ -1057,8 +1057,8 @@ function PainelChat({
                   return (
                     <div className={`text-[10px] px-2 py-1 rounded-lg border-l-2 mb-1 truncate ${
                       m.de === 'cliente'
-                        ? 'bg-grafite-700 border-acao/60 text-slate-400'
-                        : 'bg-slate-900/10 border-linha text-slate-900/70'
+                        ? 'bg-grafite-800/70 border-acao/60 text-texto-suave'
+                        : 'bg-grafite-900/30 border-acao-200/70 text-texto-suave'
                     }`}>
                       {orig.texto}
                     </div>
@@ -1067,17 +1067,17 @@ function PainelChat({
 
                 {m.tipo && m.tipo !== 'texto' ? (
                   <>
-                    <MensagemMidia m={m} escuro={false} onAbrirImagem={setImagemAmpliada} />
+                    <MensagemMidia m={m} escuro onAbrirImagem={setImagemAmpliada} />
                     {m.midia?.caption && <FormattedMessage text={m.midia.caption} />}
                   </>
                 ) : (
                   <FormattedMessage text={m.texto} />
                 )}
 
-                <div className="text-[9px] flex items-center justify-end gap-1 text-grafite-900/55">
+                <div className="text-[9px] flex items-center justify-end gap-1 text-texto-suave">
                   {m.editada && <span className="italic">editada</span>}
                   <span>{m.hora}</span>
-                  <StatusMensagem status={m.status} escuro={false} />
+                  <StatusMensagem status={m.status} escuro />
                 </div>
               </div>
             )}

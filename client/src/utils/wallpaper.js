@@ -2,37 +2,42 @@
  * Papel de parede da area de conversas (estilo WhatsApp).
  *
  * === Como trocar a imagem ===
- * 1. Salve o arquivo em `client/public/` (ex.: wallpaper-whatsapp.png)
- * 2. Ajuste ARQUIVO_WALLPAPER abaixo. Aceita .png, .jpg, .webp ou .svg.
+ * 1. Salve o arquivo em `client/public/` (ex.: wallpaper.jpg)
+ * 2. Ajuste ARQUIVO_WALLPAPER e COR_FUNDO_CHAT abaixo.
  * Como fica em `public/`, o Vite serve direto: nao precisa recompilar nem
  * importar o arquivo em lugar nenhum.
  *
- * === Como o padrao fica discreto ===
- * Em vez de clarear a imagem num editor, empilhamos DUAS camadas de fundo no
- * mesmo elemento: um veu translucido da cor do chat por cima do padrao.
- * Assim qualquer imagem que voce jogar na pasta ja entra suave, sem editar o
- * arquivo -- e sem precisar de um ::before com z-index, que exigiria mexer na
- * estrutura das mensagens e ainda quebraria dentro de um container que rola.
+ * === Por que a largura do tile e nao um quadrado ===
+ * A arte do WhatsApp e uma imagem de tela de celular (1080x1920, retrato).
+ * Forcar um tile quadrado -- como `360px 360px` -- espremia os 1920px de altura
+ * dentro de 360, achatando todos os doodles. Aqui definimos so a LARGURA e
+ * deixamos a altura em `auto`, entao a proporcao 9:16 e preservada.
  *
- * Menos VEU = padrao mais visivel.
+ * O valor de LARGURA_TILE reproduz a escala que a arte tem no celular: uma tela
+ * de ~400px de CSS mostra a imagem de 1080px inteira, ou seja, os desenhos
+ * aparecem a cerca de 1/2,7 do tamanho do arquivo.
  */
 
 const ARQUIVO_WALLPAPER = '/wallpaper.jpg';
 
-// Veu translucido por cima do padrao. DESLIGADO (0): a imagem em uso ja vem no
-// tom certo, e qualquer veu so lavava o desenho.
+// Largura de cada repeticao. Altura fica em `auto` para nao distorcer.
+// Menor = doodles menores e mais densos.
+const LARGURA_TILE = '400px';
+
+// Veu translucido por cima do padrao. DESLIGADO (0): a arte do WhatsApp ja vem
+// com os doodles bem discretos, e qualquer veu so lavava o desenho.
 // Se um dia entrar uma imagem contrastada demais, suba para 0.5-0.9 -- em 0 a
 // camada nem chega a ser criada.
 const VEU = 0;
 
-// Lado do tile em px. Use 'auto' para respeitar o tamanho real da imagem.
-const TAMANHO_TILE = '360px';
+// Cor lisa do fundo da imagem (amostrada do proprio arquivo: e o tom que ocupa
+// ~48% dos pixels, entre um doodle e outro). Ela cobre dois buracos: o instante
+// antes de a imagem carregar e a faixa que sobra quando a area do chat nao e um
+// multiplo exato do tile. Trocar a imagem sem trocar esta cor deixa uma moldura
+// de cor errada nas bordas.
+export const COR_FUNDO_CHAT = '#03141F';
 
-// Cor do chat. Fica por tras enquanto a imagem carrega (sem "flash" escuro) e
-// tambem e a cor do veu.
-export const COR_FUNDO_CHAT = '#EFEAE2';
-
-const veu = `rgba(239, 234, 226, ${VEU})`;
+const veu = COR_FUNDO_CHAT + Math.round(VEU * 255).toString(16).padStart(2, '0');
 const padrao = `url("${ARQUIVO_WALLPAPER}")`;
 
 // Com VEU em 0 a camada nem entra: a imagem vai pura para a tela, sem um
@@ -43,15 +48,15 @@ export const wallpaperStyle = VEU > 0
       // 1a camada: veu liso. 2a camada: o padrao repetido.
       backgroundImage: `linear-gradient(${veu}, ${veu}), ${padrao}`,
       backgroundRepeat: 'no-repeat, repeat',
-      backgroundSize: `cover, ${TAMANHO_TILE} ${TAMANHO_TILE}`,
-      backgroundPosition: 'center, center',
+      backgroundSize: `cover, ${LARGURA_TILE} auto`,
+      backgroundPosition: 'center, top center',
     }
   : {
       backgroundColor: COR_FUNDO_CHAT,
       backgroundImage: padrao,
       backgroundRepeat: 'repeat',
-      backgroundSize: `${TAMANHO_TILE} ${TAMANHO_TILE}`,
-      backgroundPosition: 'center',
+      backgroundSize: `${LARGURA_TILE} auto`,
+      backgroundPosition: 'top center',
     };
 
 export default wallpaperStyle;
