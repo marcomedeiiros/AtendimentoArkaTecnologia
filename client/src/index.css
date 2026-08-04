@@ -212,4 +212,12 @@
     opacity: 1;
   }
   .cena-lida { color: #53BDEB; }
+
+  /* `fade-in` sai: e translate + scale, o tipo de movimento que incomoda quem
+     pede menos animacao.
+     Os spinners (.animate-spin) ficam. Eles nao sao enfeite -- dizem que algo
+     esta em andamento, e parados viram um simbolo travado. Sao pequenos,
+     locais e giram no proprio eixo, que e o caso que a recomendacao de
+     movimento reduzido nao ataca. */
+  .fade-in { animation: none; }
 }

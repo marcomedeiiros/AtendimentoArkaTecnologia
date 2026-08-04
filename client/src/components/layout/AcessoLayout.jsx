@@ -28,7 +28,7 @@ function Cena() {
     <div className="w-full max-w-sm space-y-2.5" aria-hidden="true">
       <div className="cena-bolha max-w-[80%] rounded-2xl rounded-tl-sm bg-grafite-600 px-3.5 py-2.5 text-xs text-texto shadow-lg"
         style={{ animationDelay: '0.35s' }}>
-        Bom dia! Vocês fazem orçamento para 20 licenças?
+        Bom dia! Preciso Liberar acesso para um novo funcionario.
       </div>
 
       <div className="cena-bolha flex w-14 items-center justify-center gap-1 rounded-2xl rounded-tl-sm bg-grafite-600 px-3 py-3 shadow-lg"
@@ -41,7 +41,7 @@ function Cena() {
 
       <div className="cena-bolha ml-auto max-w-[80%] rounded-2xl rounded-tr-sm bg-bolha px-3.5 py-2.5 text-xs text-texto shadow-lg"
         style={{ animationDelay: '2.3s' }}>
-        Claro. Já estou preparando e te envio ainda hoje.
+        Bom dia! Me passa o acesso do anydesk por gentileza!
         <span className="mt-1 flex items-center justify-end gap-1 text-[9px] text-texto-suave">
           09:14
           <span className="cena-lida inline-flex" style={{ animationDelay: '3.1s' }}>

@@ -12,7 +12,11 @@ import AvisoSessao from '../components/AvisoSessao';
 
 const AuthContext = createContext(null);
 
-const DURACAO_AVISO = 4500;
+// Entrada e saida cobrem a tela inteira, entao saem rapido: tempo de ler a
+// frase e nada mais. O aviso de sessao expirada e uma faixa que nao bloqueia
+// nada, e pode ficar o dobro -- costuma chegar quando a pessoa nem estava
+// olhando para a tela.
+const DURACAO = { entrada: 1800, saida: 1800, expirou: 5000 };
 
 export function AuthProvider({ children }) {
   const [usuario, setUsuario] = useState(null);
@@ -26,7 +30,7 @@ export function AuthProvider({ children }) {
   const avisar = useCallback((texto, tipo = 'entrada') => {
     clearTimeout(timerAviso.current);
     setAviso({ texto, tipo });
-    timerAviso.current = setTimeout(() => setAviso(null), DURACAO_AVISO);
+    timerAviso.current = setTimeout(() => setAviso(null), DURACAO[tipo] ?? 2000);
   }, []);
 
   useEffect(() => () => clearTimeout(timerAviso.current), []);
