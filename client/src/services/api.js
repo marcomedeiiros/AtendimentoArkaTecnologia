@@ -121,11 +121,10 @@ export const FluxosAPI = {
 };
 
 // ── Equipe API ──
+// So leitura: a equipe e derivada de quem tem conta. Entrar nela e criar conta
+// em /cadastrar, e o status vem da presenca observada pelo servidor.
 export const EquipeAPI = {
   listar: () => request('/equipe'),
-  criar: (dados) => request('/equipe', { method: 'POST', body: JSON.stringify(dados) }),
-  atualizar: (id, dados) => request(`/equipe/${id}`, { method: 'PUT', body: JSON.stringify(dados) }),
-  remover: (id) => request(`/equipe/${id}`, { method: 'DELETE' }),
 };
 
 // ── WhatsApp API ──

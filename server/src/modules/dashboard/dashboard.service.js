@@ -1,17 +1,21 @@
 const prisma = require("../../infrastructure/database/prisma.client");
 const conversaRepository = require("../../infrastructure/repositories/conversa.repository");
 const parceiroRepository = require("../../infrastructure/repositories/parceiro.repository");
-const equipeRepository = require("../../infrastructure/repositories/equipe.repository");
+const equipeService = require("../equipe/equipe.service");
 
 class DashboardService {
   async obterMetricas() {
-    const [statusCounts, parceirosAtivos, equipeOnline, validacoesCnpj, contatos] = await Promise.all([
+    // A equipe vem do service, nao de uma contagem SQL: "online" e uma janela
+    // de tempo sobre o ultimo acesso, calculada la. Duplicar essa regra aqui
+    // faria o Dashboard e a Gestao da Equipe divergirem com o tempo.
+    const [statusCounts, parceirosAtivos, equipe, validacoesCnpj, contatos] = await Promise.all([
       conversaRepository.countByStatus(),
       prisma.parceiro.count({ where: { status: "ativo" } }),
-      prisma.equipe.count({ where: { status: "online" } }),
+      equipeService.listar(),
       prisma.conversa.count({ where: { cnpjVerificado: true } }),
       prisma.contato.count(),
     ]);
+    const equipeOnline = equipe.filter((m) => m.status === "online").length;
 
     const mapStatus = Object.fromEntries(
       statusCounts.map((s) => [s.statusAtendimento, s._count.id])
@@ -27,7 +31,7 @@ class DashboardService {
       validacoesCnpj,
       parceirosAtivos,
       equipeOnline,
-      totalEquipe: await prisma.equipe.count(),
+      totalEquipe: equipe.length,
       filaAguardando: mapStatus.pendente || 0,
     };
   }

@@ -244,8 +244,18 @@ export function AppProvider({ children }) {
     return () => { ativo = false; clearInterval(id); };
   }, []);
 
-  const atualizarEquipe = useCallback(async (nova) => {
-    setEquipe(nova);
+  // A presenca da equipe muda sem ninguem clicar em nada: alguem abre o painel
+  // e fica online, fecha e some depois da janela. Sem esta releitura, a Gestao
+  // da Equipe mostraria para sempre o estado do instante em que a aba abriu.
+  useEffect(() => {
+    let ativo = true;
+    const id = setInterval(async () => {
+      try {
+        const lista = await EquipeAPI.listar();
+        if (ativo && Array.isArray(lista)) setEquipe(lista);
+      } catch { /* back-end fora: mantem a ultima lista conhecida */ }
+    }, 30000);
+    return () => { ativo = false; clearInterval(id); };
   }, []);
 
   const atualizarFluxos = useCallback(async (novo) => {
@@ -268,7 +278,7 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       carregando,
       recargarDados: carregarDadosDoServidor,
-      equipe,            atualizarEquipe,
+      equipe,
       fluxos,            atualizarFluxos,
       parceiros,         atualizarParceiros,
       conversas,         atualizarConversas,

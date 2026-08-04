@@ -2064,8 +2064,8 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               {equipe.length === 0 && (
                 <div className="text-center text-slate-400 text-xs py-8 space-y-2">
                   <Users size={26} className="text-slate-600 mx-auto" />
-                  <p>Nenhum atendente cadastrado.</p>
-                  <p className="text-slate-500">Adicione membros em <strong className="text-slate-300">Gestao da Equipe</strong>.</p>
+                  <p>Nenhum outro operador com conta.</p>
+                  <p className="text-slate-500">Quem cria conta em <strong className="text-slate-300">/cadastrar</strong> aparece aqui.</p>
                 </div>
               )}
               {equipe.map(m => {

@@ -64,6 +64,10 @@ model Usuario {
   senhaHash    String   @map("senha_hash")
   cargo        String   @default("Administrador")
   ativo        Boolean  @default(true)
+  // Ultima requisicao autenticada desta pessoa. E o que sustenta o "online" da
+  // Gestao da Equipe: com o painel aberto, o front consulta o servidor a cada
+  // poucos segundos, entao presenca recente aqui significa aba aberta agora.
+  ultimoAcessoEm DateTime? @map("ultimo_acesso_em")
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
@@ -72,16 +76,13 @@ model Usuario {
   @@map("usuarios")
 }
 
-model Equipe {
-  id           String       @id @default(uuid())
-  nome         String
-  cargo        String       @default("Atendimento")
-  status       String       @default("offline")
-  criadoEm     DateTime     @default(now()) @map("criado_em")
-  atualizadoEm DateTime     @updatedAt @map("atualizado_em")
-
-  @@map("equipe")
-}
+// NAO existe mais um model Equipe aqui.
+//
+// Ele era uma lista paralela, digitada a mao, sem ligacao nenhuma com quem
+// realmente usa o sistema: `Conversa.atendenteId` sempre apontou para Usuario,
+// nunca para Equipe. Entao "adicionar atendente" criava um nome que nao podia
+// atender nada, e o status online/offline era um botao que a propria pessoa
+// virava. A equipe agora sai de Usuario -- quem tem conta e quem esta na lista.
 
 model Parceiro {
   cnpj         String         @id

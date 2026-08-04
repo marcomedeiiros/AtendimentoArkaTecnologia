@@ -46,15 +46,6 @@ function mapConversa(c) {
   };
 }
 
-function mapEquipe(e) {
-  return {
-    id: e.id,
-    nome: e.nome,
-    cargo: e.cargo,
-    status: e.status,
-  };
-}
-
 function mapParceiro(p) {
   return {
     cnpj: p.cnpj,
@@ -107,7 +98,6 @@ function mapFluxo(f) {
 module.exports = {
   mapMensagem,
   mapConversa,
-  mapEquipe,
   mapParceiro,
   mapContato,
   mapFluxo,

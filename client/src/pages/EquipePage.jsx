@@ -1,130 +1,120 @@
-import { useState } from 'react';
-import { Plus, Trash2, Circle, AlertTriangle, X } from 'lucide-react';
+/**
+ * Gestao da Equipe.
+ *
+ * Nao ha nada para cadastrar aqui: a equipe E quem tem conta no painel. Entrar
+ * na lista significa criar conta em /cadastrar, e sair dela significa perder o
+ * acesso. Antes esta tela mantinha uma lista propria, digitada a mao, que nao
+ * tinha ligacao nenhuma com quem realmente entrava no sistema -- dava para
+ * "adicionar" alguem que nunca conseguiria atender, e o online/offline era um
+ * botao que a propria pessoa virava.
+ *
+ * O status agora e observado, nao declarado: vem do ultimo acesso registrado
+ * pelo servidor a cada requisicao autenticada.
+ */
+import { useState, useEffect } from 'react';
+import { Users, Circle, ShieldCheck } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
-import { EquipeAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import Avatar from '../components/Avatar';
+
+// "há 3 min", "há 2 h", "ontem". Recebe ISO; null vira "nunca entrou".
+function vistoEm(iso) {
+  if (!iso) return 'nunca entrou';
+  const seg = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (seg < 60) return 'agora há pouco';
+  const min = Math.floor(seg / 60);
+  if (min < 60) return `há ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `há ${h} h`;
+  const d = Math.floor(h / 24);
+  return d === 1 ? 'ontem' : `há ${d} dias`;
+}
 
 export default function EquipePage() {
-  const { equipe, atualizarEquipe } = useAppContext();
-  const [nome,  setNome]  = useState('');
-  const [cargo, setCargo] = useState('');
-  const [erro,  setErro]  = useState(null);
+  const { equipe } = useAppContext();
+  const { usuario } = useAuth();
 
-  // Regra desta tela: a lista so muda depois que o servidor confirma. Antes o
-  // catch alterava so o estado local -- parecia funcionar e desfazia no F5.
-  async function adicionar() {
-    if (!nome.trim()) return;
-    const novo = { nome: nome.trim(), cargo: cargo.trim() || 'Atendimento', status: 'offline' };
-    try {
-      const criado = await EquipeAPI.criar(novo);
-      atualizarEquipe([...equipe, criado]);
-      setErro(null);
-      setNome(''); setCargo('');
-    } catch (err) {
-      setErro(`Nao foi possivel adicionar: ${err.message}. Verifique se o back-end esta rodando.`);
-    }
-  }
+  // O "visto há X" envelhece sozinho na tela; sem este tique ele congelaria no
+  // valor que tinha quando a pagina montou.
+  const [, forcarRedesenho] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => forcarRedesenho(n => n + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
-  async function remover(id) {
-    if (!window.confirm('Remover este membro da equipe?')) return;
-    try {
-      await EquipeAPI.remover(id);
-      atualizarEquipe(equipe.filter(e => e.id !== id));
-      setErro(null);
-    } catch (err) {
-      setErro(`Nao foi possivel remover: ${err.message}. Verifique se o back-end esta rodando.`);
-    }
-  }
-
-  async function alternarStatus(id) {
-    const alvo = equipe.find(e => e.id === id);
-    if (!alvo) return;
-    const novoStatus = alvo.status === 'online' ? 'offline' : 'online';
-    try {
-      const atualizado = await EquipeAPI.atualizar(id, { status: novoStatus });
-      atualizarEquipe(equipe.map(e => e.id === id ? atualizado : e));
-      setErro(null);
-    } catch (err) {
-      setErro(`Nao foi possivel mudar o status: ${err.message}`);
-    }
-  }
+  const online = equipe.filter(m => m.status === 'online').length;
 
   return (
     <div className="fade-in space-y-6">
-      <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-linha">
+      <div className="mb-8 flex flex-col gap-4 border-b border-linha pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight font-display">Gestão da Equipe de Atendimento</h1>
-          <p className="text-slate-400 text-xs sm:text-sm mt-1">Gerencie os operadores e atendentes autorizados da Arka Tecnologia.</p>
+          <h1 className="font-display text-2xl font-bold tracking-tight text-white">Gestão da Equipe</h1>
+          <p className="mt-1 text-xs text-texto-suave sm:text-sm">
+            Quem tem conta no painel da Arka Tecnologia. Novos operadores entram criando conta em{' '}
+            <span className="font-mono text-acao-200">/cadastrar</span>.
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-4 text-xs">
+          <span className="flex items-center gap-2 text-texto-suave">
+            <Users size={14} /> {equipe.length} {equipe.length === 1 ? 'conta' : 'contas'}
+          </span>
+          <span className="flex items-center gap-2 text-ativo-400">
+            <Circle size={8} fill="currentColor" /> {online} online
+          </span>
         </div>
       </div>
 
-      {erro && (
-        <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-falha/10 border border-falha/30 text-falha-400 text-xs">
-          <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-          <p className="flex-1">{erro}</p>
-          <button onClick={() => setErro(null)} className="text-falha-400/60 hover:text-falha-400 shrink-0">
-            <X size={14} />
-          </button>
-        </div>
-      )}
-
-      <div className="flex flex-wrap gap-2.5">
-        <input
-          value={nome}
-          onChange={e => setNome(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && adicionar()}
-          placeholder="Nome do atendente"
-          className="flex-1 min-w-[200px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50"
-        />
-        <input
-          value={cargo}
-          onChange={e => setCargo(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && adicionar()}
-          placeholder="Cargo (ex: Suporte N2)"
-          className="flex-1 min-w-[200px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50"
-        />
-        <button
-          onClick={adicionar}
-          className="px-4 py-2 rounded-xl bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-acao/20 transition-all"
-        >
-          <Plus size={15} /> Adicionar Atendente
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {equipe.map(e => (
-          <div key={e.id} className="glass-panel p-4 rounded-2xl border border-linha space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-acao/15 text-acao-200 font-bold text-sm flex items-center justify-center border border-acao/30">
-                {e.nome.charAt(0).toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-bold text-xs text-white truncate">{e.nome}</div>
-                <div className="text-[11px] text-slate-400 truncate">{e.cargo}</div>
-              </div>
-              <button
-                onClick={() => remover(e.id)}
-                className="text-falha-400 hover:bg-slate-800 p-1.5 rounded-lg transition-colors"
-              >
-                <Trash2 size={13} />
-              </button>
-            </div>
-            <button
-              onClick={() => alternarStatus(e.id)}
-              className={`w-full py-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                e.status === 'online'
-                  ? 'bg-ativo/15 border-ativo/30 text-ativo-400'
-                  : 'bg-slate-800 border-linha text-slate-400'
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {equipe.map(m => {
+          const ehVoce = m.id === usuario?.id;
+          return (
+            <div
+              key={m.id}
+              // `ring` e nao `border`: .glass-panel define a borda pelo atalho
+              // `border:`, que sobrescreve qualquer border-color vindo do
+              // Tailwind. O anel fica por fora e nao entra nessa disputa.
+              className={`glass-panel space-y-3 rounded-2xl p-4 ${
+                m.status === 'online' ? 'ring-1 ring-ativo/40' : ''
               }`}
             >
-              <Circle size={8} fill="currentColor" />
-              {e.status === 'online' ? 'Online' : 'Offline'}
-            </button>
-          </div>
-        ))}
+              <div className="flex items-center gap-3">
+                {/* `online` desenha a bolinha de presenca no proprio avatar */}
+                <Avatar nome={m.nome} size="md" online={m.status === 'online'} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="truncate text-xs font-bold text-white">{m.nome}</span>
+                    {ehVoce && (
+                      <span className="shrink-0 rounded-md bg-acao/15 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-acao-200">
+                        você
+                      </span>
+                    )}
+                  </div>
+                  <div className="truncate font-mono text-[11px] text-texto-suave">{m.email}</div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 border-t border-linha pt-3">
+                <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-texto-suave">
+                  <ShieldCheck size={12} className="shrink-0 text-texto-fraco" />
+                  <span className="truncate">{m.cargo}</span>
+                </span>
+                <span
+                  className={`flex shrink-0 items-center gap-1.5 text-[11px] font-semibold ${
+                    m.status === 'online' ? 'text-ativo-400' : 'text-texto-fraco'
+                  }`}
+                  title={m.status === 'online' ? 'Com o painel aberto agora' : `Último acesso ${vistoEm(m.ultimoAcessoEm)}`}
+                >
+                  <Circle size={7} fill="currentColor" />
+                  {m.status === 'online' ? 'Online' : vistoEm(m.ultimoAcessoEm)}
+                </span>
+              </div>
+            </div>
+          );
+        })}
 
         {equipe.length === 0 && (
-          <div className="col-span-full text-center text-slate-400 text-xs py-12 glass-panel rounded-2xl border border-linha">
-            Nenhum atendente cadastrado ainda.
+          <div className="glass-panel col-span-full rounded-2xl border border-linha py-12 text-center text-xs text-texto-suave">
+            Nenhuma conta ainda.
           </div>
         )}
       </div>

@@ -1,6 +1,27 @@
 const jwt = require("jsonwebtoken");
 const env = require("../../config/env");
 const AppError = require("../errors/AppError");
+const usuarioRepository = require("../../infrastructure/repositories/usuario.repository");
+
+// Presenca do operador, sem uma tabela de sessao.
+//
+// Com o painel aberto o front consulta o servidor a cada poucos segundos, entao
+// "requisicao autenticada recente" ja e um sinal fiel de aba aberta. Gravar
+// isso a cada chamada seria um UPDATE por requisicao; por isso o cache abaixo
+// segura a escrita por INTERVALO_ESCRITA. O efeito no "online" e nulo: a janela
+// que a tela usa para considerar alguem online e bem maior que esse intervalo.
+const INTERVALO_ESCRITA = 30_000;
+const ultimaEscrita = new Map();
+
+function registrarPresenca(userId) {
+  if (!userId) return;
+  const agora = Date.now();
+  if (agora - (ultimaEscrita.get(userId) || 0) < INTERVALO_ESCRITA) return;
+  ultimaEscrita.set(userId, agora);
+  // Sem await: presenca e efeito colateral, nao pode atrasar nem derrubar a
+  // resposta. Conta apagada no meio da sessao cai aqui e e ignorada.
+  usuarioRepository.marcarAcesso(userId).catch(() => ultimaEscrita.delete(userId));
+}
 
 function authMiddleware(req, res, next) {
   const header = req.headers.authorization;
@@ -14,6 +35,7 @@ function authMiddleware(req, res, next) {
   try {
     const payload = jwt.verify(token, env.jwt.secret);
     req.user = payload;
+    registrarPresenca(payload.sub);
     return next();
   } catch {
     return next(new AppError("Token invalido ou expirado", 401, "INVALID_TOKEN"));

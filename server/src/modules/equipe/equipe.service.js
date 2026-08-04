@@ -1,30 +1,35 @@
-const equipeRepository = require("../../infrastructure/repositories/equipe.repository");
-const { mapEquipe } = require("../../shared/helpers/mapper.helper");
-const AppError = require("../../shared/errors/AppError");
+const usuarioRepository = require("../../infrastructure/repositories/usuario.repository");
+
+// Alguem conta como online se o servidor viu uma requisicao autenticada dessa
+// pessoa nos ultimos minutos. Com o painel aberto o front consulta a API a cada
+// poucos segundos, entao a janela abaixo e folgada de proposito: absorve
+// oscilacao de rede e o intervalo com que a presenca e gravada, sem manter
+// online alguem que ja fechou a aba ha tempo.
+const JANELA_ONLINE_MS = 2 * 60 * 1000;
 
 class EquipeService {
+  // A equipe nao e mais uma lista digitada a mao: e quem tem conta. Criar
+  // membro virou criar conta, em /cadastrar, e o status deixou de ser um botao
+  // que a propria pessoa virava -- ele agora e observado, nao declarado.
   async listar() {
-    const itens = await equipeRepository.findAll();
-    return itens.map(mapEquipe);
-  }
+    const usuarios = await usuarioRepository.listarTodos();
+    const agora = Date.now();
 
-  async criar(data) {
-    const membro = await equipeRepository.create(data);
-    return mapEquipe(membro);
-  }
-
-  async atualizar(id, data) {
-    const existente = await equipeRepository.findById(id);
-    if (!existente) throw new AppError("Membro nao encontrado", 404, "NOT_FOUND");
-    const membro = await equipeRepository.update(id, data);
-    return mapEquipe(membro);
-  }
-
-  async remover(id) {
-    const existente = await equipeRepository.findById(id);
-    if (!existente) throw new AppError("Membro nao encontrado", 404, "NOT_FOUND");
-    await equipeRepository.delete(id);
-    return { removido: true };
+    return usuarios.map((u) => {
+      const visto = u.ultimoAcessoEm ? new Date(u.ultimoAcessoEm).getTime() : 0;
+      return {
+        id: u.id,
+        nome: u.nome,
+        email: u.email,
+        cargo: u.cargo,
+        ativo: u.ativo,
+        // Mantem o vocabulario que o resto do painel ja usa (o Dashboard conta
+        // `status === "online"`), agora alimentado por presenca real.
+        status: u.ativo && agora - visto < JANELA_ONLINE_MS ? "online" : "offline",
+        ultimoAcessoEm: u.ultimoAcessoEm,
+        criadoEm: u.criadoEm,
+      };
+    });
   }
 }
 
