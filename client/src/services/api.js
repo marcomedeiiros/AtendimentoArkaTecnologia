@@ -75,9 +75,10 @@ export const AuthAPI = {
     setToken(data.token);
     return data.usuario;
   },
+  // Cria a conta e pronto -- nao guarda token nenhum, porque o servidor nao
+  // emite token no cadastro. Entrar e um passo separado, em /login.
   cadastrar: async (dados) => {
     const data = await publico('/auth/cadastrar', dados);
-    setToken(data.token);
     return data.usuario;
   },
   // Confirma que o token guardado ainda vale, e devolve quem e o dono dele.

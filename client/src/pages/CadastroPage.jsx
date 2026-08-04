@@ -44,13 +44,18 @@ export default function CadastroPage() {
 
     setEnviando(true);
     try {
-      await cadastrar({
+      const criado = await cadastrar({
         nome: form.nome,
         email: form.email,
         senha: form.senha,
         ...(exigeCodigo ? { codigo: form.codigo } : {}),
       });
-      navigate('/atendimento', { replace: true });
+      // Criar conta nao e entrar. O login recebe o e-mail pelo `state` para
+      // ja vir preenchido -- a pessoa acabou de digitar, repetir seria ruido.
+      navigate('/login', {
+        replace: true,
+        state: { cadastrado: true, email: criado?.email || form.email },
+      });
     } catch (err) {
       if (Object.keys(err.campos || {}).length) setCampos(err.campos);
       else setErro(err.message);

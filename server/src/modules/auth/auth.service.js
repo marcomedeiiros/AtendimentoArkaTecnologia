@@ -50,9 +50,18 @@ class AuthService {
     const senhaHash = await bcrypt.hash(senha, 10);
     const usuario = await usuarioRepository.criar({ nome, email, senhaHash, cargo });
 
-    // Ja devolve token: quem acabou de criar a conta entra direto, sem repetir
-    // as credenciais numa segunda tela.
-    return this._assinar(usuario);
+    // Sem token: criar conta nao e entrar. Quem acabou de se cadastrar passa
+    // pelo login como qualquer outra pessoa -- assim a senha e exercitada uma
+    // vez antes de virar a unica forma de voltar, e o painel so abre depois de
+    // uma autenticacao de verdade.
+    return {
+      usuario: {
+        id: usuario.id,
+        nome: usuario.nome,
+        email: usuario.email,
+        cargo: usuario.cargo,
+      },
+    };
   }
 
   async login({ email, senha }) {

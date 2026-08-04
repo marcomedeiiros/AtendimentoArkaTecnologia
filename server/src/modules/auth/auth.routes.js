@@ -33,7 +33,7 @@ router.post("/login", validate(loginSchema), (req, res, next) =>
  * /api/auth/cadastrar:
  *   post:
  *     tags: [Auth]
- *     summary: Cria uma conta de operador e ja devolve o token
+ *     summary: Cria uma conta de operador (nao autentica -- e preciso fazer login)
  *     requestBody:
  *       required: true
  *       content:
@@ -48,7 +48,7 @@ router.post("/login", validate(loginSchema), (req, res, next) =>
  *               cargo:  { type: string }
  *               codigo: { type: string, description: "Exigido apenas quando REGISTRO_CODIGO estiver definido no .env" }
  *     responses:
- *       201: { description: Conta criada, com token JWT }
+ *       201: { description: "Conta criada. Devolve apenas os dados do usuario; o token sai do /login" }
  *       409: { description: E-mail ja cadastrado }
  */
 router.post("/cadastrar", validate(cadastroSchema), (req, res, next) =>

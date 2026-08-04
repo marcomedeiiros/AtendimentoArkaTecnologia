@@ -6,10 +6,13 @@
  * permissao para nada disso, e sem essa separacao o painel dispararia um punhado
  * de 401 antes mesmo de a pessoa digitar o e-mail.
  */
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { AuthAPI, getToken } from '../services/api';
+import AvisoSessao from '../components/AvisoSessao';
 
 const AuthContext = createContext(null);
+
+const DURACAO_AVISO = 4500;
 
 export function AuthProvider({ children }) {
   const [usuario, setUsuario] = useState(null);
@@ -17,6 +20,16 @@ export function AuthProvider({ children }) {
   // guardado ainda vale. Sem esse estado, um F5 dentro do painel piscaria a
   // tela de login antes de o /auth/me responder.
   const [verificando, setVerificando] = useState(true);
+  const [aviso, setAviso] = useState(null);
+  const timerAviso = useRef(null);
+
+  const avisar = useCallback((texto, tipo = 'entrada') => {
+    clearTimeout(timerAviso.current);
+    setAviso({ texto, tipo });
+    timerAviso.current = setTimeout(() => setAviso(null), DURACAO_AVISO);
+  }, []);
+
+  useEffect(() => () => clearTimeout(timerAviso.current), []);
 
   useEffect(() => {
     let vivo = true;
@@ -35,29 +48,41 @@ export function AuthProvider({ children }) {
     return () => { vivo = false; };
   }, []);
 
-  // Qualquer 401 vindo de qualquer chamada derruba a sessao aqui.
+  // Qualquer 401 vindo de qualquer chamada derruba a sessao aqui. Antes isso
+  // acontecia em silencio e a pessoa era jogada no login sem entender por que.
   useEffect(() => {
-    const aoPerderSessao = () => setUsuario(null);
+    const aoPerderSessao = () => {
+      setUsuario(atual => {
+        if (atual) avisar('Sua sessão expirou. Entre novamente para continuar.', 'expirou');
+        return null;
+      });
+    };
     window.addEventListener(AuthAPI.EVENTO_SEM_SESSAO, aoPerderSessao);
     return () => window.removeEventListener(AuthAPI.EVENTO_SEM_SESSAO, aoPerderSessao);
-  }, []);
+  }, [avisar]);
 
   const entrar = useCallback(async (email, senha) => {
-    setUsuario(await AuthAPI.entrar(email, senha));
-  }, []);
+    const eu = await AuthAPI.entrar(email, senha);
+    setUsuario(eu);
+    // Primeiro nome: o aviso e uma saudacao curta, nao um cabecalho de cadastro.
+    avisar(`Você entrou como ${String(eu.nome || '').split(' ')[0]}.`, 'entrada');
+    return eu;
+  }, [avisar]);
 
-  const cadastrar = useCallback(async (dados) => {
-    setUsuario(await AuthAPI.cadastrar(dados));
-  }, []);
+  // Cadastrar NAO autentica: o servidor nao devolve token, e quem acabou de
+  // criar a conta passa pelo login como qualquer outra pessoa.
+  const cadastrar = useCallback((dados) => AuthAPI.cadastrar(dados), []);
 
   const sair = useCallback(() => {
     AuthAPI.sair();
     setUsuario(null);
-  }, []);
+    avisar('Você saiu da plataforma.', 'saida');
+  }, [avisar]);
 
   return (
-    <AuthContext.Provider value={{ usuario, verificando, entrar, cadastrar, sair }}>
+    <AuthContext.Provider value={{ usuario, verificando, entrar, cadastrar, sair, avisar }}>
       {children}
+      <AvisoSessao aviso={aviso} onFechar={() => setAviso(null)} />
     </AuthContext.Provider>
   );
 }

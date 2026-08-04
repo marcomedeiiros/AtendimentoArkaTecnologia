@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { Loader2, LogIn, AlertCircle } from 'lucide-react';
+import { Loader2, LogIn, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import AcessoLayout, { Campo, LinkAcesso } from '../components/layout/AcessoLayout';
 
@@ -9,7 +9,10 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const local = useLocation();
 
-  const [email, setEmail] = useState('');
+  // Quem acabou de se cadastrar chega aqui com o e-mail no `state`. Ja vem
+  // preenchido: a pessoa digitou isso segundos atras, pedir de novo e ruido.
+  const recemCadastrado = !!local.state?.cadastrado;
+  const [email, setEmail] = useState(local.state?.email || '');
   const [senha, setSenha] = useState('');
   const [erro, setErro] = useState(null);
   const [enviando, setEnviando] = useState(false);
@@ -38,13 +41,27 @@ export default function LoginPage() {
       rodape={<>Ainda não tem conta? <LinkAcesso to="/cadastrar">Criar conta</LinkAcesso></>}
     >
       <form onSubmit={enviar} className="space-y-4" noValidate>
+        {recemCadastrado && (
+          <div role="status" className="flex items-start gap-2 rounded-xl border border-acao/40 bg-acao/10 p-3">
+            <CheckCircle2 size={15} className="mt-px shrink-0 text-acao-200" />
+            <p className="text-xs leading-relaxed text-texto">
+              <strong className="text-acao-200">Conta criada.</strong> Entre com a senha que você acabou de escolher.
+            </p>
+          </div>
+        )}
+
+        {/* O foco vai para o primeiro campo que ainda esta vazio: vindo do
+            cadastro o e-mail ja veio preenchido, entao comecar por ele
+            obrigaria a pessoa a dar um Tab para chegar onde precisa digitar. */}
         <Campo
-          id="email" rotulo="E-mail" type="email" autoComplete="email" required autoFocus
+          id="email" rotulo="E-mail" type="email" autoComplete="email" required
+          autoFocus={!recemCadastrado}
           placeholder=""
           value={email} onChange={e => setEmail(e.target.value)}
         />
         <Campo
           id="senha" rotulo="Senha" type="password" autoComplete="current-password" required
+          autoFocus={recemCadastrado}
           placeholder=""
           value={senha} onChange={e => setSenha(e.target.value)}
         />
