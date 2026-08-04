@@ -319,8 +319,8 @@ function PainelTv({ pendentes, abertas, onFechar }) {
     );
   };
 
-  const Coluna = ({ titulo, itens, cor, aberta, vazio }) => (
-    <section className="flex min-h-0 flex-col gap-5">
+  const Coluna = ({ titulo, itens, cor, aberta, vazio, className = '' }) => (
+    <section className={`flex min-h-0 flex-col gap-5 ${className}`}>
       <header className="flex shrink-0 items-center gap-4">
         <span className={`h-3 w-3 rounded-full ${cor}`} />
         <h2 className="text-2xl font-bold uppercase tracking-wider text-texto-suave">{titulo}</h2>
@@ -384,14 +384,19 @@ function PainelTv({ pendentes, abertas, onFechar }) {
               <p className="text-2xl text-texto-suave">Nenhum cliente aguardando atendimento.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-10 xl:grid-cols-2">
+            /* Sem `gap`: o respiro entre as colunas vem do padding de cada uma,
+               metade de cada lado, e a divisoria fica no meio exato. Com gap, a
+               borda encostaria na coluna da direita em vez de dividir a tela. */
+            <div className="grid grid-cols-1 xl:grid-cols-2">
               <Coluna
                 titulo="Aguardando" cor="bg-espera" itens={pendentes}
                 vazio="Ninguém na fila."
+                className="pb-10 xl:pb-0 xl:border-r xl:border-linha xl:pr-10"
               />
               <Coluna
                 titulo="Em atendimento" cor="bg-ativo" itens={abertas} aberta
                 vazio="Nenhuma conversa assumida."
+                className="border-t border-linha pt-10 xl:border-t-0 xl:pt-0 xl:pl-10"
               />
             </div>
           )}
