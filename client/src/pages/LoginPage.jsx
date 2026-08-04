@@ -40,12 +40,12 @@ export default function LoginPage() {
       <form onSubmit={enviar} className="space-y-4" noValidate>
         <Campo
           id="email" rotulo="E-mail" type="email" autoComplete="email" required autoFocus
-          placeholder="voce@arkatecnologia.com.br"
+          placeholder=""
           value={email} onChange={e => setEmail(e.target.value)}
         />
         <Campo
           id="senha" rotulo="Senha" type="password" autoComplete="current-password" required
-          placeholder="••••••••"
+          placeholder=""
           value={senha} onChange={e => setSenha(e.target.value)}
         />
 

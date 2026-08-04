@@ -67,22 +67,22 @@ export default function CadastroPage() {
       <form onSubmit={enviar} className="space-y-4" noValidate>
         <Campo
           id="nome" rotulo="Nome" autoComplete="name" required autoFocus
-          placeholder="Como você aparece para a equipe"
+          placeholder=""
           value={form.nome} onChange={mudar('nome')} erro={campos.nome}
         />
         <Campo
           id="email" rotulo="E-mail" type="email" autoComplete="email" required
-          placeholder="voce@arkatecnologia.com.br"
+          placeholder=""
           value={form.email} onChange={mudar('email')} erro={campos.email}
         />
         <Campo
           id="senha" rotulo="Senha" type="password" autoComplete="new-password" required
-          placeholder="••••••••" dica="Mínimo de 6 caracteres."
+          placeholder="" dica="Mínimo de 6 caracteres."
           value={form.senha} onChange={mudar('senha')} erro={campos.senha}
         />
         <Campo
           id="confirmar" rotulo="Confirmar senha" type="password" autoComplete="new-password" required
-          placeholder="••••••••"
+          placeholder=""
           value={form.confirmar} onChange={mudar('confirmar')} erro={campos.confirmar}
         />
         {exigeCodigo && (
