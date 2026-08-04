@@ -19,6 +19,12 @@ const env = {
     email: process.env.ADMIN_EMAIL || "admin@arkatecnologia.com.br",
     password: process.env.ADMIN_PASSWORD || "Admin@123",
   },
+  // Codigo de convite para /api/auth/cadastrar. Vazio (padrao) = cadastro
+  // aberto: qualquer pessoa que alcance a URL cria conta e passa a ler as
+  // conversas dos clientes. Preencha REGISTRO_CODIGO no .env para exigir o
+  // codigo no cadastro -- o formulario mostra o campo sozinho quando isso
+  // estiver ativo.
+  registroCodigo: process.env.REGISTRO_CODIGO || "",
 };
 
 module.exports = env;

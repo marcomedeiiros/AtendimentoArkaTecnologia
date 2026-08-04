@@ -6,11 +6,14 @@ import {
 } from 'react-router-dom';
 import './index.css';
 
-import { AppProvider } from './context/AppContext';
+import { AuthProvider } from './context/AuthContext';
 
 import AppLayout from './components/layout/AppLayout';
+import RotaProtegida from './components/layout/RotaProtegida';
 
 import NotFound from './pages/NotFound';
+import LoginPage from './pages/LoginPage';
+import CadastroPage from './pages/CadastroPage';
 
 import DashboardPage    from './pages/DashboardPage';
 import AtendimentoPage  from './pages/AtendimentoPage';
@@ -27,26 +30,33 @@ import ConfiguracoesPage from './pages/ConfiguracoesPage';
 export default function App() {
   return (
     <Router>
-      <AppProvider>
+      <AuthProvider>
         <Routes>
-          <Route path="/" element={<Navigate to="/atendimento" replace />} />
-          <Route element={<AppLayout />}>
-            <Route path="/dashboard"   element={<DashboardPage />} />
-            <Route path="/atendimento" element={<AtendimentoPage />} />
-            <Route path="/contatos"    element={<ContatosPage />} />
-            <Route path="/fluxos"      element={<FluxosPage />} />
-            <Route path="/whatsapp"    element={<WhatsAppPage />} />
-            <Route path="/configuracoes" element={<ConfiguracoesPage />} />
-            <Route path="/equipe"      element={<EquipePage />} />
-            <Route path="/parceiros"   element={<ParceirosPage />} />
-            <Route path="/mensagens"   element={<MensagensPage />} />
-            <Route path="/agenda"      element={<AgendaPage />} />
-            <Route path="/massa"       element={<MassaPage />} />
+          {/* Acesso: fora do portao, e as unicas rotas publicas do app. */}
+          <Route path="/login"     element={<LoginPage />} />
+          <Route path="/cadastrar" element={<CadastroPage />} />
+
+          {/* Painel: tudo daqui para baixo exige sessao. */}
+          <Route element={<RotaProtegida />}>
+            <Route path="/" element={<Navigate to="/atendimento" replace />} />
+            <Route element={<AppLayout />}>
+              <Route path="/dashboard"   element={<DashboardPage />} />
+              <Route path="/atendimento" element={<AtendimentoPage />} />
+              <Route path="/contatos"    element={<ContatosPage />} />
+              <Route path="/fluxos"      element={<FluxosPage />} />
+              <Route path="/whatsapp"    element={<WhatsAppPage />} />
+              <Route path="/configuracoes" element={<ConfiguracoesPage />} />
+              <Route path="/equipe"      element={<EquipePage />} />
+              <Route path="/parceiros"   element={<ParceirosPage />} />
+              <Route path="/mensagens"   element={<MensagensPage />} />
+              <Route path="/agenda"      element={<AgendaPage />} />
+              <Route path="/massa"       element={<MassaPage />} />
+            </Route>
           </Route>
 
           <Route path="*" element={<NotFound />} />
         </Routes>
-      </AppProvider>
+      </AuthProvider>
     </Router>
   );
 }

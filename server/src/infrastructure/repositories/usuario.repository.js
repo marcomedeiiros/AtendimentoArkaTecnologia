@@ -11,6 +11,17 @@ class UsuarioRepository {
       select: { id: true, nome: true, email: true, cargo: true, ativo: true },
     });
   }
+
+  criar({ nome, email, senhaHash, cargo }) {
+    return prisma.usuario.create({
+      data: { nome, email, senhaHash, cargo: cargo || "Atendente" },
+      select: { id: true, nome: true, email: true, cargo: true, ativo: true },
+    });
+  }
+
+  contar() {
+    return prisma.usuario.count();
+  }
 }
 
 module.exports = new UsuarioRepository();

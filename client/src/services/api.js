@@ -1,52 +1,51 @@
 const API_BASE = '/api';
 
-// Credenciais do operador padrao (criado pelo seed do back-end).
-// Como ainda nao existe tela de login, o front autentica automaticamente.
-//
-// Vem de client/.env (fora do versionamento) -- antes a senha ficava escrita
-// aqui e ia publicada junto com o codigo-fonte. Copie client/.env.example para
-// client/.env e preencha com os mesmos valores do server/.env.
-const DEFAULT_CREDENTIALS = {
-  email: import.meta.env.VITE_ADMIN_EMAIL || 'admin@arkatecnologia.com.br',
-  senha: import.meta.env.VITE_ADMIN_SENHA || '',
-};
-
 const TOKEN_KEY = 'arka_token';
 
-const getToken = () => localStorage.getItem(TOKEN_KEY);
+export const getToken = () => localStorage.getItem(TOKEN_KEY);
 const setToken = (t) => (t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY));
 
-// Faz login e guarda o JWT. Retorna o token ou null se falhar.
-let loginPromise = null;
-async function login(credentials = DEFAULT_CREDENTIALS) {
-  // Evita multiplos logins simultaneos (varias telas carregam ao mesmo tempo).
-  if (loginPromise) return loginPromise;
-  loginPromise = (async () => {
-    try {
-      const response = await fetch(`${API_BASE}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(credentials),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data?.error?.message || 'Falha no login');
-      const token = data?.data?.token;
-      setToken(token);
-      return token;
-    } catch (err) {
-      console.warn('[API] Falha ao autenticar:', err.message);
-      setToken(null);
-      return null;
-    } finally {
-      loginPromise = null;
-    }
-  })();
-  return loginPromise;
+// Avisa a aplicacao de que a sessao acabou.
+//
+// Antes o front trazia o e-mail e a senha do administrador embutidos e
+// reautenticava sozinho a cada 401 -- ou seja, ninguem nunca saia, e as
+// credenciais de admin viajavam no bundle. Agora o 401 apaga o token e emite
+// este evento; quem decide o que fazer e o AuthProvider, que manda a pessoa
+// para /login.
+const SEM_SESSAO = 'arka:sem-sessao';
+function encerrarSessao() {
+  setToken(null);
+  window.dispatchEvent(new CustomEvent(SEM_SESSAO));
 }
 
-async function request(endpoint, options = {}, _retry = true) {
-  let token = getToken();
-  if (!token) token = await login();
+// Lanca Error com `.codigo` e `.campos` preenchidos a partir da resposta, para
+// o formulario poder destacar o campo certo em vez de so mostrar um texto.
+async function lerErro(response) {
+  let corpo = null;
+  try { corpo = await response.json(); } catch { /* resposta sem JSON */ }
+  const erro = new Error(corpo?.error?.message || 'Não foi possível concluir a operação.');
+  erro.codigo = corpo?.error?.code || null;
+  erro.status = response.status;
+  erro.campos = {};
+  for (const d of corpo?.error?.details || []) {
+    if (d?.field) erro.campos[d.field] = d.message;
+  }
+  return erro;
+}
+
+async function publico(endpoint, body) {
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw await lerErro(response);
+  const data = await response.json();
+  return data.data !== undefined ? data.data : data;
+}
+
+async function request(endpoint, options = {}) {
+  const token = getToken();
 
   const config = {
     headers: {
@@ -57,26 +56,40 @@ async function request(endpoint, options = {}, _retry = true) {
     ...options,
   };
 
-  try {
-    const response = await fetch(`${API_BASE}${endpoint}`, config);
+  const response = await fetch(`${API_BASE}${endpoint}`, config);
 
-    // Token invalido/expirado: reautentica uma vez e repete a chamada.
-    if (response.status === 401 && _retry) {
-      setToken(null);
-      const novo = await login();
-      if (novo) return request(endpoint, options, false);
-    }
-
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data?.error?.message || 'Erro na requisição');
-    }
-    return data.data !== undefined ? data.data : data;
-  } catch (err) {
-    console.warn(`[API] Fallback ou Erro em ${endpoint}:`, err.message);
-    throw err;
+  if (response.status === 401) {
+    encerrarSessao();
+    throw await lerErro(response);
   }
+
+  if (!response.ok) throw await lerErro(response);
+
+  const data = await response.json();
+  return data.data !== undefined ? data.data : data;
 }
+
+export const AuthAPI = {
+  entrar: async (email, senha) => {
+    const data = await publico('/auth/login', { email, senha });
+    setToken(data.token);
+    return data.usuario;
+  },
+  cadastrar: async (dados) => {
+    const data = await publico('/auth/cadastrar', dados);
+    setToken(data.token);
+    return data.usuario;
+  },
+  // Confirma que o token guardado ainda vale, e devolve quem e o dono dele.
+  eu: () => request('/auth/me'),
+  registroInfo: async () => {
+    const r = await fetch(`${API_BASE}/auth/registro-info`);
+    if (!r.ok) return { exigeCodigo: false };
+    return (await r.json()).data;
+  },
+  sair: () => setToken(null),
+  EVENTO_SEM_SESSAO: SEM_SESSAO,
+};
 
 // ── Auth API ──
 // ── Contatos API ──

@@ -7,6 +7,15 @@ class AuthController {
     return success(res, data);
   }
 
+  async cadastrar(req, res) {
+    const data = await authService.cadastrar(req.body);
+    return success(res, data, 201);
+  }
+
+  registroInfo(req, res) {
+    return success(res, authService.registroInfo());
+  }
+
   async me(req, res) {
     const data = await authService.me(req.user.sub);
     return success(res, data);

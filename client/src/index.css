@@ -157,3 +157,59 @@
 .emoji-badge:hover {
   transform: scale(1.04);
 }
+
+/* ── Telas de acesso (/login e /cadastrar) ────────────────────────────────
+   O painel da esquerda encena o ciclo do produto: chega mensagem do cliente,
+   o atendente responde, e o ✓✓ vira azul. A sequencia e toda por delay de
+   animacao -- sem timer em JS, entao nao ha o que limpar ao desmontar e a
+   preferencia por menos movimento desliga tudo de uma vez, no fim do arquivo. */
+
+/* Grade tecnica de fundo. A mascara radial faz ela existir onde o conteudo
+   esta e sumir nas bordas, em vez de virar papel de parede uniforme. */
+.grade-tecnica {
+  background-image:
+    linear-gradient(to right, rgba(42, 57, 66, 0.55) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(42, 57, 66, 0.55) 1px, transparent 1px);
+  background-size: 46px 46px;
+  -webkit-mask-image: radial-gradient(ellipse 78% 62% at 42% 45%, #000 25%, transparent 78%);
+  mask-image: radial-gradient(ellipse 78% 62% at 42% 45%, #000 25%, transparent 78%);
+}
+
+@keyframes bolhaEntra {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+
+@keyframes digitando {
+  0%, 60%, 100% { transform: translateY(0);    opacity: 0.45; }
+  30%           { transform: translateY(-3px); opacity: 1; }
+}
+
+/* O momento azul: o unico uso de #53BDEB na tela inteira. */
+@keyframes viraLida {
+  to { color: #53BDEB; }
+}
+
+.cena-bolha {
+  opacity: 0;
+  animation: bolhaEntra 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.cena-ponto {
+  animation: digitando 1.4s ease-in-out infinite;
+}
+
+.cena-lida {
+  color: #8696A0;
+  animation: viraLida 0.4s ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cena-bolha,
+  .cena-ponto,
+  .cena-lida {
+    animation: none;
+    opacity: 1;
+  }
+  .cena-lida { color: #53BDEB; }
+}

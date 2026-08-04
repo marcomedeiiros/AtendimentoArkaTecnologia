@@ -2,7 +2,7 @@ const router = require("express").Router();
 const authController = require("./auth.controller");
 const validate = require("../../shared/middlewares/validate.middleware");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
-const { loginSchema } = require("./auth.dto");
+const { loginSchema, cadastroSchema } = require("./auth.dto");
 
 /**
  * @openapi
@@ -27,6 +27,42 @@ const { loginSchema } = require("./auth.dto");
 router.post("/login", validate(loginSchema), (req, res, next) =>
   authController.login(req, res).catch(next)
 );
+
+/**
+ * @openapi
+ * /api/auth/cadastrar:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Cria uma conta de operador e ja devolve o token
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [nome, email, senha]
+ *             properties:
+ *               nome:   { type: string }
+ *               email:  { type: string }
+ *               senha:  { type: string, minLength: 6 }
+ *               cargo:  { type: string }
+ *               codigo: { type: string, description: "Exigido apenas quando REGISTRO_CODIGO estiver definido no .env" }
+ *     responses:
+ *       201: { description: Conta criada, com token JWT }
+ *       409: { description: E-mail ja cadastrado }
+ */
+router.post("/cadastrar", validate(cadastroSchema), (req, res, next) =>
+  authController.cadastrar(req, res).catch(next)
+);
+
+/**
+ * @openapi
+ * /api/auth/registro-info:
+ *   get:
+ *     tags: [Auth]
+ *     summary: Diz se o cadastro exige codigo de convite
+ */
+router.get("/registro-info", (req, res) => authController.registroInfo(req, res));
 
 /**
  * @openapi

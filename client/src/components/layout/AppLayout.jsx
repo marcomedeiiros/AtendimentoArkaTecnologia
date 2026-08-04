@@ -9,10 +9,12 @@ import React, { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   LayoutGrid, Users, Zap, MessageSquare, ShieldCheck,
-  GitFork, MessageCircle, CalendarDays, Send, Loader2, Menu, X, WifiOff, Settings
+  GitFork, MessageCircle, CalendarDays, Send, Loader2, Menu, X, WifiOff, Settings, LogOut
 } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
 import NotificacoesToast from '../NotificacoesToast';
+import Avatar from '../Avatar';
 
 const NAV_PRINCIPAL = [
   { to: '/atendimento', label: 'Central de Atendimento', icon: MessageSquare },
@@ -94,6 +96,7 @@ function NavItem({ to, label, icon: Icon, badge, onNavigate }) {
 
 function Sidebar({ aberto, onClose }) {
   const { conversas } = useAppContext();
+  const { usuario, sair } = useAuth();
 
   const naFila = conversas.filter(c => c.statusAtendimento === 'pendente').length;
   const naoLidos = conversas.filter(
@@ -152,6 +155,25 @@ function Sidebar({ aberto, onClose }) {
           <NavItem key={item.to} {...item} onNavigate={onClose} />
         ))}
       </nav>
+
+      {/* Quem esta logado, e a saida. No rodape porque e o unico item que nao e
+          navegacao: nao leva a lugar nenhum do painel, encerra a sessao. */}
+      <div className="mt-3 shrink-0 border-t border-linha pt-3">
+        <div className="flex items-center gap-2.5 px-1">
+          <Avatar nome={usuario?.nome || ''} size="sm" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-semibold text-texto">{usuario?.nome}</p>
+            <p className="truncate font-mono text-[10px] text-texto-fraco">{usuario?.email}</p>
+          </div>
+          <button
+            onClick={sair}
+            title="Sair da conta"
+            className="shrink-0 rounded-lg p-2 text-texto-suave transition-colors hover:bg-falha/15 hover:text-falha-400"
+          >
+            <LogOut size={15} />
+          </button>
+        </div>
+      </div>
     </aside>
   );
 }
