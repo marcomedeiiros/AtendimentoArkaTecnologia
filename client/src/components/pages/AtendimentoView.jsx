@@ -243,10 +243,14 @@ function PainelFiltros({ extras, setExtras, visib, setVisib, onLimpar, totalAtiv
   );
 }
 
-// Painel de parede: a fila de pendentes numa TV, lida a varios metros.
-// Tudo aqui e dimensionado para distancia -- tipografia grande, poucos itens
-// por tela e nenhum controle pequeno. Atualiza sozinho pelo SSE, como a lista.
-function PainelTv({ conversas, onFechar }) {
+// Painel de parede: a fila numa TV, lida a varios metros. Tudo aqui e
+// dimensionado para distancia -- tipografia grande, poucos itens por tela e
+// nenhum controle pequeno. Atualiza sozinho pelo SSE, como a lista.
+//
+// Duas colunas, porque sao duas perguntas diferentes: a esquerda mostra quem
+// ainda nao foi atendido, a direita quem ja esta com alguem. Sem a segunda, uma
+// conversa assumida e esquecida some da parede e ninguem percebe.
+function PainelTv({ pendentes, abertas, onFechar }) {
   const [agora, setAgora] = useState(Date.now());
 
   // 1s: o relogio da parede mostra segundos, entao precisa bater a cada tique.
@@ -272,6 +276,68 @@ function PainelTv({ conversas, onFechar }) {
     return { cor: 'text-ativo-400', borda: 'border-linha' };
   };
 
+  // Numa conversa ja assumida, "esperando ha 20 min" seria mentira -- alguem
+  // esta com ela. O que importa e outra coisa: a ultima mensagem e do cliente?
+  // Entao ela esta devendo resposta, e vale o mesmo alerta da fila. Se a ultima
+  // foi nossa, a bola esta com o cliente e o cartao fica calmo.
+  const devendoResposta = (c) => c.mensagens?.[c.mensagens.length - 1]?.de === 'cliente';
+
+  const Cartao = ({ c, aberta }) => {
+    const cobrando = aberta ? devendoResposta(c) : true;
+    const u = cobrando
+      ? urgencia(c.ultimaMensagemEm)
+      : { cor: 'text-quieto', borda: 'border-linha' };
+    const ultima = c.mensagens?.[c.mensagens.length - 1];
+    const tempo = tempoDesde(c.ultimaMensagemEm).replace('há ', '');
+
+    return (
+      <div className={`bg-grafite-700 rounded-3xl border-2 ${u.borda} p-7 flex flex-col gap-4`}>
+        <div className="flex items-center gap-5 min-w-0">
+          <Avatar nome={c.cliente} size="lg" fotoUrl={c.fotoUrl} className="scale-150 ml-2 mr-3" />
+          <div className="min-w-0 flex-1">
+            <div className="text-3xl font-bold text-white truncate">{c.cliente}</div>
+            <div className="text-xl text-texto-suave font-mono truncate">{c.telefone}</div>
+          </div>
+          {c.naoLidas > 0 && (
+            <span className="shrink-0 min-w-[52px] h-[52px] px-3 rounded-full bg-espera text-grafite-900 text-2xl font-extrabold flex items-center justify-center tabular-nums">
+              {c.naoLidas > 99 ? '99+' : c.naoLidas}
+            </span>
+          )}
+        </div>
+
+        <p className="text-xl text-texto-suave line-clamp-2 leading-snug">
+          {ultima ? ultima.texto : 'Sem mensagens'}
+        </p>
+
+        <div className={`flex items-center gap-2 text-2xl font-bold ${u.cor}`}>
+          <Clock size={24} />
+          {!aberta && `esperando ${tempo}`}
+          {aberta && cobrando && `sem resposta ${tempo}`}
+          {aberta && !cobrando && `respondido ${tempo}`}
+        </div>
+      </div>
+    );
+  };
+
+  const Coluna = ({ titulo, itens, cor, aberta, vazio }) => (
+    <section className="flex min-h-0 flex-col gap-5">
+      <header className="flex shrink-0 items-center gap-4">
+        <span className={`h-3 w-3 rounded-full ${cor}`} />
+        <h2 className="text-2xl font-bold uppercase tracking-wider text-texto-suave">{titulo}</h2>
+        <span className="text-2xl font-extrabold tabular-nums text-white">{itens.length}</span>
+      </header>
+      {itens.length === 0 ? (
+        <p className="rounded-3xl border-2 border-dashed border-linha p-8 text-center text-2xl text-texto-fraco">
+          {vazio}
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 gap-6 2xl:grid-cols-2">
+          {itens.map(c => <Cartao key={c.id} c={c} aberta={aberta} />)}
+        </div>
+      )}
+    </section>
+  );
+
   const d = new Date(agora);
   const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   // "quinta-feira" -> "Quinta-feira"
@@ -283,16 +349,17 @@ function PainelTv({ conversas, onFechar }) {
       <div className="fixed inset-0 z-[70] bg-grafite-900 flex flex-col">
         <div className="shrink-0 flex items-center justify-between gap-6 px-10 py-6 border-b border-linha bg-grafite-800">
           <div className="flex items-center gap-5">
+            {/* O ponto pulsa so quando ha alguem sem atendimento. Piscando o
+                tempo todo, ele deixaria de significar qualquer coisa. */}
             <span className="relative flex h-4 w-4">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-espera opacity-60" />
-              <span className="relative inline-flex rounded-full h-4 w-4 bg-espera" />
+              {pendentes.length > 0 && (
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-espera opacity-60" />
+              )}
+              <span className={`relative inline-flex rounded-full h-4 w-4 ${pendentes.length > 0 ? 'bg-espera' : 'bg-ativo'}`} />
             </span>
             <h1 className="text-4xl font-bold text-white tracking-tight font-display">
-              Aguardando atendimento
+              Fila de atendimento
             </h1>
-            <span className="px-5 py-1.5 rounded-full bg-espera text-grafite-900 text-3xl font-extrabold tabular-nums">
-              {conversas.length}
-            </span>
           </div>
           <div className="flex items-center gap-6">
             <div className="text-right leading-tight">
@@ -308,7 +375,7 @@ function PainelTv({ conversas, onFechar }) {
         </div>
 
         <div className="flex-1 overflow-y-auto p-8">
-          {conversas.length === 0 ? (
+          {pendentes.length === 0 && abertas.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center gap-6 text-center">
               <div className="p-10 rounded-full bg-ativo/10 border-4 border-ativo/30 text-ativo">
                 <CheckCircle2 size={90} />
@@ -317,37 +384,15 @@ function PainelTv({ conversas, onFechar }) {
               <p className="text-2xl text-texto-suave">Nenhum cliente aguardando atendimento.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-6">
-              {conversas.map(c => {
-                const u = urgencia(c.ultimaMensagemEm);
-                const ultima = c.mensagens?.[c.mensagens.length - 1];
-                return (
-                  <div key={c.id}
-                    className={`bg-grafite-700 rounded-3xl border-2 ${u.borda} p-7 flex flex-col gap-4`}>
-                    <div className="flex items-center gap-5 min-w-0">
-                      <Avatar nome={c.cliente} size="lg" fotoUrl={c.fotoUrl} className="scale-150 ml-2 mr-3" />
-                      <div className="min-w-0 flex-1">
-                        <div className="text-3xl font-bold text-white truncate">{c.cliente}</div>
-                        <div className="text-xl text-texto-suave font-mono truncate">{c.telefone}</div>
-                      </div>
-                      {c.naoLidas > 0 && (
-                        <span className="shrink-0 min-w-[52px] h-[52px] px-3 rounded-full bg-espera text-grafite-900 text-2xl font-extrabold flex items-center justify-center tabular-nums">
-                          {c.naoLidas > 99 ? '99+' : c.naoLidas}
-                        </span>
-                      )}
-                    </div>
-
-                    <p className="text-xl text-texto-suave line-clamp-2 leading-snug">
-                      {ultima ? ultima.texto : 'Sem mensagens'}
-                    </p>
-
-                    <div className={`flex items-center gap-2 text-2xl font-bold ${u.cor}`}>
-                      <Clock size={24} />
-                      esperando {tempoDesde(c.ultimaMensagemEm).replace('há ', '')}
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="grid grid-cols-1 gap-10 xl:grid-cols-2">
+              <Coluna
+                titulo="Aguardando" cor="bg-espera" itens={pendentes}
+                vazio="Ninguém na fila."
+              />
+              <Coluna
+                titulo="Em atendimento" cor="bg-ativo" itens={abertas} aberta
+                vazio="Nenhuma conversa assumida."
+              />
             </div>
           )}
         </div>
@@ -1985,8 +2030,13 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
 
       {modoTv && (
         <PainelTv
-          conversas={conversas
+          // Mais antiga primeiro nas duas colunas: na fila e quem espera ha
+          // mais tempo, no atendimento e quem esta parado ha mais tempo.
+          pendentes={conversas
             .filter(c => c.statusAtendimento === 'pendente' && !c.arquivada && !c.oculta)
+            .sort((a, b) => new Date(a.ultimaMensagemEm || 0) - new Date(b.ultimaMensagemEm || 0))}
+          abertas={conversas
+            .filter(c => c.statusAtendimento === 'aberta' && !c.arquivada && !c.oculta)
             .sort((a, b) => new Date(a.ultimaMensagemEm || 0) - new Date(b.ultimaMensagemEm || 0))}
           onFechar={fecharModoTv}
         />
