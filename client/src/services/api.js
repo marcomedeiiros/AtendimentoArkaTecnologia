@@ -2,8 +2,31 @@ const API_BASE = '/api';
 
 const TOKEN_KEY = 'arka_token';
 
-export const getToken = () => localStorage.getItem(TOKEN_KEY);
-const setToken = (t) => (t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY));
+// "Lembrar-me" decide ONDE o token mora. Marcado: localStorage, sobrevive a
+// fechar o navegador. Desmarcado: sessionStorage, evapora quando a aba fecha --
+// bom para maquina compartilhada. getToken olha os dois porque, num F5, so
+// descobrimos onde ele parou lendo de ambos.
+export const getToken = () =>
+  localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
+
+function setToken(token, lembrar = true) {
+  // Limpa os dois antes de gravar: sem isso, um login "nao lembrar" deixaria um
+  // token antigo no localStorage e a sessao voltaria sozinha no proximo F5.
+  localStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
+  if (token) (lembrar ? localStorage : sessionStorage).setItem(TOKEN_KEY, token);
+}
+
+// "Lembrar-me" tambem guarda o ULTIMO e-mail para pre-preencher o formulario na
+// proxima visita -- so o e-mail, nunca a senha (senha em texto no navegador e o
+// que a regra de seguranca proibe; quem guarda senha e o gerenciador do
+// navegador, via autoComplete). Desmarcar apaga o e-mail lembrado.
+const EMAIL_KEY = 'arka_email';
+export const getEmailLembrado = () => localStorage.getItem(EMAIL_KEY) || '';
+function lembrarEmail(email, lembrar) {
+  if (lembrar && email) localStorage.setItem(EMAIL_KEY, email);
+  else localStorage.removeItem(EMAIL_KEY);
+}
 
 // Avisa a aplicacao de que a sessao acabou.
 //
@@ -70,9 +93,10 @@ async function request(endpoint, options = {}) {
 }
 
 export const AuthAPI = {
-  entrar: async (email, senha) => {
+  entrar: async (email, senha, lembrar = true) => {
     const data = await publico('/auth/login', { email, senha });
-    setToken(data.token);
+    setToken(data.token, lembrar);
+    lembrarEmail(email, lembrar);
     return data.usuario;
   },
   // Cria a conta e pronto -- nao guarda token nenhum, porque o servidor nao
@@ -128,6 +152,8 @@ export const EquipeAPI = {
   listar: () => request('/equipe'),
   alterarStatus: (id, ativo) => request(`/equipe/${id}/status`, { method: 'PATCH', body: JSON.stringify({ ativo }) }),
   alterarCargo: (id, cargo) => request(`/equipe/${id}/cargo`, { method: 'PATCH', body: JSON.stringify({ cargo }) }),
+  // Sem recuperacao por e-mail: um Administrador define a nova senha do membro.
+  redefinirSenha: (id, senha) => request(`/equipe/${id}/senha`, { method: 'PATCH', body: JSON.stringify({ senha }) }),
 };
 
 // ── WhatsApp API ──

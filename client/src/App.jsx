@@ -14,6 +14,7 @@ import RotaProtegida from './components/layout/RotaProtegida';
 import NotFound from './pages/NotFound';
 import LoginPage from './pages/LoginPage';
 import CadastroPage from './pages/CadastroPage';
+import EsqueciSenhaPage from './pages/EsqueciSenhaPage';
 
 import DashboardPage    from './pages/DashboardPage';
 import AtendimentoPage  from './pages/AtendimentoPage';
@@ -35,6 +36,7 @@ export default function App() {
           {/* Acesso: fora do portao, e as unicas rotas publicas do app. */}
           <Route path="/login"     element={<LoginPage />} />
           <Route path="/cadastrar" element={<CadastroPage />} />
+          <Route path="/esqueci-senha" element={<EsqueciSenhaPage />} />
 
           {/* Painel: tudo daqui para baixo exige sessao. */}
           <Route element={<RotaProtegida />}>

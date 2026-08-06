@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { useNavigate, useLocation, Navigate, Link } from 'react-router-dom';
 import { Loader2, LogIn, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import AcessoLayout, { Campo, LinkAcesso } from '../components/layout/AcessoLayout';
@@ -14,6 +14,9 @@ export default function LoginPage() {
   const recemCadastrado = !!local.state?.cadastrado;
   const [email, setEmail] = useState(local.state?.email || '');
   const [senha, setSenha] = useState('');
+  // Marcado por padrao: manter a sessao e o caso comum (maquina propria). Quem
+  // esta num computador compartilhado desmarca e o token vira sessao de aba so.
+  const [lembrar, setLembrar] = useState(true);
   const [erro, setErro] = useState(null);
   const [enviando, setEnviando] = useState(false);
 
@@ -25,7 +28,7 @@ export default function LoginPage() {
     setErro(null);
     setEnviando(true);
     try {
-      await entrar(email, senha);
+      await entrar(email, senha, lembrar);
       // Devolve a pessoa para onde ela tentou ir antes de ser barrada.
       navigate(local.state?.de || '/atendimento', { replace: true });
     } catch (err) {
@@ -65,6 +68,25 @@ export default function LoginPage() {
           placeholder=""
           value={senha} onChange={e => setSenha(e.target.value)}
         />
+
+        <div className="flex items-center justify-between gap-3">
+          <label className="flex cursor-pointer select-none items-center gap-2 text-xs text-texto-suave">
+            <input
+              type="checkbox"
+              checked={lembrar}
+              onChange={e => setLembrar(e.target.checked)}
+              className="h-4 w-4 rounded border-linha bg-grafite-800 text-acao accent-acao focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acao-200"
+            />
+            Lembrar-me
+          </label>
+
+          <Link
+            to="/esqueci-senha"
+            className="py-2 text-xs font-semibold text-acao-200 underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
+          >
+            Esqueci a senha
+          </Link>
+        </div>
 
         {erro && (
           <div role="alert" className="flex items-start gap-2 rounded-xl border border-falha/30 bg-falha/10 p-3">

@@ -12,7 +12,7 @@
  * pelo servidor a cada requisicao autenticada.
  */
 import { useState, useEffect } from 'react';
-import { Users, Circle, ShieldCheck, CheckCircle2, XCircle, UserCheck, Shield } from 'lucide-react';
+import { Users, Circle, ShieldCheck, CheckCircle2, XCircle, KeyRound, Loader2, X, Clock } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { EquipeAPI } from '../services/api';
@@ -37,6 +37,47 @@ export default function EquipePage() {
   const { usuario } = useAuth();
   const [loadingId, setLoadingId] = useState(null);
   const [erro, setErro] = useState('');
+  const [okMsg, setOkMsg] = useState('');
+
+  // Modal de redefinicao de senha: guarda o membro alvo e o rascunho da senha.
+  const [resetAlvo, setResetAlvo] = useState(null);
+  const [novaSenha, setNovaSenha] = useState('');
+  const [resetErro, setResetErro] = useState('');
+  const [salvandoSenha, setSalvandoSenha] = useState(false);
+
+  function abrirReset(membro) {
+    setResetAlvo(membro);
+    setNovaSenha('');
+    setResetErro('');
+  }
+
+  function fecharReset() {
+    if (salvandoSenha) return;
+    setResetAlvo(null);
+    setNovaSenha('');
+    setResetErro('');
+  }
+
+  async function confirmarReset(e) {
+    e.preventDefault();
+    if (novaSenha.length < 6) {
+      setResetErro('A senha precisa de pelo menos 6 caracteres.');
+      return;
+    }
+    setSalvandoSenha(true);
+    setResetErro('');
+    try {
+      await EquipeAPI.redefinirSenha(resetAlvo.id, novaSenha);
+      const nome = resetAlvo.nome;
+      setResetAlvo(null);
+      setNovaSenha('');
+      setOkMsg(`Senha de ${nome} redefinida. Avise a nova senha por um canal seguro.`);
+    } catch (err) {
+      setResetErro(err.message);
+    } finally {
+      setSalvandoSenha(false);
+    }
+  }
 
   const [, forcarRedesenho] = useState(0);
   useEffect(() => {
@@ -51,6 +92,7 @@ export default function EquipePage() {
   async function alternarStatus(id, novoStatus) {
     setLoadingId(id);
     setErro('');
+    setOkMsg('');
     try {
       await EquipeAPI.alterarStatus(id, novoStatus);
       if (recarregarEquipe) await recarregarEquipe();
@@ -64,6 +106,7 @@ export default function EquipePage() {
   async function mudarCargo(id, novoCargo) {
     setLoadingId(id);
     setErro('');
+    setOkMsg('');
     try {
       await EquipeAPI.alterarCargo(id, novoCargo);
       if (recarregarEquipe) await recarregarEquipe();
@@ -101,6 +144,15 @@ export default function EquipePage() {
       {erro && (
         <div className="p-3 rounded-xl bg-falha/15 border border-falha/30 text-falha-400 text-xs font-semibold">
           {erro}
+        </div>
+      )}
+
+      {okMsg && (
+        <div className="flex items-start justify-between gap-3 p-3 rounded-xl bg-ativo/15 border border-ativo/30 text-ativo-400 text-xs font-semibold">
+          <span>{okMsg}</span>
+          <button onClick={() => setOkMsg('')} className="shrink-0 text-ativo-400/70 hover:text-ativo-400">
+            <X size={14} />
+          </button>
         </div>
       )}
 
@@ -175,7 +227,7 @@ export default function EquipePage() {
                     <button
                       disabled={loadingId === m.id}
                       onClick={() => alternarStatus(m.id, true)}
-                      className="w-full px-3 py-1.5 rounded-xl bg-ativo/20 hover:bg-ativo/30 text-ativo-400 border border-ativo/30 text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+                      className="flex-1 px-3 py-1.5 rounded-xl bg-ativo/20 hover:bg-ativo/30 text-ativo-400 border border-ativo/30 text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
                     >
                       <CheckCircle2 size={14} /> Aprovar Acesso
                     </button>
@@ -188,6 +240,15 @@ export default function EquipePage() {
                       <XCircle size={13} /> Bloquear
                     </button>
                   )}
+
+                  <button
+                    disabled={loadingId === m.id}
+                    onClick={() => abrirReset(m)}
+                    title="Redefinir senha"
+                    className="px-2.5 py-1.5 rounded-xl bg-grafite-700 hover:bg-grafite-600 text-texto-suave hover:text-white border border-linha text-[11px] font-semibold flex items-center gap-1 transition-all"
+                  >
+                    <KeyRound size={13} /> Senha
+                  </button>
                 </div>
               )}
             </div>
@@ -200,6 +261,79 @@ export default function EquipePage() {
           </div>
         )}
       </div>
+
+      {resetAlvo && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={fecharReset}
+        >
+          <form
+            onSubmit={confirmarReset}
+            onClick={e => e.stopPropagation()}
+            className="glass-panel w-full max-w-sm space-y-4 rounded-2xl border border-linha p-5"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <KeyRound size={16} className="text-acao-200" />
+                <h2 className="text-sm font-bold text-white">Redefinir senha</h2>
+              </div>
+              <button
+                type="button"
+                onClick={fecharReset}
+                disabled={salvandoSenha}
+                className="text-texto-suave hover:text-white disabled:opacity-50"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <p className="text-xs leading-relaxed text-texto-suave">
+              Definindo uma nova senha para <strong className="text-white">{resetAlvo.nome}</strong>.
+              Ela entra com esta senha e pode trocá-la depois.
+            </p>
+
+            <div>
+              <label htmlFor="nova-senha" className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.14em] text-texto-suave">
+                Nova senha
+              </label>
+              <input
+                id="nova-senha"
+                type="password"
+                autoFocus
+                autoComplete="new-password"
+                value={novaSenha}
+                onChange={e => setNovaSenha(e.target.value)}
+                placeholder="Mínimo de 6 caracteres"
+                className="w-full rounded-xl border border-linha bg-grafite-800 px-3.5 py-2.5 text-sm text-texto placeholder-texto-fraco outline-none transition-colors focus:border-acao focus:ring-2 focus:ring-acao/25"
+              />
+            </div>
+
+            {resetErro && (
+              <p className="text-[11px] font-semibold text-falha-400">{resetErro}</p>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={fecharReset}
+                disabled={salvandoSenha}
+                className="px-3 py-2 rounded-xl border border-linha text-xs font-semibold text-texto-suave hover:text-white disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={salvandoSenha}
+                className="flex items-center gap-1.5 rounded-xl bg-acao px-3 py-2 text-xs font-bold text-slate-950 hover:bg-acao-200 disabled:opacity-60"
+              >
+                {salvandoSenha
+                  ? <><Loader2 size={13} className="animate-spin" /> Salvando...</>
+                  : <><KeyRound size={13} /> Redefinir</>}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

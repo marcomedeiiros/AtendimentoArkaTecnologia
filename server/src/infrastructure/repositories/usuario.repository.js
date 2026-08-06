@@ -63,6 +63,16 @@ class UsuarioRepository {
     });
   }
 
+  // So o hash muda. Nao devolve nada sensivel: quem chamou ja sabe de quem e a
+  // conta, e o hash nunca deve sair do servidor.
+  atualizarSenha(id, senhaHash) {
+    return prisma.usuario.update({
+      where: { id },
+      data: { senhaHash },
+      select: { id: true },
+    });
+  }
+
   contar() {
     return prisma.usuario.count();
   }

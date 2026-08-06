@@ -65,8 +65,8 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener(AuthAPI.EVENTO_SEM_SESSAO, aoPerderSessao);
   }, [avisar]);
 
-  const entrar = useCallback(async (email, senha) => {
-    const eu = await AuthAPI.entrar(email, senha);
+  const entrar = useCallback(async (email, senha, lembrar = true) => {
+    const eu = await AuthAPI.entrar(email, senha, lembrar);
     setUsuario(eu);
     // Primeiro nome: o aviso e uma saudacao curta, nao um cabecalho de cadastro.
     avisar(`Você entrou como ${String(eu.nome || '').split(' ')[0]}.`, 'entrada');

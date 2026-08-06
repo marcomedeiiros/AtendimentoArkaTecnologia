@@ -17,6 +17,15 @@ class EquipeController {
     const { cargo } = req.body;
     return equipeService.alterarCargo(id, cargo).then((data) => success(res, data));
   }
+
+  redefinirSenha(req, res) {
+    const { id } = req.params;
+    const { senha } = req.body;
+    // req.user.sub identifica quem esta pedindo; o service confere se e Admin.
+    return equipeService
+      .redefinirSenha(id, senha, req.user.sub)
+      .then((data) => success(res, data));
+  }
 }
 
 module.exports = new EquipeController();

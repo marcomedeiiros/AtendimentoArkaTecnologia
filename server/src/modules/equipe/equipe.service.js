@@ -1,3 +1,5 @@
+const bcrypt = require("bcryptjs");
+const AppError = require("../../shared/errors/AppError");
 const usuarioRepository = require("../../infrastructure/repositories/usuario.repository");
 
 // Alguem conta como online se o servidor viu uma requisicao autenticada dessa
@@ -41,6 +43,38 @@ class EquipeService {
       throw new Error("Cargo inválido");
     }
     return usuarioRepository.atualizarCargo(id, cargo);
+  }
+
+  // Nao ha recuperacao por e-mail: quem esqueceu a senha pede a um Administrador,
+  // que define uma nova aqui. A permissao e checada no servidor, nao so na tela --
+  // o cargo vem do banco (nao do JWT) para uma troca de cargo valer na hora, sem
+  // esperar a pessoa sair e entrar de novo.
+  async redefinirSenha(idAlvo, novaSenha, solicitanteId) {
+    const solicitante = await usuarioRepository.findById(solicitanteId);
+    if (!solicitante || solicitante.cargo !== "Administrador") {
+      throw new AppError(
+        "Apenas Administradores podem redefinir senhas.",
+        403,
+        "SEM_PERMISSAO"
+      );
+    }
+
+    if (!novaSenha || String(novaSenha).length < 6) {
+      throw new AppError(
+        "A senha precisa de pelo menos 6 caracteres.",
+        400,
+        "SENHA_CURTA"
+      );
+    }
+
+    const alvo = await usuarioRepository.findById(idAlvo);
+    if (!alvo) {
+      throw new AppError("Conta não encontrada.", 404, "NOT_FOUND");
+    }
+
+    const senhaHash = await bcrypt.hash(String(novaSenha), 10);
+    await usuarioRepository.atualizarSenha(idAlvo, senhaHash);
+    return { id: alvo.id, nome: alvo.nome };
   }
 }
 
