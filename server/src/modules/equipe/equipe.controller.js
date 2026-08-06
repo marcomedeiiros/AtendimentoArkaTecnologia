@@ -5,6 +5,18 @@ class EquipeController {
   listar(req, res) {
     return equipeService.listar().then((data) => success(res, data));
   }
+
+  alterarStatus(req, res) {
+    const { id } = req.params;
+    const { ativo } = req.body;
+    return equipeService.alterarStatus(id, ativo).then((data) => success(res, data));
+  }
+
+  alterarCargo(req, res) {
+    const { id } = req.params;
+    const { cargo } = req.body;
+    return equipeService.alterarCargo(id, cargo).then((data) => success(res, data));
+  }
 }
 
 module.exports = new EquipeController();

@@ -126,6 +126,8 @@ export const FluxosAPI = {
 // em /cadastrar, e o status vem da presenca observada pelo servidor.
 export const EquipeAPI = {
   listar: () => request('/equipe'),
+  alterarStatus: (id, ativo) => request(`/equipe/${id}/status`, { method: 'PATCH', body: JSON.stringify({ ativo }) }),
+  alterarCargo: (id, cargo) => request(`/equipe/${id}/cargo`, { method: 'PATCH', body: JSON.stringify({ cargo }) }),
 };
 
 // ── WhatsApp API ──
@@ -177,6 +179,8 @@ export const ConversasAPI = {
   solicitarCnpj: (id) => request(`/conversas/${id}/solicitar-cnpj`, { method: 'POST' }),
   validarCnpj: (id, cnpj) => request(`/conversas/${id}/validar-cnpj`, { method: 'POST', body: JSON.stringify({ cnpj }) }),
   atualizarStatus: (id, status) => request(`/conversas/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  atualizarSetor: (id, setor) => request(`/conversas/${id}/setor`, { method: 'PATCH', body: JSON.stringify({ setor }) }),
+  avaliarAtendimento: (id, avaliacao, feedback) => request(`/conversas/${id}/avaliacao`, { method: 'POST', body: JSON.stringify({ avaliacao, feedback }) }),
   // Atalhos de status (os 3 estados da Central).
   pendente: (id) => request(`/conversas/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'pendente' }) }),
   fechar: (id) => request(`/conversas/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'fechada' }) }),

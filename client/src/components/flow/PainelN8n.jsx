@@ -6,14 +6,14 @@ import {
 import { N8nAPI } from '../../services/api';
 
 function formatarData(iso) {
-  if (!iso) return '—';
+  if (!iso) return '-';
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
+  if (Number.isNaN(d.getTime())) return '-';
   return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
 function formatarDuracao(ms) {
-  if (ms == null) return '—';
+  if (ms == null) return '-';
   if (ms < 1000) return `${ms} ms`;
   if (ms < 60000) return `${(ms / 1000).toFixed(1)} s`;
   return `${Math.round(ms / 60000)} min`;
@@ -105,7 +105,7 @@ export default function PainelN8n() {
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
               {conectado
-                ? `${workflows.length} workflow(s) • resposta em ${conexao.latenciaMs ?? '—'} ms`
+                ? `${workflows.length} workflow(s) • resposta em ${conexao.latenciaMs ?? '-'} ms`
                 : 'Configure a URL e a API Key do n8n em Configurações.'}
             </p>
           </div>

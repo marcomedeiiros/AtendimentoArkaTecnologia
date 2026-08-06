@@ -3,11 +3,11 @@ const { success } = require("../../shared/helpers/response.helper");
 
 class ConversaController {
   listar(req, res) {
-    return conversaService.listar(req.query).then((data) => success(res, data));
+    return conversaService.listar(req.query, req.user?.cargo).then((data) => success(res, data));
   }
 
   obter(req, res) {
-    return conversaService.obter(req.params.id).then((data) => success(res, data));
+    return conversaService.obter(req.params.id, req.user?.cargo).then((data) => success(res, data));
   }
 
   atender(req, res) {
@@ -46,6 +46,14 @@ class ConversaController {
 
   atualizarStatus(req, res) {
     return conversaService.atualizarStatus(req.params.id, req.body.status).then((data) => success(res, data));
+  }
+
+  atualizarSetor(req, res) {
+    return conversaService.atualizarSetor(req.params.id, req.body.setor).then((data) => success(res, data));
+  }
+
+  avaliarAtendimento(req, res) {
+    return conversaService.avaliarAtendimento(req.params.id, req.body).then((data) => success(res, data));
   }
 
   atualizarFlags(req, res) {

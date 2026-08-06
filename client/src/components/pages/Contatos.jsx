@@ -202,7 +202,7 @@ export default function Contatos({ setAba }) {
       setErroApi(null);
       window.alert(
         r.total === 0
-          ? 'A Evolution não retornou nenhum contato.\n\nIsso acontece quando o WhatsApp ainda não enviou a agenda — conecte o número e aguarde alguns instantes.'
+          ? 'A Evolution não retornou nenhum contato.\n\nIsso acontece quando o WhatsApp ainda não enviou a agenda - conecte o número e aguarde alguns instantes.'
           : `Agenda importada!\n\n${r.criados} contato(s) novo(s)\n${r.atualizados} atualizado(s)\n${r.ignorados} ignorado(s) (grupos/inválidos)`
       );
     } catch (e) {

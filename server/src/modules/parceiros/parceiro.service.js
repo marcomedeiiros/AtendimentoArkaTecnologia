@@ -9,7 +9,7 @@ class ParceiroService {
     return itens.map(mapParceiro);
   }
 
-  async criar({ cnpj, razaoSocial, status = "ativo" }) {
+  async criar({ cnpj, razaoSocial, email, telefones, cidades, status = "ativo" }) {
     const cnpjLimpo = limparCnpj(cnpj);
     if (!cnpjValido(cnpjLimpo)) {
       throw new AppError("CNPJ invalido", 400, "INVALID_CNPJ");
@@ -17,6 +17,9 @@ class ParceiroService {
 
     const parceiro = await parceiroRepository.upsert(cnpjLimpo, {
       razaoSocial: razaoSocial.trim(),
+      email: email ? email.trim() : null,
+      telefones: telefones ? telefones.trim() : null,
+      cidades: cidades ? cidades.trim() : null,
       status,
     });
     return mapParceiro(parceiro);

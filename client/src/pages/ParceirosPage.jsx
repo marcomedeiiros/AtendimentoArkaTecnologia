@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash2, Search, Building2 } from 'lucide-react';
+import { Plus, Trash2, Search, Building2, Mail, Phone, MapPin } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { ParceirosAPI } from '../services/api';
 
@@ -33,25 +33,34 @@ function cnpjValido(v) {
 export default function ParceirosPage() {
   const { parceiros, atualizarParceiros } = useAppContext();
   const [cnpjInput, setCnpjInput] = useState('');
-  const [nome,      setNome]      = useState('');
-  const [erro,      setErro]      = useState('');
-  const [busca,     setBusca]     = useState('');
+  const [nome, setNome] = useState('');
+  const [email, setEmail] = useState('');
+  const [telefones, setTelefones] = useState('');
+  const [cidades, setCidades] = useState('');
+  const [erro, setErro] = useState('');
+  const [busca, setBusca] = useState('');
 
   async function adicionar() {
     const c = limparCnpj(cnpjInput);
     if (!cnpjValido(c)) { setErro('CNPJ inválido confira os números.'); return; }
-    if (!nome.trim())   { setErro('Informe a razão social.'); return; }
+    if (!nome.trim()) { setErro('Informe a razão social.'); return; }
     setErro('');
 
-    const novo = { cnpj: c, razaoSocial: nome.trim(), status: 'ativo' };
-    // A lista so muda depois que o servidor confirma. Antes o catch gravava
-    // so na tela: parecia salvo e o F5 desfazia tudo.
+    const novo = {
+      cnpj: c,
+      razaoSocial: nome.trim(),
+      email: email.trim() || null,
+      telefones: telefones.trim() || null,
+      cidades: cidades.trim() || null,
+      status: 'ativo'
+    };
+
     try {
       const criado = await ParceirosAPI.criar(novo);
       atualizarParceiros([...parceiros.filter(p => p.cnpj !== c), criado]);
-      setCnpjInput(''); setNome('');
+      setCnpjInput(''); setNome(''); setEmail(''); setTelefones(''); setCidades('');
     } catch (err) {
-      setErro(`Nao foi possivel salvar: ${err.message}. Verifique se o back-end esta rodando.`);
+      setErro(`Não foi possível salvar: ${err.message}. Verifique se o back-end está rodando.`);
     }
   }
 
@@ -62,7 +71,7 @@ export default function ParceirosPage() {
       atualizarParceiros(parceiros.filter(p => p.cnpj !== c));
       setErro('');
     } catch (err) {
-      setErro(`Nao foi possivel remover: ${err.message}. Verifique se o back-end esta rodando.`);
+      setErro(`Não foi possível remover: ${err.message}. Verifique se o back-end está rodando.`);
     }
   }
 
@@ -72,7 +81,7 @@ export default function ParceirosPage() {
       atualizarParceiros(parceiros.map(p => p.cnpj === c ? alt : p));
       setErro('');
     } catch (err) {
-      setErro(`Nao foi possivel mudar o status: ${err.message}`);
+      setErro(`Não foi possível mudar o status: ${err.message}`);
     }
   }
 
@@ -82,37 +91,56 @@ export default function ParceirosPage() {
     const cnpjDigits = limparCnpj(busca);
     const matchNome = (p.razaoSocial || '').toLowerCase().includes(term);
     const matchCnpj = cnpjDigits ? (p.cnpj || '').includes(cnpjDigits) : false;
-    return matchNome || matchCnpj;
+    const matchEmail = (p.email || '').toLowerCase().includes(term);
+    const matchCidade = (p.cidades || '').toLowerCase().includes(term);
+    return matchNome || matchCnpj || matchEmail || matchCidade;
   });
 
   return (
     <div className="fade-in space-y-6">
       <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-linha">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight font-display">Parceiros Cadastrados (CNPJ & Nome)</h1>
-          <p className="text-slate-400 text-xs sm:text-sm mt-1">Cadastro oficial de empresas parceiras com validação automatizada de contrato.</p>
+          <h1 className="text-2xl font-bold text-white tracking-tight font-display">Cadastro de Parceiros (CNPJ)</h1>
+          <p className="text-slate-400 text-xs sm:text-sm mt-1">Cadastro oficial de parceiros com dados de e-mail, telefones e cidades atendidas.</p>
         </div>
       </div>
 
-      <div className="glass-panel p-5 rounded-2xl border border-linha space-y-3">
-        <div className="flex flex-wrap gap-2.5">
+      <div className="glass-panel p-5 rounded-2xl border border-linha space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <input
             value={cnpjInput}
             onChange={e => { setCnpjInput(mascararCnpj(e.target.value)); setErro(''); }}
-            onKeyDown={e => e.key === 'Enter' && adicionar()}
-            placeholder="00.000.000/0000-00"
-            className="w-48 bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white font-mono placeholder-slate-500 focus:outline-none focus:border-acao/50"
+            placeholder="CNPJ (00.000.000/0000-00)"
+            className="bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white font-mono placeholder-slate-500 focus:outline-none focus:border-acao/50"
           />
           <input
             value={nome}
             onChange={e => setNome(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && adicionar()}
             placeholder="Razão Social / Nome da Empresa"
-            className="flex-1 min-w-[200px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50"
+            className="bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50"
+          />
+          <input
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder="E-mail de contato"
+            type="email"
+            className="bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50"
+          />
+          <input
+            value={telefones}
+            onChange={e => setTelefones(e.target.value)}
+            placeholder="Telefones (ex: 11 9999-9999, 11 8888-8888)"
+            className="bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50"
+          />
+          <input
+            value={cidades}
+            onChange={e => setCidades(e.target.value)}
+            placeholder="Cidades atendidas (ex: São Paulo, Campinas)"
+            className="bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50"
           />
           <button
             onClick={adicionar}
-            className="px-4 py-2 rounded-xl bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-acao/20 transition-all"
+            className="px-4 py-2 rounded-xl bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-acao/20 transition-all"
           >
             <Plus size={15} /> Cadastrar Parceiro
           </button>
@@ -125,24 +153,41 @@ export default function ParceirosPage() {
         <input
           value={busca}
           onChange={e => setBusca(e.target.value)}
-          placeholder="Pesquisar parceiro por Nome (Razão Social) ou CNPJ..."
+          placeholder="Pesquisar por Nome, CNPJ, E-mail ou Cidade..."
           className="w-full bg-grafite-700 border border-linha rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50"
         />
       </div>
 
       <div className="space-y-2.5">
         {filtrados.map(p => (
-          <div key={p.cnpj} className="glass-panel p-4 rounded-xl border border-linha hover:border-linha-forte transition-all flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
-                <Building2 size={16} />
+          <div key={p.cnpj} className="glass-panel p-4 rounded-xl border border-linha hover:border-linha-forte transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3 flex-1 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
+                <Building2 size={18} />
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 space-y-1">
                 <div className="font-bold text-xs sm:text-sm text-white truncate">{p.razaoSocial}</div>
-                <div className="text-[11px] text-slate-400 font-mono mt-0.5">{mascararCnpj(p.cnpj)}</div>
+                <div className="text-[11px] text-slate-400 font-mono">{mascararCnpj(p.cnpj)}</div>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-400 pt-1">
+                  {p.email && (
+                    <span className="flex items-center gap-1">
+                      <Mail size={12} className="text-slate-500" /> {p.email}
+                    </span>
+                  )}
+                  {p.telefones && (
+                    <span className="flex items-center gap-1">
+                      <Phone size={12} className="text-slate-500" /> {p.telefones}
+                    </span>
+                  )}
+                  {p.cidades && (
+                    <span className="flex items-center gap-1">
+                      <MapPin size={12} className="text-slate-500" /> {p.cidades}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
               <button
                 onClick={() => alternarStatus(p.cnpj)}
                 className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${

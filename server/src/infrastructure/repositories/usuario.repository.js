@@ -32,9 +32,33 @@ class UsuarioRepository {
     });
   }
 
-  criar({ nome, email, senhaHash, cargo }) {
+  async criar({ nome, email, senhaHash, cargo }) {
+    const total = await this.contar();
+    const ePrimeiro = total === 0;
     return prisma.usuario.create({
-      data: { nome, email, senhaHash, cargo: cargo || "Atendente" },
+      data: {
+        nome,
+        email,
+        senhaHash,
+        cargo: ePrimeiro ? "Administrador" : cargo || "Atendente",
+        ativo: ePrimeiro ? true : false,
+      },
+      select: { id: true, nome: true, email: true, cargo: true, ativo: true },
+    });
+  }
+
+  atualizarStatus(id, ativo) {
+    return prisma.usuario.update({
+      where: { id },
+      data: { ativo: Boolean(ativo) },
+      select: { id: true, nome: true, email: true, cargo: true, ativo: true },
+    });
+  }
+
+  atualizarCargo(id, cargo) {
+    return prisma.usuario.update({
+      where: { id },
+      data: { cargo },
       select: { id: true, nome: true, email: true, cargo: true, ativo: true },
     });
   }

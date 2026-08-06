@@ -27,6 +27,9 @@ function mapConversa(c) {
     cliente: c.cliente,
     telefone: c.telefone,
     statusAtendimento: c.statusAtendimento,
+    setor: c.setor || "Geral",
+    avaliacao: c.avaliacao || null,
+    feedback: c.feedback || null,
     cnpj: c.cnpj,
     cnpjVerificado: c.cnpjVerificado,
     lido: c.lido,
@@ -50,6 +53,9 @@ function mapParceiro(p) {
   return {
     cnpj: p.cnpj,
     razaoSocial: p.razaoSocial,
+    email: p.email || "",
+    telefones: p.telefones || "",
+    cidades: p.cidades || "",
     status: p.status,
   };
 }

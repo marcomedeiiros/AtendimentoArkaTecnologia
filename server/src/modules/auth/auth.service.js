@@ -7,7 +7,7 @@ const usuarioRepository = require("../../infrastructure/repositories/usuario.rep
 class AuthService {
   _assinar(usuario) {
     const token = jwt.sign(
-      { sub: usuario.id, email: usuario.email, nome: usuario.nome },
+      { sub: usuario.id, email: usuario.email, nome: usuario.nome, cargo: usuario.cargo },
       env.jwt.secret,
       { expiresIn: env.jwt.expiresIn }
     );
@@ -66,13 +66,21 @@ class AuthService {
 
   async login({ email, senha }) {
     const usuario = await usuarioRepository.findByEmail(email);
-    if (!usuario || !usuario.ativo) {
-      throw new AppError("Credenciais invalidas", 401, "INVALID_CREDENTIALS");
+    if (!usuario) {
+      throw new AppError("Credenciais inválidas", 401, "INVALID_CREDENTIALS");
     }
 
     const senhaOk = await bcrypt.compare(senha, usuario.senhaHash);
     if (!senhaOk) {
-      throw new AppError("Credenciais invalidas", 401, "INVALID_CREDENTIALS");
+      throw new AppError("Credenciais inválidas", 401, "INVALID_CREDENTIALS");
+    }
+
+    if (!usuario.ativo) {
+      throw new AppError(
+        "Sua conta está pendente de aprovação por um Administrador.",
+        403,
+        "CONTA_PENDENTE"
+      );
     }
 
     return this._assinar(usuario);

@@ -31,6 +31,17 @@ class EquipeService {
       };
     });
   }
+  async alterarStatus(id, ativo) {
+    return usuarioRepository.atualizarStatus(id, ativo);
+  }
+
+  async alterarCargo(id, cargo) {
+    const cargosValidos = ["Administrador", "Financeiro", "Técnico", "Comercial"];
+    if (!cargosValidos.includes(cargo)) {
+      throw new Error("Cargo inválido");
+    }
+    return usuarioRepository.atualizarCargo(id, cargo);
+  }
 }
 
 module.exports = new EquipeService();

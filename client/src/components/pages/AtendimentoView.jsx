@@ -6,12 +6,14 @@ import {
   ArrowRightLeft, AlertCircle, Users, RotateCcw, Layers, ArrowDown, Tv,
   FileText, MapPin, Contact, Paperclip, Smile, Image as Loader2,
   SlidersHorizontal, Star, Archive, EyeOff, MoreVertical,
-  ZoomIn, ZoomOut, Maximize2, Download, CornerUpLeft, Share2, Pencil, MoreHorizontal
+  ZoomIn, ZoomOut, Maximize2, Download, CornerUpLeft, Share2, Pencil, MoreHorizontal, Mic, Tag
 } from 'lucide-react';
 import { EmojiIcon, FormattedMessage } from './EmojiIcon';
 import { useMensagensRapidas } from './MensagensRapidas';
 import Avatar from '../Avatar';
 import Portal from '../Portal';
+import AudioPlayer from '../AudioPlayer';
+import AudioRecorder from '../AudioRecorder';
 import { useAppContext } from '../../context/AppContext';
 import { ConversasAPI } from '../../services/api';
 import { usePreferencia } from '../../hooks/usePreferencia';
@@ -649,7 +651,7 @@ function MensagemMidia({ m, escuro, onAbrirImagem }) {
     return <video src={md.url} controls className="rounded-lg max-w-full max-h-72" />;
   }
   if (m.tipo === 'audio') {
-    return <audio src={md.url} controls className="w-full min-w-[220px]" />;
+    return <AudioPlayer src={md.url || m.texto} />;
   }
   if (m.tipo === 'documento') {
     return (
@@ -840,6 +842,7 @@ function PainelChat({
   const [respondendoA, setRespondendoA] = useState(null);   // mensagem citada
   const [encaminhando, setEncaminhando] = useState(null);   // mensagem a encaminhar
   const [editando, setEditando] = useState(null);           // { id, textoOriginal }
+  const [gravandoAudio, setGravandoAudio] = useState(false);
 
   const iniciarEdicao = useCallback((m) => {
     setEditando({ id: m.id, textoOriginal: m.texto });
@@ -1003,19 +1006,6 @@ function PainelChat({
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap">
-          {!conversa.cnpjVerificado && (
-            <>
-              <button onClick={onSolicitarCnpj}
-                className="px-2.5 py-1.5 rounded-lg bg-acao/15 hover:bg-acao/25 text-acao-200 text-xs font-semibold border border-acao/30 transition-all">
-                🤖 Pedir CNPJ
-              </button>
-              <button onClick={onValidarCnpjModal}
-                className="px-2.5 py-1.5 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 text-xs font-semibold border border-blue-500/30 transition-all">
-                🔎 Validar CNPJ
-              </button>
-            </>
-          )}
-
           {conversa.naoLidas > 0 && (
             <button onClick={() => onMarcarLido(conversa.id)}
               title="Marcar como lido"
@@ -1033,9 +1023,6 @@ function PainelChat({
           ) : (
             <>
               {conversa.statusAtendimento === 'pendente' ? (
-                // Sem esta acao aqui, uma conversa pendente aberta vira beco sem
-                // saida: nao da para responder nem para assumir sem fechar o
-                // painel e voltar para a lista.
                 <button onClick={() => onAtender(conversa.id)}
                   title="Assumir o atendimento (libera a resposta)"
                   className="px-2.5 py-1.5 rounded-lg bg-ativo/15 hover:bg-ativo/25 text-ativo-400 text-xs font-semibold border border-ativo/30 transition-all flex items-center gap-1">
@@ -1063,6 +1050,7 @@ function PainelChat({
           </button>
 
           <button onClick={() => onApagarChat(conversa.id)}
+            title="Apagar conversa"
             className="p-1.5 rounded-lg bg-falha/15 hover:bg-falha/25 text-falha-400 border border-falha/30 transition-all">
             <Trash2 size={13} />
           </button>
@@ -1336,23 +1324,45 @@ function PainelChat({
           <Zap size={15} />
         </button>
 
-        <textarea
-          value={texto}
-          rows={1}
-          onChange={e => setTexto(e.target.value)}
-          onKeyDown={e => {
-            // Enter envia; Ctrl/Cmd+Enter envia; Shift+Enter quebra linha.
-            if (e.key === 'Enter' && (!e.shiftKey || e.ctrlKey || e.metaKey)) {
-              e.preventDefault();
-              enviar();
-            }
-          }}
-          placeholder={anexo ? 'Legenda (opcional)...' : 'Digite sua mensagem ou CNPJ...  (Enter envia · Shift+Enter quebra linha)'}
-          className="order-first w-full sm:order-none sm:w-auto sm:flex-1 min-w-0 resize-none max-h-32 bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 transition-colors"
-        />
+        <button
+          onClick={() => setGravandoAudio(v => !v)}
+          title={gravandoAudio ? 'Cancelar gravação' : 'Gravar áudio'}
+          className={`p-2.5 rounded-xl border transition-all ${
+            gravandoAudio
+              ? 'bg-red-500/20 border-red-500/40 text-red-400'
+              : 'bg-grafite-700 border-linha text-slate-400 hover:text-red-400 hover:border-red-500/30'
+          }`}
+        >
+          <Mic size={15} />
+        </button>
+
+        {gravandoAudio ? (
+          <AudioRecorder
+            onEnviar={(dataUrl) => {
+              onEnviarMidia({ tipo: 'audio', dataUrl, mimetype: 'audio/ogg; codecs=opus', fileName: 'audio.ogg' });
+              setGravandoAudio(false);
+            }}
+            onCancelar={() => setGravandoAudio(false)}
+          />
+        ) : (
+          <textarea
+            value={texto}
+            rows={1}
+            onChange={e => setTexto(e.target.value)}
+            onKeyDown={e => {
+              // Enter envia; Ctrl/Cmd+Enter envia; Shift+Enter quebra linha.
+              if (e.key === 'Enter' && (!e.shiftKey || e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                enviar();
+              }
+            }}
+            placeholder={anexo ? 'Legenda (opcional)...' : 'Digite sua mensagem...  (Enter envia · Shift+Enter quebra linha)'}
+            className="order-first w-full sm:order-none sm:w-auto sm:flex-1 min-w-0 resize-none max-h-32 bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 transition-colors"
+          />
+        )}
         <button
           onClick={enviar}
-          disabled={enviandoMidia}
+          disabled={enviandoMidia || gravandoAudio}
           className="ml-auto sm:ml-0 p-2.5 rounded-xl bg-acao hover:bg-acao-200 disabled:opacity-50 text-slate-950 transition-colors shadow-md shadow-acao/20 self-end"
         >
           {enviandoMidia ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}

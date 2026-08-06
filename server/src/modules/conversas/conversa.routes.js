@@ -42,6 +42,12 @@ router.post("/:id/validar-cnpj", validate(validarCnpjSchema), (req, res, next) =
 router.patch("/:id/status", validate(atualizarStatusSchema), (req, res, next) =>
   conversaController.atualizarStatus(req, res).catch(next)
 );
+router.patch("/:id/setor", (req, res, next) =>
+  conversaController.atualizarSetor(req, res).catch(next)
+);
+router.post("/:id/avaliacao", (req, res, next) =>
+  conversaController.avaliarAtendimento(req, res).catch(next)
+);
 router.patch("/:id/flags", validate(atualizarFlagsSchema), (req, res, next) =>
   conversaController.atualizarFlags(req, res).catch(next)
 );

@@ -8,16 +8,36 @@ const bus = require("../../shared/events/event-bus");
 const AppError = require("../../shared/errors/AppError");
 const env = require("../../config/env");
 
-class ConversaService {
-  async listar(filtros = {}) {
-    const conversas = await conversaRepository.findAll(filtros);
-    return conversas.map(mapConversa);
+function podeAcessarSetor(userCargo, setorConversa) {
+  if (!userCargo || userCargo === "Administrador") return true;
+  const setorNorm = (setorConversa || "Geral").trim();
+  if (setorNorm === "Geral") return true;
+
+  if (setorNorm === "Financeiro" && userCargo === "Técnico") return false;
+
+  if (["Financeiro", "Técnico", "Comercial"].includes(userCargo)) {
+    return setorNorm === userCargo;
   }
 
-  async obter(id) {
+  return true;
+}
+
+class ConversaService {
+  async listar(filtros = {}, userCargo = null) {
+    const conversas = await conversaRepository.findAll(filtros);
+    const dto = conversas.map(mapConversa);
+    if (!userCargo || userCargo === "Administrador") return dto;
+    return dto.filter((c) => podeAcessarSetor(userCargo, c.setor));
+  }
+
+  async obter(id, userCargo = null) {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
-    return mapConversa(conversa);
+    const dto = mapConversa(conversa);
+    if (userCargo && !podeAcessarSetor(userCargo, dto.setor)) {
+      throw new AppError("Sem permissao para acessar este setor", 403, "FORBIDDEN_SECTOR");
+    }
+    return dto;
   }
 
   async atender(id, atendenteId = null) {
@@ -308,6 +328,23 @@ class ConversaService {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
     const atualizada = await conversaRepository.zerarNaoLidas(id);
+    return this._emitir(atualizada);
+  }
+
+  async atualizarSetor(id, setor) {
+    const conversa = await conversaRepository.findById(id);
+    if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
+    const atualizada = await conversaRepository.update(id, { setor });
+    return this._emitir(atualizada);
+  }
+
+  async avaliarAtendimento(id, { avaliacao, feedback }) {
+    const conversa = await conversaRepository.findById(id);
+    if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
+    const atualizada = await conversaRepository.update(id, {
+      avaliacao: Number(avaliacao) || null,
+      feedback: feedback ? String(feedback).trim() : null,
+    });
     return this._emitir(atualizada);
   }
 
