@@ -9,4 +9,14 @@ const criarParceiroSchema = z.object({
   status: z.enum(["ativo", "inativo"]).optional(),
 });
 
-module.exports = { criarParceiroSchema };
+// O CNPJ nao entra aqui: ele e a chave (vem na URL) e nao se edita -- trocar o
+// documento e apagar e criar outro parceiro, nao editar este.
+const atualizarParceiroSchema = z.object({
+  razaoSocial: z.string().min(2),
+  email: z.string().optional().nullable(),
+  telefones: z.string().optional().nullable(),
+  cidades: z.string().optional().nullable(),
+  status: z.enum(["ativo", "inativo"]).optional(),
+});
+
+module.exports = { criarParceiroSchema, atualizarParceiroSchema };

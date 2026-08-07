@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useLocation, Navigate, Link } from 'react-router-dom';
 import { Loader2, LogIn, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { getEmailLembrado } from '../services/api';
 import AcessoLayout, { Campo, LinkAcesso } from '../components/layout/AcessoLayout';
 
 export default function LoginPage() {
@@ -12,10 +13,15 @@ export default function LoginPage() {
   // Quem acabou de se cadastrar chega aqui com o e-mail no `state`. Ja vem
   // preenchido: a pessoa digitou isso segundos atras, pedir de novo e ruido.
   const recemCadastrado = !!local.state?.cadastrado;
-  const [email, setEmail] = useState(local.state?.email || '');
+  // Vindo do cadastro (state) ou de um login anterior com "lembrar-me": o e-mail
+  // ja aparece preenchido. So o e-mail -- a senha nunca fica guardada por nos.
+  const emailLembrado = getEmailLembrado();
+  const emailInicial = local.state?.email || emailLembrado;
+  const [email, setEmail] = useState(emailInicial);
   const [senha, setSenha] = useState('');
-  // Marcado por padrao: manter a sessao e o caso comum (maquina propria). Quem
-  // esta num computador compartilhado desmarca e o token vira sessao de aba so.
+  // Marcado por padrao: manter a sessao e o caso comum (maquina propria). Se ha
+  // e-mail lembrado, foi porque a pessoa deixou marcado antes. Quem esta em
+  // maquina compartilhada desmarca e o token/e-mail nao ficam.
   const [lembrar, setLembrar] = useState(true);
   const [erro, setErro] = useState(null);
   const [enviando, setEnviando] = useState(false);
@@ -53,18 +59,18 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* O foco vai para o primeiro campo que ainda esta vazio: vindo do
-            cadastro o e-mail ja veio preenchido, entao comecar por ele
+        {/* O foco vai para o primeiro campo que ainda esta vazio: com o e-mail
+            ja preenchido (do cadastro ou do "lembrar-me"), comecar por ele
             obrigaria a pessoa a dar um Tab para chegar onde precisa digitar. */}
         <Campo
           id="email" rotulo="E-mail" type="email" autoComplete="email" required
-          autoFocus={!recemCadastrado}
+          autoFocus={!emailInicial}
           placeholder=""
           value={email} onChange={e => setEmail(e.target.value)}
         />
         <Campo
           id="senha" rotulo="Senha" type="password" autoComplete="current-password" required
-          autoFocus={recemCadastrado}
+          autoFocus={!!emailInicial}
           placeholder=""
           value={senha} onChange={e => setSenha(e.target.value)}
         />

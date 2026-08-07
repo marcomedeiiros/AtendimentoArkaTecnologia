@@ -1,9 +1,10 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   Send, Plus, Trash2, Upload, Play, Pause, StopCircle,
   CheckCircle2, XCircle, Clock, Users, MessageSquare,
   AlertTriangle, FileText, X, RotateCcw, Download
 } from 'lucide-react';
+import { WhatsAppAPI } from '../../services/api';
 
 function sleep(ms) { return new Promise(res => setTimeout(res, ms)); }
 
@@ -11,14 +12,27 @@ function horaAgora() {
   return new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
-async function carregar(chave, padrao) {
+// Persistencia da campanha. Antes esses helpers existiam mas nunca eram
+// chamados: por isso o F5 zerava nome, mensagem e destinatarios. Agora o rascunho
+// da campanha vive no localStorage e sobrevive a recarregar a pagina.
+const CHAVE = 'arka_envio_massa';
+function carregar(padrao) {
   try {
-    const raw = localStorage.getItem(chave);
-    return raw ? JSON.parse(raw) : padrao;
+    const raw = localStorage.getItem(CHAVE);
+    return raw ? { ...padrao, ...JSON.parse(raw) } : padrao;
   } catch { return padrao; }
 }
-async function salvar(chave, valor) {
-  try { localStorage.setItem(chave, JSON.stringify(valor)); } catch {}
+function salvar(valor) {
+  try { localStorage.setItem(CHAVE, JSON.stringify(valor)); } catch { /* cota cheia */ }
+}
+
+// Personaliza a mensagem por destinatario. {nome} vira o nome; {primeiro_nome}
+// vira so o primeiro. Sem placeholder, todo mundo recebe o mesmo texto.
+function personalizar(texto, dest) {
+  const nome = dest.nome || '';
+  return String(texto)
+    .replace(/\{nome\}/gi, nome)
+    .replace(/\{primeiro_nome\}/gi, nome.split(' ')[0] || nome);
 }
 
 function FormContato({ onAdicionar }) {
@@ -103,9 +117,13 @@ function ItemLog({ entry }) {
     entry.status === 'pulado'  ? <AlertTriangle size={12} className="text-espera-400  shrink-0" /> :
                                  <Clock        size={12} className="text-slate-400   shrink-0" />;
   return (
-    <div className="flex items-center gap-2 py-1 border-b border-linha/50 last:border-0">
+    <div className="flex items-center gap-2 py-1 border-b border-linha/50 last:border-0"
+      title={entry.status === 'erro' && entry.motivo ? `Falha: ${entry.motivo}` : undefined}>
       {icone}
       <span className="flex-1 text-[11px] text-slate-300 truncate">{entry.nome}</span>
+      {entry.status === 'erro' && entry.motivo && (
+        <span className="text-[10px] text-falha-400/80 truncate max-w-[120px] shrink-0">{entry.motivo}</span>
+      )}
       <span className="text-[10px] text-slate-500 font-mono shrink-0">{entry.hora}</span>
     </div>
   );
@@ -130,13 +148,24 @@ function exportarLog(logs, campanha) {
 }
 
 export default function EnvioEmMassa({ conversas = [] }) {
-  const [campanha, setCampanha]       = useState('');
-  const [mensagem, setMensagem]       = useState('');
-  const [destinatarios, setDest]      = useState([]);
-  const [intervaloDe, setIntervaloDe] = useState(2);
-  const [intervaloAte, setIntervaloAte] = useState(5);
+  // Rascunho restaurado do localStorage (uma unica leitura na montagem).
+  const [inicial] = useState(() => carregar({
+    campanha: '', mensagem: '', destinatarios: [], intervaloDe: 2, intervaloAte: 5,
+  }));
 
-  const [status, setStatus]   = useState('idle'); 
+  const [campanha, setCampanha]       = useState(inicial.campanha);
+  const [mensagem, setMensagem]       = useState(inicial.mensagem);
+  const [destinatarios, setDest]      = useState(inicial.destinatarios);
+  const [intervaloDe, setIntervaloDe] = useState(inicial.intervaloDe);
+  const [intervaloAte, setIntervaloAte] = useState(inicial.intervaloAte);
+
+  // Salva o rascunho sempre que algo relevante muda. O status/progresso do envio
+  // NAO e persistido de proposito: e transitorio, cada envio recomeca do zero.
+  useEffect(() => {
+    salvar({ campanha, mensagem, destinatarios, intervaloDe, intervaloAte });
+  }, [campanha, mensagem, destinatarios, intervaloDe, intervaloAte]);
+
+  const [status, setStatus]   = useState('idle');
   const [enviados, setEnviados] = useState(0);
   const [erros, setErros]       = useState(0);
   const [logs, setLogs]         = useState([]);
@@ -200,15 +229,28 @@ export default function EnvioEmMassa({ conversas = [] }) {
       const dest = lista[i];
       setIndiceAtual(i + 1);
 
-      const delay = (intervaloDe + Math.random() * (intervaloAte - intervaloDe)) * 1000;
+      // Intervalo aleatorio ANTES de cada envio: espaca os disparos para reduzir
+      // risco de bloqueio por spam.
+      const delay = (intervaloDe + Math.random() * (Math.max(intervaloAte, intervaloDe) - intervaloDe)) * 1000;
       await sleep(delay);
 
-      const sucesso = Math.random() > 0.05; 
+      // Envio REAL pelo WhatsApp (antes isto era um Math.random simulado, por
+      // isso "nada acontecia"). Cada falha vira um item de erro no log, sem
+      // derrubar a campanha inteira.
+      let sucesso = true;
+      let motivo = null;
+      try {
+        await WhatsAppAPI.enviar(dest.telefone, personalizar(mensagem, dest));
+      } catch (e) {
+        sucesso = false;
+        motivo = e.message;
+      }
 
       const entry = {
         nome:     dest.nome,
         telefone: dest.telefone,
         status:   sucesso ? 'ok' : 'erro',
+        motivo,
         hora:     horaAgora()
       };
 
@@ -221,10 +263,12 @@ export default function EnvioEmMassa({ conversas = [] }) {
     if (!paradoRef.current) {
       setStatus('concluido');
     }
-  }, [intervaloDe, intervaloAte]);
+  }, [intervaloDe, intervaloAte, mensagem]);
 
   async function iniciarEnvio() {
     if (!mensagem.trim() || destinatarios.length === 0) return;
+    // Agora o envio e real: confirma antes de disparar para todos.
+    if (!window.confirm(`Enviar esta mensagem para ${destinatarios.length} destinatário(s) pelo WhatsApp?`)) return;
     paradoRef.current  = false;
     pausadoRef.current = false;
     setStatus('enviando');
@@ -294,6 +338,9 @@ export default function EnvioEmMassa({ conversas = [] }) {
                 placeholder="Digite a mensagem que será enviada para todos os destinatários..."
                 disabled={emExecucao}
                 className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 resize-none disabled:opacity-50 font-mono leading-relaxed" />
+              <p className="mt-1.5 text-[10px] text-slate-500">
+                Use <code className="text-acao-200">{'{nome}'}</code> ou <code className="text-acao-200">{'{primeiro_nome}'}</code> para personalizar por destinatário.
+              </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>

@@ -168,7 +168,16 @@ class WhatsAppService {
     // Para tipos com arquivo, tenta obter os bytes (base64 no payload quando o
     // "Webhook Base64" está ligado, senão baixa via getBase64FromMediaMessage).
     if (midia && midia.tipo !== "localizacao" && midia.tipo !== "contato") {
-      let base64 = data?.message?.base64 || data?.base64 || body?.base64 || null;
+      // A Evolution acomoda o base64 em lugares diferentes conforme a versao e o
+      // "Webhook Base64": no proprio audioMessage, na raiz da mensagem, ou solto.
+      const msg = data?.message || {};
+      const doMidia = msg.audioMessage || msg.imageMessage || msg.videoMessage || msg.documentMessage || {};
+      let base64 =
+        doMidia.base64 ||
+        msg.base64 ||
+        data?.base64 ||
+        body?.base64 ||
+        null;
       let mimetype = midia.mimetype;
       if (!base64 && key) {
         const baixado = await evolutionApi.getBase64FromMediaMessage(key, instanceName);
@@ -180,6 +189,15 @@ class WhatsAppService {
       if (base64) {
         const url = base64.startsWith("data:") ? base64 : `data:${mimetype};base64,${base64}`;
         midia = { ...midia, url, mimetype };
+      } else {
+        // Sem bytes o audio vira "[Mídia indisponível]" na Central. Deixamos o
+        // rastro no log para diagnosticar: quase sempre e o "Webhook Base64"
+        // desligado na Evolution ou o getBase64 indisponivel naquela versao.
+        logger.warn("Mídia recebida sem bytes (base64 ausente)", {
+          tipo: midia.tipo,
+          instance: instanceName,
+          waMessageId: key?.id || null,
+        });
       }
     }
 

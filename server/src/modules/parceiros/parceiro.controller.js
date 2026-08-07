@@ -11,6 +11,10 @@ class ParceiroController {
     return parceiroService.criar(req.body).then((data) => success(res, data, 201));
   }
 
+  atualizar(req, res) {
+    return parceiroService.atualizar(req.params.cnpj, req.body).then((data) => success(res, data));
+  }
+
   validar(req, res) {
     return parceiroService.validar(req.params.cnpj).then((data) => success(res, data));
   }

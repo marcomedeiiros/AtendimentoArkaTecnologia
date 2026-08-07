@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash2, Search, Building2, Mail, Phone, MapPin } from 'lucide-react';
+import { Plus, Trash2, Search, Building2, Mail, Phone, MapPin, Pencil, X, Loader2 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { ParceirosAPI } from '../services/api';
 
@@ -39,6 +39,51 @@ export default function ParceirosPage() {
   const [cidades, setCidades] = useState('');
   const [erro, setErro] = useState('');
   const [busca, setBusca] = useState('');
+
+  // Edicao: guarda o parceiro em edicao e o rascunho dos campos. O CNPJ nao
+  // entra no rascunho porque e a chave -- so leitura no modal.
+  const [editando, setEditando] = useState(null);
+  const [rascunho, setRascunho] = useState({ razaoSocial: '', email: '', telefones: '', cidades: '' });
+  const [editErro, setEditErro] = useState('');
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+
+  function abrirEdicao(p) {
+    setEditando(p);
+    setRascunho({
+      razaoSocial: p.razaoSocial || '',
+      email: p.email || '',
+      telefones: p.telefones || '',
+      cidades: p.cidades || '',
+    });
+    setEditErro('');
+  }
+
+  function fecharEdicao() {
+    if (salvandoEdicao) return;
+    setEditando(null);
+    setEditErro('');
+  }
+
+  async function salvarEdicao(e) {
+    e.preventDefault();
+    if (!rascunho.razaoSocial.trim()) { setEditErro('Informe a razão social.'); return; }
+    setSalvandoEdicao(true);
+    setEditErro('');
+    try {
+      const atualizado = await ParceirosAPI.atualizar(editando.cnpj, {
+        razaoSocial: rascunho.razaoSocial.trim(),
+        email: rascunho.email.trim() || null,
+        telefones: rascunho.telefones.trim() || null,
+        cidades: rascunho.cidades.trim() || null,
+      });
+      atualizarParceiros(parceiros.map(p => p.cnpj === editando.cnpj ? atualizado : p));
+      setEditando(null);
+    } catch (err) {
+      setEditErro(`Não foi possível salvar: ${err.message}`);
+    } finally {
+      setSalvandoEdicao(false);
+    }
+  }
 
   async function adicionar() {
     const c = limparCnpj(cnpjInput);
@@ -199,6 +244,13 @@ export default function ParceirosPage() {
                 {p.status === 'ativo' ? 'Ativo' : 'Inativo'}
               </button>
               <button
+                onClick={() => abrirEdicao(p)}
+                className="text-slate-300 hover:text-white hover:bg-slate-800 p-1.5 rounded-lg transition-colors"
+                title="Editar parceiro"
+              >
+                <Pencil size={13} />
+              </button>
+              <button
                 onClick={() => remover(p.cnpj)}
                 className="text-falha-400 hover:bg-slate-800 p-1.5 rounded-lg transition-colors"
                 title="Excluir parceiro"
@@ -215,6 +267,92 @@ export default function ParceirosPage() {
           </div>
         )}
       </div>
+
+      {editando && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={fecharEdicao}
+        >
+          <form
+            onSubmit={salvarEdicao}
+            onClick={e => e.stopPropagation()}
+            className="glass-panel w-full max-w-md space-y-4 rounded-2xl border border-linha p-5"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <Pencil size={15} className="text-acao-200 shrink-0" />
+                <h2 className="text-sm font-bold text-white truncate">Editar parceiro</h2>
+              </div>
+              <button
+                type="button"
+                onClick={fecharEdicao}
+                disabled={salvandoEdicao}
+                className="text-slate-400 hover:text-white disabled:opacity-50 shrink-0"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.14em] text-slate-400">CNPJ</label>
+              <div className="rounded-xl border border-linha bg-grafite-800/60 px-3.5 py-2 text-xs font-mono text-slate-400">
+                {mascararCnpj(editando.cnpj)}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <input
+                value={rascunho.razaoSocial}
+                onChange={e => setRascunho(r => ({ ...r, razaoSocial: e.target.value }))}
+                placeholder="Razão Social / Nome da Empresa"
+                autoFocus
+                className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50"
+              />
+              <input
+                value={rascunho.email}
+                onChange={e => setRascunho(r => ({ ...r, email: e.target.value }))}
+                placeholder="E-mail de contato"
+                type="email"
+                className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50"
+              />
+              <input
+                value={rascunho.telefones}
+                onChange={e => setRascunho(r => ({ ...r, telefones: e.target.value }))}
+                placeholder="Telefones"
+                className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50"
+              />
+              <input
+                value={rascunho.cidades}
+                onChange={e => setRascunho(r => ({ ...r, cidades: e.target.value }))}
+                placeholder="Cidades atendidas"
+                className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50"
+              />
+            </div>
+
+            {editErro && <div className="text-[11px] font-semibold text-falha-400">{editErro}</div>}
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={fecharEdicao}
+                disabled={salvandoEdicao}
+                className="px-3 py-2 rounded-xl border border-linha text-xs font-semibold text-slate-300 hover:text-white disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={salvandoEdicao}
+                className="flex items-center gap-1.5 rounded-xl bg-acao px-3 py-2 text-xs font-bold text-slate-950 hover:bg-acao-200 disabled:opacity-60"
+              >
+                {salvandoEdicao
+                  ? <><Loader2 size={13} className="animate-spin" /> Salvando...</>
+                  : <>Salvar alterações</>}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

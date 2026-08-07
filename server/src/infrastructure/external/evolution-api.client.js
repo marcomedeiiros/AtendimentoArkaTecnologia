@@ -216,9 +216,19 @@ class EvolutionApiClient {
         `/chat/getBase64FromMediaMessage/${instance}`,
         { message: { key }, convertToMp4: false }
       );
-      const base64 = data?.base64 || data?.media || null;
+      // O campo muda conforme a versao da Evolution: `base64` (v2), `media`,
+      // ou aninhado em `data.base64`. Cobrimos todas para o audio nao sumir so
+      // porque a instalacao usa um formato diferente.
+      const base64 =
+        data?.base64 ||
+        data?.media ||
+        data?.data?.base64 ||
+        data?.message?.base64 ||
+        data?.buffer ||
+        null;
       if (!base64) return null;
-      return { base64, mimetype: data?.mimetype || null };
+      const mimetype = data?.mimetype || data?.mimeType || data?.data?.mimetype || null;
+      return { base64, mimetype };
     } catch {
       return null;
     }

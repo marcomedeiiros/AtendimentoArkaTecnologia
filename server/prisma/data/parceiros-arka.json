@@ -1,0 +1,1490 @@
+[
+  {
+    "cnpj": "21533349000169",
+    "razaoSocial": "A COLLI / AUTO UNION",
+    "email": "autounioncenter@hotmail.com",
+    "telefones": "(27)99999-9999",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "36324580000110",
+    "razaoSocial": "ACADEMIA DE GINASTICA HANGAR LTDA / ACADEMIA HANGAR-CONTRATO",
+    "email": "mppedra@hotmail.com",
+    "telefones": "(27)99849-2321",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "08606340000172",
+    "razaoSocial": "AEVO TECNOLOGIA DA INFORMACAO S/A",
+    "email": "marcelo.cogo@aevo.com.br",
+    "telefones": "(27)99737-1764",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "32394603000101",
+    "razaoSocial": "AFAGO COMERCIO LTDA / AFAGO",
+    "email": "afagoloja@hotmail.com",
+    "telefones": "(27)3349-3764",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "32394660000190",
+    "razaoSocial": "AFAGO CONFECCOES LTDA",
+    "email": "fiscal@afagoshop.com.br",
+    "telefones": null,
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "16829408000100",
+    "razaoSocial": "ALLBIOM SOLUCOES EM BIOPROCESSOS LTDA / ALLBIOM",
+    "email": "joao.neto@allbiom.com",
+    "telefones": "(27)99999-9999",
+    "cidades": "Cajuru - SP",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "16750498000140",
+    "razaoSocial": "ALLMONT MONTAGENS S.A",
+    "email": "fernando@somacontadores.com.br",
+    "telefones": "(11)99999-9999",
+    "cidades": "Araçoiaba da Serra - SP",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "24801362000140",
+    "razaoSocial": "AMD TECNOLOGIA DA INFORMACAO E SISTEMAS LTDA / AMD SISTEMAS",
+    "email": "bruno@amdsistemas.com.br",
+    "telefones": "(71)99999-9999",
+    "cidades": "Recife - PE",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "40757350000111",
+    "razaoSocial": "ANESTEVILLA SERVICOS DE ANESTESIOLOGIA LTDA / HYPNOS ANESTESIOLOGIA",
+    "email": "prolinecontabil@hotmail.com",
+    "telefones": "(27)99999-9999",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "05832287000130",
+    "razaoSocial": "AR VIX COMERCIO E SERVICO LTDA / AR VIX",
+    "email": "moacyr@arvix.com.br",
+    "telefones": "(27)99312-2663",
+    "cidades": "Cariacica - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "55725765000180",
+    "razaoSocial": "ARKA TECNOLOGIA LTDA / ARKA TECNOLOGIA",
+    "email": "vivianemunzer@gmail.com",
+    "telefones": "(27)99909-2774",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "31674633000109",
+    "razaoSocial": "ASS DOS SERV ATIVOS E INATIVOS DO PODER JUDIC E DOS SERV ATIVOS DOS DEMAIS ORGAOS PUB FEDERAIS, ESTADUAIS E MUNICIPAIS N / AJUDES",
+    "email": "jeniffer@ajudes.org.br",
+    "telefones": "(27)3232-2122",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "11204496000131",
+    "razaoSocial": "ASSOCIACAO ALPHAVILLE JACUHY / AMAJ - ASSOCIACAO DE MORADORES DO ALPHAVILLE JACUHY",
+    "email": "adm@amaj.com.br",
+    "telefones": "(27)3218-3320",
+    "cidades": "Serra - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "03077236000114",
+    "razaoSocial": "ASSOCIACAO COMERCIAL E EMPRESARIAL DO ESPIRITO SANTO / ACE-ES",
+    "email": "leo.polezi@terra.com.br",
+    "telefones": null,
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "14145515000194",
+    "razaoSocial": "ASSOCIACAO DAS EMPRESAS E FUNCIONARIOS DO COMERCIO DE BENS E SERVICOS NO ESTADO DO ESPIRITO SANTO / ACS-ES",
+    "email": "financeiro@acses.org.br",
+    "telefones": "(27)99720-1436",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "12047339000122",
+    "razaoSocial": "ASSOCIACAO DE MORADORES DO LOTEAMENTO RIVIERA PARK RESIDENCE",
+    "email": "administrativo@rivierapark.com.br",
+    "telefones": "(27)99942-1606",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "28127926000323",
+    "razaoSocial": "ASSOCIACAO EVANGELICA BENEFICENTE ESPIRITO-SANTENSE - AEBES / HOSPITAL ESTADUAL DE URGENCIA E EMERGENCIA - HEUE",
+    "email": "contabilidade@aebes.org.br",
+    "telefones": "(27)99999-9999",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "28127926000161",
+    "razaoSocial": "ASSOCIACAO EVANGELICA BENEFICENTE ESPIRITO-SANTENSE - AEBES / HOSPITAL EVANGELICO DE VILA VELHA",
+    "email": "nfemercadorias@aebes.org.br",
+    "telefones": "(27)99999-9999",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "14086738000128",
+    "razaoSocial": "ASSOCIACAO JARDINS VENEZA",
+    "email": "gerencia@jdsveneza.com.br",
+    "telefones": "(27)99999-9999",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "23466807000110",
+    "razaoSocial": "B.P FAE COMERCIO & ACESSORIOS / LOJA LUSH - VITORIA",
+    "email": "lushacessorios@gmail.com",
+    "telefones": "(27)98810-0590",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "41156351000173",
+    "razaoSocial": "B2G VIX COMERCIO DE PRODUTOS E EQUIPAMENTOS LTDA",
+    "email": null,
+    "telefones": "2732255540",
+    "cidades": "Recife - PE",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "41156351000254",
+    "razaoSocial": "B2G VIX COMERCIO DE PRODUTOS E EQUIPAMENTOS LTDA",
+    "email": null,
+    "telefones": "27998189226",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "11051921000108",
+    "razaoSocial": "BEAPA CONFECCOES LTDA / AFAGO",
+    "email": "ruixavier@uol.com.br",
+    "telefones": "(27)3216-0651",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "07798962000187",
+    "razaoSocial": "BENTTO COMUNICACAO & DESIGN LTDA / PIXEL COMUNICACAO & DESIGN",
+    "email": "contato@klamss.com.br",
+    "telefones": "(27)90000-0000",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "26861688000198",
+    "razaoSocial": "BORGES MOYSES SOCIEDADE INDIVIDUAL DE ADVOCACIA",
+    "email": "ibmoyses@gmail.com",
+    "telefones": "(27)99689-4039",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "14247873000108",
+    "razaoSocial": "BRENNER COMERCIO DE QUEIMADORES LTDA / BRENNER QUEIMADORES",
+    "email": "financeiro@brennersolucoes.com",
+    "telefones": "(47)99999-9999",
+    "cidades": "Joinville - SC",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "39393301000168",
+    "razaoSocial": "BRILHANTE ADMINISTRADORA E CORRETORA DE SEGUROS LTDA",
+    "email": "financeiro@brilhantecorretora.com.br",
+    "telefones": "(27)99659-6424",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "24953072000200",
+    "razaoSocial": "BROS LOGISTICA E TRANSPORTES LTDA / BROS LOG",
+    "email": "comercial@arkabrasil.com",
+    "telefones": "(75)99999-9999",
+    "cidades": "Campo Grande - MS",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "11863124000117",
+    "razaoSocial": "BROTHERS MARMORES E GRANITOS LTDA / BROTHERS MÁRMORES E GRANITOS CONTRATO",
+    "email": "adm@brothersingranite.com",
+    "telefones": "(27)99994-4003",
+    "cidades": "Serra - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "47335550000125",
+    "razaoSocial": "BSV MEDICAL DISTRIBUIDORA DE MATERIAL HOSPITALAR LTDA",
+    "email": "comercial2.d2m@gmail.com",
+    "telefones": "(27)99222-9983",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "01776672000156",
+    "razaoSocial": "CAMARA MUNICIPAL DE ALFREDO CHAVES / PODER LEGISLATIVO",
+    "email": "compras@camaraalfredochaves.es.gov.br",
+    "telefones": "(27)99999-9999",
+    "cidades": "Alfredo Chaves - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "39262985000169",
+    "razaoSocial": "CAMARA MUNICIPAL DE MARECHAL FLORIANO / MARECHAL CAMARA MUNICIPAL",
+    "email": "cmmfes@ig.com.br",
+    "telefones": "(27)99999-9999",
+    "cidades": "Marechal Floriano - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "29376862000286",
+    "razaoSocial": "CANADIAN SCHOOL VILA VELHA LTDA / ESCOLA CANADIAN SCHOOL DE VITORIA",
+    "email": "financeiro@vitoria.maplebear.com.br",
+    "telefones": "(27)3077-1009",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "32815846000176",
+    "razaoSocial": "CANADIAN SCHOOL VITORIA LTDA / CANADIAN SCHOOL",
+    "email": "financeiro@vitoria.maplebear.com.br",
+    "telefones": "(27)99309-9098",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "47871953000199",
+    "razaoSocial": "CAPIXABA ALIMENTOS LTDA / CAPIXABA ALIMENTOS",
+    "email": "adm@congeladosmoxuara.com.br",
+    "telefones": "(27)99970-6962",
+    "cidades": "Cariacica - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "55268986000177",
+    "razaoSocial": "CARLOS HENRIQUE SFORCA LTDA / SFORZA TRADING COMPANY",
+    "email": "gustavo.sforca@sforzatc.com",
+    "telefones": "(19)98854-0276",
+    "cidades": "Votorantim - SP",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "16810618000157",
+    "razaoSocial": "CARLOS LEITE DE MATTOS NETO LTDA",
+    "email": "con.adv@ig.com.br",
+    "telefones": "(27)3324-1779",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "07698801000626",
+    "razaoSocial": "CENEGED - COMPANHIA ELETROMECANICA E GERENCIAMENTO DE DADOS S/A",
+    "email": "contratos@ceneged.com.br",
+    "telefones": "(21)99999-9999",
+    "cidades": "Rio das Ostras - RJ",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "35954932000158",
+    "razaoSocial": "CHS ENGENHARIA LTDA",
+    "email": "chs@chsengenharia.com.br",
+    "telefones": "(27)99620-0141",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "43907904000108",
+    "razaoSocial": "CL SUPORTE COMERCIO E SERVICOS LTDA / CL PAINEIS",
+    "email": "contato@closed-loop.net",
+    "telefones": "(34)99999-9999",
+    "cidades": "Uberlândia - MG",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "02872908000110",
+    "razaoSocial": "COLECT VITORIA COMERCIO E SERVICOS LTDA / COLECT VITORIA COMERCIO E SERVICOS LTDA EPP",
+    "email": "administrativo@colect.com.br",
+    "telefones": "(27)98252-8080",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "01522040000166",
+    "razaoSocial": "COLEGIO GALILEU GALILEI LTDA",
+    "email": "confissc@terra.com.br",
+    "telefones": "(11)99999-9999",
+    "cidades": "São Paulo - SP",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "16906404000189",
+    "razaoSocial": "COMERIO E SOUZA CONFECCOES LTDA / COMERIO E SOUZA CONFECCOES LTDA - EPP",
+    "email": "1@1.com",
+    "telefones": "(27)3621-4081",
+    "cidades": "Nanuque - MG",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "54110000000173",
+    "razaoSocial": "CONDOMINIO DO EDIFICIO PALAZZO VENETO / EDIFICIO PALAZZO VENETO",
+    "email": "adm1@cecad.com.br",
+    "telefones": "(27)99933-8052",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "28421097000125",
+    "razaoSocial": "CONDOMINIO DOS EDIF BELLEVUE E SUR LA PIERRE / CONDOMINIO DOS EDIF. BELLE VUE E SUR LA PIERRE - 83127",
+    "email": "condbellevue@bol.com.br",
+    "telefones": "(27)3235-7762",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "28877438000171",
+    "razaoSocial": "CONDOMINIO MAR DO CARIBE",
+    "email": "atendimentoadm@mardocaribe.com.br",
+    "telefones": "(27)99831-0274",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "49846393000148",
+    "razaoSocial": "CONSELHO REGIONAL DE EDUCACAO FISICA DA 22 REGIAO",
+    "email": "cobranca@cref22.org.br",
+    "telefones": "(27)99590-9638",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "27055235000137",
+    "razaoSocial": "CONSELHO REGIONAL DE ENGENHARIA E AGRONOMIA DO ES",
+    "email": "sandra@creaes.org.br",
+    "telefones": "(27)99999-9999",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "28066819000170",
+    "razaoSocial": "CONSTRUTORA SPALENZA LTDA",
+    "email": "construtora@spalenza.com.br",
+    "telefones": "(27)99982-8948",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "46551376000195",
+    "razaoSocial": "CONSULTA SIM CLINICA MEDICA E DIAGNOSTICOS DE SERRA LTDA",
+    "email": "financeiro@consultasim.com.br",
+    "telefones": "(27)99824-9956",
+    "cidades": "Serra - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "27987551000147",
+    "razaoSocial": "CONTAGOS ASSESSORIA CONTABIL LTDA / CONTAGOS ASSESSORIA CONTABIL LTDA-CONTRATO",
+    "email": "gustavoapolinario@terra.com.br",
+    "telefones": "(27)99434-9500",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "31707409000176",
+    "razaoSocial": "COOPERATIVA DE LATICINIOS DE ALFREDO CHAVES - CLAC / COOPERATIVA DE LATICINIOS DE ALFREDO CHAVES CLAC CONTRATOS",
+    "email": "fiscal@clacnet.coop.br",
+    "telefones": "(27)99702-3573",
+    "cidades": "Alfredo Chaves - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "36325157000134",
+    "razaoSocial": "COSTA CAMARGO COM. DE PRODUTOS HOSPITALARES LTDA / COSTA CAMARGO COMÉRCIO DE PRODUTOS-CONTRATO",
+    "email": "financeiro@costacamargo.com.br",
+    "telefones": "(27)99939-3788",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "27569499000109",
+    "razaoSocial": "CR SPORTS LTDA / TRACK & FIELD",
+    "email": "gabrielmedeiros@outlook.com",
+    "telefones": "(27)99999-9999",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "05525709000124",
+    "razaoSocial": "CV EVENTOS LTDA / WIN EVENTOS",
+    "email": "viviane@wincentraldeeventos.com.br",
+    "telefones": "(27)99942-2074",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "00993777000102",
+    "razaoSocial": "D' ART COMERCIO E SERVICOS LTDA",
+    "email": "alessandra@dartsolucoes.com.br",
+    "telefones": "(27)99293-2458",
+    "cidades": "Serra - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "45506593000109",
+    "razaoSocial": "D'ART SOLUCOES EM EPS LTDA / DART SOLUCOES EM EPS LTDA",
+    "email": "administrativo@waltercon.com.br",
+    "telefones": "(27)99293-8032",
+    "cidades": "Serra - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "42482254000133",
+    "razaoSocial": "DANILO DAVI DE SOUZA ALVES SILVA / LED ELETRONICA",
+    "email": "danilodavidesouza@gmail.com",
+    "telefones": "(11)99999-9999",
+    "cidades": "Ferraz de Vasconcelos - SP",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "07500936000120",
+    "razaoSocial": "DASIRA CONFECCOES LTDA / DSP - P. COMERIO DASIRA COM CONFEC EPP - CONTRATO",
+    "email": "1@1.com",
+    "telefones": "(27)3026-3917",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "18355397000108",
+    "razaoSocial": "DEAL4B SOLUCOES EM TECNOLOGIA LTDA",
+    "email": "administracao@deal4b.com.br",
+    "telefones": "(19)3847-3344",
+    "cidades": "Jaguariúna - SP",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "28138154000163",
+    "razaoSocial": "DIONYSIO ABAURRE INDUSTRIA E COMERCIO LTDA",
+    "email": "aabaurre@hotmail.com",
+    "telefones": "(27)99860-1195",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "97547239000118",
+    "razaoSocial": "DROGARIA REZENDE & GARBINI LTDA",
+    "email": "fe.orezende@hotmail.com",
+    "telefones": "(27)99603-4022",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "14147658000135",
+    "razaoSocial": "ECONOMY PRINT GERENCIAMENTO DE SERVICOS LTDA / DOMNIA GERENCIAMENTO DE SERVICOS",
+    "email": "marcos.souza@economyprint.com.br",
+    "telefones": "(11)99999-9999",
+    "cidades": "São Paulo - SP",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "26725734000121",
+    "razaoSocial": "EK CLINICA E CIRURGIAS LTDA / EK CENTRO DE CIRURGIAS",
+    "email": "kuster.elias@yahoo.com.br",
+    "telefones": "(27)99651-6339",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "07403634000134",
+    "razaoSocial": "EQUIPE FISIOTERAPIA ESPECIALIZADA LTDA / EQUIPE FISIOTERAPIA ESPECIALIZADA",
+    "email": "equipefisioterapia@gmail.com",
+    "telefones": "(27)98144-1576",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "09230164000180",
+    "razaoSocial": "F R CAVALCANTE E CIA LTDA / BOTICARIO - CODO",
+    "email": "processual003@assessoriareal.com.br",
+    "telefones": "(75)99999-9999",
+    "cidades": "São Luís - MA",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "27105162000140",
+    "razaoSocial": "FAZENDA CLUBE SANTA TERESA",
+    "email": "financeiro2@fazendaclube.com.br",
+    "telefones": "(27)99840-6573",
+    "cidades": "Santa Teresa - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "32424227000150",
+    "razaoSocial": "FELIPE FERNANDES BORTOLUZZI",
+    "email": "felipe.bortoluzzi@gmail.com",
+    "telefones": "(27)99868-1402",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "16866361000155",
+    "razaoSocial": "FOUR TECH MANUTENCAO E MONTAGENS INDUSTRIAIS LTDA / FOUR TECH MANUTENCAO E MONTAGENS INDUSTRIAIS",
+    "email": "romys@4fourtech.com.br",
+    "telefones": "(19)98435-0560",
+    "cidades": "Cosmopolis - SP",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "02179328000304",
+    "razaoSocial": "FREITAS & CIA LTDA / BARBOSA MIX - ATACADO DA CONSTRUCAO",
+    "email": "contabilidade@abarbosa.com.br",
+    "telefones": "(51)99999-9999",
+    "cidades": "Porto Velho - RO",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "02616238000171",
+    "razaoSocial": "FUNDACAO ESPIRITO SANTO TURISMO & EVENTOS / ESPIRITO SANTO CONVENTION & VISITORS BUREAU",
+    "email": "financeiro@esconvention.com.br",
+    "telefones": null,
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "11027350000320",
+    "razaoSocial": "Filial SC Atacadista - Proxys Comércio Eletrônico LTDA",
+    "email": null,
+    "telefones": "4131548100",
+    "cidades": "Joinville - SC",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "11027350000753",
+    "razaoSocial": "Filial SP 07 - Proxys Comércio Eletrônico LTDA",
+    "email": null,
+    "telefones": "4131548100",
+    "cidades": "São Paulo - SP",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "58699821000148",
+    "razaoSocial": "GLENDA CRISTINA CLEMENTE",
+    "email": "realnovaprovisorio@gmail.com",
+    "telefones": "(11)96933-6044",
+    "cidades": "Cajamar - SP",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "00414527000162",
+    "razaoSocial": "GM EQUIPAMENTOS PARA ESCRITORIO LTDA / GILMOVEIS",
+    "email": "gilmoveis-es@hotmail.com",
+    "telefones": "(27)99824-7732",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "33041260065290",
+    "razaoSocial": "GRUPO CASAS BAHIA S.A.",
+    "email": "setorfiscal.csc@viavarejo.com.br",
+    "telefones": "(27)91111-1111",
+    "cidades": "São Paulo - SP",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "14690436000164",
+    "razaoSocial": "HC REPRESENTACOES E COMERCIO EXTERIOR LTDA",
+    "email": "hccomercioexterior@hccomex.com.br",
+    "telefones": "(27)99917-4157",
+    "cidades": "Serra - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "32448532000182",
+    "razaoSocial": "HIDRAUVIT-EQUIPAMENTOS INDUSTRIAIS LTDA",
+    "email": "juliana@hidrauvit.com.br",
+    "telefones": "(27)99999-9999",
+    "cidades": "Serra - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "32448532000263",
+    "razaoSocial": "HIDRAUVIT-EQUIPAMENTOS INDUSTRIAIS LTDA",
+    "email": "financeiro@hidrauvit.com.br",
+    "telefones": "(27)99999-9999",
+    "cidades": "Três Lagoas - MS",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "52740458000180",
+    "razaoSocial": "HOPE COMERCIO EXTERIOR LTDA / HOPE TRADE",
+    "email": "importacao@consulplancontabil.com.br",
+    "telefones": "(27)99806-9606",
+    "cidades": "Maceió - AL",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "28420875000161",
+    "razaoSocial": "HOSPITAL DE OLHOS DE VITORIA LTDA / HOSPITAL DE OLHOS DE VITORIA",
+    "email": "financeiro@hovitoria.com.br",
+    "telefones": "(27)99311-5382",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "03233045000102",
+    "razaoSocial": "HOSPITAL UNIGASTRO PARA LTDA / UNIGASTRO PARA",
+    "email": "adm01@unigastropara.com.br",
+    "telefones": "(91)98415-3380",
+    "cidades": "Belém - PA",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "02860191000197",
+    "razaoSocial": "HOUSE CONFECCOES LTDA / DSP - HOUSE CONFECCOES LTDA - CONTRATO",
+    "email": "financeiro.lsp20@gmail.com",
+    "telefones": "(27)99254-4889",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "09243053000108",
+    "razaoSocial": "HSE ENGENHARIA DE SOFTWARE E CONSULTORIA LTDA / HSE",
+    "email": "comercial@hsesistemas.com.br",
+    "telefones": "(27)99726-7060",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "07933551000157",
+    "razaoSocial": "I.L. BARRETO REPRESENTACOES LTDA",
+    "email": "agenciavipmundi@gmail.com",
+    "telefones": "(27)3267-1140",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "17198808000128",
+    "razaoSocial": "IMOBILIARIA SPALENZA LTDA / IMOBILIARIA SPALENZA",
+    "email": "adrianabarbosaspalenza@gmail.com",
+    "telefones": "(27)99968-9788",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "05034787000126",
+    "razaoSocial": "INDUSTRIA METALURGICA SETE DE SETEMBRO LTDA / I7",
+    "email": "contato@cpaprimecontabilidade.com.br",
+    "telefones": "(11)99999-9999",
+    "cidades": "Mauá - SP",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "01771935000215",
+    "razaoSocial": "INGRAM MICRO BRASIL LTDA",
+    "email": "fiscal@ingrammicro.com.br",
+    "telefones": "(11)2078-4200",
+    "cidades": "Barueri - SP",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "01771935001025",
+    "razaoSocial": "INGRAM MICRO BRASIL LTDA",
+    "email": null,
+    "telefones": "1120784415",
+    "cidades": "Serra - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "36309165000197",
+    "razaoSocial": "INSTITUTO AMBIENTAL RELUZ",
+    "email": "renatabomfim2006@gmail.com",
+    "telefones": "(27)99999-9999",
+    "cidades": "Marechal Floriano - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "64441276000198",
+    "razaoSocial": "INSTITUTO DE PLASTICA OCULAR & VISAO LTDA / INSTITUTO DE PLASTICA OCULAR",
+    "email": "consultoriosamyra@hotmail.com",
+    "telefones": "(27)99311-3757",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "42672850000186",
+    "razaoSocial": "INSTITUTO MAE E FILHO LTDA / INSTITUTO MAE E FILHO",
+    "email": "institutomaeefilho@gmail.com",
+    "telefones": "(27)99249-5954",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "07003928000179",
+    "razaoSocial": "INSTITUTO MARCOS DANIEL",
+    "email": "financeiro@institutomarcosdaniel.org.br",
+    "telefones": "(27)99868-9427",
+    "cidades": "Serra - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "04892217000104",
+    "razaoSocial": "INTERATIVA ASSESSORIA CONTABIL SOCIEDADE UNIPESSOAL LTDA",
+    "email": "interativacontabil-es@veloxmail.com.br",
+    "telefones": "(27)99972-4004",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "41906220000166",
+    "razaoSocial": "JAIRO DE SOUSA BRAGA 79845282768",
+    "email": "jairorepresentacoes@gmail.com",
+    "telefones": "(27)99999-9999",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "44489810000129",
+    "razaoSocial": "JOAO PEDRO BRINCK SABEDRA LTDA",
+    "email": "jpbrinck77@gmail.com",
+    "telefones": "(51)99999-9999",
+    "cidades": "Uruguaiana - RS",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "31550561000198",
+    "razaoSocial": "KAMEL COMERCIO DE ALIMENTOS LTDA / SUPERMERCADO MEGA MIX",
+    "email": "financeiro@grupokamel.com.br",
+    "telefones": "(31)99999-9999",
+    "cidades": "Uberaba - MG",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "28529910000185",
+    "razaoSocial": "KATIA LEAO BORGES DE ALMEIDA SOCIEDADE INDIVIDUAL DE ADVOCACIA",
+    "email": "financeiro@cepra.com.br",
+    "telefones": "(27)99971-4727",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "06066043000156",
+    "razaoSocial": "KILL CENTER COMERCIO DE ARMARINHO LTDA / CASA KILL",
+    "email": "keilakillbatista@gmail.com",
+    "telefones": "(27)98115-9151",
+    "cidades": "Cariacica - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "13008791000148",
+    "razaoSocial": "KROMOS CONEXOES EM TECNOLOGIA LTDA",
+    "email": null,
+    "telefones": "11940077941",
+    "cidades": "São Paulo - SP",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "11402100000160",
+    "razaoSocial": "LABORATORIO DE PATOLOGIA COSTA, NOGUEIRA & TAVORA LTDA. / LABORATORIO ARGOS - ANATOMIA PATOLOGICA",
+    "email": "argoslaboratorio@gmail.com",
+    "telefones": "(73)99999-9999",
+    "cidades": "Fortaleza - CE",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "12543364000105",
+    "razaoSocial": "LB2 INTERATIVA LTDA / LB2 INTERATIVA",
+    "email": "societario@admlog-es.com.br",
+    "telefones": "(27)99839-7007",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "17245302000122",
+    "razaoSocial": "LIVERO CONSTRUTORA E INCORPORADORA LTDA / TERRAVILLA ENGENHARIA LTDA",
+    "email": "engenharia@terravilla.eng.br",
+    "telefones": "(27)99924-7612",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "07002482000168",
+    "razaoSocial": "LOCACOES HIDROVACUO LTDA / HIDROVACUO-CONTRATO",
+    "email": "mirian@hidrovacuo.com.br",
+    "telefones": "(27)3241-5900",
+    "cidades": "Serra - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "15603174000116",
+    "razaoSocial": "LORE COMUNICACAO LTDA / LORE PARCERIAS ESTRATEGICAS EM COMUNICACAO",
+    "email": "ilma@lorecomunicacao.com.br",
+    "telefones": "(27)98161-9899",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "02617509000103",
+    "razaoSocial": "MACHADO ASSESSORIA E CONSULTORIA EMPRESARIAL LTDA",
+    "email": "guilhermeamjr@hotmail.com",
+    "telefones": "(27)98147-1000",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "05753329000147",
+    "razaoSocial": "MAGNAGO & SARMENTO CONTADORES ASSOCIADOS S/S LTDA",
+    "email": "magnagoesarmento@gmail.com",
+    "telefones": "(27)99762-5491",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "05817031000153",
+    "razaoSocial": "MAPA PRESTACAO DE SERVICOS LTDA",
+    "email": "suportemapa@mapacobrancas.com.br",
+    "telefones": "(27)99999-9999",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "11318751000177",
+    "razaoSocial": "MARCELINA ORNELLAS - SERVICOS MEDICOS CARDIOLOGICOS LTDA / MARCELINA / ATRIUM-CONTRATO",
+    "email": "financeiroatrium@yahoo.com",
+    "telefones": "(27)3386-7320",
+    "cidades": "Cariacica - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "03995142000124",
+    "razaoSocial": "MARCHETTI E MARCHETTI TECNOLOGIA S.A. / REVENDA MAIS",
+    "email": "financeiro@revendamais.com.br",
+    "telefones": "(15)99999-9999",
+    "cidades": "Curitiba - PR",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "05363541000106",
+    "razaoSocial": "MARIA APARECIDA ADAMI REBUZZI / AFAGO",
+    "email": "fiscal@afagoshop.com.br",
+    "telefones": "(27)3359-0487",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "15525426000136",
+    "razaoSocial": "MATISA DO BRASIL PROJETOS DE VIA FERREA LTDA / MATISA DO BRASIL",
+    "email": "exch_br_financeiro@matisa.ch",
+    "telefones": "(27)3315-9103",
+    "cidades": "Serra - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "94623741000334",
+    "razaoSocial": "MAZER DISTRIBUIDORA LTDA",
+    "email": null,
+    "telefones": null,
+    "cidades": "Curitiba - PR",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "94623741000172",
+    "razaoSocial": "MAZER DISTRIBUIDORA LTDA / MAZER DISTRIBUIDORA",
+    "email": "fiscal@mazer.com.br",
+    "telefones": "(51)2101-2100",
+    "cidades": "Porto Alegre - RS",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "55493866000173",
+    "razaoSocial": "MENSURA ANALISES LTDA / MENSURA",
+    "email": "caiogamberini@gmail.com",
+    "telefones": "(27)99635-1255",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "44743752000118",
+    "razaoSocial": "MERCADO TUBARAO DE NOVA IGUACU LTDA",
+    "email": "mercadotubaraoni@gmail.com",
+    "telefones": "(21)99999-9999",
+    "cidades": "Nova Iguaçu - RJ",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "04526252000100",
+    "razaoSocial": "MILLENIUM CENTRO DE MEDICINA E CIRURGIA LTDA / MILLENIUM- KLINIKE - HOSPITAL DIA - CONTRATO",
+    "email": "financeiro@milleniumhospitaldia.com.br",
+    "telefones": "(27)99717-7632",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "02808675000197",
+    "razaoSocial": "MIP - REPRESENTACAO COMERCIAL LTDA / MIP REPRESENTAÇÕES",
+    "email": "mipedanrepresentacoes@gmail.com",
+    "telefones": "(27)98145-9601",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "12069529000140",
+    "razaoSocial": "MMV13 SERVICOS EMPRESARIAIS LTDA",
+    "email": "marcelo@mmv13.com.br",
+    "telefones": "(21)95323-9435",
+    "cidades": "Niterói - RJ",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "28133189000100",
+    "razaoSocial": "MOUSSALLEM & FILHOS LTDA / GIRUS MAGAZIN",
+    "email": "girusmagazin_@hotmail.com",
+    "telefones": "(27)99744-1852",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "20424505000190",
+    "razaoSocial": "MPRO ACADEMIA LTDA / MPRO ACADEMIA",
+    "email": "mproacademia@hotmail.com",
+    "telefones": "(27)99897-5108",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "23971024000193",
+    "razaoSocial": "MULTINOX COMERCIO DE PRODUTOS SIDERURGICOS LTDA / MULTINOX",
+    "email": "financeirojm@gmail.com",
+    "telefones": "(31)99999-9999",
+    "cidades": "Betim - MG",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "27150549000119",
+    "razaoSocial": "MUNICIPIO DE CARIACICA / PREFEITURA MUN DE CARIACICA",
+    "email": "contabilidade@cariacica.es.gov.br",
+    "telefones": "(27)3354-5866",
+    "cidades": "Cariacica - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "35625405000108",
+    "razaoSocial": "MUNZER COMERCIO DE PRODUTOS LTDA",
+    "email": null,
+    "telefones": "(27)3225-5540",
+    "cidades": "Itueta - MG",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "21423315000111",
+    "razaoSocial": "NATACAO RACHEL PASSOS LTDA / NATACAO RACHEL PASSOS",
+    "email": "rb.nacimento@terra.com.br",
+    "telefones": "(27)3323-2426",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "18835403000116",
+    "razaoSocial": "NERES INFORMATICA LTDA / NERES INFORMATICA",
+    "email": "eduardo_neres@hotmail.com",
+    "telefones": "(11)99999-9999",
+    "cidades": "São Paulo - SP",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "58532642000111",
+    "razaoSocial": "NOSTRA GESTAO ADMINISTRACAO DE CONDOMINIOS LTDA",
+    "email": "ngestao.condominial@gmail.com",
+    "telefones": "(27)99999-9999",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "34729047000102",
+    "razaoSocial": "NSA DISTRIBUIDORA DE MEDICAMENTOS LTDA / NSA DISTRIBUIDORA DE MEDICAMENTOS EIRELI",
+    "email": "1@gmail.com",
+    "telefones": "(27)3359-4714",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "08887312000170",
+    "razaoSocial": "NUTRI CONSULT - CONSULTORIA EM NUTRICAO E QUALIDADE DE VIDA LTDA / NUTRICONSULT - CONTRATO",
+    "email": "administracao@nutriconsult-es.com.br",
+    "telefones": "(27)3325-6697",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "05041933000140",
+    "razaoSocial": "ODONTO-SCAN CENTRO DE RADIOLOGIA E IMAGENS EM ODONTOLOGIA LTDA / ODONTO-SCAN",
+    "email": "financeiro1@odontoscan.com.br",
+    "telefones": "(27)99225-5216",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "25260195000130",
+    "razaoSocial": "ONE ASSESSORIA EMPRESARIAL LTDA. / ONE INTELIGENCIA TRIBUTARIA",
+    "email": "claudia.tielas@oneconsultoria.net",
+    "telefones": "(11)99999-9999",
+    "cidades": "São Paulo - SP",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "28214207000188",
+    "razaoSocial": "PABLO DELBONI CIRURGIA PLASTICA LTDA",
+    "email": "financeiro.drpablodelboni@gmail.com",
+    "telefones": "(27)2104-1600",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "01978924000120",
+    "razaoSocial": "PAES E CONGELADOS MOXUARA LTDA / PAES CONGELADOS MOXUARA",
+    "email": "jose.paulo@congeladosmoxuara.com.br",
+    "telefones": "(27)99781-8031",
+    "cidades": "Cariacica - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "31675994000170",
+    "razaoSocial": "PARTIDO SOCIALISTA BRASILEIRO-PSB / PSB DIRETORIO REGIONAL EM VITORIA",
+    "email": "psbes40@gmail.com",
+    "telefones": "(27)3322-1005",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "24921030000107",
+    "razaoSocial": "PECLY BARCELOS SOCIEDADE INDIVIDUAL DE ADVOCACIA",
+    "email": "ladyane@pecly.com.br",
+    "telefones": "(27)98189-1717",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "05561142000141",
+    "razaoSocial": "PERSPECTIVA ADM E CORRETORA DE SEGUROS E CONSULTORIA LTDA / PERSPECTIVA ADMINISTRADORA E CORRETORA DE SEGUROS LTDA",
+    "email": "financeiro@perspectivaseguros.com.br",
+    "telefones": "(27)3025-6600",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "14934956000175",
+    "razaoSocial": "PET CORDIS CARDIOLOGIA VETERINARIA LTDA / PET CORDIS CARDIOLOGIA VETERINARIA",
+    "email": "spavet@hotmail.com",
+    "telefones": "(27)3223-4988",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "32086946000109",
+    "razaoSocial": "POLIMEDVIX SERVICOS MEDICOS LTDA / POLIMEDVIX",
+    "email": "administracao@polimedvix.com.br",
+    "telefones": "(27)3376-6331",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "23313238000172",
+    "razaoSocial": "PORTO SEGURO TEXTIL COMERCIO DE CONFECCOES LTDA / LOJAS PAGUE MENOS",
+    "email": "fiscal@caldeia.com.br",
+    "telefones": "(73)3288-9556",
+    "cidades": "Porto Seguro - BA",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "41219372000190",
+    "razaoSocial": "PORTO VITORIA CHURRASCARIA LTDA.",
+    "email": "portosauevitoria@gmail.com",
+    "telefones": "(27)99839-4267",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "10332340000173",
+    "razaoSocial": "PORTUGAL DISTRIBUIDORA DE MEDICAMENTOS E PERFUMARIA LTDA / FARMACIA RIOFARMA",
+    "email": "mariportugal1985@gmail.com",
+    "telefones": "(27)3316-3000",
+    "cidades": "Cariacica - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "34387806000104",
+    "razaoSocial": "POSTO SATURNINO RANGEL MAURO LTDA / POSTO SATURNINO",
+    "email": "leoanicio@hotmail.com",
+    "telefones": "(27)3229-3211",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "32469660000293",
+    "razaoSocial": "PRAIA MASSAS LTDA",
+    "email": null,
+    "telefones": "(27)99751-1808",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "08084233000121",
+    "razaoSocial": "PROJECAO ASSESSORIA CONTABIL LTDA / PROJECAO ASSESSORIA CONTABIL",
+    "email": "projecaoassessoria@yahoo.com.br",
+    "telefones": "(27)99946-6092",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "08036041000140",
+    "razaoSocial": "QUANTA ENGENHARIA LTDA",
+    "email": "operacional@quantaengenharia.com.br",
+    "telefones": "(61)99999-9999",
+    "cidades": "Belém - PA",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "02174925000184",
+    "razaoSocial": "QUEIROZ AGRO LTDA / QUEIROZ AGRO",
+    "email": "contabil1@grupoqueiroz.com.br",
+    "telefones": "(65)3027-6550",
+    "cidades": "Cuiabá - MT",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "08342777000146",
+    "razaoSocial": "R A REBUZZI / AFAGO",
+    "email": "ruixavier@uol.com.br",
+    "telefones": "(27)3336-4950",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "02834047000186",
+    "razaoSocial": "R.A. DROGARIAS LTDA / FARMAIS VENCESLAU",
+    "email": "departamentolegalfarma@outlook.com",
+    "telefones": "(21)2635-4903",
+    "cidades": "Presidente Venceslau - SP",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "02264706000196",
+    "razaoSocial": "RAIZES LAMINADOS DE MADEIRA LTDA",
+    "email": "fiscal.raizes@hotmail.com",
+    "telefones": "(21)4322-90482",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "05600403000195",
+    "razaoSocial": "RAPABE CONFECCOES LTDA / AFAGO",
+    "email": "rx33@hotmail.com",
+    "telefones": "(27)3326-2206",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "48875550000180",
+    "razaoSocial": "RBB CONSULTIVA CONTABILIDADE E AUDITORIA LTDA",
+    "email": "administrativo@russellbedfordes.com.br",
+    "telefones": "(27)99989-8184",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "22289202000138",
+    "razaoSocial": "RENATA DA SILVA MENDES / INFOELETRO INFORMATICA E ELETRONICA",
+    "email": "teclemaiseletronica@gmail.com",
+    "telefones": "(14)99999-9999",
+    "cidades": "Criciúma - SC",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "23073876000163",
+    "razaoSocial": "RESIDENCE GESTAO E AVALIACAO IMOBILIARIA LTDA / RESIDENCE GESTAO IMOBILIARIA",
+    "email": "sscontabil.ney@hotmail.com",
+    "telefones": "(27)93389-4380",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "07994467000143",
+    "razaoSocial": "ROMANO DONADEL ADVOGADOS ASSOCIADOS",
+    "email": "contato@romanodonadel.com.br",
+    "telefones": "(34)99999-9999",
+    "cidades": "Uberlândia - MG",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "52153285000102",
+    "razaoSocial": "ROQUE IMOVEIS LTDA.",
+    "email": "gerencia@roqueimoveis.com.br",
+    "telefones": "(11)99999-9999",
+    "cidades": "Limeira - SP",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "39280680000180",
+    "razaoSocial": "RPF AUTO PECAS LTDA / R.P.F.",
+    "email": "contato.rpf@hotmail.com",
+    "telefones": "(27)99292-5294",
+    "cidades": "Serra - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "17010700000160",
+    "razaoSocial": "SALVADOR ASSESSORIA E RECUPERACAO DE CREDITO LTDA / SALVADOR RECUPERAÇÃO DE CREDITO",
+    "email": "alice@salvadorrecuperacao.com.br",
+    "telefones": "(27)99524-3518",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "09651478000156",
+    "razaoSocial": "SARLO CONSULTORIA DE IMOVEIS LTDA",
+    "email": "admfinanceiro@sarloimoveis.com.br",
+    "telefones": "(27)3026-0606",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "07760258000135",
+    "razaoSocial": "SECURISOFT DO BRASIL LTDA",
+    "email": "martini@martini-contabilistas.com.br",
+    "telefones": "(11)3018-1855",
+    "cidades": "Barueri - SP",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "11175625000100",
+    "razaoSocial": "SENIOR CONTABILIDADE E CONSULTORIA LTDA",
+    "email": "contato@contabilidadesenior.com.br",
+    "telefones": "(27)3026-7871",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "03810810000878",
+    "razaoSocial": "SERVICO NACIONAL DE APRENDIZAGEM INDUSTRIAL / CENTRO DE EDUCACAO PROFISSIONAL HELCIO REZENDE DIAS",
+    "email": "tributos@findes.org.br",
+    "telefones": "(27)3334-5792",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "03810810000100",
+    "razaoSocial": "SERVICO NACIONAL DE APRENDIZAGEM INDUSTRIAL / FINDES - SERVICO NACIONAL DE APRENDIZAGEM INDUSTRIAL",
+    "email": "caroline.freitas@findes.org.br",
+    "telefones": "(31)99950-4900",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "02820683000159",
+    "razaoSocial": "SEVENTUR VIAGENS E TURISMO / SEVEN TOUR VIAGENS E TURISMO",
+    "email": "marcia@seventurviagens.com",
+    "telefones": "(27)99949-3456",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "02206155000104",
+    "razaoSocial": "SHOPPING JURIDICO LTDA",
+    "email": "administrativo@shopjuridico.com.br",
+    "telefones": "(27)99874-7031",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "08298936000152",
+    "razaoSocial": "SINERGIA ATACADISTA LTDA / SINERGIA",
+    "email": "sinergia@sngvv.com.br",
+    "telefones": "(27)3349-7947",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "28165272000160",
+    "razaoSocial": "SOCIEDADE DE ASSISTENCIA A VELHICE DESAMPARADA / SOCIEDADE DE ASSIST A VELHICE DESAMPARADA / CONTRATO",
+    "email": "presidencia@asilodevitoria.org.br",
+    "telefones": "(27)99989-0350",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "54468655000118",
+    "razaoSocial": "SOLLAR ITAPARICA EMPREENDIMENTOS IMOBILIARIOS SPE LTDA / SOLLAR ITAPARICA RESIDENCE",
+    "email": "astralengenharia@gmail.com",
+    "telefones": "(27)99722-7007",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "20635800000196",
+    "razaoSocial": "SPE FACILITA BENTO FERREIRA EMPREENDIMENTO IMOBILIARIO LTDA",
+    "email": "financeiro@grupomarco.com.br",
+    "telefones": "(27)99948-3472",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "29751514000160",
+    "razaoSocial": "SPORTI - TECNOLOGIA E GESTAO NO ESPORTE LTDA. / SPORTI",
+    "email": "contato@sporti.com.br",
+    "telefones": "(41)98875-9340",
+    "cidades": "Belo Horizonte - MG",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "49758537000104",
+    "razaoSocial": "TASK ESTUDIO CRIATIVO LTDA",
+    "email": "leandrobomfimlb2@gmail.com",
+    "telefones": "(27)99839-7007",
+    "cidades": "Mariana - MG",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "71680193000540",
+    "razaoSocial": "TELCABOS TELECOMUNICACOES E INFORMATICA LTDA",
+    "email": "mara.paiva@telcabos.com.br",
+    "telefones": "(27)98158-0013",
+    "cidades": "Serra - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "07985533000119",
+    "razaoSocial": "TEXTIL WM CONFECCOES LTDA / CHARBEL",
+    "email": "escritorio@textilwm.com.br",
+    "telefones": "(11)99999-9999",
+    "cidades": "Guareí - SP",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "28801725000106",
+    "razaoSocial": "TIAGO SIMONI NACIF SOCIEDADE INDIVIDUAL DE ADVOCACIA",
+    "email": "tiago.simoni@terra.com.br",
+    "telefones": "(27)99999-9999",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "88670526000120",
+    "razaoSocial": "TRANSPORTES RODOSUPER LTDA.",
+    "email": "juridico@rodosuper.com.br",
+    "telefones": "(54)99999-9999",
+    "cidades": "Bento Gonçalves - RS",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "20127611000102",
+    "razaoSocial": "UNIO GROUP GESTORA BENEFICIOS LTDA / VIX PRIME SOLUCOES LTDA",
+    "email": "financeiro@uniogroup.com.br",
+    "telefones": "(27)3215-0000",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "23725062000166",
+    "razaoSocial": "UNIODONTO FORTALEZA COOPERATIVA ODONTOLOGICA LTDA",
+    "email": "contabil@uniodonto-ce.com.br",
+    "telefones": "(75)99999-9999",
+    "cidades": "Fortaleza - CE",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "23864942000113",
+    "razaoSocial": "UNIQUE DISTRIBUIDORA DE MEDICAMENTOS LTDA / UNIQUE DISTRIBUIDORA DE MEDICAMENTOS EIRELI",
+    "email": "adm@uniquemedicamentos.com.br",
+    "telefones": "(27)3020-9768",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "44861769000250",
+    "razaoSocial": "VIBOWLS COMERCIO DE ALIMENTOS E DELIVERY LTDA",
+    "email": "vibowlsvix@gmail.com",
+    "telefones": "(27)99981-6058",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "34342094000107",
+    "razaoSocial": "VIDA HOME CARE SERVICOS DE SAUDE LTDA / VIDA HOME CARE",
+    "email": "financeiro@vidahomecarevix.com.br",
+    "telefones": "(27)99259-7343",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "05418260000103",
+    "razaoSocial": "VILA ERVAS E ALIMENTOS COMERCIAL LTDA",
+    "email": "nfe@vilaervas.com.br",
+    "telefones": "(27)98867-8876",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "09503828000137",
+    "razaoSocial": "VILA SEG ADMINISTRADORA & CORRETORA DE SEGUROS LTDA / VILA SEG CORRETORA",
+    "email": "vilaseg@vilasegcorretora.com.br",
+    "telefones": "(27)3055-2255",
+    "cidades": "Vila Velha - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "21614505000116",
+    "razaoSocial": "VTN MEDICINA E SEGURANCA DO TRABALHO LTDA / MEDSEG",
+    "email": null,
+    "telefones": "(27)3064-1481",
+    "cidades": "Serra - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "08911585001002",
+    "razaoSocial": "WYNTECH SERVICOS EM TECNOLOGIA DA INFORMACAO LTDA",
+    "email": "fabriseder@gmail.com",
+    "telefones": "(27)98114-0520",
+    "cidades": "Rio de Janeiro - RJ",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "27243377000128",
+    "razaoSocial": "ZANOTTI & MARQUES AUDITORES INDEPENDENTES / BAKER TILLY BRASIL-ES-CONTRATO",
+    "email": "financeiro.aud.cons@gmail.com",
+    "telefones": "(27)99731-0091",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "09687728000108",
+    "razaoSocial": "ZORZAL ASSESSORIA TURISMO LTDA / ZORZAL ASSESSORIA",
+    "email": "financeiro@zorzalassessoria.com.br",
+    "telefones": "(27)3235-9902",
+    "cidades": "Vitória - ES",
+    "status": "ativo"
+  },
+  {
+    "cnpj": "29247011000152",
+    "razaoSocial": "ZUNIK COMERCIO INTERNACIONAL LTDA",
+    "email": "contasapagar@zunik.com.br",
+    "telefones": "(27)2123-0000",
+    "cidades": "Serra - ES",
+    "status": "ativo"
+  }
+]

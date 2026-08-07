@@ -40,6 +40,21 @@ class ParceiroService {
     };
   }
 
+  async atualizar(cnpj, { razaoSocial, email, telefones, cidades, status }) {
+    const cnpjLimpo = limparCnpj(cnpj);
+    const parceiro = await parceiroRepository.findByCnpj(cnpjLimpo);
+    if (!parceiro) throw new AppError("Parceiro nao encontrado", 404, "NOT_FOUND");
+
+    const atualizado = await parceiroRepository.upsert(cnpjLimpo, {
+      razaoSocial: razaoSocial.trim(),
+      email: email ? email.trim() : null,
+      telefones: telefones ? telefones.trim() : null,
+      cidades: cidades ? cidades.trim() : null,
+      ...(status ? { status } : {}),
+    });
+    return mapParceiro(atualizado);
+  }
+
   async alternarStatus(cnpj) {
     const cnpjLimpo = limparCnpj(cnpj);
     const parceiro = await parceiroRepository.findByCnpj(cnpjLimpo);

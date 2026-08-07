@@ -131,6 +131,7 @@ export const ContatosAPI = {
 export const ParceirosAPI = {
   listar: (q = '') => request(`/parceiros${q ? `?q=${encodeURIComponent(q)}` : ''}`),
   criar: (dados) => request('/parceiros', { method: 'POST', body: JSON.stringify(dados) }),
+  atualizar: (cnpj, dados) => request(`/parceiros/${cnpj}`, { method: 'PUT', body: JSON.stringify(dados) }),
   alternarStatus: (cnpj) => request(`/parceiros/${cnpj}/status`, { method: 'PATCH' }),
   remover: (cnpj) => request(`/parceiros/${cnpj}`, { method: 'DELETE' }),
 };
@@ -166,6 +167,8 @@ export const WhatsAppAPI = {
   desconectar: (instance) => request('/whatsapp/desconectar', { method: 'POST', body: JSON.stringify({ instance }) }),
   reiniciar: (instance) => request('/whatsapp/reiniciar', { method: 'POST', body: JSON.stringify({ instance }) }),
   excluir: (instance) => request('/whatsapp/instancia', { method: 'DELETE', body: JSON.stringify({ instance }) }),
+  // Envio avulso (um numero) usado pela tela de Envio em Massa, um a um.
+  enviar: (telefone, texto, instance) => request('/whatsapp/enviar', { method: 'POST', body: JSON.stringify({ telefone, texto, instance }) }),
 };
 
 // ── n8n API ──

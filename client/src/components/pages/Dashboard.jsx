@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useCallback } from 'react';
 import {
   Users, ShieldCheck, Clock, TrendingUp,
   Download, ArrowRight, Activity, CheckCircle2, Inbox,
-  BarChart3, FileText, Loader2, Star, MessageCircle
+  BarChart3, FileText, Loader2, Star, MessageCircle, X
 } from 'lucide-react';
 // So o Doughnut sobrou nesta tela: ele precisa de ArcElement. Escalas e
 // elementos de linha/barra ficaram registrados sem grafico que os usasse.
@@ -104,9 +104,17 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
   const [abaAtiva, setAbaAtiva] = useState('geral');
   const graficosRef = useRef(null);
 
+  // Filtros da aba de avaliacoes: nota (0 = todas), texto e setor.
+  const [filtroNota, setFiltroNota] = useState(0);
+  const [buscaAval, setBuscaAval] = useState('');
+  const [filtroSetor, setFiltroSetor] = useState('');
+
   // ---------- Avaliações ----------
   const avaliacoes = useMemo(() => {
-    const avaliadas = conversas.filter(c => c.avaliacao != null && c.avaliacao > 0);
+    const avaliadas = conversas
+      .filter(c => c.avaliacao != null && c.avaliacao > 0)
+      // Mais recentes primeiro quando houver data de fechamento.
+      .sort((a, b) => new Date(b.fechadoEm || 0) - new Date(a.fechadoEm || 0));
     const total = avaliadas.length;
     const soma = avaliadas.reduce((s, c) => s + c.avaliacao, 0);
     const media = total > 0 ? (soma / total) : 0;
@@ -115,8 +123,38 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
       qtd: avaliadas.filter(c => c.avaliacao === n).length
     }));
     const maxQtd = Math.max(1, ...distribuicao.map(d => d.qtd));
-    return { avaliadas, total, media, distribuicao, maxQtd };
+    const promotores = distribuicao.filter(d => d.nota >= 4).reduce((s, d) => s + d.qtd, 0);
+    const detratores = distribuicao.filter(d => d.nota <= 2).reduce((s, d) => s + d.qtd, 0);
+
+    // Media por setor: onde a satisfacao esta boa e onde precisa de atencao.
+    const mapaSetor = {};
+    for (const c of avaliadas) {
+      const setor = c.setor || 'Geral';
+      if (!mapaSetor[setor]) mapaSetor[setor] = { setor, soma: 0, qtd: 0 };
+      mapaSetor[setor].soma += c.avaliacao;
+      mapaSetor[setor].qtd += 1;
+    }
+    const porSetor = Object.values(mapaSetor)
+      .map(s => ({ setor: s.setor, qtd: s.qtd, media: s.soma / s.qtd }))
+      .sort((a, b) => b.media - a.media);
+    const setores = porSetor.map(s => s.setor);
+
+    return { avaliadas, total, media, distribuicao, maxQtd, promotores, detratores, porSetor, setores };
   }, [conversas]);
+
+  // Aplica os filtros da aba sobre a lista de avaliacoes.
+  const feedbacksFiltrados = useMemo(() => {
+    const termo = buscaAval.trim().toLowerCase();
+    return avaliacoes.avaliadas.filter(c => {
+      if (filtroNota && c.avaliacao !== filtroNota) return false;
+      if (filtroSetor && (c.setor || 'Geral') !== filtroSetor) return false;
+      if (termo) {
+        const alvo = `${c.cliente || ''} ${c.telefone || ''} ${c.feedback || ''}`.toLowerCase();
+        if (!alvo.includes(termo)) return false;
+      }
+      return true;
+    });
+  }, [avaliacoes, filtroNota, filtroSetor, buscaAval]);
 
   const exportarPdf = useCallback(async () => {
     setGerandoPdf(true);
@@ -145,6 +183,27 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
       setGerandoPdf(false);
     }
   }, [metricas]);
+
+  const exportarAvaliacoesCsv = useCallback(() => {
+    const linhas = [
+      ['Cliente', 'Telefone', 'Nota', 'Setor', 'Comentário'],
+      ...feedbacksFiltrados.map(c => [
+        c.cliente || '',
+        c.telefone || '',
+        c.avaliacao,
+        c.setor || 'Geral',
+        (c.feedback || '').replace(/[\r\n;]+/g, ' '),
+      ]),
+    ];
+    const csv = linhas.map(r => r.join(';')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `avaliacoes-${Date.now()}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }, [feedbacksFiltrados]);
 
   const doughnutData = useMemo(() => {
     // Sem `|| 1`: um zero real precisa aparecer como zero. O fallback antigo
@@ -214,6 +273,12 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
               {gerandoPdf ? 'Gerando...' : 'Exportar Relatório'}
             </button>
           </div>
+        )}
+        {abaAtiva === 'avaliacoes' && avaliacoes.total > 0 && (
+          <button onClick={exportarAvaliacoesCsv}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-300 text-xs font-semibold border border-yellow-500/30 transition-all shrink-0">
+            <Download size={14} /> Exportar Avaliações
+          </button>
         )}
       </div>
 
@@ -334,7 +399,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
       {abaAtiva === 'avaliacoes' && (
         <>
           {/* Cards de resumo */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="glass-panel rounded-2xl p-6 border border-linha text-center">
               <div className="flex items-center justify-center gap-1 mb-2">
                 {renderEstrelas(Math.round(avaliacoes.media))}
@@ -350,24 +415,64 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
             </div>
             <div className="glass-panel rounded-2xl p-6 border border-linha text-center">
               <div className="text-3xl font-bold text-ativo-400 font-display">
-                {avaliacoes.total > 0 ? Math.round((avaliacoes.distribuicao.filter(d => d.nota >= 4).reduce((s, d) => s + d.qtd, 0) / avaliacoes.total) * 100) : 0}%
+                {avaliacoes.total > 0 ? Math.round((avaliacoes.promotores / avaliacoes.total) * 100) : 0}%
               </div>
               <div className="text-xs text-slate-400 mt-1">Satisfação (4-5 ⭐)</div>
             </div>
+            <div className="glass-panel rounded-2xl p-6 border border-linha text-center">
+              <div className="text-3xl font-bold text-falha-400 font-display">{avaliacoes.detratores}</div>
+              <div className="text-xs text-slate-400 mt-1">Precisam de atenção (1-2 ⭐)</div>
+            </div>
           </div>
 
-          {/* Distribuição por nota */}
+          {/* Média por setor */}
+          {avaliacoes.porSetor.length > 0 && (
+            <div className="glass-panel rounded-2xl p-5 border border-linha">
+              <h3 className="text-sm font-bold text-white font-display mb-4 flex items-center gap-2">
+                <Users size={15} className="text-acao-200" /> Média por Setor
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {avaliacoes.porSetor.map(s => (
+                  <button
+                    key={s.setor}
+                    onClick={() => setFiltroSetor(filtroSetor === s.setor ? '' : s.setor)}
+                    className={`text-left rounded-xl p-3 border transition-all ${
+                      filtroSetor === s.setor
+                        ? 'bg-acao/10 border-acao/40'
+                        : 'bg-grafite-600/40 border-linha hover:border-slate-500'
+                    }`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-white truncate">{s.setor}</span>
+                      <span className="flex items-center gap-1 text-xs font-bold text-yellow-300 shrink-0">
+                        {s.media.toFixed(1)} <Star size={11} className="fill-yellow-400 text-yellow-400" />
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-1">{s.qtd} avaliação(ões)</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Distribuição por nota (clicável: filtra os feedbacks) */}
           <div className="glass-panel rounded-2xl p-5 border border-linha">
-            <h3 className="text-sm font-bold text-white font-display mb-5 flex items-center gap-2">
+            <h3 className="text-sm font-bold text-white font-display mb-1 flex items-center gap-2">
               <BarChart3 size={15} className="text-yellow-400" /> Distribuição por Nota
             </h3>
-            <div className="space-y-3">
+            <p className="text-[11px] text-slate-500 mb-4">Clique numa nota para filtrar os feedbacks abaixo.</p>
+            <div className="space-y-2">
               {[5, 4, 3, 2, 1].map(nota => {
                 const item = avaliacoes.distribuicao.find(d => d.nota === nota);
                 const pct = avaliacoes.total > 0 ? (item.qtd / avaliacoes.total) * 100 : 0;
+                const ativo = filtroNota === nota;
                 return (
-                  <div key={nota} className="flex items-center gap-3">
-                    <div className="flex items-center gap-1 w-20 shrink-0 justify-end">
+                  <button
+                    key={nota}
+                    onClick={() => setFiltroNota(ativo ? 0 : nota)}
+                    className={`w-full flex items-center gap-3 rounded-lg px-2 py-1.5 transition-all border ${
+                      ativo ? 'bg-yellow-500/10 border-yellow-500/40' : 'border-transparent hover:bg-grafite-600/40'
+                    }`}>
+                    <div className="flex items-center gap-1 w-16 shrink-0 justify-end">
                       <span className="text-xs font-semibold text-white">{nota}</span>
                       <Star size={12} className="text-yellow-400 fill-yellow-400" />
                     </div>
@@ -383,7 +488,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                     <span className="text-xs text-slate-400 w-16 text-right font-mono">
                       {item.qtd} ({pct.toFixed(0)}%)
                     </span>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -391,14 +496,61 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
 
           {/* Tabela de feedbacks */}
           <div className="glass-panel rounded-2xl p-5 border border-linha">
-            <h3 className="text-sm font-bold text-white font-display mb-4 flex items-center gap-2">
-              <MessageCircle size={15} className="text-acao-200" /> Feedbacks Recentes
-            </h3>
-            {avaliacoes.avaliadas.length === 0 ? (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <h3 className="text-sm font-bold text-white font-display flex items-center gap-2">
+                <MessageCircle size={15} className="text-acao-200" /> Feedbacks
+                <span className="text-slate-500 font-normal">({feedbacksFiltrados.length})</span>
+              </h3>
+              {avaliacoes.total > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    value={buscaAval}
+                    onChange={e => setBuscaAval(e.target.value)}
+                    placeholder="Buscar cliente, telefone ou comentário..."
+                    className="bg-grafite-700 border border-linha rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 w-full sm:w-64"
+                  />
+                  <select
+                    value={filtroSetor}
+                    onChange={e => setFiltroSetor(e.target.value)}
+                    className="bg-grafite-700 border border-linha rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-acao/50">
+                    <option value="">Todos os setores</option>
+                    {avaliacoes.setores.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {(filtroNota > 0 || filtroSetor || buscaAval) && (
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                {filtroNota > 0 && (
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-yellow-500/15 text-yellow-300 border border-yellow-500/30">
+                    Nota {filtroNota} <Star size={9} className="fill-yellow-400 text-yellow-400" />
+                    <button onClick={() => setFiltroNota(0)} className="hover:text-white"><X size={10} /></button>
+                  </span>
+                )}
+                {filtroSetor && (
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/15 text-blue-400 border border-blue-500/30">
+                    {filtroSetor}
+                    <button onClick={() => setFiltroSetor('')} className="hover:text-white"><X size={10} /></button>
+                  </span>
+                )}
+                <button
+                  onClick={() => { setFiltroNota(0); setFiltroSetor(''); setBuscaAval(''); }}
+                  className="text-[10px] text-slate-400 hover:text-white underline underline-offset-2">
+                  limpar filtros
+                </button>
+              </div>
+            )}
+
+            {avaliacoes.total === 0 ? (
               <div className="text-center py-10">
                 <Star size={32} className="mx-auto text-slate-600 mb-3" />
                 <p className="text-sm text-slate-400">Nenhuma avaliação recebida ainda.</p>
                 <p className="text-xs text-slate-500 mt-1">As avaliações aparecerão aqui quando os clientes avaliarem os atendimentos.</p>
+              </div>
+            ) : feedbacksFiltrados.length === 0 ? (
+              <div className="text-center py-10 text-sm text-slate-400">
+                Nenhuma avaliação para os filtros selecionados.
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -413,8 +565,10 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                     </tr>
                   </thead>
                   <tbody>
-                    {avaliacoes.avaliadas.slice(0, 50).map(c => (
-                      <tr key={c.id} className="border-b border-linha/40 hover:bg-grafite-600/40 transition-colors">
+                    {feedbacksFiltrados.slice(0, 100).map(c => (
+                      <tr key={c.id} className={`border-b border-linha/40 hover:bg-grafite-600/40 transition-colors ${
+                        c.avaliacao <= 2 ? 'bg-falha/5' : ''
+                      }`}>
                         <td className="py-2.5 px-3 text-white font-semibold">{c.cliente}</td>
                         <td className="py-2.5 px-3 text-slate-400 font-mono">{c.telefone || '-'}</td>
                         <td className="py-2.5 px-3">
@@ -427,7 +581,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                             {c.setor || 'Geral'}
                           </span>
                         </td>
-                        <td className="py-2.5 px-3 text-slate-300 max-w-xs truncate">{c.feedback || '-'}</td>
+                        <td className="py-2.5 px-3 text-slate-300 max-w-xs truncate" title={c.feedback || ''}>{c.feedback || '-'}</td>
                       </tr>
                     ))}
                   </tbody>

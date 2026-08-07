@@ -60,6 +60,18 @@ adminRouter.get("/status", (req, res, next) =>
   whatsappController.status(req, res).catch(next)
 );
 
+/**
+ * @openapi
+ * /api/whatsapp/enviar:
+ *   post:
+ *     tags: [WhatsApp]
+ *     security: [{ bearerAuth: [] }]
+ *     summary: Envia uma mensagem de texto a um numero (usado pelo Envio em Massa)
+ */
+adminRouter.post("/enviar", (req, res, next) =>
+  whatsappController.enviar(req, res).catch(next)
+);
+
 adminRouter.post("/conectar", (req, res, next) =>
   whatsappController.conectar(req, res).catch(next)
 );

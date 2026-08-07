@@ -54,6 +54,19 @@ class WhatsAppController {
       .then((data) => success(res, data));
   }
 
+  // Envio avulso a partir do painel (JWT), reaproveitando o mesmo caminho do
+  // /responder: manda pelo WhatsApp e registra na conversa se ela existir. E o
+  // que a tela de Envio em Massa chama, um destinatario por vez.
+  enviar(req, res) {
+    return whatsappService
+      .responderCliente({
+        telefone: req.body?.telefone,
+        texto: req.body?.texto,
+        instanceName: req.body?.instance,
+      })
+      .then((data) => success(res, data));
+  }
+
   criarInstancia(req, res) {
     return whatsappService
       .criarInstancia({
