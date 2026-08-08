@@ -12,7 +12,7 @@
  * pelo servidor a cada requisicao autenticada.
  */
 import { useState, useEffect } from 'react';
-import { Users, Circle, ShieldCheck, CheckCircle2, XCircle, KeyRound, Loader2, X, Clock } from 'lucide-react';
+import { Users, Circle, ShieldCheck, CheckCircle2, XCircle, KeyRound, Loader2, X, Clock, Trash2 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { EquipeAPI } from '../services/api';
@@ -110,6 +110,25 @@ export default function EquipePage() {
     try {
       await EquipeAPI.alterarCargo(id, novoCargo);
       if (recarregarEquipe) await recarregarEquipe();
+    } catch (e) {
+      setErro(e.message);
+    } finally {
+      setLoadingId(null);
+    }
+  }
+
+  async function excluirConta(membro) {
+    if (!window.confirm(
+      `Excluir definitivamente a conta de ${membro.nome}? Esta ação não pode ser desfeita. ` +
+      `Os atendimentos que essa pessoa fez continuam registrados, mas ela perde o acesso.`
+    )) return;
+    setLoadingId(membro.id);
+    setErro('');
+    setOkMsg('');
+    try {
+      await EquipeAPI.excluir(membro.id);
+      if (recarregarEquipe) await recarregarEquipe();
+      setOkMsg(`Conta de ${membro.nome} excluída.`);
     } catch (e) {
       setErro(e.message);
     } finally {
@@ -248,6 +267,15 @@ export default function EquipePage() {
                     className="px-2.5 py-1.5 rounded-xl bg-grafite-700 hover:bg-grafite-600 text-texto-suave hover:text-white border border-linha text-[11px] font-semibold flex items-center gap-1 transition-all"
                   >
                     <KeyRound size={13} /> Senha
+                  </button>
+
+                  <button
+                    disabled={loadingId === m.id}
+                    onClick={() => excluirConta(m)}
+                    title="Excluir conta"
+                    className="px-2.5 py-1.5 rounded-xl bg-falha/15 hover:bg-falha/25 text-falha-400 border border-falha/30 text-[11px] font-semibold flex items-center gap-1 transition-all"
+                  >
+                    <Trash2 size={13} /> Excluir
                   </button>
                 </div>
               )}

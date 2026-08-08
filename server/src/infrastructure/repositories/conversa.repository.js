@@ -112,11 +112,19 @@ class ConversaRepository {
     return prisma.mensagem.findUnique({ where: { id } });
   }
 
+  atualizarMetadata(id, metadata) {
+    return prisma.mensagem.update({ where: { id }, data: { metadata } });
+  }
+
   editarMensagem(id, texto) {
     return prisma.mensagem.update({
       where: { id },
       data: { texto, editadaEm: new Date() },
     });
+  }
+
+  removerMensagem(id) {
+    return prisma.mensagem.delete({ where: { id } });
   }
 
   zerarNaoLidas(id) {

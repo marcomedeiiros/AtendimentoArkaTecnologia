@@ -36,6 +36,18 @@ class ConversaController {
     return conversaService.enviarMidia(req.params.id, req.body).then((data) => success(res, data));
   }
 
+  transcreverAudio(req, res) {
+    return conversaService
+      .transcreverAudio(req.params.mensagemId)
+      .then((data) => success(res, data));
+  }
+
+  apagarMensagem(req, res) {
+    return conversaService
+      .apagarMensagem(req.params.mensagemId)
+      .then((data) => success(res, data));
+  }
+
   solicitarCnpj(req, res) {
     return conversaService.solicitarCnpj(req.params.id).then((data) => success(res, data));
   }

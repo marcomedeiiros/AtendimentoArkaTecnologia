@@ -185,6 +185,14 @@ class EvolutionApiClient {
     });
   }
 
+  // Apaga a mensagem PARA TODOS (o "apagar para todos" do WhatsApp). Vale apenas
+  // para mensagens que a instancia enviou (fromMe: true) -- o WhatsApp nao deixa
+  // remover do aparelho do cliente algo que ele mesmo mandou. `key` e a chave da
+  // mensagem: { id, remoteJid, fromMe }.
+  async apagarMensagem(key, instance = this.defaultInstance) {
+    return this.request("DELETE", `/chat/deleteMessageForEveryone/${instance}`, key);
+  }
+
   // Envia imagem/video/documento. `media` aceita URL publica ou base64.
   // mediatype: "image" | "video" | "document".
   async sendMedia(number, { mediatype, media, mimetype, fileName, caption }, instance = this.defaultInstance) {

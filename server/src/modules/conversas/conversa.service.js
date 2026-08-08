@@ -1,6 +1,7 @@
 const conversaRepository = require("../../infrastructure/repositories/conversa.repository");
 const instanciaRepository = require("../../infrastructure/repositories/instancia.repository");
 const evolutionApi = require("../../infrastructure/external/evolution-api.client");
+const transcricaoClient = require("../../infrastructure/external/transcricao.client");
 const { mapConversa } = require("../../shared/helpers/mapper.helper");
 const { limparCnpj, cnpjValido, mascararCnpj } = require("../../shared/helpers/cnpj.helper");
 const parceiroRepository = require("../../infrastructure/repositories/parceiro.repository");
@@ -199,6 +200,42 @@ class ConversaService {
     return this._emitir(atualizada);
   }
 
+  // Transcreve o audio de uma mensagem (fala -> texto) e guarda o resultado no
+  // metadata, para nao pagar/reprocessar de novo no proximo F5. Sob demanda: so
+  // roda quando o operador clica em "Transcrever".
+  async transcreverAudio(mensagemId) {
+    const mensagem = await conversaRepository.findMensagem(mensagemId);
+    if (!mensagem) throw new AppError("Mensagem nao encontrada", 404, "NOT_FOUND");
+
+    const meta = mensagem.metadata || {};
+    if (meta.tipo !== "audio") {
+      throw new AppError("Esta mensagem nao e um audio.", 400, "NAO_E_AUDIO");
+    }
+    // Ja transcrito antes: devolve o cache, sem chamar a API de novo.
+    if (meta.transcricao) return { transcricao: meta.transcricao, cache: true };
+
+    // A midia recebida/enviada guarda a data URL em `url`. Se por acaso for um
+    // link http (raro), baixa os bytes antes de mandar transcrever.
+    let media = meta.url;
+    if (typeof media === "string" && media.startsWith("http")) {
+      const resp = await fetch(media);
+      const buf = Buffer.from(await resp.arrayBuffer());
+      media = `data:${meta.mimetype || "audio/ogg"};base64,${buf.toString("base64")}`;
+    }
+    if (!media) throw new AppError("Audio indisponivel para transcrever.", 400, "AUDIO_INDISPONIVEL");
+
+    const texto = await transcricaoClient.transcrever(media, meta.mimetype);
+    const transcricao = texto || "(nao foi possivel entender o audio)";
+
+    await conversaRepository.atualizarMetadata(mensagemId, { ...meta, transcricao });
+
+    // Reemite a conversa para o painel refletir a transcricao em tempo real.
+    const conversa = await conversaRepository.findById(mensagem.conversaId);
+    if (conversa) this._emitir(conversa);
+
+    return { transcricao, cache: false };
+  }
+
   // Encaminha uma mensagem existente para outra conversa (o WhatsApp reenvia o
   // conteudo; nao existe "forward nativo" pela API, entao reenviamos o texto).
   async encaminharMensagem(mensagemId, conversaDestinoId) {
@@ -260,6 +297,40 @@ class ConversaService {
     }
 
     await conversaRepository.editarMensagem(mensagemId, texto);
+    return this._emitir(await conversaRepository.findById(msg.conversaId));
+  }
+
+  // Apaga a mensagem para todos. Nas mensagens que NOS enviamos, dispara o
+  // "apagar para todos" do WhatsApp (some tambem no aparelho do cliente). Em
+  // mensagem do cliente isso e impossivel pelo WhatsApp -- entao ela some so do
+  // painel. Em ambos os casos removemos a linha aqui, entao some da Central.
+  async apagarMensagem(mensagemId) {
+    const msg = await conversaRepository.findMensagem(mensagemId);
+    if (!msg) throw new AppError("Mensagem nao encontrada", 404, "NOT_FOUND");
+
+    const conversa = await conversaRepository.findById(msg.conversaId);
+    const nossa = msg.origem !== "cliente";
+
+    if (msg.waMessageId && nossa && conversa) {
+      try {
+        await evolutionApi.apagarMensagem(
+          {
+            id: msg.waMessageId,
+            remoteJid: `${conversa.telefone}@s.whatsapp.net`,
+            fromMe: true,
+          },
+          env.evolutionApi.instance
+        );
+      } catch (err) {
+        throw new AppError(
+          `Nao foi possivel apagar no WhatsApp: ${err.message}`,
+          502,
+          "APAGAR_FALHOU"
+        );
+      }
+    }
+
+    await conversaRepository.removerMensagem(mensagemId);
     return this._emitir(await conversaRepository.findById(msg.conversaId));
   }
 

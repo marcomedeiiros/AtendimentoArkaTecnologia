@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Settings, Save, Loader2, CheckCircle2, XCircle, Plug,
-  Database, Server, MessageCircle, Workflow
+  Database, Server, MessageCircle, Workflow, FileText
 } from 'lucide-react';
 import { ConfiguracoesAPI } from '../services/api';
 
@@ -219,6 +219,28 @@ export default function ConfiguracoesPage() {
             campos={CAMPOS.n8n} valores={valores} onChange={onChange}
             onTestar={() => testar('n8n')} teste={testes.n8n} testando={testando === 'n8n'}
           />
+        </div>
+      )}
+
+      {!carregando && (
+        <div className="glass-panel p-6 rounded-2xl border border-linha space-y-4">
+          <h3 className="font-bold text-sm text-white font-display flex items-center gap-2">
+            <FileText size={16} className="text-acao-200" /> Transcrição de áudio (Whisper)
+          </h3>
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            Liga o botão <strong className="text-slate-300">Transcrever</strong> nos áudios da conversa.
+            Use uma chave <strong className="text-slate-300">gratuita</strong> da{' '}
+            <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-acao-200 underline underline-offset-2">Groq</a>{' '}
+            (cadastro rápido) o Whisper roda na camada gratuita. Sem chave, o botão avisa que a transcrição não está configurada.
+          </p>
+          <Campo
+            def={{ chave: 'transcricao.apiKey', label: 'Chave de API (Groq)', placeholder: 'gsk_...', segredo: true }}
+            valor={valores['transcricao.apiKey'] ?? ''}
+            onChange={onChange}
+          />
+          <p className="text-[10px] text-slate-500">
+            Depois de colar a chave, clique em <strong className="text-slate-400">Salvar configurações</strong>.
+          </p>
         </div>
       )}
 

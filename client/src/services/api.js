@@ -155,6 +155,7 @@ export const EquipeAPI = {
   alterarCargo: (id, cargo) => request(`/equipe/${id}/cargo`, { method: 'PATCH', body: JSON.stringify({ cargo }) }),
   // Sem recuperacao por e-mail: um Administrador define a nova senha do membro.
   redefinirSenha: (id, senha) => request(`/equipe/${id}/senha`, { method: 'PATCH', body: JSON.stringify({ senha }) }),
+  excluir: (id) => request(`/equipe/${id}`, { method: 'DELETE' }),
 };
 
 // ── WhatsApp API ──
@@ -191,6 +192,11 @@ export const PreferenciasAPI = {
   }),
 };
 
+// ── Help Desk API ──
+export const HelpDeskAPI = {
+  metricas: () => request('/helpdesk'),
+};
+
 // ── Configurações API ──
 export const ConfiguracoesAPI = {
   obter: () => request('/configuracoes'),
@@ -204,6 +210,8 @@ export const ConversasAPI = {
   atender: (id) => request(`/conversas/${id}/atender`, { method: 'POST' }),
   enviarMensagem: (id, texto, respondendoAId = null) => request(`/conversas/${id}/mensagens`, { method: 'POST', body: JSON.stringify({ texto, respondendoAId }) }),
   editarMensagem: (mensagemId, texto) => request(`/conversas/mensagens/${mensagemId}`, { method: 'PATCH', body: JSON.stringify({ texto }) }),
+  transcreverAudio: (mensagemId) => request(`/conversas/mensagens/${mensagemId}/transcrever`, { method: 'POST' }),
+  apagarMensagem: (mensagemId) => request(`/conversas/mensagens/${mensagemId}`, { method: 'DELETE' }),
   encaminharMensagem: (mensagemId, conversaDestinoId) => request('/conversas/mensagens/encaminhar', { method: 'POST', body: JSON.stringify({ mensagemId, conversaDestinoId }) }),
   solicitarCnpj: (id) => request(`/conversas/${id}/solicitar-cnpj`, { method: 'POST' }),
   validarCnpj: (id, cnpj) => request(`/conversas/${id}/validar-cnpj`, { method: 'POST', body: JSON.stringify({ cnpj }) }),

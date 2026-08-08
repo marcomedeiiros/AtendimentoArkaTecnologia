@@ -26,6 +26,12 @@ class EquipeController {
       .redefinirSenha(id, senha, req.user.sub)
       .then((data) => success(res, data));
   }
+
+  remover(req, res) {
+    return equipeService
+      .remover(req.params.id, req.user.sub)
+      .then((data) => success(res, data));
+  }
 }
 
 module.exports = new EquipeController();

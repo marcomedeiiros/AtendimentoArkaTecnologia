@@ -6,7 +6,7 @@ import {
   ArrowRightLeft, AlertCircle, Users, RotateCcw, Layers, ArrowDown, Tv,
   FileText, MapPin, Contact, Paperclip, Smile, Image as Loader2,
   SlidersHorizontal, Star, Archive, EyeOff, MoreVertical,
-  ZoomIn, ZoomOut, Maximize2, Download, CornerUpLeft, Share2, Pencil, MoreHorizontal, Mic, Tag
+  ZoomIn, ZoomOut, Maximize2, Download, CornerUpLeft, Share2, Pencil, MoreHorizontal, Mic, Tag, PenLine
 } from 'lucide-react';
 import { EmojiIcon, FormattedMessage } from './EmojiIcon';
 import { useMensagensRapidas } from './MensagensRapidas';
@@ -15,6 +15,7 @@ import Portal from '../Portal';
 import AudioPlayer from '../AudioPlayer';
 import AudioRecorder from '../AudioRecorder';
 import { useAppContext } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
 import { ConversasAPI } from '../../services/api';
 import { usePreferencia } from '../../hooks/usePreferencia';
 import { wallpaperStyle as WHATSAPP_BG } from '../../utils/wallpaper';
@@ -472,7 +473,7 @@ function StatusMensagem({ status, escuro }) {
 }
 
 // Menu de tres pontinhos da bolha: responder, encaminhar, editar.
-function MenuMensagem({ m, ehPropria, onResponder, onEncaminhar, onEditar }) {
+function MenuMensagem({ m, ehPropria, onResponder, onEncaminhar, onEditar, onApagar }) {
   const [aberto, setAberto] = useState(false);
   const ref = useRef(null);
 
@@ -510,6 +511,14 @@ function MenuMensagem({ m, ehPropria, onResponder, onEncaminhar, onEditar }) {
           {ehPropria && m.tipo === 'texto' && (
             <button className={item} onClick={() => { onEditar(m); setAberto(false); }}>
               <Pencil size={12} className="text-slate-500" /> Editar
+            </button>
+          )}
+          {onApagar && (
+            <button
+              className={`${item} text-falha-400 hover:text-falha-400`}
+              onClick={() => { onApagar(m); setAberto(false); }}
+            >
+              <Trash2 size={12} className="text-falha-400" /> {ehPropria ? 'Apagar para todos' : 'Apagar'}
             </button>
           )}
         </div>
@@ -622,6 +631,55 @@ function VisualizadorImagem({ url, legenda, nomeArquivo, onFechar }) {
   );
 }
 
+// Player de áudio + transcrição sob demanda. O botão "Transcrever" chama a API,
+// que usa Whisper (Groq) e guarda o texto no metadata -- na próxima vez já vem
+// pronto (md.transcricao). Útil porque muitos clientes mandam áudio.
+function BolhaAudio({ m, escuro }) {
+  const md = m.midia || {};
+  const [texto, setTexto] = useState(md.transcricao || '');
+  const [carregando, setCarregando] = useState(false);
+  const [erro, setErro] = useState('');
+
+  async function transcrever() {
+    if (!m.id) { setErro('Áudio ainda não sincronizado. Recarregue e tente de novo.'); return; }
+    setCarregando(true); setErro('');
+    try {
+      const r = await ConversasAPI.transcreverAudio(m.id);
+      setTexto(r.transcricao || '(vazio)');
+    } catch (e) {
+      setErro(e.message);
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <AudioPlayer src={md.url || m.texto} />
+      {texto ? (
+        <div className={`text-[11px] leading-relaxed rounded-lg px-2.5 py-1.5 ${
+          escuro ? 'bg-grafite-700/70 text-slate-200 border border-linha' : 'bg-slate-900/10 text-slate-900'
+        }`}>
+          <span className="font-semibold opacity-70">Transcrição: </span>{texto}
+        </div>
+      ) : (
+        <button
+          onClick={transcrever}
+          disabled={carregando}
+          className={`inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all disabled:opacity-60 ${
+            escuro
+              ? 'bg-grafite-700 border-linha text-slate-300 hover:text-acao-200 hover:border-acao/30'
+              : 'bg-slate-900/10 border-slate-900/10 text-slate-900 hover:bg-slate-900/20'
+          }`}
+        >
+          <FileText size={12} /> {carregando ? 'Transcrevendo…' : 'Transcrever'}
+        </button>
+      )}
+      {erro && <div className="text-[10px] text-falha-400">{erro}</div>}
+    </div>
+  );
+}
+
 // Renderiza a bolha de acordo com o tipo de mídia. `escuro` = bolha do cliente
 // (fundo escuro); senão é a bolha da equipe (fundo laranja).
 function MensagemMidia({ m, escuro, onAbrirImagem }) {
@@ -651,7 +709,7 @@ function MensagemMidia({ m, escuro, onAbrirImagem }) {
     return <video src={md.url} controls className="rounded-lg max-w-full max-h-72" />;
   }
   if (m.tipo === 'audio') {
-    return <AudioPlayer src={md.url || m.texto} />;
+    return <BolhaAudio m={m} escuro={escuro} />;
   }
   if (m.tipo === 'documento') {
     return (
@@ -834,7 +892,8 @@ function PainelChat({
   texto, setTexto, scrollRef, onEnviar, onEnviarMidia, onFechar, onPendente, onReabrir,
   onMarcarLido, onApagarChat, onSolicitarCnpj, onValidarCnpjModal,
   onExecutarFluxo, fluxoSugerido, onVoltar, atendente, onTransferir,
-  onEditar, onEncaminharPara, conversas, onAtender
+  onEditar, onEncaminharPara, conversas, onAtender,
+  assinar, onToggleAssinar, assinaturaNome, onApagarMensagem
 }) {
   const [showMsgRapidas, setShowMsgRapidas] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
@@ -1079,6 +1138,7 @@ function PainelChat({
                 onResponder={setRespondendoA}
                 onEncaminhar={setEncaminhando}
                 onEditar={iniciarEdicao}
+                onApagar={onApagarMensagem}
               />
             )}
             {m.de === 'sistema' ? (
@@ -1138,6 +1198,7 @@ function PainelChat({
                 onResponder={setRespondendoA}
                 onEncaminhar={setEncaminhando}
                 onEditar={iniciarEdicao}
+                onApagar={onApagarMensagem}
               />
             )}
           </div>
@@ -1294,6 +1355,12 @@ function PainelChat({
           onChange={e => { const f = e.target.files?.[0]; if (f) selecionarArquivo(f); e.target.value = ''; }}
         />
 
+        {/* Durante a gravacao de audio, toda a barra some e fica so o gravador
+            (que ja tem seus proprios botoes de cancelar e enviar). Antes esses
+            botoes e o "enviar" principal continuavam na tela -- dai a sensacao
+            de "dois botoes de enviar". */}
+        {!gravandoAudio && (
+        <>
         <button
           onClick={() => fileInputRef.current?.click()}
           title="Anexar arquivo"
@@ -1324,6 +1391,23 @@ function PainelChat({
           <Zap size={15} />
         </button>
 
+        {assinaturaNome && (
+          <button
+            onClick={onToggleAssinar}
+            title={assinar
+              ? `Assinatura LIGADA: cada mensagem sai com "${assinaturaNome}" em negrito na primeira linha. Clique para desligar.`
+              : `Assinatura desligada. Clique para assinar suas mensagens como "${assinaturaNome}".`}
+            className={`px-2.5 py-2 rounded-xl border transition-all flex items-center gap-1.5 text-[11px] font-semibold shrink-0 ${
+              assinar
+                ? 'bg-acao/20 border-acao/40 text-acao-200'
+                : 'bg-grafite-700 border-linha text-slate-400 hover:text-acao-200 hover:border-acao/30'
+            }`}
+          >
+            <PenLine size={14} />
+            <span className="hidden sm:inline">{assinar ? assinaturaNome : 'Assinar'}</span>
+          </button>
+        )}
+
         <button
           onClick={() => setGravandoAudio(v => !v)}
           title={gravandoAudio ? 'Cancelar gravação' : 'Gravar áudio'}
@@ -1335,14 +1419,23 @@ function PainelChat({
         >
           <Mic size={15} />
         </button>
+        </>
+        )}
 
         {gravandoAudio ? (
           <AudioRecorder
-            onEnviar={(dataUrl) => {
-              onEnviarMidia({ tipo: 'audio', dataUrl, mimetype: 'audio/ogg; codecs=opus', fileName: 'audio.ogg' });
+            onSendAudio={(dataUrl) => {
+              // O backend espera o campo `media` (mesmo do envio de imagem),
+              // nao `dataUrl` -- por isso o audio nao saia mesmo com a prop certa.
+              const r = onEnviarMidia({ tipo: 'audio', media: dataUrl, mimetype: 'audio/ogg; codecs=opus', fileName: 'audio.ogg' });
+              // Sem isso o erro era engolido: se a Evolution recusa (WhatsApp
+              // desconectado, numero invalido), nada aparecia E nada avisava.
+              r?.promise?.catch(e => {
+                if (String(e.message) !== 'cancelado') window.alert('Não foi possível enviar o áudio: ' + e.message);
+              });
               setGravandoAudio(false);
             }}
-            onCancelar={() => setGravandoAudio(false)}
+            onCancel={() => setGravandoAudio(false)}
           />
         ) : (
           <textarea
@@ -1360,13 +1453,15 @@ function PainelChat({
             className="order-first w-full sm:order-none sm:w-auto sm:flex-1 min-w-0 resize-none max-h-32 bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 transition-colors"
           />
         )}
+        {!gravandoAudio && (
         <button
           onClick={enviar}
-          disabled={enviandoMidia || gravandoAudio}
+          disabled={enviandoMidia}
           className="ml-auto sm:ml-0 p-2.5 rounded-xl bg-acao hover:bg-acao-200 disabled:opacity-50 text-slate-950 transition-colors shadow-md shadow-acao/20 self-end"
         >
           {enviandoMidia ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
         </button>
+        )}
       </div>
       )}
 
@@ -1384,6 +1479,11 @@ function PainelChat({
 
 export default function AtendimentoView({ conversas, setConversas, fluxos, parceiros, equipe = [] }) {
   const { whatsAppConectado, carregando, historico = [], marcarNotificacoesLidas, limparHistorico } = useAppContext();
+  const { usuario } = useAuth();
+  // Primeiro nome de quem esta logado, usado como assinatura das mensagens.
+  const primeiroNome = (usuario?.nome || '').trim().split(/\s+/)[0] || '';
+  // Toggle de assinatura, por operador (sobrevive ao F5).
+  const [assinar, setAssinar] = usePreferencia('central.assinatura', false);
   const [abaAtual,      setAbaAtual]     = usePreferencia('central.aba', 'todas');
   const [selecionada,   setSelecionada]  = useState(null);
   const [texto,         setTexto]        = useState('');
@@ -1665,17 +1765,37 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     }
   }, [aplicarConversa]);
 
+  const apagarMensagem = useCallback(async (mensagem) => {
+    // "Apagar para todos" so alcanca o aparelho do cliente nas mensagens que
+    // NOS enviamos -- o WhatsApp nao deixa apagar de la o que o cliente mandou.
+    const nossa = mensagem.de !== 'cliente';
+    const aviso = nossa
+      ? 'Apagar esta mensagem para todos? Ela some para você e para o cliente no WhatsApp.'
+      : 'Esta é uma mensagem do cliente: o WhatsApp não permite apagá-la do aparelho dele. Ela será removida apenas do painel. Continuar?';
+    if (!window.confirm(aviso)) return;
+    try {
+      aplicarConversa(await ConversasAPI.apagarMensagem(mensagem.id));
+    } catch (e) {
+      window.alert('Não foi possível apagar: ' + e.message);
+    }
+  }, [aplicarConversa]);
+
   const enviarResposta = useCallback(async (txt, respondendoAId = null) => {
     if (!txt.trim() || !conversa) return;
     const id = conversa.id;
-    // Otimista: mostra a mensagem da equipe na hora.
+    // Assinatura: prefixa o nome do operador em negrito (*Nome*), numa linha
+    // acima da mensagem -- assim o cliente ve quem falou. So quando o toggle
+    // esta ligado e ha nome. O negrito e a sintaxe do WhatsApp.
+    const corpo = txt.trim();
+    const final = assinar && primeiroNome ? `*${primeiroNome}*\n${corpo}` : corpo;
+    // Otimista: mostra a mensagem da equipe na hora (ja assinada).
     setConversas(prev => prev.map(c =>
-      c.id === id ? { ...c, mensagens: [...c.mensagens, { de: 'equipe', texto: txt.trim(), hora: horaAgora() }] } : c
+      c.id === id ? { ...c, mensagens: [...c.mensagens, { de: 'equipe', texto: final, hora: horaAgora() }] } : c
     ));
     setTexto('');
     // O back-end persiste, detecta CNPJ e devolve a conversa completa.
-    try { aplicarConversa(await ConversasAPI.enviarMensagem(id, txt.trim(), respondendoAId)); } catch {}
-  }, [conversa, setConversas, aplicarConversa]);
+    try { aplicarConversa(await ConversasAPI.enviarMensagem(id, final, respondendoAId)); } catch {}
+  }, [conversa, setConversas, aplicarConversa, assinar, primeiroNome]);
 
   // Envio de mídia com progresso/cancelamento. Devolve { promise, cancel } para
   // o PainelChat controlar a barra e o botão de cancelar. A conversa atualizada
@@ -1986,6 +2106,10 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               onEncaminharPara={encaminharMensagem}
               onAtender={atenderConversa}
               conversas={conversas}
+              assinar={assinar}
+              onToggleAssinar={() => setAssinar(v => !v)}
+              assinaturaNome={primeiroNome}
+              onApagarMensagem={apagarMensagem}
             />
           )}
         </div>

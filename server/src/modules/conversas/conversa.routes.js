@@ -33,6 +33,12 @@ router.post("/mensagens/encaminhar", (req, res, next) =>
 router.patch("/mensagens/:mensagemId", (req, res, next) =>
   conversaController.editarMensagem(req, res).catch(next)
 );
+router.post("/mensagens/:mensagemId/transcrever", (req, res, next) =>
+  conversaController.transcreverAudio(req, res).catch(next)
+);
+router.delete("/mensagens/:mensagemId", (req, res, next) =>
+  conversaController.apagarMensagem(req, res).catch(next)
+);
 router.post("/:id/solicitar-cnpj", (req, res, next) =>
   conversaController.solicitarCnpj(req, res).catch(next)
 );

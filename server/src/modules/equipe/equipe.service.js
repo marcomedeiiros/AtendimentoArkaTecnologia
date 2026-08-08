@@ -76,6 +76,35 @@ class EquipeService {
     await usuarioRepository.atualizarSenha(idAlvo, senhaHash);
     return { id: alvo.id, nome: alvo.nome };
   }
+
+  // Exclusao definitiva de uma conta. Só Administrador; nao pode excluir a
+  // propria conta nem o ultimo Administrador ativo (senao a gestao trava).
+  async remover(idAlvo, solicitanteId) {
+    const solicitante = await usuarioRepository.findById(solicitanteId);
+    if (!solicitante || solicitante.cargo !== "Administrador") {
+      throw new AppError("Apenas Administradores podem excluir contas.", 403, "SEM_PERMISSAO");
+    }
+    if (idAlvo === solicitanteId) {
+      throw new AppError("Você não pode excluir a sua própria conta.", 400, "AUTO_EXCLUSAO");
+    }
+
+    const alvo = await usuarioRepository.findById(idAlvo);
+    if (!alvo) throw new AppError("Conta não encontrada.", 404, "NOT_FOUND");
+
+    if (alvo.cargo === "Administrador" && alvo.ativo) {
+      const admins = await usuarioRepository.contarAdminsAtivos();
+      if (admins <= 1) {
+        throw new AppError(
+          "Não é possível excluir o último Administrador ativo.",
+          400,
+          "ULTIMO_ADMIN"
+        );
+      }
+    }
+
+    await usuarioRepository.remover(idAlvo);
+    return { removido: true, id: idAlvo, nome: alvo.nome };
+  }
 }
 
 module.exports = new EquipeService();

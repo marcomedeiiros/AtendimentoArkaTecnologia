@@ -123,10 +123,27 @@ export function FormattedMessage({ text }) {
       <div className="flex items-start gap-2">
         {containsCheck && <EmojiIcon name="check" label="" size="sm" />}
         {containsWarning && <EmojiIcon name="warning" label="" size="sm" />}
-        <span className="flex-1">{cleanText}</span>
+        <span className="flex-1">{renderRico(cleanText)}</span>
       </div>
     );
   }
 
-  return <span>{text}</span>;
+  return <span>{renderRico(text)}</span>;
+}
+
+// Renderiza *negrito* (sintaxe do WhatsApp) e preserva quebras de linha. E o que
+// faz a assinatura "*Nome*\nmensagem" aparecer com o nome em negrito em cima e a
+// mensagem embaixo -- igual ao que o cliente ve no WhatsApp.
+function renderRico(texto) {
+  const linhas = String(texto).split('\n');
+  return linhas.map((linha, li) => (
+    <span key={li}>
+      {linha.split(/(\*[^*\n]+\*)/g).map((parte, pi) =>
+        /^\*[^*\n]+\*$/.test(parte)
+          ? <strong key={pi} className="font-bold">{parte.slice(1, -1)}</strong>
+          : <span key={pi}>{parte}</span>
+      )}
+      {li < linhas.length - 1 && <br />}
+    </span>
+  ));
 }

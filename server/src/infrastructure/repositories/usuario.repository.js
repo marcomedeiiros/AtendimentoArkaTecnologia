@@ -76,6 +76,18 @@ class UsuarioRepository {
   contar() {
     return prisma.usuario.count();
   }
+
+  // Administradores ATIVOS -- usado para nao deixar excluir/rebaixar o ultimo,
+  // o que travaria a gestao (ninguem mais aprova, troca cargo ou exclui).
+  contarAdminsAtivos() {
+    return prisma.usuario.count({ where: { cargo: "Administrador", ativo: true } });
+  }
+
+  remover(id) {
+    // Conversas atendidas por essa pessoa nao somem: o atendenteId vira null
+    // (onDelete: SetNull no schema). So a conta e apagada.
+    return prisma.usuario.delete({ where: { id } });
+  }
 }
 
 module.exports = new UsuarioRepository();

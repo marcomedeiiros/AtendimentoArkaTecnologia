@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useCallback } from 'react';
 import {
   Users, ShieldCheck, Clock, TrendingUp,
   Download, ArrowRight, Activity, CheckCircle2, Inbox,
-  BarChart3, FileText, Loader2, Star, MessageCircle, X
+  BarChart3, FileText, Loader2, Star, MessageCircle, X, LifeBuoy, ClipboardList
 } from 'lucide-react';
 // So o Doughnut sobrou nesta tela: ele precisa de ArcElement. Escalas e
 // elementos de linha/barra ficaram registrados sem grafico que os usasse.
@@ -10,6 +10,8 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
 import { EmojiIcon } from './EmojiIcon';
 import { exportarRelatorioPdf } from '../../utils/exportarPdf';
+import HelpDeskPainel from './HelpDeskPainel';
+import RegistroConversas from './RegistroConversas';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -260,6 +262,24 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
             }`}>
             <Star size={13} className="inline mr-1.5 -mt-0.5" /> Avaliações
           </button>
+          <button
+            onClick={() => setAbaAtiva('helpdesk')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
+              abaAtiva === 'helpdesk'
+                ? 'bg-acao/15 border-acao/40 text-acao-200'
+                : 'bg-grafite-700 border-linha text-slate-400 hover:text-white hover:border-slate-500'
+            }`}>
+            <LifeBuoy size={13} className="inline mr-1.5 -mt-0.5" /> Help Desk
+          </button>
+          <button
+            onClick={() => setAbaAtiva('registro')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
+              abaAtiva === 'registro'
+                ? 'bg-acao/15 border-acao/40 text-acao-200'
+                : 'bg-grafite-700 border-linha text-slate-400 hover:text-white hover:border-slate-500'
+            }`}>
+            <ClipboardList size={13} className="inline mr-1.5 -mt-0.5" /> Registro
+          </button>
         </div>
         {abaAtiva === 'geral' && (
           <div className="flex items-center gap-2 shrink-0">
@@ -307,14 +327,61 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
               </div>
             </div>
 
-            <div className="glass-panel rounded-2xl p-5 border border-linha flex flex-col justify-center gap-3">
-              <h3 className="text-sm font-bold text-white font-display flex items-center gap-2">
-                <TrendingUp size={15} className="text-acao-200" /> Situação atual
-              </h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                O histórico por período (7/30/90 dias) aparecerá aqui assim que os atendimentos
-                começarem a ser registrados pelo WhatsApp. Por enquanto, os números refletem o estado atual em tempo real.
-              </p>
+            <div className="glass-panel rounded-2xl p-5 border border-linha flex flex-col justify-center gap-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-white font-display flex items-center gap-2">
+                  <Star size={15} className="text-yellow-400" /> Satisfação dos clientes
+                </h3>
+                <button onClick={() => setAbaAtiva('avaliacoes')}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-300 text-[11px] font-semibold border border-yellow-500/30 transition-all">
+                  Ver todas <ArrowRight size={11} />
+                </button>
+              </div>
+
+              {avaliacoes.total === 0 ? (
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Ainda não há avaliações. Elas aparecem aqui assim que os clientes avaliarem os atendimentos.
+                </p>
+              ) : (
+                <>
+                  <div className="flex items-end gap-5">
+                    <div>
+                      <div className="flex items-center gap-0.5 mb-1">{renderEstrelas(Math.round(avaliacoes.media))}</div>
+                      <div className="text-3xl font-bold text-white font-display leading-none">
+                        {avaliacoes.media.toFixed(1)}<span className="text-sm text-slate-500 font-normal"> / 5</span>
+                      </div>
+                    </div>
+                    <div className="flex-1 grid grid-cols-3 gap-2 text-center">
+                      <div>
+                        <div className="text-lg font-bold text-yellow-300 font-display">{avaliacoes.total}</div>
+                        <div className="text-[10px] text-slate-400">avaliações</div>
+                      </div>
+                      <div>
+                        <div className="text-lg font-bold text-ativo-400 font-display">
+                          {Math.round((avaliacoes.promotores / avaliacoes.total) * 100)}%
+                        </div>
+                        <div className="text-[10px] text-slate-400">satisfação</div>
+                      </div>
+                      <div>
+                        <div className="text-lg font-bold text-falha-400 font-display">{avaliacoes.detratores}</div>
+                        <div className="text-[10px] text-slate-400">1-2 ⭐</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Mini barra de distribuição (5→1) */}
+                  <div className="flex h-2.5 rounded-full overflow-hidden border border-linha/40 bg-grafite-600/40">
+                    {[5, 4, 3, 2, 1].map(n => {
+                      const item = avaliacoes.distribuicao.find(d => d.nota === n);
+                      const pct = avaliacoes.total > 0 ? (item.qtd / avaliacoes.total) * 100 : 0;
+                      const cor = n >= 4 ? '#10b981' : n === 3 ? '#f59e0b' : '#ef4444';
+                      return pct > 0 ? (
+                        <div key={n} style={{ width: `${pct}%`, background: cor }} title={`${n}★ ${item.qtd} (${pct.toFixed(0)}%)`} />
+                      ) : null;
+                    })}
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -591,6 +658,12 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
           </div>
         </>
       )}
+
+      {/* ============= ABA: HELP DESK ============= */}
+      {abaAtiva === 'helpdesk' && <HelpDeskPainel />}
+
+      {/* ============= ABA: REGISTRO DE CONVERSAS ============= */}
+      {abaAtiva === 'registro' && <RegistroConversas conversas={conversas} equipe={equipe} />}
     </div>
   );
 }

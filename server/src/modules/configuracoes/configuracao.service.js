@@ -20,6 +20,10 @@ const DEFINICOES = {
   // webhook configurado, e com "n8n" os fluxos do Arka ficariam mudos sem que o
   // motivo fosse obvio. Troque em Configuracoes quando o workflow estiver pronto.
   "atendimento.modo":   { padrao: () => process.env.ATENDIMENTO_MODO || "local", segredo: false },
+  // Transcricao de audio (fala->texto). Provedor padrao: Groq (Whisper), que tem
+  // camada gratuita. A chave e OpenAI-compativel, entao trocar para a OpenAI e so
+  // mudar a chave/URL. Vem do .env (GROQ_API_KEY) quando o banco esta vazio.
+  "transcricao.apiKey": { padrao: () => process.env.GROQ_API_KEY || process.env.TRANSCRICAO_API_KEY || "", segredo: true },
 };
 
 // Mascara em ASCII puro: caracteres como "•" se corrompem dependendo da
@@ -70,6 +74,12 @@ class ConfiguracaoService {
       apiKey: c["n8n.apiKey"],
       webhookFluxo: String(c["n8n.webhookFluxo"] || "").trim(),
     };
+  }
+
+  // Chave do servico de transcricao (Groq/OpenAI). Vazia = recurso desligado.
+  async transcricaoApiKey() {
+    const c = await this._carregar();
+    return String(c["transcricao.apiKey"] || "").trim();
   }
 
   // "n8n" | "local" | "humano" -- ver DEFINICOES.

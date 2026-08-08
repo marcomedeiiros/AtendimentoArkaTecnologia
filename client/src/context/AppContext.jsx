@@ -89,6 +89,16 @@ export function AppProvider({ children }) {
     } catch { /* back-end offline: mantem estado atual */ }
   }, []);
 
+  // Releitura sob demanda da equipe. A Gestao da Equipe chama isto apos aprovar,
+  // trocar cargo ou excluir alguem: sem essa releitura, o <select> de cargo
+  // (controlado por m.cargo) voltava para o valor antigo e parecia "nao salvar".
+  const recarregarEquipe = useCallback(async () => {
+    try {
+      const eq = await EquipeAPI.listar();
+      if (Array.isArray(eq)) setEquipe(eq);
+    } catch { /* back-end offline: mantem estado atual */ }
+  }, []);
+
   // Patch incremental vindo do SSE: substitui/insere/remove uma conversa sem
   // recarregar a lista inteira. O disparo de som/notificacao continua no efeito
   // de msgCountsRef, que reage a qualquer mudanca em `conversas`.
@@ -278,7 +288,7 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       carregando,
       recargarDados: carregarDadosDoServidor,
-      equipe,
+      equipe,            recarregarEquipe,
       fluxos,            atualizarFluxos,
       parceiros,         atualizarParceiros,
       conversas,         atualizarConversas,

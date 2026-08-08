@@ -40,6 +40,7 @@ function mapConversa(c) {
     arquivada: !!c.arquivada,
     oculta: !!c.oculta,
     atendenteId: c.atendenteId || null,
+    criadoEm: c.criadoEm ? c.criadoEm.toISOString?.() || c.criadoEm : null,
     atendidoEm: c.atendidoEm ? c.atendidoEm.toISOString?.() || c.atendidoEm : null,
     fechadoEm: c.fechadoEm ? c.fechadoEm.toISOString?.() || c.fechadoEm : null,
     ultimaMensagemEm: ultima?.criadoEm
