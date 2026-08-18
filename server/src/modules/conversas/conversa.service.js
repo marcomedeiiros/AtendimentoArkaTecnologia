@@ -3,7 +3,8 @@ const instanciaRepository = require("../../infrastructure/repositories/instancia
 const evolutionApi = require("../../infrastructure/external/evolution-api.client");
 const transcricaoClient = require("../../infrastructure/external/transcricao.client");
 const { mapConversa } = require("../../shared/helpers/mapper.helper");
-const { limparCnpj, cnpjValido, mascararCnpj } = require("../../shared/helpers/cnpj.helper");
+const { limparCnpj, cnpjValido, mascararCnpj, normalizarTelefoneBr } = require("../../shared/helpers/cnpj.helper");
+const { normalizarSetor } = require("../../shared/helpers/setor.helper");
 const parceiroRepository = require("../../infrastructure/repositories/parceiro.repository");
 const bus = require("../../shared/events/event-bus");
 const AppError = require("../../shared/errors/AppError");
@@ -64,6 +65,95 @@ class ConversaService {
     });
 
     return this._emitir(atualizada);
+  }
+
+  /**
+   * Inicia uma conversa a partir de um numero digitado pelo operador.
+   *
+   * Existia um buraco aqui: `POST /whatsapp/enviar` (usado pelo Envio em Massa)
+   * dispara a mensagem, mas so registra a bolha se a conversa JA existir. Para
+   * um numero novo, a mensagem saia no celular do cliente e nada aparecia na
+   * Central -- a conversa so nascia quando ele respondesse, pelo webhook. Ou
+   * seja: o atendente mandava e ficava sem trilha do que mandou.
+   *
+   * Aqui a conversa e criada JA ABERTA e atribuida a quem enviou. Aberta por
+   * dois motivos: quem inicia esta assumindo o atendimento (nao faz sentido
+   * entrar na fila de pendentes um contato que nos mesmos procuramos), e
+   * `enviarMensagem` recusa mensagem da equipe fora de conversa aberta.
+   *
+   * O envio em si e delegado a `enviarMensagem`, para herdar de graca o
+   * waMessageId, o status de entrega e a emissao no SSE.
+   */
+  async iniciarConversa({ telefone, nome, setor, texto, atendenteId = null }) {
+    const conteudo = String(texto || "").trim();
+    if (!conteudo) {
+      throw new AppError("Escreva a mensagem que abre a conversa", 400, "TEXTO_OBRIGATORIO");
+    }
+
+    const numero = normalizarTelefoneBr(telefone);
+    if (!numero) {
+      throw new AppError(
+        "Numero invalido. Use DDD + numero, por exemplo 27 99999-0000.",
+        400,
+        "TELEFONE_INVALIDO"
+      );
+    }
+
+    const setorFinal = normalizarSetor(setor);
+    const nomeInstancia = env.evolutionApi.instance;
+    const instancia = await instanciaRepository.findByNome(nomeInstancia);
+    if (!instancia) {
+      throw new AppError(
+        "Nenhuma instancia do WhatsApp registrada. Conecte em Integracao WhatsApp antes de iniciar conversas.",
+        400,
+        "INSTANCIA_AUSENTE"
+      );
+    }
+
+    // Reaproveita conversa em andamento com o mesmo numero: criar outra deixaria
+    // o mesmo cliente em duas linhas da lista, cada uma com metade do historico.
+    // (`findByTelefone` so considera pendente/aberta, entao um atendimento ja
+    // encerrado nao e reaberto por um contato novo -- ele vira conversa nova.)
+    const existente = await conversaRepository.findByTelefone(instancia.id, numero);
+
+    let conversaId;
+    if (existente) {
+      conversaId = existente.id;
+      await conversaRepository.update(existente.id, {
+        statusAtendimento: "aberta",
+        setor: setorFinal,
+        lido: true,
+        naoLidas: 0,
+        // Nao rouba a conversa de quem ja estava nela.
+        atendenteId: existente.atendenteId || atendenteId,
+        atendidoEm: existente.atendidoEm || new Date(),
+      });
+    } else {
+      const criada = await conversaRepository.create({
+        instanciaId: instancia.id,
+        // Sem nome informado, o proprio numero e o rotulo. O webhook atualiza
+        // para o nome do perfil quando o cliente responder.
+        cliente: String(nome || "").trim() || numero,
+        telefone: numero,
+        statusAtendimento: "aberta",
+        setor: setorFinal,
+        lido: true,
+        naoLidas: 0,
+        atendenteId,
+        atendidoEm: new Date(),
+      });
+      conversaId = criada.id;
+
+      // Foto de perfil e best-effort: se a Evolution estiver fora, a conversa
+      // nasce sem foto e o avatar cai nas iniciais.
+      const fotoUrl = await evolutionApi
+        .fetchProfilePictureUrl(numero, nomeInstancia)
+        .catch(() => null);
+      if (fotoUrl) await conversaRepository.update(conversaId, { fotoUrl });
+    }
+
+    const dto = await this.enviarMensagem(conversaId, conteudo, "equipe");
+    return { ...dto, criada: !existente };
   }
 
   // So a conversa ABERTA aceita mensagem do operador.

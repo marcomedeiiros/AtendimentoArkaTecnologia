@@ -1,7 +1,21 @@
 const { z } = require("zod");
 
+const { SETORES } = require("../../shared/helpers/setor.helper");
+
 const enviarMensagemSchema = z.object({
   texto: z.string().min(1),
+});
+
+// Conversa iniciada pelo painel (botao de enviar da Central).
+//
+// O telefone e validado de leve aqui (tamanho plausivel) e normalizado de
+// verdade no service, que e quem sabe as regras de DDI/DDD -- deixar a
+// normalizacao no schema esconderia a regra num lugar onde ninguem procura.
+const iniciarConversaSchema = z.object({
+  telefone: z.string().min(8, "Informe DDD + numero"),
+  nome: z.string().max(120).optional(),
+  setor: z.enum(SETORES).optional(),
+  texto: z.string().min(1, "Escreva a mensagem"),
 });
 
 const atualizarStatusSchema = z.object({
@@ -40,6 +54,7 @@ const enviarMidiaSchema = z
 
 module.exports = {
   enviarMensagemSchema,
+  iniciarConversaSchema,
   atualizarStatusSchema,
   validarCnpjSchema,
   enviarMidiaSchema,

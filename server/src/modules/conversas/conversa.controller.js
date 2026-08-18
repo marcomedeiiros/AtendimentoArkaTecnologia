@@ -20,6 +20,20 @@ class ConversaController {
       .then((data) => success(res, data));
   }
 
+  // Conversa nova a partir de um numero digitado. Quem envia fica como
+  // atendente: iniciar contato e assumir o atendimento.
+  iniciarConversa(req, res) {
+    return conversaService
+      .iniciarConversa({
+        telefone: req.body.telefone,
+        nome: req.body.nome,
+        setor: req.body.setor,
+        texto: req.body.texto,
+        atendenteId: req.user?.sub || null,
+      })
+      .then((data) => success(res, data, 201));
+  }
+
   encaminharMensagem(req, res) {
     return conversaService
       .encaminharMensagem(req.body.mensagemId, req.body.conversaDestinoId)

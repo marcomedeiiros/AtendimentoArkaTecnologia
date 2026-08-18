@@ -5,6 +5,7 @@ const validate = require("../../shared/middlewares/validate.middleware");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
 const {
   enviarMensagemSchema,
+  iniciarConversaSchema,
   atualizarStatusSchema,
   validarCnpjSchema,
   enviarMidiaSchema,
@@ -19,6 +20,11 @@ router.use(authMiddleware);
 
 router.post("/stream-ticket", (req, res) => conversaStream.criarTicket(req, res));
 router.get("/", (req, res, next) => conversaController.listar(req, res).catch(next));
+// ANTES de "/:id": em Express a primeira rota que casa vence, e "/iniciar"
+// casaria com "/:id" se viesse depois.
+router.post("/iniciar", validate(iniciarConversaSchema), (req, res, next) =>
+  conversaController.iniciarConversa(req, res).catch(next)
+);
 router.get("/:id", (req, res, next) => conversaController.obter(req, res).catch(next));
 router.post("/:id/atender", (req, res, next) => conversaController.atender(req, res).catch(next));
 router.post("/:id/mensagens", validate(enviarMensagemSchema), (req, res, next) =>

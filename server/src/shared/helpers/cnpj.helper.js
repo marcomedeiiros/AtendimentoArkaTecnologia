@@ -33,6 +33,36 @@ function limparTelefone(valor) {
   return String(valor || "").replace(/\D/g, "");
 }
 
+/**
+ * Normaliza um numero brasileiro para o formato que a Evolution espera.
+ *
+ * Ate aqui o projeto so tinha `limparTelefone` (tira o que nao e digito), o que
+ * bastava para numero que CHEGA do WhatsApp -- ele ja vem com DDI. Numero
+ * DIGITADO por um operador nao vem: "27 99999-0000" sairia como "27999990000" e
+ * a Evolution entenderia como um numero de outro pais. Daí a normalizacao.
+ *
+ * Devolve null quando o numero nao tem cara de telefone, para o chamador poder
+ * recusar antes de gastar uma chamada na Evolution.
+ *
+ * @param {string} valor  numero em qualquer formatacao
+ * @returns {string|null} so digitos, com DDI 55, ou null se invalido
+ */
+function normalizarTelefoneBr(valor) {
+  // Zeros a esquerda vem de quem digita "0 27 9..." por costume de telefonia.
+  let d = limparTelefone(valor).replace(/^0+/, "");
+  if (!d) return null;
+
+  // Ja veio com DDI: 55 + DDD(2) + 8 ou 9 digitos.
+  if (d.startsWith("55") && (d.length === 12 || d.length === 13)) return d;
+
+  // Sem DDI: DDD(2) + 8 ou 9 digitos.
+  if (d.length === 10 || d.length === 11) return `55${d}`;
+
+  // 55 na frente de um numero curto e ambiguo (pode ser DDD 55, de Santa Maria).
+  // Nesse caso tratamos como DDD e prefixamos o DDI, que e o caso comum.
+  return null;
+}
+
 function formatarHora(date = new Date()) {
   return date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
@@ -46,6 +76,7 @@ module.exports = {
   mascararCnpj,
   cnpjValido,
   limparTelefone,
+  normalizarTelefoneBr,
   formatarHora,
   sleep,
 };
