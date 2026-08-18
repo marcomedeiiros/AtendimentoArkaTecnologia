@@ -19,17 +19,43 @@ const logger = require("../../config/logger");
 const env = require("../../config/env");
 const { sessao: cfgSessao, limites, palavrasChave } = require("./chatbot.config");
 
+// Dependencias em um objeto injetavel. O motor usa `this.deps.*` em vez dos
+// modulos direto para que o simulador (chatbot.simulador.js) possa rodar
+// EXATAMENTE este codigo com conversa/sessao em memoria e sem tocar o WhatsApp.
+// Sem essa costura, testar um fluxo exigiria reimplementar a orquestracao em
+// outro lugar - e uma copia que envelhece sozinha mente sobre o bot.
+const DEPENDENCIAS_PADRAO = {
+  fluxoRepository,
+  conversaRepository,
+  sessaoRepository,
+  parceiroRepository,
+  evolutionApi,
+  mockErp,
+  n8nClient,
+  configuracaoService,
+  bus,
+};
+
 // Estados possiveis de `sessao.aguardando`:
 //   cnpj   -> proxima mensagem do cliente e tratada como CNPJ
-//   menu   -> proxima mensagem e tratada como escolha numerica do menu
+//   menu   -> proxima mensagem e tratada como escolha numerica do menu de FLUXOS
+//   opcao  -> proxima mensagem e casada com as opcoes do passo atual
+//             (`config.opcoes`, vindo de fluxos importados)
 //   humano -> conversa transferida; o bot fica calado ate expirar ou ser atendida
-const AGUARDANDO = { CNPJ: "cnpj", MENU: "menu", HUMANO: "humano" };
+const AGUARDANDO = { CNPJ: "cnpj", MENU: "menu", OPCAO: "opcao", HUMANO: "humano" };
+
+// Gatilho que casa com qualquer primeira mensagem (fluxo de boas-vindas).
+const GATILHO_CURINGA = "*";
 
 function escaparRegex(texto) {
   return texto.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 class ChatbotEngine {
+  constructor(deps = {}) {
+    this.deps = { ...DEPENDENCIAS_PADRAO, ...deps };
+  }
+
   normalizarTexto(texto) {
     return String(texto || "")
       .toLowerCase()
@@ -42,17 +68,56 @@ class ChatbotEngine {
     return String(texto || "").trim();
   }
 
+  // Substitui as variaveis do texto do passo. O motor nunca fazia isso: tanto o
+  // "{{name}}" dos fluxos importados quanto o "{{cliente.nome}}" que os botoes
+  // de variavel do editor inserem iam crus para o WhatsApp. Chave desconhecida
+  // vira string vazia - um placeholder tecnico vazando para o cliente e pior
+  // que a lacuna - e fica registrada no log para dar para investigar.
+  interpolar(texto, contexto = {}) {
+    const str = String(texto ?? "");
+    if (!str.includes("{{")) return str;
+
+    const conversa = contexto.conversa || {};
+    const cnpj = conversa.cnpj || contexto.cnpjValidacao?.cnpj || null;
+    const parceiro = contexto.cnpjValidacao?.parceiro || null;
+
+    const valores = {
+      name: conversa.cliente,
+      "cliente.nome": conversa.cliente,
+      "cliente.telefone": conversa.telefone,
+      "cliente.cnpj": cnpj ? mascararCnpj(cnpj) : "",
+      "parceiro.status": parceiro
+        ? "parceiro com contrato ativo"
+        : cnpj
+          ? "sem contrato de parceiro ativo"
+          : "",
+      "parceiro.razaoSocial": parceiro?.razaoSocial || "",
+      "data.hoje": new Date().toLocaleDateString("pt-BR"),
+      "atendente.nome": conversa.atendente?.nome || "",
+      "empresa.nome": "",
+    };
+
+    return str.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_tudo, chave) => {
+      const valor = valores[chave];
+      if (valor === undefined) {
+        logger.warn("Variavel desconhecida no texto do passo", { chave });
+        return "";
+      }
+      return String(valor ?? "");
+    });
+  }
+
   // Texto que efetivamente vai para o cliente. `descricao` e anotacao interna
   // do editor de fluxos e so entra como fallback para fluxos antigos que nao
   // tem `texto` preenchido.
-  textoDoPasso(passo) {
-    return (
+  textoDoPasso(passo, contexto = {}) {
+    const bruto =
       passo.texto ||
       passo.config?.mensagem ||
       passo.descricao ||
       passo.titulo ||
-      ""
-    );
+      "";
+    return this.interpolar(bruto, contexto);
   }
 
   // "Fluxo 2: Reenvio de 2a Via de Boleto" -> "Reenvio de 2a Via de Boleto"
@@ -76,6 +141,7 @@ class ChatbotEngine {
 
     for (const fluxo of fluxos) {
       for (const gatilho of this.gatilhosDoFluxo(fluxo)) {
+        if (gatilho === GATILHO_CURINGA) continue; // tratado no fallback
         const regex = new RegExp(`(^|[^\\p{L}\\p{N}])${escaparRegex(gatilho)}`, "u");
         if (regex.test(normalizado) && (!melhor || gatilho.length > melhor.tamanho)) {
           melhor = { fluxo, tamanho: gatilho.length };
@@ -84,6 +150,13 @@ class ChatbotEngine {
     }
 
     return melhor?.fluxo || null;
+  }
+
+  // Fluxo de boas-vindas: um bot de menu precisa abrir em QUALQUER mensagem, nao
+  // numa palavra-chave. Sem isso o cliente teria que adivinhar o gatilho para o
+  // menu aparecer. Marca-se com o gatilho "*", que nao colide com palavra real.
+  fluxoPadrao(fluxos) {
+    return fluxos.find((f) => this.gatilhosDoFluxo(f).includes(GATILHO_CURINGA)) || null;
   }
 
   detectarComando(texto) {
@@ -102,11 +175,68 @@ class ChatbotEngine {
     return [...passos].sort((a, b) => a.ordem - b.ordem);
   }
 
+  // ------------------------------------------------- opcoes (ramificacoes) ---
+
+  // Um passo do editor visual tem UMA saida (`targetId`). Fluxos importados de
+  // editores de chatbot ramificam: cada opcao do menu tem suas palavras-chave e
+  // seu proprio destino. Essas saidas extras ficam em `config.opcoes`, gravado
+  // pelo import (client/src/components/flow/fluxoJson.js).
+  opcoesDoPasso(passo) {
+    const opcoes = passo?.config?.opcoes;
+    if (!Array.isArray(opcoes)) return [];
+    return opcoes.filter((o) => o && typeof o === "object");
+  }
+
+  // O bloco de "Configuracoes" do fluxo importado guarda os textos de fallback
+  // do proprio fluxo (nao entendi / transferindo / despedida). Sao textos do
+  // FLUXO, escritos por quem montou o bot, e nao mensagens que o motor inventa.
+  configuracoesGlobais(fluxo) {
+    for (const passo of fluxo?.passos || []) {
+      const cfg = passo.config?.configuracoesGlobais;
+      if (cfg && typeof cfg === "object") return cfg;
+    }
+    return null;
+  }
+
+  // Casa a resposta do cliente com as opcoes do passo. Prefere a palavra-chave
+  // mais longa que bater, para "menu inicial" ganhar de "menu" e "cliente
+  // avulso" ganhar de "cliente". Igualdade exata sempre ganha de conter.
+  // Sem nenhum acerto, cai na opcao curinga (o `type: "US"` da origem, usado
+  // nas perguntas abertas: "descreva sua solicitacao").
+  casarOpcao(texto, opcoes) {
+    const alvo = this.normalizarTexto(texto);
+    if (!alvo) return null;
+
+    let melhor = null;
+    for (const opcao of opcoes) {
+      for (const palavra of opcao.palavrasChave || []) {
+        const termo = this.normalizarTexto(palavra);
+        if (!termo) continue;
+        const exato = alvo === termo;
+        const contido = new RegExp(
+          `(^|[^\\p{L}\\p{N}])${escaparRegex(termo)}([^\\p{L}\\p{N}]|$)`,
+          "u"
+        ).test(alvo);
+        if (!exato && !contido) continue;
+        const peso = (exato ? 1000 : 0) + termo.length;
+        if (!melhor || peso > melhor.peso) melhor = { opcao, peso };
+      }
+    }
+    if (melhor) return melhor.opcao;
+
+    return opcoes.find((o) => !o.esperaEscolha) || null;
+  }
+
   proximoPasso(passos, passoAtual) {
     if (!passoAtual) return passos[0] || null;
     if (passoAtual.targetId) {
       return passos.find((p) => p.id === passoAtual.targetId) || null;
     }
+    // Um passo com `config.opcoes` descreve TODAS as suas saidas ali. Sem
+    // targetId ele e terminal: cair no proximo por `ordem` faria o bot seguir
+    // por um caminho que nao existe no desenho do fluxo (o VENDEDOR, que so
+    // transfere para atendente, emendaria no bloco seguinte da lista).
+    if (this.opcoesDoPasso(passoAtual).length) return null;
     const idx = passos.findIndex((p) => p.id === passoAtual.id);
     return idx >= 0 ? passos[idx + 1] || null : null;
   }
@@ -121,6 +251,89 @@ class ChatbotEngine {
     return alvo.includes("cnpj");
   }
 
+  // ----------------------------------------------- horario de atendimento ---
+
+  // "18:30" -> 1110 minutos. Fora do formato devolve null e a checagem e
+  // ignorada, em vez de bloquear o atendimento por causa de um typo na config.
+  _minutosDoDia(hhmm) {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || "").trim());
+    if (!m) return null;
+    const h = Number(m[1]);
+    const min = Number(m[2]);
+    if (h > 23 || min > 59) return null;
+    return h * 60 + min;
+  }
+
+  // Fora do horario definido em Configuracoes. Desligado por padrao: quem nao
+  // configurar nada continua sendo atendido a qualquer hora, como antes.
+  // Suporta janela que atravessa a meia-noite (ex.: 22:00 as 06:00).
+  foraDoHorario(horario, agora = new Date()) {
+    if (!horario?.ativo) return false;
+
+    const inicio = this._minutosDoDia(horario.inicio);
+    const fim = this._minutosDoDia(horario.fim);
+    if (inicio === null || fim === null) return false;
+
+    const dias = horario.dias?.length ? horario.dias : [1, 2, 3, 4, 5];
+    const minutos = agora.getHours() * 60 + agora.getMinutes();
+
+    if (inicio <= fim) {
+      return !dias.includes(agora.getDay()) || minutos < inicio || minutos >= fim;
+    }
+    // Janela virando o dia: o "dia" vale para o trecho depois do inicio.
+    const dentro =
+      (minutos >= inicio && dias.includes(agora.getDay())) ||
+      (minutos < fim && dias.includes((agora.getDay() + 6) % 7));
+    return !dentro;
+  }
+
+  // ------------------------------------------------------- inatividade ---
+
+  // `notResponseMessage` do fluxo: depois de N minutos parado, avisa e encerra.
+  // Roda pelo varredor (chatbot.inatividade.js), nao por mensagem recebida - o
+  // motor so acordava com mensagem do cliente, e e justamente a ausencia dela
+  // que precisa ser detectada aqui.
+  configuracaoInatividade(fluxo) {
+    const cfg = this.configuracoesGlobais(fluxo)?.notResponseMessage;
+    const minutos = Number(cfg?.time);
+    if (!cfg || !Number.isFinite(minutos) || minutos <= 0) return null;
+    return {
+      minutos,
+      mensagem: typeof cfg.message === "string" ? cfg.message.trim() : "",
+      // type 3 no editor de origem = encerrar o atendimento.
+      encerrar: Number(cfg.type) === 3,
+    };
+  }
+
+  // Aplica o timeout de inatividade em uma sessao que ficou parada esperando
+  // resposta do cliente. Devolve null quando ainda nao deu o tempo.
+  async aplicarInatividade(sessao, { conversa, instanciaId, instanceName }) {
+    if (!sessao?.ativo || !sessao.fluxoAtualId) return null;
+    // Conversa com atendente humano nao e problema do bot.
+    if (sessao.aguardando === AGUARDANDO.HUMANO) return null;
+
+    const fluxo = await this.deps.fluxoRepository.findById(sessao.fluxoAtualId);
+    const cfg = fluxo && this.configuracaoInatividade(fluxo);
+    if (!cfg) return null;
+
+    const parado = Date.now() - new Date(sessao.atualizadoEm || sessao.criadoEm).getTime();
+    if (parado < cfg.minutos * 60 * 1000) return null;
+
+    const ctx = { conversa, telefone: sessao.telefone, instanciaId, instanceName };
+    const texto = cfg.mensagem ? this.interpolar(cfg.mensagem, ctx) : null;
+
+    logger.info("Sessao encerrada por inatividade", {
+      conversaId: conversa.id,
+      minutos: cfg.minutos,
+      encerrar: cfg.encerrar,
+    });
+
+    if (cfg.encerrar) return this.encerrarAtendimento(ctx, texto);
+
+    if (texto) await this.enviarBot(conversa.id, sessao.telefone, texto, instanceName);
+    return this.transferirParaHumano(ctx, { motivo: "inatividade" });
+  }
+
   sessaoExpirada(sessao) {
     if (!sessao?.ativo) return false;
     const ttl =
@@ -131,7 +344,7 @@ class ChatbotEngine {
 
   async registrarLog(instanciaId, fluxoId, passo, conversaId, mensagem, sucesso, inicio) {
     try {
-      await fluxoRepository.createLog({
+      await this.deps.fluxoRepository.createLog({
         instanciaId,
         fluxoId,
         conversaId,
@@ -149,21 +362,21 @@ class ChatbotEngine {
   }
 
   async enviarBot(conversaId, telefone, texto, instanceName) {
-    const msg = await conversaRepository.addMensagem(conversaId, "bot", texto, null, null, {
+    const msg = await this.deps.conversaRepository.addMensagem(conversaId, "bot", texto, null, null, {
       status: "enviando",
     });
     try {
-      const r = await evolutionApi.sendText(
+      const r = await this.deps.evolutionApi.sendText(
         telefone,
         texto,
         instanceName || env.evolutionApi.instance
       );
       // Guardar o id da Evolution e o que permite os ACKs de entrega/leitura
       // (messages.update) encontrarem esta mensagem depois.
-      await conversaRepository.vincularWaMessageId(msg.id, r?.key?.id || null, "enviada");
+      await this.deps.conversaRepository.vincularWaMessageId(msg.id, r?.key?.id || null, "enviada");
     } catch (error) {
       logger.warn("Falha ao enviar WhatsApp", { telefone, message: error.message });
-      await conversaRepository.vincularWaMessageId(msg.id, null, "erro");
+      await this.deps.conversaRepository.vincularWaMessageId(msg.id, null, "erro");
     }
     await this._emitirConversa(conversaId);
     return texto;
@@ -173,8 +386,8 @@ class ChatbotEngine {
   // Best-effort: uma falha aqui nunca deve interromper o atendimento.
   async _emitirConversa(conversaId) {
     try {
-      const conversa = await conversaRepository.findById(conversaId);
-      if (conversa) bus.emitConversa(mapConversa(conversa));
+      const conversa = await this.deps.conversaRepository.findById(conversaId);
+      if (conversa) this.deps.bus.emitConversa(mapConversa(conversa));
     } catch (error) {
       logger.warn("Falha ao emitir conversa no SSE", { conversaId, message: error.message });
     }
@@ -186,8 +399,8 @@ class ChatbotEngine {
       return { valido: false, cnpj: cnpjLimpo };
     }
 
-    const parceiro = await parceiroRepository.findAtivoByCnpj(cnpjLimpo);
-    await conversaRepository.update(conversa.id, {
+    const parceiro = await this.deps.parceiroRepository.findAtivoByCnpj(cnpjLimpo);
+    await this.deps.conversaRepository.update(conversa.id, {
       cnpj: cnpjLimpo,
       cnpjVerificado: true,
     });
@@ -217,18 +430,23 @@ class ChatbotEngine {
 
   // ------------------------------------------------------------ handoff ---
 
-  async transferirParaHumano(ctx, { avisar = true, motivo = "solicitado" } = {}) {
+  async transferirParaHumano(
+    ctx,
+    { avisar = true, motivo = "solicitado", setor = null, filaId = null } = {}
+  ) {
     const { conversa, telefone, instanciaId, instanceName } = ctx;
 
     if (avisar) {
     }
 
-    await conversaRepository.update(conversa.id, {
-      statusAtendimento: "pendente",
-      lido: false,
-    });
+    const dados = { statusAtendimento: "pendente", lido: false };
+    // `filaId` vem do editor de origem (queueId) e nao tem equivalente aqui:
+    // fica no log para rastreio. Se a opcao trouxer um setor, ele entra na
+    // conversa e o HelpDesk ja consegue filtrar por ele.
+    if (setor) dados.setor = setor;
+    await this.deps.conversaRepository.update(conversa.id, dados);
 
-    await sessaoRepository.upsert(instanciaId, conversa.id, telefone, {
+    await this.deps.sessaoRepository.upsert(instanciaId, conversa.id, telefone, {
       fluxoAtualId: null,
       passoAtualId: null,
       aguardando: AGUARDANDO.HUMANO,
@@ -241,6 +459,8 @@ class ChatbotEngine {
     logger.info("Conversa transferida para atendimento humano", {
       conversaId: conversa.id,
       motivo,
+      filaId,
+      setor,
     });
 
     return {
@@ -249,12 +469,44 @@ class ChatbotEngine {
       aguardando: AGUARDANDO.HUMANO,
       transferido: true,
       motivo,
+      filaId,
     };
+  }
+
+  // Encerramento pedido pelo FLUXO (opcao com acao "encerrar"): diferente do
+  // comando "sair", aqui a conversa e fechada de fato, com a mensagem de
+  // despedida que o proprio fluxo definiu.
+  async encerrarAtendimento(ctx, mensagem) {
+    const { conversa, telefone, instanciaId, instanceName } = ctx;
+
+    if (mensagem) {
+      await this.enviarBot(conversa.id, telefone, mensagem, instanceName);
+    }
+
+    await this.deps.conversaRepository.update(conversa.id, {
+      statusAtendimento: "fechada",
+      fechadoEm: new Date(),
+      lido: true,
+      naoLidas: 0,
+    });
+
+    await this.deps.sessaoRepository.upsert(instanciaId, conversa.id, telefone, {
+      fluxoAtualId: null,
+      passoAtualId: null,
+      aguardando: null,
+      ativo: false,
+      contexto: {},
+    });
+
+    await this._emitirConversa(conversa.id);
+    logger.info("Atendimento encerrado pelo fluxo", { conversaId: conversa.id });
+
+    return { processado: true, conversaId: conversa.id, encerrado: true, fechada: true };
   }
 
   async encerrarSessao(ctx) {
     const { conversa, telefone, instanciaId, instanceName } = ctx;
-    await sessaoRepository.upsert(instanciaId, conversa.id, telefone, {
+    await this.deps.sessaoRepository.upsert(instanciaId, conversa.id, telefone, {
       fluxoAtualId: null,
       passoAtualId: null,
       aguardando: null,
@@ -281,8 +533,13 @@ class ChatbotEngine {
         break;
 
       case "mensagem": {
-        resposta = this.textoDoPasso(passo);
-        if (this.passoAguardaCnpj(passo) && !contexto.cnpjValidacao?.valido) {
+        resposta = this.textoDoPasso(passo, contexto);
+        // Passo com menu (fluxo importado): envia o texto e PARA aqui. Sem isso
+        // o motor seguiria o targetId na hora e o cliente receberia o fluxo
+        // inteiro de uma vez, sem chance de escolher nada.
+        if (this.opcoesDoPasso(passo).length) {
+          aguardando = AGUARDANDO.OPCAO;
+        } else if (this.passoAguardaCnpj(passo) && !contexto.cnpjValidacao?.valido) {
           aguardando = AGUARDANDO.CNPJ;
         } else {
           proximo = this.proximoPasso(fluxo.passos, passo);
@@ -300,9 +557,7 @@ class ChatbotEngine {
           aguardando = AGUARDANDO.CNPJ;
           // O texto tem que vir do passo. So caimos no padrao do motor quando
           // as respostas automaticas estao ligadas.
-          resposta =
-            this.textoDoPasso(passo) ||
-            "";
+          resposta = this.textoDoPasso(passo, contexto) || "";
         }
         break;
       }
@@ -317,12 +572,12 @@ class ChatbotEngine {
       case "acao": {
         const acao = passo.config?.acao;
         const cnpj = conversa.cnpj || contexto.cnpjValidacao?.cnpj;
-        const parceiro = cnpj ? await parceiroRepository.findAtivoByCnpj(cnpj) : null;
+        const parceiro = cnpj ? await this.deps.parceiroRepository.findAtivoByCnpj(cnpj) : null;
 
         if (acao === "desconto_parceiro") {
           const percentual = passo.config?.percentual || 15;
           if (parceiro) {
-            const result = await mockErp.aplicarDescontoParceiro({
+            const result = await this.deps.mockErp.aplicarDescontoParceiro({
               cnpj,
               razaoSocial: parceiro.razaoSocial,
               percentual,
@@ -333,15 +588,16 @@ class ChatbotEngine {
               "Desconto de parceiro nao aplicavel: o CNPJ informado nao possui contrato ativo.";
           }
         } else if (acao === "gerar_boleto") {
-          const result = await mockErp.gerarBoleto({
+          const result = await this.deps.mockErp.gerarBoleto({
             cnpj,
             razaoSocial: parceiro?.razaoSocial,
           });
           resposta = `${result.mensagem}\nLinha digitavel: ${result.linhaDigitavel}\nPIX: ${result.pixCopiaCola}\nVencimento: ${result.vencimento}`;
         } else {
-          resposta = this.textoDoPasso(passo);
+          resposta = this.textoDoPasso(passo, contexto);
         }
-        proximo = this.proximoPasso(fluxo.passos, passo);
+        if (this.opcoesDoPasso(passo).length) aguardando = AGUARDANDO.OPCAO;
+        else proximo = this.proximoPasso(fluxo.passos, passo);
         break;
       }
 
@@ -419,12 +675,12 @@ class ChatbotEngine {
 
     const { passoAtual, aguardando } = await this.percorrer(passos[0] || null, contexto);
 
-    await sessaoRepository.upsert(instanciaId, conversa.id, telefone, {
+    await this.deps.sessaoRepository.upsert(instanciaId, conversa.id, telefone, {
       fluxoAtualId: fluxo.id,
       passoAtualId: passoAtual?.id || null,
       aguardando,
       ativo: !!aguardando,
-      contexto: { tentativasCnpj: 0 },
+      contexto: { tentativasCnpj: 0, tentativasOpcao: 0 },
     });
 
     return { fluxoId: fluxo.id, aguardando, concluido: !aguardando };
@@ -432,13 +688,67 @@ class ChatbotEngine {
 
   // ------------------------------------------------------ continuar sessao --
 
+  // Executa a opcao escolhida pelo cliente: seguir para outro bloco, entregar
+  // para um atendente ou encerrar a conversa.
+  async aplicarOpcao(opcao, contexto, sessao) {
+    const { conversa, telefone, instanceName, fluxo } = contexto;
+    const globais = this.configuracoesGlobais(fluxo);
+
+    if (opcao.acao === "encerrar") {
+      const despedida = opcao.mensagemEncerramento || globais?.farewellMessage?.message || null;
+      return this.encerrarAtendimento(
+        contexto,
+        despedida ? this.interpolar(despedida, contexto) : null
+      );
+    }
+
+    if (opcao.acao === "transferir") {
+      // O editor de origem manda a `welcomeMessage` ("sua solicitacao esta
+      // completa, aguarde um colaborador") justamente ao entregar para a fila.
+      const aviso = globais?.welcomeMessage?.message;
+      if (aviso) {
+        await this.enviarBot(conversa.id, telefone, this.interpolar(aviso, contexto), instanceName);
+      }
+      // A fila do editor de origem (queueId) vira setor pelo mapa de
+      // Configuracoes; sem mapa, a conversa cai na fila geral como antes.
+      const filaId = opcao.filaId ?? null;
+      let setor = opcao.setor || null;
+      if (!setor && filaId != null) {
+        const mapa = await this.deps.configuracaoService.filasParaSetor();
+        setor = mapa[String(filaId)] || null;
+      }
+      return this.transferirParaHumano(contexto, { motivo: "fluxo_transferiu", setor, filaId });
+    }
+
+    const destino = fluxo.passos.find((p) => p.id === opcao.targetId) || null;
+    if (!destino) {
+      // Ramificacao apontando para o vazio: um atendente e melhor que silencio.
+      return this.transferirParaHumano(contexto, { motivo: "ramificacao_sem_destino" });
+    }
+
+    const resultado = await this.percorrer(destino, contexto);
+
+    await this.deps.sessaoRepository.update(sessao.id, {
+      passoAtualId: resultado.passoAtual?.id || null,
+      aguardando: resultado.aguardando,
+      ativo: !!resultado.aguardando,
+      contexto: { ...(sessao.contexto || {}), tentativasOpcao: 0, tentativasCnpj: 0 },
+    });
+
+    return {
+      fluxoId: fluxo.id,
+      aguardando: resultado.aguardando,
+      concluido: !resultado.aguardando,
+    };
+  }
+
   async continuarSessao(sessao, ctx, textoEntrada) {
     const { conversa, telefone, instanciaId, instanceName } = ctx;
-    const fluxo = await fluxoRepository.findById(sessao.fluxoAtualId);
+    const fluxo = await this.deps.fluxoRepository.findById(sessao.fluxoAtualId);
 
     if (!fluxo || !fluxo.ativo) {
       // Fluxo apagado ou desativado no meio do atendimento.
-      const fluxos = await fluxoRepository.findAtivos();
+      const fluxos = await this.deps.fluxoRepository.findAtivos();
       return this.enviarMenu(ctx);
     }
 
@@ -452,6 +762,42 @@ class ChatbotEngine {
       ? passos.find((p) => p.id === sessao.passoAtualId)
       : passos[0];
 
+    // Cliente parado num menu do fluxo: a mensagem dele e a escolha da opcao.
+    if (sessao.aguardando === AGUARDANDO.OPCAO) {
+      const opcoes = this.opcoesDoPasso(passoAtual);
+      const escolha = opcoes.length ? this.casarOpcao(textoEntrada, opcoes) : null;
+
+      if (!escolha) {
+        // Passo perdeu as opcoes (fluxo editado no meio do atendimento): nao ha
+        // como continuar de onde parou.
+        if (!opcoes.length) return this.transferirParaHumano(ctx, { motivo: "passo_sem_opcoes" });
+
+        const tentativas = (sessao.contexto?.tentativasOpcao || 0) + 1;
+        if (tentativas >= limites.maxTentativasOpcao) {
+          return this.transferirParaHumano(ctx, { motivo: "opcao_invalida" });
+        }
+
+        // Texto do proprio fluxo importado, nao do motor.
+        const naoEntendi = this.configuracoesGlobais(fluxo)?.notOptionsSelectMessage?.message;
+        if (naoEntendi) {
+          await this.enviarBot(
+            conversa.id,
+            telefone,
+            this.interpolar(naoEntendi, contexto),
+            instanceName
+          );
+        }
+
+        await this.deps.sessaoRepository.update(sessao.id, {
+          contexto: { ...(sessao.contexto || {}), tentativasOpcao: tentativas },
+        });
+
+        return { fluxoId: fluxo.id, conversaId: conversa.id, aguardando: AGUARDANDO.OPCAO };
+      }
+
+      return this.aplicarOpcao(escolha, contexto, sessao);
+    }
+
     if (sessao.aguardando === AGUARDANDO.CNPJ) {
       const cnpjValidacao = await this.validarCnpjRecebido(conversa, textoEntrada);
 
@@ -462,7 +808,7 @@ class ChatbotEngine {
           return this.transferirParaHumano(ctx, { motivo: "cnpj_invalido" });
         }
 
-        await sessaoRepository.update(sessao.id, {
+        await this.deps.sessaoRepository.update(sessao.id, {
           contexto: { ...(sessao.contexto || {}), tentativasCnpj: tentativas },
         });
 
@@ -472,7 +818,7 @@ class ChatbotEngine {
       await this.enviarBot(conversa.id, telefone, cnpjValidacao.mensagem, instanceName);
 
       contexto.cnpjValidacao = cnpjValidacao;
-      contexto.conversa = await conversaRepository.findById(conversa.id);
+      contexto.conversa = await this.deps.conversaRepository.findById(conversa.id);
 
       // O passo que pediu o CNPJ ja cumpriu seu papel; segue para o proximo.
       if (passoAtual) {
@@ -482,11 +828,11 @@ class ChatbotEngine {
 
     const resultado = await this.percorrer(passoAtual, contexto);
 
-    await sessaoRepository.update(sessao.id, {
+    await this.deps.sessaoRepository.update(sessao.id, {
       passoAtualId: resultado.passoAtual?.id || null,
       aguardando: resultado.aguardando,
       ativo: !!resultado.aguardando,
-      contexto: { ...(sessao.contexto || {}), tentativasCnpj: 0 },
+      contexto: { ...(sessao.contexto || {}), tentativasCnpj: 0, tentativasOpcao: 0 },
     });
 
     return {
@@ -520,7 +866,7 @@ class ChatbotEngine {
 
     // A Evolution API reentrega webhooks; sem isso a mesma mensagem rodava o
     // fluxo duas vezes e o cliente recebia tudo duplicado.
-    if (waMessageId && (await conversaRepository.existeMensagemWa(waMessageId))) {
+    if (waMessageId && (await this.deps.conversaRepository.existeMensagemWa(waMessageId))) {
       return { processado: false, motivo: "mensagem_duplicada" };
     }
 
@@ -529,9 +875,9 @@ class ChatbotEngine {
     const textoMsg = ehMidia ? (textoLimpo || rotulos[midia.tipo] || "[Mídia]") : textoLimpo;
     const metadata = ehMidia ? midia : null;
 
-    let conversa = await conversaRepository.findByTelefone(instanciaId, telefone);
+    let conversa = await this.deps.conversaRepository.findByTelefone(instanciaId, telefone);
     if (!conversa) {
-      conversa = await conversaRepository.create({
+      conversa = await this.deps.conversaRepository.create({
         instanciaId,
         cliente: nomeCliente,
         telefone,
@@ -543,18 +889,18 @@ class ChatbotEngine {
         },
       });
       // Foto de perfil (best-effort) so na criacao, para nao pesar a cada msg.
-      const fotoUrl = await evolutionApi.fetchProfilePictureUrl(telefone, instanceName);
-      if (fotoUrl) await conversaRepository.update(conversa.id, { fotoUrl });
-      conversa = await conversaRepository.findById(conversa.id);
+      const fotoUrl = await this.deps.evolutionApi.fetchProfilePictureUrl(telefone, instanceName);
+      if (fotoUrl) await this.deps.conversaRepository.update(conversa.id, { fotoUrl });
+      conversa = await this.deps.conversaRepository.findById(conversa.id);
     } else {
-      await conversaRepository.addMensagem(
+      await this.deps.conversaRepository.addMensagem(
         conversa.id,
         "cliente",
         textoMsg,
         metadata,
         waMessageId
       );
-      conversa = await conversaRepository.findById(conversa.id);
+      conversa = await this.deps.conversaRepository.findById(conversa.id);
     }
 
     // Guarda defensiva: se a releitura falhar (corrida com exclusao da conversa,
@@ -570,11 +916,11 @@ class ChatbotEngine {
     // Quem responde o cliente e definido em Configuracoes. Fora do modo "local",
     // o motor NAO envia nada por conta propria: a mensagem fica registrada na
     // Central e o n8n (ou o atendente) decide o que fazer.
-    const modo = await configuracaoService.modoAtendimento();
+    const modo = await this.deps.configuracaoService.modoAtendimento();
     if (modo !== "local") {
       let encaminhamento = { encaminhado: false, motivo: "modo_humano" };
       if (modo === "n8n") {
-        encaminhamento = await n8nClient.encaminharMensagem({
+        encaminhamento = await this.deps.n8nClient.encaminharMensagem({
           evento: "mensagem_recebida",
           conversaId: conversa.id,
           instancia: instanceName,
@@ -601,14 +947,40 @@ class ChatbotEngine {
       return { processado: true, motivo: "midia_recebida", conversaId: conversa.id };
     }
 
+    // Fora do horario de atendimento: o bot nao inicia fluxo nenhum. Vale so
+    // para conversa nova/parada - quem ja esta no meio de um menu continua, para
+    // nao abandonar o cliente no meio do caminho quando o expediente vira.
+    const horario = await this.deps.configuracaoService.horarioAtendimento();
+    if (this.foraDoHorario(horario)) {
+      const sessaoEmCurso = await this.deps.sessaoRepository.findByTelefone(instanciaId, telefone);
+      const noMeioDoFluxo = sessaoEmCurso?.ativo && sessaoEmCurso.aguardando === AGUARDANDO.OPCAO;
+      if (!noMeioDoFluxo) {
+        if (horario.mensagem) {
+          await this.enviarBot(
+            conversa.id,
+            telefone,
+            this.interpolar(horario.mensagem, { conversa }),
+            instanceName
+          );
+        }
+        logger.info("Mensagem recebida fora do horario de atendimento", {
+          conversaId: conversa.id,
+        });
+        return this.transferirParaHumano(
+          { conversa, telefone, instanciaId, instanceName },
+          { avisar: false, motivo: "fora_do_horario" }
+        );
+      }
+    }
+
     // Atendente humano assumiu: o bot nao interfere.
     if (conversa.statusAtendimento === "aberta") {
       return { processado: false, motivo: "atendimento_humano", conversaId: conversa.id };
     }
 
-    let sessao = await sessaoRepository.findByTelefone(instanciaId, telefone);
+    let sessao = await this.deps.sessaoRepository.findByTelefone(instanciaId, telefone);
     if (sessao && this.sessaoExpirada(sessao)) {
-      await sessaoRepository.update(sessao.id, {
+      await this.deps.sessaoRepository.update(sessao.id, {
         ativo: false,
         aguardando: null,
         passoAtualId: null,
@@ -627,7 +999,18 @@ class ChatbotEngine {
     };
 
     try {
-      const comando = this.detectarComando(textoLimpo);
+      const comandoBruto = this.detectarComando(textoLimpo);
+
+      // Com o cliente parado num menu do fluxo, as palavras-chave globais do
+      // motor colidem de frente com os rotulos do menu: `palavrasChave.menu` tem
+      // "voltar" e "inicio", `palavrasChave.sair` tem "encerrar" e "sair", e um
+      // menu tipico traz "3,voltar,menu inicial,inicio" e "encerrar,sair,4".
+      // Nesse estado a opcao do fluxo ganha - senao o cliente que digita
+      // "voltar" cai na fila em vez de voltar ao inicio do bot, e quem digita
+      // "encerrar" nao recebe a mensagem de despedida que o fluxo definiu.
+      // O pedido explicito de atendente continua atropelando o fluxo.
+      const noMenuDoFluxo = sessao?.ativo && sessao.aguardando === AGUARDANDO.OPCAO;
+      const comando = noMenuDoFluxo && comandoBruto !== "atendente" ? null : comandoBruto;
 
       if (comando === "atendente") {
         return await this.transferirParaHumano(ctx, { motivo: "pedido_do_cliente" });
@@ -638,7 +1021,7 @@ class ChatbotEngine {
       }
 
       if (comando === "menu") {
-        const fluxos = await fluxoRepository.findAtivos();
+        const fluxos = await this.deps.fluxoRepository.findAtivos();
         ctx.contexto = { ...ctx.contexto, tentativasMenu: 0 };
         return await this.enviarMenu(ctx);
       }
@@ -658,7 +1041,7 @@ class ChatbotEngine {
         const fluxoId = this.interpretarEscolhaMenu(textoLimpo, opcoes);
 
         if (fluxoId) {
-          const fluxo = await fluxoRepository.findById(fluxoId);
+          const fluxo = await this.deps.fluxoRepository.findById(fluxoId);
           if (fluxo?.ativo) {
             const result = await this.executarFluxo(
               fluxo,
@@ -679,8 +1062,10 @@ class ChatbotEngine {
         return { processado: true, conversaId: conversa.id, ...result };
       }
 
-      const fluxos = await fluxoRepository.findAtivos();
-      const fluxo = this.detectarGatilho(textoLimpo, fluxos);
+      const fluxos = await this.deps.fluxoRepository.findAtivos();
+      // Palavra-chave primeiro; o fluxo de boas-vindas (gatilho "*") e o fallback,
+      // senao ele engoliria todos os fluxos especificos.
+      const fluxo = this.detectarGatilho(textoLimpo, fluxos) || this.fluxoPadrao(fluxos);
 
       if (!fluxo) {
         // Antes o bot simplesmente nao respondia nada aqui.
@@ -699,7 +1084,7 @@ class ChatbotEngine {
       if (cnpjNumeros.length === 14 && cnpjValido(cnpjNumeros) && !conversa.cnpjVerificado) {
         cnpjValidacao = await this.validarCnpjRecebido(conversa, textoLimpo);
         await this.enviarBot(conversa.id, telefone, cnpjValidacao.mensagem, instanceName);
-        conversa = await conversaRepository.findById(conversa.id);
+        conversa = await this.deps.conversaRepository.findById(conversa.id);
       }
 
       const result = await this.executarFluxo(
@@ -729,4 +1114,11 @@ class ChatbotEngine {
   }
 }
 
-module.exports = new ChatbotEngine();
+const engine = new ChatbotEngine();
+
+module.exports = engine;
+// A classe e as constantes ficam expostas para o simulador montar uma instancia
+// com dependencias falsas (mesma logica, sem banco e sem WhatsApp).
+module.exports.ChatbotEngine = ChatbotEngine;
+module.exports.AGUARDANDO = AGUARDANDO;
+module.exports.GATILHO_CURINGA = GATILHO_CURINGA;

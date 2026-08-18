@@ -1,8 +1,10 @@
 const chatbotEngine = require("./chatbot.engine");
+const chatbotSimulador = require("./chatbot.simulador");
 const sessaoRepository = require("../../infrastructure/repositories/sessao.repository");
 const fluxoRepository = require("../../infrastructure/repositories/fluxo.repository");
 const conversaRepository = require("../../infrastructure/repositories/conversa.repository");
 const instanciaRepository = require("../../infrastructure/repositories/instancia.repository");
+const configuracaoService = require("../configuracoes/configuracao.service");
 const AppError = require("../../shared/errors/AppError");
 const env = require("../../config/env");
 
@@ -46,6 +48,25 @@ class ChatbotService {
     );
 
     return { conversaId, ...result };
+  }
+
+  // Conversa de teste contra o fluxo, sem WhatsApp e sem gravar nada. Ver
+  // chatbot.simulador.js: usa o motor real com dependencias em memoria.
+  async simular({ fluxoId, mensagens = [], nomeCliente, respeitarHorario = false }) {
+    const fluxo = await fluxoRepository.findById(fluxoId);
+    if (!fluxo) throw new AppError("Fluxo nao encontrado", 404, "NOT_FOUND");
+
+    // O mapa de filas vem da configuracao real: e ele que decide o setor da
+    // transferencia, e o teste tem que mostrar o setor que o cliente veria.
+    const filas = await configuracaoService.filasParaSetor();
+    const horario = await configuracaoService.horarioAtendimento();
+
+    return chatbotSimulador.simular(fluxo, mensagens, {
+      nomeCliente,
+      filas,
+      horario,
+      respeitarHorario,
+    });
   }
 
   async obterSessao(telefone, instanceName) {

@@ -10,19 +10,24 @@ export function FlowExecutionLogs({ logs, isRunning, onClear, onClose, activeNod
     }
   }, [logs.length]);
 
+  // `w-full` com `left-4` estourava 16px para fora da tela: o calc desconta as
+  // duas margens laterais.
   return (
-    <div className="absolute bottom-4 left-4 z-30 w-full max-w-lg glass-panel border border-linha rounded-2xl shadow-2xl overflow-hidden fade-in">
+    <div className="absolute bottom-4 left-4 z-30 w-[calc(100%-2rem)] max-w-lg glass-panel border border-linha rounded-2xl shadow-2xl overflow-hidden fade-in">
       <div className="p-3 bg-grafite-600 border-b border-linha flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs font-bold text-white font-display">
-          <Terminal size={15} className="text-acao-200" />
-          <span>Console de Execução em Tempo Real</span>
+        <div className="flex items-center gap-2 text-xs font-bold text-white font-display min-w-0">
+          <Terminal size={15} className="text-acao-200 shrink-0" />
+          <span className="truncate">
+            <span className="hidden sm:inline">Console de Execução em Tempo Real</span>
+            <span className="sm:hidden">Console</span>
+          </span>
           {isRunning && (
-            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-acao/20 text-acao-200 font-mono">
-              <Loader2 size={10} className="animate-spin" /> EXECUTANDO
+            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-acao/20 text-acao-200 font-mono shrink-0">
+              <Loader2 size={10} className="animate-spin" /> <span className="hidden sm:inline">EXECUTANDO</span>
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={onClear}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 text-xs flex items-center gap-1 transition-colors"

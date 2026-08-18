@@ -146,6 +146,14 @@ export const FluxosAPI = {
   removerTodos: () => request('/fluxos', { method: 'DELETE' }),
 };
 
+// ── Chatbot API ──
+export const ChatbotAPI = {
+  // Conversa de teste contra um fluxo. Stateless: manda a lista completa de
+  // mensagens do cliente e o servidor reproduz a conversa do zero. Nao envia
+  // WhatsApp e nao grava conversa nem sessao.
+  simular: (dados) => request('/chatbot/simular', { method: 'POST', body: JSON.stringify(dados) }),
+};
+
 // ── Equipe API ──
 // So leitura: a equipe e derivada de quem tem conta. Entrar nela e criar conta
 // em /cadastrar, e o status vem da presenca observada pelo servidor.

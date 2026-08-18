@@ -145,7 +145,7 @@ export default function ConfiguracoesPage() {
             <Settings size={22} className="text-acao-200" /> Configurações
           </h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-1">
-            Conexões com a Evolution API e o n8n. Os valores salvos aqui têm prioridade sobre o .env.
+            Conexões com a Evolution API e o n8n os valores salvos aqui têm prioridade sobre o .env.
           </p>
         </div>
         <button onClick={salvar} disabled={salvando || carregando}
@@ -160,7 +160,7 @@ export default function ConfiguracoesPage() {
       )}
 
       <p className="text-[11px] text-slate-500">
-        Campos de API Key aparecem mascarados. Deixe como está para manter a chave atual;
+        Campos de API Key aparecem mascarados deixe como está para manter a chave atual
         digite um valor novo apenas se quiser trocá-la.
       </p>
 
@@ -228,8 +228,8 @@ export default function ConfiguracoesPage() {
             <FileText size={16} className="text-acao-200" /> Transcrição de áudio (Whisper)
           </h3>
           <p className="text-[11px] text-slate-400 leading-relaxed">
-            Liga o botão <strong className="text-slate-300">Transcrever</strong> nos áudios da conversa.
-            Use uma chave <strong className="text-slate-300">gratuita</strong> da{' '}
+            Liga o botão <strong className="text-slate-300">Transcrever</strong> nos áudios da conversa
+            use uma chave <strong className="text-slate-300">gratuita</strong> da{' '}
             <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-acao-200 underline underline-offset-2">Groq</a>{' '}
             (cadastro rápido) o Whisper roda na camada gratuita. Sem chave, o botão avisa que a transcrição não está configurada.
           </p>

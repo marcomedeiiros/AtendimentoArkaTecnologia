@@ -1,0 +1,677 @@
+{
+  "name": "ARKA",
+  "nodeList": [
+    {
+      "id": "start",
+      "name": "Início",
+      "type": "start",
+      "left": "26px",
+      "top": "100px",
+      "ico": "mdi-play",
+      "viewOnly": true,
+      "status": "success",
+      "style": {},
+      "configurations": {},
+      "variableKey": "",
+      "variableLabel": "",
+      "variableType": "text",
+      "variableValidation": ""
+    },
+    {
+      "id": "configurations",
+      "name": "Configurações",
+      "type": "configurations",
+      "left": "340px",
+      "top": "100px",
+      "ico": "mdi-alert-circle-outline",
+      "viewOnly": true,
+      "style": {},
+      "configurations": {
+        "notOptionsSelectMessage": {
+          "message": "Não consegui entender sua solicitação, pode responder novamente?",
+          "stepReturn": "A"
+        },
+        "notResponseMessage": {
+          "time": 10,
+          "type": 3,
+          "destiny": "",
+          "message": "Que pena, por falta de interação o chat foi encerrado, mas não se preocupe, caso deseje tentar novamente, envie uma nova mensagem! "
+        },
+        "welcomeMessage": {
+          "message": "Agora sim!! Sua solicitação está completa, basta esperar que logo um dos nossos colaboradores virá lhe atender!"
+        },
+        "farewellMessage": {
+          "message": "Seu atendimento foi encerrar! se precisar nos envie uma nova mensagem!"
+        },
+        "maxRetryBotMessage": {
+          "number": 3,
+          "type": 3,
+          "destiny": 41
+        },
+        "outOpenHours": {
+          "type": 1,
+          "destiny": 42
+        },
+        "firstInteraction": {
+          "type": 1,
+          "destiny": null
+        },
+        "keyword": {
+          "message": ""
+        },
+        "autoDistributeTickets": "N",
+        "answerCloseTicket": [
+          "encerrar atendimento"
+        ]
+      },
+      "variableKey": "",
+      "variableLabel": "",
+      "variableType": "text",
+      "variableValidation": ""
+    },
+    {
+      "id": "nodeC",
+      "name": "Boas Vindas",
+      "type": "node",
+      "left": "26px",
+      "top": "495px",
+      "viewOnly": false,
+      "style": {},
+      "interactions": [
+        {
+          "id": "dc69a7cf-e3f1-455d-b9c3-025138eb0cc3",
+          "type": "MessageField",
+          "data": {
+            "message": "🤖Olá, {{name}}. Bem-vindo(a) à ARKA TECNOLOGIA. Agradecemos seu contato. Por favor, escolha uma das opções abaixo para direcionar seu atendimento:\"\n\n\n\n1️⃣- Setor Técnico\n2️⃣- Comercial\n3️⃣- Adm/Financeiro\n4️⃣- Encerrar atendimento"
+          }
+        }
+      ],
+      "conditions": [
+        {
+          "id": "972c0135-707d-4341-91d8-e85f97a74229",
+          "action": 0,
+          "nextStepId": "ae4ce3fe-3c25-4111-818d-ebc8c3a62dfc",
+          "type": "R",
+          "comparisonType": "equals",
+          "condition": [
+            "1",
+            "tecnico",
+            "técnico",
+            "setor tecnico",
+            "suporte tecnico",
+            "suporte"
+          ],
+          "value": "1,tecnico,técnico,setor tecnico,suporte tecnico,suporte"
+        },
+        {
+          "id": "96c6bc28-2fa9-4a95-b260-aa7db50c55d2",
+          "action": 0,
+          "nextStepId": "e75edeb7-19da-4af9-b6d1-220aeaa1e260",
+          "type": "R",
+          "comparisonType": "equals",
+          "condition": [
+            "2",
+            "comercial",
+            "vendas"
+          ],
+          "value": "2,comercial,vendas"
+        },
+        {
+          "id": "fe3a01f8-6fdb-4207-91fa-6530c0058678",
+          "action": 0,
+          "nextStepId": "84c878d7-3224-4a04-b144-268b09bedceb",
+          "type": "R",
+          "comparisonType": "equals",
+          "condition": [
+            "3",
+            "financeiro",
+            "adm",
+            "administrativo",
+            "faturamento"
+          ],
+          "value": "3,financeiro,adm,administrativo,faturamento"
+        },
+        {
+          "id": "84cefdb7-957e-408d-b656-9e70f185854d",
+          "action": 3,
+          "nextStepId": "",
+          "closeTicket": "À Arka agradece seu contato. Ficamos à disposição caso precise falar novamente conosco. Aproveite e conheça nosso site e nos siga no Instagram:\n\nwww.arkabrasil.com\nwww.instagram.com/arkatecnologia/\n",
+          "type": "R",
+          "comparisonType": "equals",
+          "condition": [
+            "encerrar",
+            "sair",
+            "finalizar",
+            "4"
+          ],
+          "value": "encerrar,sair,finalizar,4"
+        }
+      ],
+      "actions": [],
+      "configurations": {
+        "welcomeMessage": { "message": "" },
+        "notOptionsSelectMessage": { "message": "" },
+        "keyword": { "message": "" },
+        "notResponseMessage": {
+          "message": "",
+          "time": 0,
+          "type": 1,
+          "destiny": null,
+          "messageWarning": "",
+          "messageWarningEnabled": false
+        },
+        "maxRetryBotMessage": { "number": 0, "type": 1, "destiny": null },
+        "firstInteraction": { "type": 1, "destiny": null },
+        "outOpenHours": { "type": 1, "destiny": null },
+        "autoDistributeTickets": "N",
+        "answerCloseTicket": [],
+        "farewellMessage": { "message": "" }
+      },
+      "variableKey": "boas_vindas",
+      "variableLabel": "",
+      "variableType": "text",
+      "variableValidation": ""
+    },
+    {
+      "id": "ae4ce3fe-3c25-4111-818d-ebc8c3a62dfc",
+      "name": "SUPORTE",
+      "type": "node",
+      "left": "295px",
+      "top": "329px",
+      "viewOnly": false,
+      "style": {},
+      "interactions": [
+        {
+          "id": "86692d2f-9d33-4e50-8898-0642f004ebc3",
+          "type": "MessageField",
+          "data": {
+            "message": "🤖 Você selecionou o Setor Técnico. Para melhor atendê-lo, por favor escolha uma das opções abaixo\n\n1️⃣- TENHO CONTRATO\n2️⃣- SOU CLIENTE AVULSO\n3️⃣- VOLTAR AO MENU INICIAL"
+          }
+        }
+      ],
+      "conditions": [
+        {
+          "id": "ccffeb04-5fcc-40f5-97e5-2abcbc119b5b",
+          "action": 0,
+          "nextStepId": "b660ab7e-1dd8-4fdf-80ee-f8bcfe4c5d5d",
+          "type": "R",
+          "comparisonType": "equals",
+          "condition": [
+            "1",
+            "Contrato",
+            "tenho contrato",
+            "contrato"
+          ],
+          "value": "1,Contrato,tenho contrato,contrato"
+        },
+        {
+          "id": "a35455d6-b79d-4e95-92a5-095fe00e50a3",
+          "action": 0,
+          "nextStepId": "a184403d-1c4b-4d51-8d58-224502002fc5",
+          "type": "R",
+          "comparisonType": "equals",
+          "condition": [
+            "2",
+            "CLIENTE AVULSO",
+            "NOVO CLIENTE"
+          ],
+          "value": "2,CLIENTE AVULSO,NOVO CLIENTE"
+        },
+        {
+          "id": "f976ae93-3f75-425d-bf9b-75f74985e1b7",
+          "action": 0,
+          "nextStepId": "nodeC",
+          "type": "R",
+          "comparisonType": "equals",
+          "condition": [
+            "3",
+            "VOLTAR AO INICIO",
+            "MENU INICIAL"
+          ],
+          "value": "3,VOLTAR AO INICIO,MENU INICIAL"
+        }
+      ],
+      "actions": [],
+      "configurations": {
+        "welcomeMessage": { "message": "" },
+        "notOptionsSelectMessage": { "message": "" },
+        "keyword": { "message": "" },
+        "notResponseMessage": {
+          "message": "",
+          "time": 0,
+          "type": 1,
+          "destiny": null,
+          "messageWarning": "",
+          "messageWarningEnabled": false
+        },
+        "maxRetryBotMessage": { "number": 0, "type": 1, "destiny": null },
+        "firstInteraction": { "type": 1, "destiny": null },
+        "outOpenHours": { "type": 1, "destiny": null },
+        "autoDistributeTickets": "N",
+        "answerCloseTicket": [],
+        "farewellMessage": { "message": "" }
+      },
+      "variableKey": "suporte",
+      "variableLabel": "",
+      "variableType": "text",
+      "variableValidation": ""
+    },
+    {
+      "id": "e75edeb7-19da-4af9-b6d1-220aeaa1e260",
+      "name": "COMERCIAL",
+      "type": "node",
+      "left": "327px",
+      "top": "569px",
+      "viewOnly": false,
+      "style": {},
+      "interactions": [
+        {
+          "id": "61ec7db5-a72c-404e-9cf2-bcaa2eedac97",
+          "type": "MessageField",
+          "data": {
+            "message": "🤖 Você selecionou o Setor Comercial. Para melhor atendê-lo, por favor escolha uma das opções abaixo:\n\n1️⃣- PRODUTOS\n2️⃣- SERVIÇOS\n3️⃣ - VOLTAR AO INICIO"
+          }
+        }
+      ],
+      "conditions": [
+        {
+          "id": "0f2e45dc-92ec-406e-b0c0-0c9d4aab3f9f",
+          "action": 0,
+          "nextStepId": "9bea8850-c67e-4f8d-9397-87688c8b2315",
+          "type": "R",
+          "comparisonType": "equals",
+          "condition": [
+            "1",
+            "produtos",
+            "computador",
+            "notebook"
+          ],
+          "value": "1,produtos,computador,notebook"
+        },
+        {
+          "id": "74ba880c-5481-4bd3-ac0f-cbf051f6ae77",
+          "action": 0,
+          "nextStepId": "9bea8850-c67e-4f8d-9397-87688c8b2315",
+          "type": "R",
+          "comparisonType": "equals",
+          "condition": [
+            "2",
+            "serviço",
+            "SERVIÇOS"
+          ],
+          "value": "2,serviço,SERVIÇOS"
+        },
+        {
+          "id": "2417e4e8-b12c-4806-a931-001c28d12834",
+          "action": 0,
+          "nextStepId": "nodeC",
+          "type": "R",
+          "comparisonType": "equals",
+          "condition": [
+            "3",
+            "voltar",
+            "menu inicial",
+            "inicio"
+          ],
+          "value": "3,voltar,menu inicial,inicio"
+        }
+      ],
+      "actions": [],
+      "configurations": {},
+      "variableKey": "comercial",
+      "variableLabel": "",
+      "variableType": "text",
+      "variableValidation": ""
+    },
+    {
+      "id": "9bea8850-c67e-4f8d-9397-87688c8b2315",
+      "name": "VENDEDOR",
+      "type": "line",
+      "left": "603px",
+      "top": "569px",
+      "viewOnly": false,
+      "style": {},
+      "interactions": [
+        {
+          "id": "00136e7e-c052-46e5-a72c-3fc05534940a",
+          "type": "MessageField",
+          "data": {
+            "message": "Entendi, para mellhor direcionar seu atendimento pode nos dizer um pouco mais sobre sua demanda?\n"
+          }
+        }
+      ],
+      "conditions": [
+        {
+          "id": "3de17edf-cd00-48ae-9a08-6ff1dfe5993c",
+          "action": 1,
+          "nextStepId": "",
+          "queueId": 35,
+          "type": "US",
+          "comparisonType": "",
+          "condition": [],
+          "value": ""
+        }
+      ],
+      "actions": [],
+      "configurations": {},
+      "variableKey": "vendedor",
+      "variableLabel": "",
+      "variableType": "text",
+      "variableValidation": ""
+    },
+    {
+      "id": "b660ab7e-1dd8-4fdf-80ee-f8bcfe4c5d5d",
+      "name": "IDENTIFICA CONTRATO",
+      "type": "node",
+      "left": "525px",
+      "top": "303px",
+      "viewOnly": false,
+      "style": {},
+      "interactions": [
+        {
+          "id": "04527cba-f899-4659-9380-874b953ac068",
+          "type": "MessageField",
+          "data": {
+            "message": "🤖 Entendi, para melhor direcionar seu atendimento me informe:\n▪️Nome da Empresa Contratante\n▪️Seu Nome\n▪️Setor"
+          }
+        }
+      ],
+      "conditions": [
+        {
+          "id": "0dcc4b96-f02f-4a34-8892-c9ee24716dcf",
+          "action": 0,
+          "nextStepId": "f49d419f-555d-4a3e-bb49-d9ef18189d0c",
+          "type": "US",
+          "comparisonType": "",
+          "condition": [],
+          "value": ""
+        }
+      ],
+      "actions": [],
+      "configurations": {},
+      "variableKey": "identifica_contrato",
+      "variableLabel": "",
+      "variableType": "text",
+      "variableValidation": ""
+    },
+    {
+      "id": "f49d419f-555d-4a3e-bb49-d9ef18189d0c",
+      "name": "IDENTIFICA PROBLEMA",
+      "type": "node",
+      "left": "837px",
+      "top": "335px",
+      "viewOnly": false,
+      "style": {},
+      "interactions": [
+        {
+          "id": "6b34d32a-ec51-4ca0-870c-77f1b771f12f",
+          "type": "MessageField",
+          "data": {
+            "message": "🤖*AGORA DESCREVA SUA SOLICITAÇÃO*"
+          }
+        }
+      ],
+      "conditions": [
+        {
+          "id": "4614eddd-f57c-45bc-919d-133239ff91f3",
+          "action": 1,
+          "nextStepId": "",
+          "queueId": 33,
+          "type": "US",
+          "comparisonType": "",
+          "condition": [],
+          "value": ""
+        }
+      ],
+      "actions": [],
+      "configurations": {},
+      "variableKey": "identifica_problema",
+      "variableLabel": "",
+      "variableType": "text",
+      "variableValidation": ""
+    },
+    {
+      "id": "84c878d7-3224-4a04-b144-268b09bedceb",
+      "name": "FINANCEIRO",
+      "type": "node",
+      "left": "324px",
+      "top": "780px",
+      "viewOnly": false,
+      "style": {},
+      "interactions": [
+        {
+          "id": "13b9c7b4-630b-42c8-a0d0-6dfa610ae3b8",
+          "type": "MessageField",
+          "data": {
+            "message": "🤖 Você selecionou o Setor Administrativo/Financeiro. Para melhor atendê-lo, por favor, informe seu nome e descreva o que deseja para melhor direcionarmos seu atendimento!"
+          }
+        }
+      ],
+      "conditions": [
+        {
+          "id": "2303869f-0808-4d85-8991-d1f789c95a52",
+          "action": 1,
+          "nextStepId": "",
+          "queueId": 35,
+          "type": "US",
+          "comparisonType": "",
+          "condition": [],
+          "value": ""
+        }
+      ],
+      "actions": [],
+      "configurations": {},
+      "variableKey": "financeiro",
+      "variableLabel": "",
+      "variableType": "text",
+      "variableValidation": ""
+    },
+    {
+      "id": "8666daf4-77d6-471f-853e-e680512621c5",
+      "name": "AVULSO",
+      "type": "node",
+      "left": "762px",
+      "top": "-127px",
+      "ico": "mdi-robot-outline",
+      "viewOnly": false,
+      "style": {},
+      "interactions": [
+        {
+          "id": "55acba58-fe9d-40ce-8822-4c88735b517d",
+          "type": "MessageField",
+          "data": {
+            "message": "Para clientes sem contrato de suporte, nossos atendimentos são realizados mediante autorização, segue abaixo valores:\n\n💻 Atendimento Remoto: R$ 120,00\n🛠 Atendimento Presencial: R$ 180,00\n\nCaso seja necessário algum outro tipo de serviço ou projeto, o valor será informado mediante consulta.\nPodemos Seguir com o seu atendimento?\n\n1️⃣- SIM\n2️⃣- NAO\n3️⃣- VOLTAR AO MENU INICIAL"
+          }
+        }
+      ],
+      "conditions": [
+        {
+          "id": "8831734e-ce42-4072-a863-24c1105ae0d5",
+          "action": 0,
+          "nextStepId": "",
+          "type": "R",
+          "comparisonType": "equals",
+          "condition": [],
+          "value": ""
+        }
+      ],
+      "actions": [],
+      "configurations": {
+        "welcomeMessage": { "message": "" },
+        "notOptionsSelectMessage": { "message": "" },
+        "keyword": { "message": "" },
+        "notResponseMessage": {
+          "message": "",
+          "time": 0,
+          "type": 1,
+          "destiny": null,
+          "messageWarning": "",
+          "messageWarningEnabled": false
+        },
+        "maxRetryBotMessage": { "number": 0, "type": 1, "destiny": null },
+        "firstInteraction": { "type": 1, "destiny": null },
+        "outOpenHours": { "type": 1, "destiny": null },
+        "autoDistributeTickets": "N",
+        "answerCloseTicket": [],
+        "farewellMessage": { "message": "" }
+      },
+      "variableKey": "sim ",
+      "variableLabel": "",
+      "variableType": "text",
+      "variableValidation": ""
+    },
+    {
+      "id": "a184403d-1c4b-4d51-8d58-224502002fc5",
+      "name": "C_AVULSO",
+      "type": "node",
+      "left": "527px",
+      "top": "373px",
+      "state": "success",
+      "actions": [],
+      "conditions": [
+        {
+          "id": "87d4f491-b229-48df-92c5-bbab033642f9",
+          "action": 0,
+          "nextStepId": "f49d419f-555d-4a3e-bb49-d9ef18189d0c",
+          "type": "R",
+          "comparisonType": "equals",
+          "condition": [
+            "sim",
+            "1"
+          ],
+          "value": "sim,1"
+        },
+        {
+          "id": "df300b15-7bf2-4f8b-bd44-eef8ddc9bf9e",
+          "action": 3,
+          "nextStepId": "",
+          "closeTicket": "Certo, de qualquer forma agradecemos seu contato, e se mudar de idéia, basta nos chamar novamente! ",
+          "type": "R",
+          "comparisonType": "equals",
+          "condition": [
+            "2",
+            "Não",
+            "encerrar"
+          ],
+          "value": "2,Não,encerrar"
+        },
+        {
+          "id": "05a4adc0-1987-4467-bf9d-a4fbe3363b85",
+          "action": 0,
+          "nextStepId": "nodeC",
+          "type": "R",
+          "comparisonType": "equals",
+          "condition": [
+            "3",
+            "voltar",
+            "menu inicial",
+            "voltar ao menu inicial"
+          ],
+          "value": "3,voltar,menu inicial,voltar ao menu inicial"
+        }
+      ],
+      "interactions": [
+        {
+          "id": "46bb1330-a65f-4801-9bdf-fee04a87450e",
+          "type": "MessageField",
+          "data": {
+            "message": "🤖 Será um prazer atende-lo, mas antes preciso te informar os valores do atendimento:\n\n💻 Atendimento Remoto: R$ 120,00\n🛠 Atendimento in Loco: R$ 180,00/h\n\nCaso seja necessário algum outro tipo de serviço ou projeto, o valor será informado mediante consulta. Podemos seguir com o seu atendimento?\n\n1️⃣- SIM\n2️⃣- NÃO\n3️⃣- VOLTAR AO MENU INICIAL"
+          }
+        }
+      ],
+      "configurations": {
+        "welcomeMessage": { "message": "" },
+        "notOptionsSelectMessage": { "message": "" },
+        "keyword": { "message": "" },
+        "notResponseMessage": {
+          "message": "",
+          "time": 0,
+          "type": 1,
+          "destiny": null,
+          "messageWarning": "",
+          "messageWarningEnabled": false
+        },
+        "maxRetryBotMessage": { "number": 0, "type": 1, "destiny": null },
+        "firstInteraction": { "type": 1, "destiny": null },
+        "outOpenHours": { "type": 1, "destiny": null },
+        "autoDistributeTickets": "N",
+        "answerCloseTicket": [],
+        "farewellMessage": { "message": "" }
+      },
+      "variableKey": "nova_etapa",
+      "variableType": "text"
+    }
+  ],
+  "lineList": [
+    {
+      "from": "start",
+      "to": "nodeC",
+      "paintStyle": { "strokeWidth": 3, "stroke": "#5c67f2" }
+    },
+    {
+      "from": "nodeC",
+      "to": "ae4ce3fe-3c25-4111-818d-ebc8c3a62dfc",
+      "label": "1,tecnico,técnico,setor tecnico,suporte tecnico,suporte",
+      "paintStyle": { "strokeWidth": 3, "stroke": "#5c67f2" }
+    },
+    {
+      "from": "nodeC",
+      "to": "e75edeb7-19da-4af9-b6d1-220aeaa1e260",
+      "label": "2,comercial,vendas",
+      "paintStyle": { "strokeWidth": 3, "stroke": "#5c67f2" }
+    },
+    {
+      "from": "nodeC",
+      "to": "84c878d7-3224-4a04-b144-268b09bedceb",
+      "label": "3,financeiro,adm,administrativo,faturamento",
+      "paintStyle": { "strokeWidth": 3, "stroke": "#5c67f2" }
+    },
+    {
+      "from": "ae4ce3fe-3c25-4111-818d-ebc8c3a62dfc",
+      "to": "b660ab7e-1dd8-4fdf-80ee-f8bcfe4c5d5d",
+      "label": "1,Contrato,tenho contrato,contrato",
+      "paintStyle": { "strokeWidth": 3, "stroke": "#5c67f2" }
+    },
+    {
+      "from": "ae4ce3fe-3c25-4111-818d-ebc8c3a62dfc",
+      "to": "a184403d-1c4b-4d51-8d58-224502002fc5",
+      "label": "2,CLIENTE AVULSO,NOVO CLIENTE",
+      "paintStyle": { "strokeWidth": 3, "stroke": "#5c67f2" }
+    },
+    {
+      "from": "ae4ce3fe-3c25-4111-818d-ebc8c3a62dfc",
+      "to": "nodeC",
+      "label": "3,VOLTAR AO INICIO,MENU INICIAL",
+      "paintStyle": { "strokeWidth": 3, "stroke": "#5c67f2" }
+    },
+    {
+      "from": "e75edeb7-19da-4af9-b6d1-220aeaa1e260",
+      "to": "9bea8850-c67e-4f8d-9397-87688c8b2315",
+      "label": "1,produtos,computador,notebook",
+      "paintStyle": { "strokeWidth": 3, "stroke": "#5c67f2" }
+    },
+    {
+      "from": "e75edeb7-19da-4af9-b6d1-220aeaa1e260",
+      "to": "nodeC",
+      "label": "3,voltar,menu inicial,inicio",
+      "paintStyle": { "strokeWidth": 3, "stroke": "#5c67f2" }
+    },
+    {
+      "from": "b660ab7e-1dd8-4fdf-80ee-f8bcfe4c5d5d",
+      "to": "f49d419f-555d-4a3e-bb49-d9ef18189d0c",
+      "paintStyle": { "strokeWidth": 3, "stroke": "#5c67f2" }
+    },
+    {
+      "from": "a184403d-1c4b-4d51-8d58-224502002fc5",
+      "to": "f49d419f-555d-4a3e-bb49-d9ef18189d0c",
+      "label": "sim,1",
+      "paintStyle": { "strokeWidth": 3, "stroke": "#5c67f2" }
+    },
+    {
+      "from": "a184403d-1c4b-4d51-8d58-224502002fc5",
+      "to": "nodeC",
+      "label": "3,voltar,menu inicial,voltar ao menu inicial",
+      "paintStyle": { "strokeWidth": 3, "stroke": "#5c67f2" }
+    }
+  ]
+}

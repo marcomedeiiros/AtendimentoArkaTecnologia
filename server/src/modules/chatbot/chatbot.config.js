@@ -27,6 +27,9 @@ const config = {
     maxPassosPorExecucao: Number(process.env.CHATBOT_MAX_PASSOS) || 50,
     // Tentativas de CNPJ invalido antes de transferir para um atendente.
     maxTentativasCnpj: Number(process.env.CHATBOT_MAX_TENTATIVAS_CNPJ) || 3,
+    // Respostas que nao casam com nenhuma opcao do menu do fluxo antes de
+    // transferir. Equivale ao `maxRetryBotMessage` do editor de origem.
+    maxTentativasOpcao: Number(process.env.CHATBOT_MAX_TENTATIVAS_OPCAO) || 3,
     // Mensagens sem gatilho reconhecido antes de transferir.
     maxTentativasMenu: Number(process.env.CHATBOT_MAX_TENTATIVAS_MENU) || 3,
     // Teto do passo "delay": ele roda dentro do request do webhook.

@@ -3,13 +3,22 @@ import {
   Zap, CheckCircle2, Plus, Trash2,
   Play, RotateCcw, ZoomIn, ZoomOut, Maximize2, LayoutGrid,
   Sparkles, Layers, RefreshCw, X, ChevronUp, ChevronDown,
-  Settings, AlertCircle, Pencil, Flame
+  Settings, AlertCircle, Pencil, Flame, Download, Upload, MessageSquare
 } from 'lucide-react';
 import { FluxosAPI } from '../../services/api';
 import { usePreferencia } from '../../hooks/usePreferencia';
 import { FlowMinimap } from './FlowMinimap';
 import { FlowPropertyPanel } from './FlowPropertyPanel';
 import { FlowExecutionLogs } from './FlowExecutionLogs';
+import { FlowTestChat } from './FlowTestChat';
+import {
+  sanitizarPassosImportados,
+  extrairFluxosImportados,
+  contarRamificacoes,
+  nomeArquivoFluxo,
+  gatilhoValido,
+  GATILHO_CURINGA,
+} from './fluxoJson';
 
 const BLOCK_META = {
   gatilho:    { emoji: '⚡', label: 'Gatilho',       desc: 'Início da conversa', color: 'border-acao/60 bg-acao/5',  badge: 'bg-acao/20 text-acao-200 border-acao/30' },
@@ -22,6 +31,12 @@ const BLOCK_META = {
 
 
 function formatNodesPositions(passos = []) {
+  // Fluxos antigos (seed) chegam sem targetId nenhum e dependem do
+  // encadeamento automatico abaixo. Fluxos com ligacao explicita - inclusive os
+  // importados, que ramificam por config.opcoes - nao podem receber esse
+  // "proximo" inventado: isso criava fios fantasma saindo dos blocos terminais
+  // (um VENDEDOR que so transfere para atendente, por exemplo).
+  const temLigacaoExplicita = passos.some(p => p.targetId || p.config?.opcoes?.length);
   return passos.map((p, idx) => ({
     ...p,
     // Usa ?? para tratar null (posicao nao salva no banco) alem de undefined
@@ -30,7 +45,7 @@ function formatNodesPositions(passos = []) {
     y: p.y ?? (180 + (idx % 2 === 0 ? 0 : 40)),
     w: p.w || (p.tipo === 'comentario' ? 240 : 220),
     h: p.h || (p.tipo === 'comentario' ? 120 : 96),
-    targetId: p.targetId || (idx < passos.length - 1 ? passos[idx + 1].id : null)
+    targetId: p.targetId || (temLigacaoExplicita ? null : (idx < passos.length - 1 ? passos[idx + 1].id : null))
   }));
 }
 
@@ -151,8 +166,16 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
   const [dragOverCanvas, setDragOverCanvas] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [nomeEditado, setNomeEditado] = useState('');
+  const [gatilhoEditado, setGatilhoEditado] = useState('');
+  const [showTestChat, setShowTestChat] = useState(false);
+  // Bloco onde a conversa de teste parou, destacado no canvas.
+  const [testPassoId, setTestPassoId] = useState(null);
+  const [isImportando, setIsImportando] = useState(false);
+  const [avisoJson, setAvisoJson] = useState(null); // { tipo: 'ok' | 'erro', msg }
 
   const containerRef = useRef(null);
+  const jsonInputRef = useRef(null);
+  const avisoTimerRef = useRef(null);
 
   // Os fluxos chegam da API depois da montagem. Sem isto, selectedFlowId ficava
   // null para sempre: o canvas abria vazio e "Simular" nao fazia nada.
@@ -214,13 +237,38 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
     }
   };
 
+  // Salva nome e gatilho juntos. O gatilho e o que faz o motor escolher este
+  // fluxo quando a mensagem do cliente chega, e antes nao havia lugar nenhum na
+  // interface para edita-lo: ficava preso no valor gerado na criacao.
   const handleRenameFlow = async () => {
-    if (!nomeEditado.trim() || !selectedFlowId) return;
+    if (!selectedFlowId) return;
     const novoNome = nomeEditado.trim();
-    setFluxos(fluxos.map(f => f.id === selectedFlowId ? { ...f, nome: novoNome } : f));
+    const novoGatilho = gatilhoEditado.trim();
+    if (novoNome.length < 2) {
+      mostrarAvisoJson('erro', 'O nome do fluxo precisa de pelo menos 2 caracteres.');
+      return;
+    }
+    if (!gatilhoValido(novoGatilho)) {
+      mostrarAvisoJson('erro', 'O gatilho precisa de 2+ caracteres (ou * para qualquer mensagem).');
+      return;
+    }
+
+    setFluxos(fluxos.map(f => f.id === selectedFlowId ? { ...f, nome: novoNome, gatilho: novoGatilho } : f));
     setIsRenaming(false);
     try {
-      await FluxosAPI.atualizar(selectedFlowId, { nome: novoNome });
+      await FluxosAPI.atualizar(selectedFlowId, { nome: novoNome, gatilho: novoGatilho });
+    } catch {
+      mostrarAvisoJson('erro', 'Não foi possível salvar no servidor.');
+    }
+  };
+
+  // Usado tambem pelo campo "Palavra-Chave Gatilho" do painel de propriedades.
+  const salvarGatilhoFluxo = async (novoGatilho) => {
+    const gatilho = String(novoGatilho || '').trim();
+    if (!selectedFlowId || !gatilhoValido(gatilho) || gatilho === flow?.gatilho) return;
+    setFluxos(fluxos.map(f => f.id === selectedFlowId ? { ...f, gatilho } : f));
+    try {
+      await FluxosAPI.atualizar(selectedFlowId, { gatilho });
     } catch {}
   };
 
@@ -244,6 +292,138 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
     try {
       await FluxosAPI.removerTodos();
     } catch {}
+  };
+
+  // ── Import / Export JSON ──────────────────────────────────────────────────
+  // O editor engole erros de API com `catch {}` em todo lugar, mas aqui o
+  // usuario precisa saber o que aconteceu: um arquivo invalido nao pode falhar
+  // em silencio. Dai o chip de aviso na propria barra (mesmo padrao visual dos
+  // confirmadores de exclusao), que se apaga sozinho.
+  const mostrarAvisoJson = (tipo, msg) => {
+    setAvisoJson({ tipo, msg });
+    clearTimeout(avisoTimerRef.current);
+    avisoTimerRef.current = setTimeout(() => setAvisoJson(null), 5000);
+  };
+
+  useEffect(() => () => clearTimeout(avisoTimerRef.current), []);
+
+  const handleExportJson = () => {
+    if (!flow) return;
+    const conteudo = {
+      versao: 1,
+      exportadoEm: new Date().toISOString(),
+      nome: flow.nome,
+      gatilho: flow.gatilho,
+      ativo: flow.ativo !== false,
+      // Usa `nodes` (estado do canvas) e nao flow.passos: e o que esta na tela,
+      // inclusive alteracoes que ainda estao subindo para o servidor.
+      passos: sanitizarPassosImportados(nodes),
+    };
+    try {
+      // Sem BOM: o \uFEFF usado nos CSVs do projeto quebraria o JSON.parse na volta.
+      const blob = new Blob([JSON.stringify(conteudo, null, 2)], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = nomeArquivoFluxo(flow.nome);
+      a.click();
+      URL.revokeObjectURL(url);
+      mostrarAvisoJson('ok', `Fluxo exportado (${conteudo.passos.length} blocos).`);
+    } catch {
+      mostrarAvisoJson('erro', 'Não foi possível gerar o arquivo.');
+    }
+  };
+
+  const handleImportJson = async (file) => {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      mostrarAvisoJson('erro', 'Arquivo muito grande (máx. 5MB).');
+      return;
+    }
+
+    let dados;
+    try {
+      dados = JSON.parse(await file.text());
+    } catch {
+      mostrarAvisoJson('erro', 'JSON inválido: não foi possível interpretar o arquivo.');
+      return;
+    }
+
+    const candidatos = extrairFluxosImportados(dados).filter(f => f.passos.length > 0);
+    if (!candidatos.length) {
+      mostrarAvisoJson('erro', 'Nenhum bloco válido encontrado no arquivo.');
+      return;
+    }
+
+    // Dois fluxos com o mesmo gatilho fazem o motor casar sempre com o primeiro,
+    // e dois curingas deixam indefinido qual atende. Resolvemos antes de gravar.
+    const gatilhosNovos = new Set();
+    let curingaOcupado = false;
+    const resolverGatilho = (candidato, idAtual = null) => {
+      const ocupado = (g) =>
+        gatilhosNovos.has(g) || fluxos.some(f => f.id !== idAtual && f.gatilho === g);
+      if (!ocupado(candidato)) return candidato;
+      // Nao da para "sufixar" um curinga: "*_ab" nao seria curinga nem palavra
+      // que alguem digite. Devolve vazio e quem chamou cai no nome do fluxo.
+      if (candidato === GATILHO_CURINGA) { curingaOcupado = true; return ''; }
+      let gatilho = candidato;
+      while (ocupado(gatilho)) gatilho = `${candidato}_${Math.random().toString(36).slice(2, 5)}`;
+      return gatilho;
+    };
+
+    setIsImportando(true);
+    try {
+      // Fluxo atual vazio (recem-criado no "Novo Fluxo"): aproveita ele em vez de
+      // deixar um fluxo em branco orfao ao lado do importado.
+      const alvoVazio = flow && (flow.passos || []).length === 0 && nodes.length === 0;
+      if (candidatos.length === 1 && alvoVazio) {
+        const unico = candidatos[0];
+        const passos = formatNodesPositions(unico.passos);
+        const patch = { passos };
+        if (unico.nomeExplicito) patch.nome = unico.nome;
+
+        const gatilho = resolverGatilho(unico.gatilho, flow.id) || unico.nome.toLowerCase();
+        if (gatilhoValido(gatilho)) patch.gatilho = gatilho;
+
+        setNodes(passos);
+        setSelectedNodeIds([]);
+        setActivePropertyNodeId(null);
+        setFluxos(fluxos.map(f => (f.id === flow.id ? { ...f, ...patch } : f)));
+        pushHistory(passos);
+        await FluxosAPI.atualizar(flow.id, patch);
+
+        const ramos = contarRamificacoes(passos);
+        mostrarAvisoJson(curingaOcupado ? 'erro' : 'ok', curingaOcupado
+          ? `Importado, mas já existe um fluxo com gatilho *. Este ficou com “${patch.gatilho}”.`
+          : `${passos.length} blocos e ${ramos} ramificações. Gatilho: ${patch.gatilho === '*' ? 'qualquer mensagem' : patch.gatilho}`);
+        return;
+      }
+
+      const criados = [];
+      for (const f of candidatos) {
+        const gatilho = resolverGatilho(f.gatilho) || f.nome.toLowerCase();
+        gatilhosNovos.add(gatilho);
+        criados.push(await FluxosAPI.criar({
+          nome: f.nome,
+          gatilho,
+          ativo: f.ativo,
+          passos: f.passos,
+        }));
+      }
+
+      setFluxos([...fluxos, ...criados]);
+      setSelectedFlowId(criados[0].id);
+      const ramos = candidatos.reduce((t, f) => t + contarRamificacoes(f.passos), 0);
+      mostrarAvisoJson(curingaOcupado ? 'erro' : 'ok', curingaOcupado
+        ? `Importado, mas já existe um fluxo com gatilho *. Este ficou com “${criados[0].gatilho}”.`
+        : criados.length > 1
+          ? `${criados.length} fluxos importados.`
+          : `“${criados[0].nome}”: ${candidatos[0].passos.length} blocos, ${ramos} ramificações, gatilho ${criados[0].gatilho === '*' ? 'qualquer mensagem' : criados[0].gatilho}`);
+    } catch {
+      mostrarAvisoJson('erro', 'Falha ao salvar o fluxo importado no servidor.');
+    } finally {
+      setIsImportando(false);
+    }
   };
 
   useEffect(() => {
@@ -545,58 +725,85 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
   const activePropertyNode = nodes.find(n => n.id === activePropertyNodeId);
 
   return (
-    <div className="flex flex-col h-full min-h-[500px] w-full relative bg-grafite-900 overflow-hidden select-none font-sans">
+    <div className="flex flex-col h-full min-h-[360px] sm:min-h-[500px] w-full relative bg-grafite-900 overflow-hidden select-none font-sans">
 
-      <div className="p-3 bg-grafite-800/90 backdrop-blur-md border-b border-linha flex flex-wrap items-center justify-between gap-3 z-20">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="p-2 rounded-xl bg-acao/10 text-acao-200 border border-acao/30">
+      {/* Barra de ferramentas: UMA linha so, com rolagem horizontal quando
+          falta espaco. Antes era flex-wrap + justify-between, e cada botao novo
+          (importar/exportar) empurrava o grupo inteiro para uma segunda linha,
+          roubando altura do canvas. Agora os rotulos somem por breakpoint e
+          sobram os icones, entao a rolagem quase nunca aparece. */}
+      <div className="shrink-0 flex items-center gap-1.5 px-2 sm:px-3 py-2 bg-grafite-800/90 backdrop-blur-md border-b border-linha overflow-x-auto z-20">
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="hidden sm:flex p-2 rounded-xl bg-acao/10 text-acao-200 border border-acao/30">
             <Zap size={18} />
           </span>
 
           {!isRenaming ? (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 shrink-0">
               {fluxos.length > 0 ? (
                 <>
                   <select
                     value={selectedFlowId || ''}
                     onChange={e => setSelectedFlowId(e.target.value)}
-                    className="bg-grafite-700 border border-linha rounded-xl px-3 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-acao max-w-[220px] truncate"
+                    className="bg-grafite-700 border border-linha rounded-xl px-2.5 sm:px-3 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-acao w-[128px] sm:w-[180px] lg:w-[220px] truncate"
                   >
                     {fluxos.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
                   </select>
                   {flow && (
-                    <button
-                      onClick={() => { setNomeEditado(flow.nome); setIsRenaming(true); }}
-                      className="p-1.5 rounded-xl bg-grafite-700 hover:bg-grafite-600 border border-linha text-slate-400 hover:text-white transition-colors"
-                      title="Renomear este fluxo"
-                    >
-                      <Pencil size={13} />
-                    </button>
+                    <>
+                      <button
+                        onClick={() => { setNomeEditado(flow.nome); setGatilhoEditado(flow.gatilho || ''); setIsRenaming(true); }}
+                        className="p-1.5 rounded-xl bg-grafite-700 hover:bg-grafite-600 border border-linha text-slate-400 hover:text-white transition-colors shrink-0"
+                        title={`Editar nome e gatilho (gatilho atual: ${flow.gatilho || '-'})`}
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      {/* O gatilho decide se o fluxo roda: sem ele visivel, o
+                          usuario nao tem como saber por que o bot nao responde. */}
+                      <span
+                        title={flow.gatilho === '*' ? 'Dispara em qualquer mensagem' : `Dispara quando a mensagem contém: ${flow.gatilho}`}
+                        className="hidden xl:inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-grafite-900 border border-linha text-[10px] font-mono text-slate-400 max-w-[160px] truncate shrink-0"
+                      >
+                        <Zap size={10} className="text-acao-200 shrink-0" />
+                        {flow.gatilho === '*' ? 'qualquer mensagem' : flow.gatilho}
+                      </span>
+                    </>
                   )}
                 </>
               ) : (
-                <span className="text-xs text-slate-500 font-semibold px-1">Nenhum fluxo clique em “Novo Fluxo”</span>
+                <span className="text-xs text-slate-500 font-semibold px-1 whitespace-nowrap">
+                  <span className="hidden sm:inline">Nenhum fluxo clique em “Novo Fluxo”</span>
+                  <span className="sm:hidden">Nenhum fluxo</span>
+                </span>
               )}
             </div>
           ) : (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 shrink-0">
               <input
                 value={nomeEditado}
                 onChange={e => setNomeEditado(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleRenameFlow()}
-                placeholder="Novo nome do fluxo"
+                placeholder="Nome do fluxo"
                 autoFocus
-                className="bg-grafite-700 border border-acao/60 rounded-xl px-3 py-1.5 text-xs font-bold text-white focus:outline-none w-48"
+                className="bg-grafite-700 border border-acao/60 rounded-xl px-3 py-1.5 text-xs font-bold text-white focus:outline-none w-28 sm:w-40"
+              />
+              <input
+                value={gatilhoEditado}
+                onChange={e => setGatilhoEditado(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleRenameFlow()}
+                placeholder="gatilho ou *"
+                title="Palavra-chave que faz o bot abrir este fluxo. Separe várias por vírgula. Use * para qualquer mensagem."
+                className="bg-grafite-700 border border-acao/60 rounded-xl px-3 py-1.5 text-xs font-mono text-white focus:outline-none w-28 sm:w-40"
               />
               <button
                 onClick={handleRenameFlow}
-                className="px-2.5 py-1.5 rounded-xl bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold transition-all"
+                className="px-2.5 py-1.5 rounded-xl bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold transition-all shrink-0"
               >
                 Salvar
               </button>
               <button
                 onClick={() => setIsRenaming(false)}
-                className="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                className="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white transition-colors shrink-0"
               >
                 <X size={13} />
               </button>
@@ -618,23 +825,59 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                 setSelectedFlowId(criado.id);
               } catch {}
             }}
-            className="px-3 py-1.5 rounded-xl bg-acao/15 hover:bg-acao/25 text-acao-200 text-xs font-semibold border border-acao/30 flex items-center gap-1.5 transition-all"
+            title="Criar um novo fluxo"
+            className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-acao/15 hover:bg-acao/25 text-acao-200 text-xs font-semibold border border-acao/30 flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap"
           >
-            <Plus size={14} /> Novo Fluxo
+            <Plus size={14} /> <span className="hidden md:inline">Novo Fluxo</span>
           </button>
+
+          {/* Importar/exportar so fazem sentido com um fluxo na tela: sem fluxo
+              nao ha o que exportar, e o import precisa de um alvo (ou do botao
+              "Novo Fluxo" antes) para nao criar registro solto. */}
+          {fluxos.length > 0 && (
+            <>
+              <button
+                onClick={() => jsonInputRef.current?.click()}
+                disabled={isImportando}
+                title="Importar fluxo de um arquivo .json"
+                aria-label="Importar fluxo de um arquivo JSON"
+                className="p-1.5 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 transition-all disabled:opacity-50 shrink-0"
+              >
+                <Upload size={14} className={isImportando ? 'animate-pulse' : ''} />
+              </button>
+              <button
+                onClick={handleExportJson}
+                disabled={!flow}
+                title={flow ? 'Exportar este fluxo como .json' : 'Selecione um fluxo para exportar'}
+                aria-label="Exportar este fluxo como JSON"
+                className="p-1.5 rounded-xl bg-ativo/10 hover:bg-ativo/20 text-ativo-400 border border-ativo/30 transition-all disabled:opacity-50 shrink-0"
+              >
+                <Download size={14} />
+              </button>
+              <input
+                ref={jsonInputRef}
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; handleImportJson(f); }}
+              />
+            </>
+          )}
 
           {fluxos.length > 0 && !showDeleteConfirm && !showDeleteAllConfirm && (
             <button
               onClick={() => setShowDeleteConfirm(true)}
-              className="px-3 py-1.5 rounded-xl bg-falha/10 hover:bg-falha/20 text-falha-400 text-xs font-semibold border border-falha/30 flex items-center gap-1.5 transition-all"
+              title="Deletar este fluxo"
+              className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-falha/10 hover:bg-falha/20 text-falha-400 text-xs font-semibold border border-falha/30 flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap"
             >
-              <Trash2 size={14} /> Deletar Fluxo
+              <Trash2 size={14} /> <span className="hidden lg:inline">Deletar Fluxo</span>
             </button>
           )}
           {showDeleteConfirm && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-falha/15 border border-falha/40 text-xs">
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-falha/15 border border-falha/40 text-xs shrink-0 whitespace-nowrap">
               <AlertCircle size={13} className="text-falha-400 shrink-0" />
-              <span className="text-falha-400 font-semibold">Excluir este fluxo?</span>
+              <span className="text-falha-400 font-semibold hidden sm:inline">Excluir este fluxo?</span>
+              <span className="text-falha-400 font-semibold sm:hidden">Excluir?</span>
               <button onClick={handleDeleteFlow} className="px-2 py-0.5 rounded-lg bg-falha hover:bg-falha-400 text-white font-bold transition-colors">Sim</button>
               <button onClick={() => setShowDeleteConfirm(false)} className="px-2 py-0.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold transition-colors">Não</button>
             </div>
@@ -643,58 +886,90 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
           {fluxos.length > 0 && !showDeleteAllConfirm && !showDeleteConfirm && (
             <button
               onClick={() => setShowDeleteAllConfirm(true)}
-              className="px-3 py-1.5 rounded-xl bg-falha-600/60 hover:bg-falha-600/80 text-falha-400 text-xs font-semibold border border-falha/50 flex items-center gap-1.5 transition-all"
+              className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-falha-600/60 hover:bg-falha-600/80 text-falha-400 text-xs font-semibold border border-falha/50 flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap"
               title="Apagar todos os fluxos cadastrados"
             >
-              <Flame size={14} className="text-falha-400" /> Apagar Todos
+              <Flame size={14} className="text-falha-400" /> <span className="hidden xl:inline">Apagar Todos</span>
             </button>
           )}
           {showDeleteAllConfirm && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-falha-600 border border-falha-600 text-xs">
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-falha-600 border border-falha-600 text-xs shrink-0 whitespace-nowrap">
               <AlertCircle size={13} className="text-falha-400 shrink-0" />
-              <span className="text-falha-400 font-bold">Apagar TODOS os fluxos?</span>
-              <button onClick={handleDeleteAllFlows} className="px-2.5 py-0.5 rounded-lg bg-falha-600 hover:bg-falha text-white font-extrabold transition-colors">Apagar Todos</button>
+              <span className="text-falha-400 font-bold hidden sm:inline">Apagar TODOS os fluxos?</span>
+              <span className="text-falha-400 font-bold sm:hidden">Apagar tudo?</span>
+              <button onClick={handleDeleteAllFlows} className="px-2.5 py-0.5 rounded-lg bg-falha-600 hover:bg-falha text-white font-extrabold transition-colors">Apagar</button>
               <button onClick={() => setShowDeleteAllConfirm(false)} className="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition-colors">Cancelar</button>
             </div>
           )}
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center bg-grafite-700 border border-linha rounded-xl p-1 text-xs text-slate-300">
-            <button onClick={() => setZoom(z => Math.max(z / 1.15, 0.25))} className="p-1.5 hover:text-white"><ZoomOut size={14} /></button>
-            <span className="px-2 font-mono text-[11px] text-slate-400">{Math.round(zoom * 100)}%</span>
-            <button onClick={() => setZoom(z => Math.min(z * 1.15, 2.5))} className="p-1.5 hover:text-white"><ZoomIn size={14} /></button>
+        {/* Espacador elastico em vez de justify-between: com overflow-x-auto o
+            justify-between nao separa nada quando o conteudo transborda. */}
+        <div className="flex-1 min-w-[8px]" />
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center bg-grafite-700 border border-linha rounded-xl p-1 text-xs text-slate-300 shrink-0">
+            <button onClick={() => setZoom(z => Math.max(z / 1.15, 0.25))} className="p-1.5 hover:text-white" title="Diminuir zoom"><ZoomOut size={14} /></button>
+            <span className="px-1.5 font-mono text-[11px] text-slate-400 hidden sm:inline">{Math.round(zoom * 100)}%</span>
+            <button onClick={() => setZoom(z => Math.min(z * 1.15, 2.5))} className="p-1.5 hover:text-white" title="Aumentar zoom"><ZoomIn size={14} /></button>
             <button onClick={() => { setZoom(1); setCanvasOffset({ x: 100, y: 100 }); }} className="p-1.5 hover:text-white border-l border-linha ml-1" title="Resetar"><Maximize2 size={13} /></button>
           </div>
-          <div className="flex items-center bg-grafite-700 border border-linha rounded-xl p-1">
-            <button onClick={handleUndo} disabled={historyIndex <= 0} className="p-1.5 text-slate-400 hover:text-white disabled:opacity-30"><RotateCcw size={14} /></button>
-            <button onClick={handleRedo} disabled={historyIndex >= history.length - 1} className="p-1.5 text-slate-400 hover:text-white disabled:opacity-30"><RefreshCw size={14} /></button>
+          <div className="flex items-center bg-grafite-700 border border-linha rounded-xl p-1 shrink-0">
+            <button onClick={handleUndo} disabled={historyIndex <= 0} className="p-1.5 text-slate-400 hover:text-white disabled:opacity-30" title="Desfazer"><RotateCcw size={14} /></button>
+            <button onClick={handleRedo} disabled={historyIndex >= history.length - 1} className="p-1.5 text-slate-400 hover:text-white disabled:opacity-30" title="Refazer"><RefreshCw size={14} /></button>
           </div>
-          <button onClick={handleAutoOrganize} className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 border border-linha transition-colors">
-            <LayoutGrid size={14} /> Organizar
+          <button onClick={handleAutoOrganize} title="Organizar blocos automaticamente" className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 border border-linha transition-colors shrink-0 whitespace-nowrap">
+            <LayoutGrid size={14} /> <span className="hidden lg:inline">Organizar</span>
           </button>
-          <button onClick={() => setShowSequencePanel(s => !s)} className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all ${showSequencePanel ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'bg-slate-800 text-slate-300 border-linha'}`}>
-            <Settings size={14} /> Sequência
+          <button onClick={() => setShowSequencePanel(s => !s)} title="Painel de sequência" className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all shrink-0 whitespace-nowrap ${showSequencePanel ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'bg-slate-800 text-slate-300 border-linha'}`}>
+            <Settings size={14} /> <span className="hidden lg:inline">Sequência</span>
           </button>
-          <button onClick={() => setShowLogsConsole(s => !s)} className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all ${showLogsConsole ? 'bg-acao/20 text-acao-200 border-acao/40' : 'bg-slate-800 text-slate-300 border-linha'}`}>
-            <Sparkles size={14} /> Console ({simLogs.length})
+          <button onClick={() => setShowLogsConsole(s => !s)} title="Console de execução" className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all shrink-0 whitespace-nowrap ${showLogsConsole ? 'bg-acao/20 text-acao-200 border-acao/40' : 'bg-slate-800 text-slate-300 border-linha'}`}>
+            <Sparkles size={14} /> <span className="hidden lg:inline">Console</span> ({simLogs.length})
+          </button>
+          {/* "Testar" conversa com o motor real; "Simular" (ao lado) so percorre
+              os blocos na tela. São coisas diferentes de proposito. */}
+          <button
+            onClick={() => setShowTestChat(s => !s)}
+            disabled={!flow}
+            title="Conversar com o bot para testar este fluxo (não envia WhatsApp)"
+            className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all shrink-0 whitespace-nowrap disabled:opacity-50 ${showTestChat ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'bg-slate-800 text-slate-300 border-linha'}`}
+          >
+            <MessageSquare size={14} /> <span className="hidden lg:inline">Testar</span>
           </button>
           <button
             onClick={handleRunSimulation}
             title={simulacaoMarcada && !isRunningSim ? 'Clique para parar a simulação' : 'Executar simulação do fluxo'}
-            className={`px-4 py-1.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-all ${
+            className={`px-3 sm:px-4 py-1.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-all shrink-0 whitespace-nowrap ${
               simulacaoMarcada
                 ? 'bg-gradient-to-r from-ativo to-green-500 text-slate-950 shadow-ativo/30 animate-pulse'
                 : 'bg-gradient-to-r from-acao to-espera hover:from-acao-200 hover:to-espera-400 text-slate-950 shadow-acao/20'
             }`}
           >
             <Play size={14} fill="currentColor" />
-            {isRunningSim ? 'Simulando...' : simulacaoMarcada ? 'Simulação ativa' : 'Simular'}
+            <span className="hidden sm:inline">
+              {isRunningSim ? 'Simulando...' : simulacaoMarcada ? 'Simulação ativa' : 'Simular'}
+            </span>
           </button>
         </div>
       </div>
 
-      <div className="flex-1 flex relative overflow-hidden">
+      <div className="flex-1 flex relative overflow-hidden min-w-0">
+
+        {/* Aviso de import/export flutuando sobre o canvas. Ficava dentro da
+            barra de ferramentas, mas aparecer/desaparecer ali remexia toda a
+            linha de botoes. Aqui e absoluto: entra e sai sem mover nada. */}
+        {avisoJson && (
+          <div className={`absolute top-3 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs border shadow-2xl backdrop-blur-md max-w-[calc(100%-1.5rem)] fade-in ${
+            avisoJson.tipo === 'ok'
+              ? 'bg-grafite-800/95 border-ativo/40 text-ativo-400'
+              : 'bg-grafite-800/95 border-falha/40 text-falha-400'
+          }`}>
+            {avisoJson.tipo === 'ok' ? <CheckCircle2 size={13} className="shrink-0" /> : <AlertCircle size={13} className="shrink-0" />}
+            <span className="font-semibold truncate">{avisoJson.msg}</span>
+            <button onClick={() => setAvisoJson(null)} className="opacity-60 hover:opacity-100 shrink-0" aria-label="Fechar aviso"><X size={12} /></button>
+          </div>
+        )}
 
         {/* Sidebar Biblioteca colapsável */}
         <div className="relative flex-shrink-0 flex z-10">
@@ -801,6 +1076,35 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                   </g>
                 );
               })}
+              {/* Ramificacoes de fluxos importados. O passo desenha a saida
+                  principal acima (targetId); as demais saidas vivem em
+                  config.opcoes e aparecem aqui em azul tracejado, com o rotulo
+                  das palavras-chave que levam a cada destino. */}
+              {nodes.map(node => {
+                const opcoes = node.config?.opcoes;
+                if (!Array.isArray(opcoes) || opcoes.length === 0) return null;
+                return opcoes.map((op, i) => {
+                  if (!op?.targetId || op.targetId === node.targetId) return null;
+                  const target = nodes.find(n => n.id === op.targetId);
+                  if (!target) return null;
+                  const sx = node.x + (node.w || 220), sy = node.y + (node.h || 96) / 2;
+                  const ex = target.x, ey = target.y + (target.h || 96) / 2;
+                  const dx = Math.abs(ex - sx) * 0.5;
+                  const d = `M ${sx} ${sy} C ${sx + dx} ${sy}, ${ex - dx} ${ey}, ${ex} ${ey}`;
+                  const rotulo = String(op.rotulo || '').slice(0, 22);
+                  return (
+                    <g key={`${node.id}-op${i}->${target.id}`} style={{ pointerEvents: 'none' }}>
+                      <path d={d} fill="none" stroke="#3B82F6" strokeWidth={2} strokeDasharray="5 4" opacity={0.7} />
+                      {rotulo && (
+                        <text x={(sx + ex) / 2} y={(sy + ey) / 2 - 5} fill="#93C5FD" fontSize="9" textAnchor="middle">
+                          {rotulo}
+                        </text>
+                      )}
+                    </g>
+                  );
+                });
+              })}
+
               {connectingFromId && (() => {
                 const src = nodes.find(n => n.id === connectingFromId);
                 if (!src) return null;
@@ -832,6 +1136,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
               const isSelected  = selectedNodeIds.includes(node.id);
               const isExecuting = activeSimNodeId === node.id;
               const isExecuted  = executedNodeIds.includes(node.id);
+              const isNoTeste   = testPassoId === node.id;
               const isComment   = node.tipo === 'comentario';
               const meta        = BLOCK_META[node.tipo] || BLOCK_META.mensagem;
 
@@ -853,6 +1158,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                     ${isSelected  ? 'ring-2 ring-acao shadow-acao/20' : ''}
                     ${isExecuting ? 'ring-4 ring-espera-400 animate-pulse' : ''}
                     ${isExecuted && !isExecuting ? 'border-ativo/80' : ''}
+                    ${isNoTeste ? 'ring-2 ring-blue-400 shadow-blue-500/20' : ''}
                   `}
                   style={{ left: node.x, top: node.y, width: node.w || 220, minHeight: node.h || 96 }}
                 >
@@ -915,6 +1221,24 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                     {!node.desc && (
                       <p className="text-[11px] text-slate-500 italic">Clique para configurar...</p>
                     )}
+
+                    {/* Opcoes do menu (fluxos importados): sem elas o bloco fica
+                        so com o texto e a ramificacao vira invisivel no card. */}
+                    {Array.isArray(node.config?.opcoes) && node.config.opcoes.length > 0 && (
+                      <div className="space-y-0.5 pt-0.5">
+                        {node.config.opcoes.slice(0, 3).map((op, i) => (
+                          <div key={op.id || i} className="text-[9px] px-1.5 py-0.5 rounded-md bg-grafite-900/70 border border-linha text-slate-300 truncate">
+                            {op.rotulo
+                              || (op.acao === 'transferir' ? '→ Atendente'
+                                : op.acao === 'encerrar' ? '→ Encerrar'
+                                : '→ Seguir')}
+                          </div>
+                        ))}
+                        {node.config.opcoes.length > 3 && (
+                          <div className="text-[9px] text-slate-500 px-1.5">+{node.config.opcoes.length - 3} opções</div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -940,9 +1264,20 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
           />
         )}
 
+        {showTestChat && flow && (
+          <FlowTestChat
+            fluxo={flow}
+            onClose={() => { setShowTestChat(false); setTestPassoId(null); }}
+            onPassoAtivo={setTestPassoId}
+          />
+        )}
+
         {activePropertyNode && (
           <FlowPropertyPanel
             node={activePropertyNode}
+            nodes={nodes}
+            gatilhoFluxo={flow?.gatilho || ''}
+            onChangeGatilhoFluxo={salvarGatilhoFluxo}
             onClose={() => setActivePropertyNodeId(null)}
             onChangeNode={(updated) => {
               const nn = nodes.map(n => n.id === updated.id ? updated : n);

@@ -12,6 +12,10 @@ class ChatbotController {
       .then((data) => success(res, data));
   }
 
+  simular(req, res) {
+    return chatbotService.simular(req.body).then((data) => success(res, data));
+  }
+
   obterSessao(req, res) {
     return chatbotService
       .obterSessao(req.params.telefone, req.query.instance)

@@ -220,7 +220,7 @@ const STATUS_META = {
 // (shared/helpers/setor.helper.js) -- e ela que decide quem ve qual conversa,
 // entao os nomes precisam bater caractere por caractere.
 const SETORES_ATENDIMENTO = [
-  { id: 'Geral',      desc: 'Ainda sem triagem. Todo mundo vê.' },
+  { id: 'Geral',      desc: 'Ainda sem triagem todo mundo vê.' },
   { id: 'Técnico',    desc: 'Suporte, instalação, defeito.' },
   { id: 'Financeiro', desc: 'Boleto, fatura, cobrança.' },
   { id: 'Comercial',  desc: 'Orçamento, proposta, novo contrato.' },
@@ -479,7 +479,7 @@ function ModalNovaConversa({ onFechar, onEnviar, enviando, erro }) {
               className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder-slate-500 focus:outline-none focus:border-acao/50"
             />
             <p className="text-[10px] text-slate-500 mt-1">
-              DDD + número. Sem o 55 na frente a gente completa.
+              DDD + número sem o 55 na frente a gente completa.
             </p>
           </div>
 

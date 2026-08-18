@@ -1,5 +1,5 @@
-import { useRef } from 'react';
-import { X, Play, HelpCircle, Trash2, Variable } from 'lucide-react';
+import { useRef, useState, useEffect } from 'react';
+import { X, Play, HelpCircle, Trash2, Variable, GitBranch } from 'lucide-react';
 
 const BLOCK_META = {
   gatilho:    { emoji: '⚡', label: 'Gatilho'     },
@@ -84,20 +84,44 @@ function RichTextEditor({ value, onChange, rows = 4, placeholder }) {
 }
 
 
-export function FlowPropertyPanel({ node, onClose, onChangeNode, onDeleteNode, onTestSingleNode }) {
+export function FlowPropertyPanel({
+  node,
+  nodes = [],
+  gatilhoFluxo = '',
+  onChangeGatilhoFluxo,
+  onClose,
+  onChangeNode,
+  onDeleteNode,
+  onTestSingleNode,
+}) {
+  // Rascunho local do gatilho: salvar a cada tecla dispararia um PUT por
+  // caractere. Sobe no blur / Enter. Hook antes do early return de proposito.
+  const [gatilhoDraft, setGatilhoDraft] = useState(gatilhoFluxo);
+  useEffect(() => { setGatilhoDraft(gatilhoFluxo); }, [gatilhoFluxo]);
+
   if (!node) return null;
 
   const isComment = node.tipo === 'comentario';
   const meta = BLOCK_META[node.tipo] || BLOCK_META.mensagem;
   const currentDesc = node.desc || node.texto || '';
+  const opcoes = Array.isArray(node.config?.opcoes) ? node.config.opcoes : [];
+
+  function descreverDestino(op) {
+    if (op.acao === 'transferir') return `Transferir para atendente${op.filaId ? ` (fila ${op.filaId})` : ''}`;
+    if (op.acao === 'encerrar') return 'Encerrar atendimento';
+    const destino = nodes.find(n => n.id === op.targetId);
+    return destino ? destino.titulo : 'Destino não encontrado';
+  }
 
   function insertVar(tag) {
     const newDesc = currentDesc + (currentDesc.endsWith(' ') || !currentDesc ? '' : ' ') + tag;
     onChangeNode({ ...node, desc: newDesc, texto: newDesc });
   }
 
+  // Abaixo de lg o painel flutua sobre o canvas em vez de ocupar uma coluna:
+  // com 320px fixos numa tela de 400px nao sobrava area util para o fluxo.
   return (
-    <aside className="w-80 lg:w-96 shrink-0 bg-grafite-800 border-l border-linha h-full flex flex-col z-30 shadow-2xl fade-in overflow-hidden">
+    <aside className="absolute inset-y-0 right-0 w-full max-w-[20rem] lg:static lg:w-96 lg:max-w-none shrink-0 bg-grafite-800 border-l border-linha h-full flex flex-col z-30 shadow-2xl fade-in overflow-hidden">
 
       <div className="p-4 bg-grafite-600 border-b border-linha flex items-center justify-between">
         <div className="flex items-center gap-2.5">
@@ -152,12 +176,22 @@ export function FlowPropertyPanel({ node, onClose, onChangeNode, onDeleteNode, o
             {node.tipo === 'gatilho' && (
               <div className="p-3.5 rounded-xl bg-acao/10 border border-acao/30 space-y-2">
                 <label className="text-xs font-bold text-acao-200 flex items-center gap-1.5">⚡ Palavra-Chave Gatilho</label>
+                {/* Este campo escrevia em `node.gatilho`, que o zod do back-end
+                    descarta (passoSchema nao tem `gatilho`): nada era salvo. O
+                    gatilho e do FLUXO, nao do passo, entao vai por aqui. */}
                 <input
-                  value={node.gatilho || ''}
-                  onChange={e => onChangeNode({ ...node, gatilho: e.target.value, desc: `Cliente digita "${e.target.value}"` })}
+                  value={gatilhoDraft}
+                  onChange={e => setGatilhoDraft(e.target.value)}
+                  onBlur={() => onChangeGatilhoFluxo?.(gatilhoDraft)}
+                  onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                   placeholder="ex: orçamento, boleto, suporte"
-                  className="w-full bg-grafite-700 border border-linha rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-acao/50"
+                  className="w-full bg-grafite-700 border border-linha rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-acao/50 font-mono"
                 />
+                <p className="text-[10px] text-slate-400 leading-relaxed">
+                  Palavra que o cliente envia para o bot abrir este fluxo. Separe várias
+                  por vírgula. Use <code className="text-acao-200 font-mono">*</code> para
+                  abrir em qualquer mensagem (menu de boas-vindas).
+                </p>
               </div>
             )}
 
@@ -192,6 +226,44 @@ export function FlowPropertyPanel({ node, onClose, onChangeNode, onDeleteNode, o
               </div>
               <p className="text-[10px] text-slate-500">Clique na variável para inserir no cursor do texto.</p>
             </div>
+
+            {/* Ramificacoes importadas. Somente leitura de proposito: editar
+                aqui daria a entender que o motor local ja segue todas elas. */}
+            {opcoes.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                  <GitBranch size={13} className="text-blue-400" /> Ramificações ({opcoes.length})
+                </div>
+                <p className="text-[10px] text-slate-500 leading-relaxed">
+                  Importadas do JSON e desenhadas no canvas. O motor local ainda executa
+                  apenas a saída principal.
+                </p>
+                {opcoes.map((op, i) => (
+                  <div key={op.id || i} className="p-2.5 rounded-xl bg-grafite-700 border border-linha space-y-1.5">
+                    <div className="text-[11px] font-semibold text-white break-words">
+                      {op.rotulo || (op.esperaEscolha ? '(sem rótulo)' : 'Qualquer resposta')}
+                    </div>
+                    {Array.isArray(op.palavrasChave) && op.palavrasChave.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {op.palavrasChave.map((p, j) => (
+                          <span key={j} className="text-[9px] px-1.5 py-0.5 rounded-md bg-grafite-900 border border-linha text-slate-400 font-mono break-all">
+                            {p}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="text-[10px] text-slate-400 flex items-center gap-1">
+                      <span className="text-blue-400">→</span> {descreverDestino(op)}
+                    </div>
+                    {op.mensagemEncerramento && (
+                      <div className="text-[10px] text-slate-500 italic line-clamp-2 break-words">
+                        “{op.mensagemEncerramento}”
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="p-3 rounded-xl bg-grafite-700 border border-linha text-xs text-slate-400 space-y-1">
               <div className="font-semibold text-slate-200 flex items-center gap-1">

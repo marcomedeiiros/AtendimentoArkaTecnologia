@@ -2,7 +2,7 @@ const router = require("express").Router();
 const chatbotController = require("./chatbot.controller");
 const validate = require("../../shared/middlewares/validate.middleware");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
-const { processarSchema } = require("./chatbot.dto");
+const { processarSchema, simularSchema } = require("./chatbot.dto");
 
 router.use(authMiddleware);
 
@@ -28,6 +28,18 @@ router.post("/processar", validate(processarSchema), (req, res, next) =>
  */
 router.post("/fluxos/:id/executar", (req, res, next) =>
   chatbotController.executarFluxo(req, res).catch(next)
+);
+
+/**
+ * @openapi
+ * /api/chatbot/simular:
+ *   post:
+ *     tags: [Chatbot]
+ *     security: [{ bearerAuth: [] }]
+ *     summary: Conversa de teste contra um fluxo (sem WhatsApp, sem gravar nada)
+ */
+router.post("/simular", validate(simularSchema), (req, res, next) =>
+  chatbotController.simular(req, res).catch(next)
 );
 
 /**

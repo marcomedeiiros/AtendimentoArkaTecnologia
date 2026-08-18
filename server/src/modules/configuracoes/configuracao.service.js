@@ -24,6 +24,16 @@ const DEFINICOES = {
   // camada gratuita. A chave e OpenAI-compativel, entao trocar para a OpenAI e so
   // mudar a chave/URL. Vem do .env (GROQ_API_KEY) quando o banco esta vazio.
   "transcricao.apiKey": { padrao: () => process.env.GROQ_API_KEY || process.env.TRANSCRICAO_API_KEY || "", segredo: true },
+  // Horario de atendimento, usado pelo motor de fluxos para o "fora de horario".
+  // JSON: { "ativo": bool, "inicio": "08:00", "fim": "18:00", "dias": [1..5],
+  //         "mensagem": "texto enviado fora do horario" }
+  // `dias` segue Date#getDay (0=domingo). Vazio/desligado = atende sempre, que e
+  // o padrao para nao mudar o comportamento de quem ja usa o sistema.
+  "chatbot.horario":    { padrao: () => process.env.CHATBOT_HORARIO || "", segredo: false },
+  // Mapa fila -> setor. O `queueId` dos fluxos importados nao existe aqui; este
+  // mapa e o que permite a transferencia cair no setor certo do HelpDesk.
+  // JSON: { "33": "Suporte", "35": "Comercial" }
+  "chatbot.filas":      { padrao: () => process.env.CHATBOT_FILAS || "", segredo: false },
 };
 
 // Mascara em ASCII puro: caracteres como "•" se corrompem dependendo da
@@ -87,6 +97,42 @@ class ConfiguracaoService {
     const c = await this._carregar();
     const modo = String(c["atendimento.modo"] || "n8n").toLowerCase();
     return ["n8n", "local", "humano"].includes(modo) ? modo : "n8n";
+  }
+
+  // JSON invalido nao pode derrubar o atendimento: cai no padrao "atende sempre".
+  _json(valor, padrao) {
+    const bruto = String(valor || "").trim();
+    if (!bruto) return padrao;
+    try {
+      const dados = JSON.parse(bruto);
+      return dados && typeof dados === "object" ? dados : padrao;
+    } catch {
+      logger.warn("Configuracao com JSON invalido, usando o padrao", { valor: bruto.slice(0, 60) });
+      return padrao;
+    }
+  }
+
+  async horarioAtendimento() {
+    const c = await this._carregar();
+    const h = this._json(c["chatbot.horario"], {});
+    return {
+      ativo: h.ativo === true,
+      inicio: typeof h.inicio === "string" ? h.inicio : "08:00",
+      fim: typeof h.fim === "string" ? h.fim : "18:00",
+      dias: Array.isArray(h.dias) ? h.dias.map(Number).filter((d) => d >= 0 && d <= 6) : [1, 2, 3, 4, 5],
+      mensagem: typeof h.mensagem === "string" ? h.mensagem : "",
+    };
+  }
+
+  // { "33": "Suporte" } -> setor para onde a fila do fluxo importado aponta.
+  async filasParaSetor() {
+    const c = await this._carregar();
+    const mapa = this._json(c["chatbot.filas"], {});
+    const out = {};
+    for (const [fila, setor] of Object.entries(mapa)) {
+      if (typeof setor === "string" && setor.trim()) out[String(fila)] = setor.trim();
+    }
+    return out;
   }
 
   // Listagem para a tela: mascara segredos, mas informa se ja existe valor.

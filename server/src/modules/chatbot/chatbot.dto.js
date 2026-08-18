@@ -8,4 +8,13 @@ const processarSchema = z.object({
   waMessageId: z.string().optional(),
 });
 
-module.exports = { processarSchema };
+// Simulacao de conversa: a lista completa de mensagens do cliente, em ordem. O
+// endpoint e stateless e reproduz a conversa do zero a cada chamada.
+const simularSchema = z.object({
+  fluxoId: z.string().min(1),
+  mensagens: z.array(z.string()).max(40).default([]),
+  nomeCliente: z.string().max(80).optional(),
+  respeitarHorario: z.boolean().optional(),
+});
+
+module.exports = { processarSchema, simularSchema };

@@ -2,6 +2,7 @@ const createApp = require("./app");
 const env = require("./config/env");
 const logger = require("./config/logger");
 const prisma = require("./infrastructure/database/prisma.client");
+const inatividade = require("./modules/chatbot/chatbot.inatividade");
 
 const app = createApp();
 
@@ -17,6 +18,9 @@ async function start() {
   app.listen(env.port, () => {
     logger.info(`Servidor rodando em http://localhost:${env.port}`);
     logger.info(`Swagger em http://localhost:${env.port}/api-docs`);
+    // Encerramento por inatividade depende de alguem olhando o relogio: o motor
+    // do chatbot so e acionado por mensagem recebida.
+    inatividade.iniciar();
   });
 }
 

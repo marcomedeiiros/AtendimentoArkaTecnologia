@@ -1,0 +1,85 @@
+// Varredor de sessoes inativas.
+//
+// O motor do chatbot so acorda quando chega mensagem do cliente, e o
+// `notResponseMessage` do fluxo ("por falta de interacao o chat foi encerrado")
+// depende exatamente do contrario: da AUSENCIA de mensagem. Sem alguem olhando
+// o relogio, esse trecho do fluxo importado nunca dispararia.
+//
+// Roda em intervalo, e nao por conversa: um timer por sessao vazaria memoria e
+// morreria em qualquer restart do processo. Aqui o estado esta todo no banco.
+const prisma = require("../../infrastructure/database/prisma.client");
+const conversaRepository = require("../../infrastructure/repositories/conversa.repository");
+const instanciaRepository = require("../../infrastructure/repositories/instancia.repository");
+const chatbotEngine = require("./chatbot.engine");
+const configuracaoService = require("../configuracoes/configuracao.service");
+const logger = require("../../config/logger");
+
+const INTERVALO_MS = Number(process.env.CHATBOT_INATIVIDADE_INTERVALO_MS) || 60 * 1000;
+
+let timer = null;
+let rodando = false;
+
+async function varrer() {
+  // Evita sobreposicao se uma varredura demorar mais que o intervalo.
+  if (rodando) return { ignorado: "em_execucao" };
+  rodando = true;
+
+  let tratadas = 0;
+  try {
+    // So o motor local encerra conversa por conta propria. Nos outros modos quem
+    // manda e o n8n ou o atendente, e fechar por tras deles seria invasivo.
+    const modo = await configuracaoService.modoAtendimento();
+    if (modo !== "local") return { modo, tratadas: 0 };
+
+    const sessoes = await prisma.sessaoChatbot.findMany({
+      where: { ativo: true, fluxoAtualId: { not: null } },
+      take: 200,
+    });
+
+    for (const sessao of sessoes) {
+      try {
+        const conversa = await conversaRepository.findById(sessao.conversaId);
+        if (!conversa) continue;
+        // Atendente ja assumiu: nao e mais conversa do bot.
+        if (conversa.statusAtendimento !== "pendente") continue;
+
+        const instancia = await instanciaRepository.findById(sessao.instanciaId);
+        const resultado = await chatbotEngine.aplicarInatividade(sessao, {
+          conversa,
+          instanciaId: sessao.instanciaId,
+          instanceName: instancia?.nome,
+        });
+        if (resultado) tratadas += 1;
+      } catch (error) {
+        // Uma sessao problematica nao pode parar a varredura das outras.
+        logger.warn("Falha ao aplicar inatividade na sessao", {
+          sessaoId: sessao.id,
+          message: error.message,
+        });
+      }
+    }
+  } catch (error) {
+    logger.warn("Falha na varredura de inatividade", { message: error.message });
+  } finally {
+    rodando = false;
+  }
+
+  if (tratadas) logger.info("Varredura de inatividade", { tratadas });
+  return { tratadas };
+}
+
+function iniciar() {
+  if (timer) return timer;
+  timer = setInterval(() => { varrer(); }, INTERVALO_MS);
+  // Nao segura o processo aberto no shutdown.
+  if (timer.unref) timer.unref();
+  logger.info("Varredor de inatividade do chatbot iniciado", { intervaloMs: INTERVALO_MS });
+  return timer;
+}
+
+function parar() {
+  if (timer) clearInterval(timer);
+  timer = null;
+}
+
+module.exports = { iniciar, parar, varrer };

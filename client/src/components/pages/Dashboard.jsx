@@ -340,7 +340,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
 
               {avaliacoes.total === 0 ? (
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  Ainda não há avaliações. Elas aparecem aqui assim que os clientes avaliarem os atendimentos.
+                  Ainda não há avaliações elas aparecem aqui assim que os clientes avaliarem os atendimentos.
                 </p>
               ) : (
                 <>
