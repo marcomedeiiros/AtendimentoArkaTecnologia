@@ -3,8 +3,10 @@ import {
   MessageSquare, Send, Eye, Trash2, UserCheck, Check, X,
   CheckCircle2, Clock, Inbox, Play, Search, Zap,
   CheckCheck, WifiOff, Wifi, Bell, Pin, ChevronLeft,
-  ArrowRightLeft, AlertCircle, Users, RotateCcw, Layers, ArrowDown, Tv,
-  FileText, MapPin, Contact, Paperclip, Smile, Image as Loader2,
+  ArrowRightLeft, AlertCircle, Users, RotateCcw, ArrowDown, Tv,
+  // `Loader2` estava importado como `Image as Loader2`: o "spinner" do envio de
+  // midia girava um icone de IMAGEM. Agora e o Loader2 de verdade.
+  FileText, MapPin, Contact, Paperclip, Smile, Loader2,
   SlidersHorizontal, Star, Archive, EyeOff, MoreVertical,
   ZoomIn, ZoomOut, Maximize2, Download, CornerUpLeft, Share2, Pencil, MoreHorizontal, Mic, Tag, PenLine
 } from 'lucide-react';
@@ -57,7 +59,152 @@ function tempoDesde(iso) {
   const d = Math.floor(h / 24);
   if (d === 1) return 'ontem';
   if (d < 7) return `há ${d} d`;
-  return new Date(ms).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  // Passada uma semana, "09/08" nao diz o suficiente: numa base que ja virou o
+  // ano, dia e mes sozinhos deixam duvida se a conversa e de agosto deste ano
+  // ou do anterior. Entao aqui vai data completa com hora.
+  return new Date(ms).toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  }).replace(',', '');
+}
+
+// "09/08/2026 14:32" -- data e hora da ultima mensagem, do jeito que aparece
+// dentro do balao de previa no cartao da lista.
+function dataHoraCurta(iso) {
+  if (!iso) return '';
+  const ms = new Date(iso).getTime();
+  if (Number.isNaN(ms)) return '';
+  return new Date(ms).toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  }).replace(',', '');
+}
+
+// Tooltip do balao: a data exata mais o tempo decorrido. O relativo saiu da
+// tela para o balao mostrar data e hora, mas "há 2 min" ainda e o que responde
+// "essa conversa esta esperando?", entao continua a um passe de mouse.
+function dataHoraCompleta(iso) {
+  if (!iso) return 'Sem mensagens';
+  const ms = new Date(iso).getTime();
+  if (Number.isNaN(ms)) return 'Sem mensagens';
+  const fmt = new Date(ms).toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  }).replace(',', ' às');
+  return `Última mensagem: ${fmt} (${tempoDesde(iso)})`;
+}
+
+// O id da conversa e um UUID de 36 caracteres: inteiro na lista, ele estouraria
+// a largura do cartao. Os 8 primeiros ja bastam para citar a conversa, e o id
+// completo fica no `title` para copiar quando precisar.
+function idCurto(id) {
+  return String(id || '').replace(/-/g, '').slice(0, 8).toUpperCase();
+}
+
+// Normaliza texto do cliente para comparar palavra-chave: minusculo e sem
+// acento, senao "técnico" e "tecnico" seriam coisas diferentes.
+function semAcento(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+// Setores que a Central sinaliza no cartao. `setor` casa com os cargos que o
+// back-end aceita (Técnico / Financeiro / Comercial), para que a badge combine
+// com o roteamento por setor que ja existe em conversa.service.js.
+//
+// `explicito` = o cliente nomeou o setor ("quero falar com o financeiro").
+// `assunto`   = ele nao nomeou, mas o assunto entrega o setor ("meu boleto").
+// O explicito e checado primeiro: nomear vale mais do que deduzir.
+const SETORES = [
+  {
+    id: 'tecnico',
+    setor: 'Técnico',
+    label: 'ATENDENTE TÉCNICO',
+    classe: 'bg-blue-500/15 border-blue-500/30 text-blue-300',
+    explicito: ['tecnico', 'tecnica'],
+    assunto: [
+      'nao funciona', 'nao esta funcionando', 'parou de funcionar', 'deu erro',
+      'erro no', 'travou', 'travando', 'lento', 'sem sinal', 'sem internet',
+      'sem conexao', 'configurar', 'configuracao', 'instalacao', 'instalar',
+      'manutencao', 'defeito', 'suporte',
+    ],
+  },
+  {
+    id: 'financeiro',
+    setor: 'Financeiro',
+    label: 'FINANCEIRO',
+    classe: 'bg-espera/15 border-espera/30 text-espera-400',
+    explicito: ['financeiro', 'financeira'],
+    assunto: [
+      'boleto', 'fatura', 'segunda via', '2 via', 'pagamento', 'pagar',
+      'cobranca', 'cobrado', 'mensalidade', 'nota fiscal', 'pix', 'estorno',
+      'reembolso', 'vencimento', 'em atraso', 'debito',
+    ],
+  },
+  {
+    id: 'comercial',
+    setor: 'Comercial',
+    label: 'COMERCIAL',
+    classe: 'bg-purple-500/15 border-purple-500/30 text-purple-300',
+    explicito: ['comercial', 'vendas', 'vendedor'],
+    assunto: [
+      'orcamento', 'proposta', 'contratar', 'quanto custa', 'preco', 'valor',
+      'plano', 'assinar', 'upgrade', 'revenda', 'parceria', 'tabela de preco',
+    ],
+  },
+];
+
+// Situacao do CNPJ como badge. Fica fora dos componentes porque duas telas
+// mostram a mesma informacao -- o cartao da lista e o painel de TV -- e, quando
+// a regra do "parceiro ativo" vivia duplicada, era questao de tempo as duas
+// discordarem sobre o mesmo cliente.
+function chipDoCnpj(c, parceiros = []) {
+  const ehParceiro = c.cnpjVerificado && c.cnpj &&
+    parceiros.some(p => p.cnpj === limparCnpj(c.cnpj) && p.status === 'ativo');
+
+  if (!c.cnpjVerificado) {
+    return {
+      label: 'CNPJ PENDENTE',
+      classe: 'bg-slate-700/50 border-linha-forte text-slate-300',
+      titulo: 'CNPJ pendente de validação',
+    };
+  }
+  return ehParceiro
+    ? {
+        label: 'PARCEIRO',
+        classe: 'bg-ativo/15 border-ativo/30 text-ativo-400',
+        titulo: `Parceiro ${mascararCnpj(c.cnpj)}`,
+      }
+    : {
+        label: 'AVULSO',
+        classe: 'bg-espera/15 border-espera/30 text-espera-400',
+        titulo: `Avulso (sem contrato) ${mascararCnpj(c.cnpj)}`,
+      };
+}
+
+// Qual setor o cliente pediu nesta conversa. Devolve null quando nada indica
+// setor -- ai o cartao nao mostra badge, em vez de chutar um.
+function setorDaConversa(c) {
+  // 1) Roteamento explicito ganha do palpite: se o setor da conversa ja foi
+  //    definido (PATCH /conversas/:id/setor), e ele que vale.
+  const doCadastro = SETORES.find(s => semAcento(s.setor) === semAcento(c.setor));
+  if (doCadastro) return doCadastro;
+
+  // 2) Senao, le o que o CLIENTE escreveu, do mais recente para o mais antigo:
+  //    quem trocou de assunto no meio da conversa quer o setor novo.
+  const falas = (c.mensagens || [])
+    .filter(m => m.de === 'cliente' && m.texto)
+    .map(m => semAcento(m.texto))
+    .reverse();
+
+  for (const t of falas) {
+    const achou = SETORES.find(s => s.explicito.some(p => t.includes(p)));
+    if (achou) return achou;
+  }
+  for (const t of falas) {
+    const achou = SETORES.find(s => s.assunto.some(p => t.includes(p)));
+    if (achou) return achou;
+  }
+  return null;
 }
 
 // Metadados visuais dos 3 status (🟢 Aberta / 🟡 Pendente / 🔴 Fechada).
@@ -69,7 +216,33 @@ const STATUS_META = {
   fechada:  { label: 'Fechada',  dot: 'bg-quieto',       chip: 'bg-quieto/20 text-quieto-400 border-quieto/30' }
 };
 
+// Setores de atendimento. A lista casa com a do servidor
+// (shared/helpers/setor.helper.js) -- e ela que decide quem ve qual conversa,
+// entao os nomes precisam bater caractere por caractere.
+const SETORES_ATENDIMENTO = [
+  { id: 'Geral',      desc: 'Ainda sem triagem. Todo mundo vê.' },
+  { id: 'Técnico',    desc: 'Suporte, instalação, defeito.' },
+  { id: 'Financeiro', desc: 'Boleto, fatura, cobrança.' },
+  { id: 'Comercial',  desc: 'Orçamento, proposta, novo contrato.' },
+];
+
 function limparCnpj(v) { return String(v || '').replace(/\D/g, ''); }
+
+// "27999990000" -> "(27) 99999-0000". Só visual: o que vai para a API é o
+// numero cru, e quem normaliza DDI/DDD e o servidor.
+function mascararTelefone(v) {
+  const d = String(v || '').replace(/\D/g, '').slice(0, 13);
+  // Com DDI digitado (55 + DDD + numero), mostra o +55 na frente.
+  if (d.length > 11) {
+    return d
+      .replace(/^(\d{2})(\d)/, '+$1 ($2')
+      .replace(/^(\+\d{2} \(\d{2})(\d)/, '$1) $2')
+      .replace(/(\d{4,5})(\d{4})$/, '$1-$2');
+  }
+  return d
+    .replace(/^(\d{2})(\d)/, '($1) $2')
+    .replace(/(\d{4,5})(\d{4})$/, '$1-$2');
+}
 function mascararCnpj(v) {
   const c = limparCnpj(v).slice(0, 14);
   return c
@@ -96,8 +269,11 @@ function horaAgora() {
   return new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
+
+// Sem aba "Todas": a fila e lida por estado (Abertas / Pendentes / Fechadas).
+// Uma aba que mostrava tudo junto misturava conversa em andamento com conversa
+// ja encerrada, e o operador tinha que reler o chip de status de cada linha.
 const ABAS = [
-  { id: 'todas',     label: 'Todas',     icon: Layers,       statusMatch: () => true },
   { id: 'abertas',   label: 'Abertas',   icon: Inbox,        statusMatch: c => c.statusAtendimento === 'aberta' },
   { id: 'pendentes', label: 'Pendentes', icon: Clock,        statusMatch: c => c.statusAtendimento === 'pendente' },
   { id: 'fechadas',  label: 'Fechadas',  icon: CheckCircle2, statusMatch: c => c.statusAtendimento === 'fechada' },
@@ -173,13 +349,13 @@ function dentroDe(iso, dias) {
   return new Date(iso).getTime() >= inicio.getTime();
 }
 
-// `todas` e `fechadas` controlam a ABA correspondente: desmarcar esconde a aba
-// inteira (e as conversas daquele status somem da lista). `arquivadas`/`ocultas`
-// so filtram as conversas. Nada e apagado do banco em nenhum caso.
-const VISIBILIDADE_PADRAO = { todas: true, fechadas: true, arquivadas: false, ocultas: false };
+// `fechadas` controla a ABA correspondente: desmarcar esconde a aba inteira (e
+// as conversas daquele status somem da lista). `arquivadas`/`ocultas` so
+// filtram as conversas. Nada e apagado do banco em nenhum caso.
+const VISIBILIDADE_PADRAO = { fechadas: true, arquivadas: false, ocultas: false };
 
 // Abas que podem ser escondidas pelos checkboxes.
-const ABA_POR_VISIBILIDADE = { todas: 'todas', fechadas: 'fechadas' };
+const ABA_POR_VISIBILIDADE = { fechadas: 'fechadas' };
 
 function PainelFiltros({ extras, setExtras, visib, setVisib, onLimpar, totalAtivos }) {
   const alternarExtra = (id) =>
@@ -221,7 +397,6 @@ function PainelFiltros({ extras, setExtras, visib, setVisib, onLimpar, totalAtiv
         <div className="pt-2 border-t border-linha">
           <div className="text-[10px] uppercase text-slate-500 font-bold mb-1.5">Exibir na lista</div>
           {[
-            { id: 'todas',      label: 'Mostrar Todas as Conversas' },
             { id: 'fechadas',   label: 'Mostrar Conversas Fechadas' },
             { id: 'arquivadas', label: 'Mostrar Conversas Arquivadas' },
             { id: 'ocultas',    label: 'Mostrar Conversas Ocultas' },
@@ -237,12 +412,162 @@ function PainelFiltros({ extras, setExtras, visib, setVisib, onLimpar, totalAtiv
             </label>
           ))}
           <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">
-            Desmarcar "Todas" ou "Fechadas" esconde a aba correspondente. Nada é
-            apagado do banco.
+            Desmarcar "Fechadas" esconde a aba correspondente. Nada é apagado do
+            banco.
           </p>
         </div>
       </div>
     </div>
+  );
+}
+
+// Modal de conversa nova: numero, setor e a primeira mensagem.
+//
+// Existe porque comecar um atendimento era sempre reativo -- so dava para
+// responder quem escreveu primeiro. Quem precisava chamar um cliente ia ao
+// Envio em Massa (que dispara mas nao registra a conversa) ou abria o WhatsApp
+// no celular, fora do sistema, sem historico nem setor.
+function ModalNovaConversa({ onFechar, onEnviar, enviando, erro }) {
+  const [telefone, setTelefone] = useState('');
+  const [nome,     setNome]     = useState('');
+  const [setor,    setSetor]    = useState('Geral');
+  const [texto,    setTexto]    = useState('');
+
+  // Fechar com Esc, como os outros paineis desta tela.
+  useEffect(() => {
+    const onTecla = (e) => { if (e.key === 'Escape' && !enviando) onFechar(); };
+    window.addEventListener('keydown', onTecla);
+    return () => window.removeEventListener('keydown', onTecla);
+  }, [onFechar, enviando]);
+
+  const digitos = telefone.replace(/\D/g, '');
+  // Mesma regra do servidor: 10-11 digitos (DDD + numero) ou 12-13 com o DDI.
+  const numeroOk = [10, 11, 12, 13].includes(digitos.length);
+  const podeEnviar = numeroOk && texto.trim().length > 0 && !enviando;
+
+  const enviar = () => {
+    if (!podeEnviar) return;
+    onEnviar({ telefone: digitos, nome: nome.trim(), setor, texto: texto.trim() });
+  };
+
+  return (
+    <Portal>
+    <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
+      <div className="glass-panel border border-linha rounded-2xl w-full max-w-md shadow-2xl fade-in my-auto flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh]">
+        <div className="p-4 bg-grafite-600 border-b border-linha flex items-center justify-between shrink-0 rounded-t-2xl">
+          <div className="flex items-center gap-2 font-bold text-sm text-white min-w-0">
+            <Send size={16} className="text-acao-200 shrink-0" />
+            <span className="truncate">Nova conversa</span>
+          </div>
+          <button onClick={onFechar} disabled={enviando}
+            className="text-slate-400 hover:text-white shrink-0 ml-2 disabled:opacity-50">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="p-4 flex-1 overflow-y-auto min-h-0 space-y-4">
+          <div>
+            <label className="text-[11px] font-semibold text-slate-300 block mb-1.5">
+              Número do WhatsApp
+            </label>
+            <input
+              value={telefone}
+              onChange={e => setTelefone(mascararTelefone(e.target.value))}
+              placeholder="(27) 99999-0000"
+              inputMode="tel"
+              autoFocus
+              className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder-slate-500 focus:outline-none focus:border-acao/50"
+            />
+            <p className="text-[10px] text-slate-500 mt-1">
+              DDD + número. Sem o 55 na frente a gente completa.
+            </p>
+          </div>
+
+          <div>
+            <label className="text-[11px] font-semibold text-slate-300 block mb-1.5">
+              Nome <span className="text-slate-500 font-normal">(opcional)</span>
+            </label>
+            <input
+              value={nome}
+              onChange={e => setNome(e.target.value)}
+              placeholder="Como aparece na lista"
+              className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50"
+            />
+            <p className="text-[10px] text-slate-500 mt-1">
+              Em branco, a conversa entra com o número e passa a mostrar o nome do
+              perfil quando o cliente responder.
+            </p>
+          </div>
+
+          <div>
+            <label className="text-[11px] font-semibold text-slate-300 block mb-1.5">
+              Setor de atendimento
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {SETORES_ATENDIMENTO.map(s => {
+                const ativo = setor === s.id;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setSetor(s.id)}
+                    aria-pressed={ativo}
+                    className={`text-left p-2.5 rounded-xl border transition-all ${
+                      ativo
+                        ? 'bg-acao/15 border-acao/50'
+                        : 'bg-grafite-700 border-linha hover:border-linha-forte'
+                    }`}
+                  >
+                    <div className={`text-[11px] font-bold ${ativo ? 'text-acao-200' : 'text-slate-300'}`}>
+                      {s.id}
+                    </div>
+                    <div className="text-[10px] text-slate-500 leading-snug mt-0.5">{s.desc}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[11px] font-semibold text-slate-300 block mb-1.5">
+              Mensagem
+            </label>
+            <textarea
+              value={texto}
+              onChange={e => setTexto(e.target.value)}
+              onKeyDown={e => {
+                // Ctrl+Enter envia; Enter sozinho continua quebrando linha,
+                // porque aqui se escreve mensagem de varias linhas.
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); enviar(); }
+              }}
+              rows={4}
+              placeholder="Escreva a mensagem que abre a conversa..."
+              className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 resize-none"
+            />
+          </div>
+
+          {erro && (
+            <p className="text-[11px] text-falha-400 bg-falha/10 border border-falha/30 rounded-lg p-2.5">
+              {erro}
+            </p>
+          )}
+        </div>
+
+        <div className="p-4 bg-grafite-600 border-t border-linha flex flex-col-reverse sm:flex-row sm:justify-end gap-2 shrink-0 rounded-b-2xl">
+          <button onClick={onFechar} disabled={enviando}
+            className="px-3 py-2 sm:py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors disabled:opacity-50">
+            Cancelar
+          </button>
+          <button onClick={enviar} disabled={!podeEnviar}
+            title={!numeroOk ? 'Informe DDD + número' : !texto.trim() ? 'Escreva a mensagem' : 'Enviar (Ctrl+Enter)'}
+            className="px-4 py-2 sm:py-1.5 rounded-lg bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-acao/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+            {enviando ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+            {enviando ? 'Enviando...' : 'Enviar e abrir'}
+          </button>
+        </div>
+      </div>
+    </div>
+    </Portal>
   );
 }
 
@@ -253,7 +578,7 @@ function PainelFiltros({ extras, setExtras, visib, setVisib, onLimpar, totalAtiv
 // Duas colunas, porque sao duas perguntas diferentes: a esquerda mostra quem
 // ainda nao foi atendido, a direita quem ja esta com alguem. Sem a segunda, uma
 // conversa assumida e esquecida some da parede e ninguem percebe.
-function PainelTv({ pendentes, abertas, onFechar }) {
+function PainelTv({ pendentes, abertas, parceiros, onFechar }) {
   const [agora, setAgora] = useState(Date.now());
 
   // 1s: o relogio da parede mostra segundos, entao precisa bater a cada tique.
@@ -285,35 +610,71 @@ function PainelTv({ pendentes, abertas, onFechar }) {
   // foi nossa, a bola esta com o cliente e o cartao fica calmo.
   const devendoResposta = (c) => c.mensagens?.[c.mensagens.length - 1]?.de === 'cliente';
 
+  // Tempo SEMPRE relativo, e recontado a cada tique do relogio. A funcao da
+  // lista (`tempoDesde`) passa a data absoluta depois de uma semana, e na parede
+  // isso viraria "esperando 09/08/2026 21:49" -- que nao responde a pergunta que
+  // a parede existe para responder: faz quanto tempo?
+  const tempoEspera = (iso) => {
+    if (!iso) return 'sem registro';
+    const ms = new Date(iso).getTime();
+    if (Number.isNaN(ms)) return 'sem registro';
+    const s = Math.max(0, Math.floor((agora - ms) / 1000));
+    if (s < 60) return 'agora';
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m} min`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h} h`;
+    return `${Math.floor(h / 24)} d`;
+  };
+
   const Cartao = ({ c, aberta }) => {
     const cobrando = aberta ? devendoResposta(c) : true;
     const u = cobrando
       ? urgencia(c.ultimaMensagemEm)
       : { cor: 'text-quieto', borda: 'border-linha' };
     const ultima = c.mensagens?.[c.mensagens.length - 1];
-    const tempo = tempoDesde(c.ultimaMensagemEm).replace('há ', '');
+    const tempo = tempoEspera(c.ultimaMensagemEm);
+    const chipCnpj = chipDoCnpj(c, parceiros);
+    const setor = setorDaConversa(c);
 
     return (
-      <div className={`bg-grafite-700 rounded-3xl border-2 ${u.borda} p-7 flex flex-col gap-4`}>
-        <div className="flex items-center gap-5 min-w-0">
-          <Avatar nome={c.cliente} size="lg" fotoUrl={c.fotoUrl} className="scale-150 ml-2 mr-3" />
+      <div className={`bg-grafite-700 rounded-3xl border-2 ${u.borda} p-4 sm:p-5 2xl:p-7 flex flex-col gap-3 2xl:gap-4`}>
+        <div className="flex items-center gap-3 sm:gap-5 min-w-0">
+          <Avatar nome={c.cliente} size="lg" fotoUrl={c.fotoUrl} className="2xl:scale-150 2xl:ml-2 2xl:mr-3" />
           <div className="min-w-0 flex-1">
-            <div className="text-3xl font-bold text-white truncate">{c.cliente}</div>
-            <div className="text-xl text-texto-suave font-mono truncate">{c.telefone}</div>
+            <div className="text-xl sm:text-2xl 2xl:text-3xl font-bold text-white truncate">{c.cliente}</div>
+            <div className="text-base sm:text-lg 2xl:text-xl text-texto-suave font-mono truncate">{c.telefone}</div>
           </div>
           {c.naoLidas > 0 && (
-            <span className="shrink-0 min-w-[52px] h-[52px] px-3 rounded-full bg-espera text-grafite-900 text-2xl font-extrabold flex items-center justify-center tabular-nums">
+            <span className="shrink-0 min-w-[36px] h-[36px] 2xl:min-w-[52px] 2xl:h-[52px] px-3 rounded-full bg-espera text-grafite-900 text-lg 2xl:text-2xl font-extrabold flex items-center justify-center tabular-nums">
               {c.naoLidas > 99 ? '99+' : c.naoLidas}
             </span>
           )}
         </div>
 
-        <p className="text-xl text-texto-suave line-clamp-2 leading-snug">
+        {/* As mesmas badges do cartao da lista, em corpo de parede: quem olha a
+            TV decide para quem vai a conversa, e "CNPJ pendente" ou o setor
+            pedido e justamente o que muda essa decisao. */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={`inline-flex items-center text-sm 2xl:text-base font-bold px-2.5 py-0.5 rounded-lg border ${chipCnpj.classe}`}
+            title={chipCnpj.titulo}>
+            {chipCnpj.label}
+          </span>
+          {setor && (
+            <span className={`inline-flex items-center text-sm 2xl:text-base font-bold px-2.5 py-0.5 rounded-lg border ${setor.classe}`}
+              title={`Cliente quer o setor ${setor.setor}`}>
+              {setor.label}
+            </span>
+          )}
+        </div>
+
+        <p className="text-base sm:text-lg 2xl:text-xl text-texto-suave line-clamp-2 leading-snug">
           {ultima ? ultima.texto : 'Sem mensagens'}
         </p>
 
-        <div className={`flex items-center gap-2 text-2xl font-bold ${u.cor}`}>
-          <Clock size={24} />
+        <div className={`flex items-center gap-2 text-lg sm:text-xl 2xl:text-2xl font-bold ${u.cor}`}>
+          <Clock size={20} className="shrink-0 2xl:hidden" />
+          <Clock size={24} className="shrink-0 hidden 2xl:block" />
           {!aberta && `esperando ${tempo}`}
           {aberta && cobrando && `sem resposta ${tempo}`}
           {aberta && !cobrando && `respondido ${tempo}`}
@@ -323,18 +684,22 @@ function PainelTv({ pendentes, abertas, onFechar }) {
   };
 
   const Coluna = ({ titulo, itens, cor, aberta, vazio, className = '' }) => (
-    <section className={`flex min-h-0 flex-col gap-5 ${className}`}>
-      <header className="flex shrink-0 items-center gap-4">
-        <span className={`h-3 w-3 rounded-full ${cor}`} />
-        <h2 className="text-2xl font-bold uppercase tracking-wider text-texto-suave">{titulo}</h2>
-        <span className="text-2xl font-extrabold tabular-nums text-white">{itens.length}</span>
+    <section className={`flex min-h-0 flex-col gap-3 sm:gap-5 ${className}`}>
+      <header className="flex shrink-0 items-center gap-3 sm:gap-4">
+        <span className={`h-3 w-3 rounded-full shrink-0 ${cor}`} />
+        <h2 className="text-base sm:text-xl 2xl:text-2xl font-bold uppercase tracking-wider text-texto-suave">{titulo}</h2>
+        <span className="text-base sm:text-xl 2xl:text-2xl font-extrabold tabular-nums text-white">{itens.length}</span>
       </header>
       {itens.length === 0 ? (
-        <p className="rounded-3xl border-2 border-dashed border-linha p-8 text-center text-2xl text-texto-fraco">
+        <p className="rounded-3xl border-2 border-dashed border-linha p-6 sm:p-8 text-center text-lg sm:text-2xl text-texto-fraco">
           {vazio}
         </p>
       ) : (
-        <div className="grid grid-cols-1 gap-6 2xl:grid-cols-2">
+        /* `auto-fit` e nao um numero fixo de colunas: as faixas se encaixam na
+           largura disponivel e as vazias somem. E o que faz UMA conversa ocupar
+           a coluna inteira em vez de metade dela com um buraco do lado -- e o que
+           faz uma TV 4K mostrar tres ou quatro por linha sem tocar no codigo. */
+        <div className="grid gap-4 sm:gap-6 grid-cols-[repeat(auto-fit,minmax(20rem,1fr))]">
           {itens.map(c => <Cartao key={c.id} c={c} aberta={aberta} />)}
         </div>
       )}
@@ -350,41 +715,44 @@ function PainelTv({ pendentes, abertas, onFechar }) {
   return (
     <Portal>
       <div className="fixed inset-0 z-[70] bg-grafite-900 flex flex-col">
-        <div className="shrink-0 flex items-center justify-between gap-6 px-10 py-6 border-b border-linha bg-grafite-800">
-          <div className="flex items-center gap-5">
+        <div className="shrink-0 flex items-center justify-between gap-3 sm:gap-6 px-4 sm:px-6 2xl:px-10 py-3 sm:py-4 2xl:py-6 border-b border-linha bg-grafite-800">
+          <div className="flex items-center gap-3 sm:gap-5 min-w-0">
             {/* O ponto pulsa so quando ha alguem sem atendimento. Piscando o
                 tempo todo, ele deixaria de significar qualquer coisa. */}
-            <span className="relative flex h-4 w-4">
+            <span className="relative flex h-4 w-4 shrink-0">
               {pendentes.length > 0 && (
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-espera opacity-60" />
               )}
               <span className={`relative inline-flex rounded-full h-4 w-4 ${pendentes.length > 0 ? 'bg-espera' : 'bg-ativo'}`} />
             </span>
-            <h1 className="text-4xl font-bold text-white tracking-tight font-display">
+            <h1 className="text-xl sm:text-2xl 2xl:text-4xl font-bold text-white tracking-tight font-display truncate">
               Fila de atendimento
             </h1>
           </div>
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3 sm:gap-6 shrink-0">
             <div className="text-right leading-tight">
               {/* tabular-nums evita o relogio "dancar" a cada segundo */}
-              <div className="text-4xl font-bold text-texto tabular-nums">{hora}</div>
-              <div className="text-lg text-texto-suave">{diaSemana} · {data}</div>
+              <div className="text-xl sm:text-2xl 2xl:text-4xl font-bold text-texto tabular-nums">{hora}</div>
+              {/* O dia da semana escrito e a primeira coisa a sair numa janela
+                  estreita: a hora sozinha ja orienta, e o resto seria o que
+                  empurraria o botao Sair para fora da tela. */}
+              <div className="hidden sm:block text-sm 2xl:text-lg text-texto-suave">{diaSemana} · {data}</div>
             </div>
             <button onClick={onFechar}
-              className="px-5 py-3 rounded-xl bg-grafite-600 hover:bg-grafite-500 text-texto text-lg font-bold flex items-center gap-2 transition-colors">
-              <X size={22} /> Sair
+              className="px-3 sm:px-5 py-2 sm:py-3 rounded-xl bg-grafite-600 hover:bg-grafite-500 text-texto text-sm sm:text-base 2xl:text-lg font-bold flex items-center gap-2 transition-colors shrink-0">
+              <X size={20} /> <span className="hidden sm:inline">Sair</span>
             </button>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 2xl:p-8">
           {pendentes.length === 0 && abertas.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center gap-6 text-center">
-              <div className="p-10 rounded-full bg-ativo/10 border-4 border-ativo/30 text-ativo">
-                <CheckCircle2 size={90} />
+            <div className="h-full flex flex-col items-center justify-center gap-4 sm:gap-6 text-center px-4">
+              <div className="p-6 sm:p-10 rounded-full bg-ativo/10 border-4 border-ativo/30 text-ativo">
+                <CheckCircle2 className="w-14 h-14 sm:w-20 sm:h-20 2xl:w-[90px] 2xl:h-[90px]" />
               </div>
-              <p className="text-5xl font-bold text-white font-display">Fila vazia</p>
-              <p className="text-2xl text-texto-suave">Nenhum cliente aguardando atendimento.</p>
+              <p className="text-3xl sm:text-4xl 2xl:text-5xl font-bold text-white font-display">Fila vazia</p>
+              <p className="text-lg sm:text-xl 2xl:text-2xl text-texto-suave">Nenhum cliente aguardando atendimento.</p>
             </div>
           ) : (
             /* Sem `gap`: o respiro entre as colunas vem do padding de cada uma,
@@ -394,12 +762,12 @@ function PainelTv({ pendentes, abertas, onFechar }) {
               <Coluna
                 titulo="Aguardando" cor="bg-espera" itens={pendentes}
                 vazio="Ninguém na fila."
-                className="pb-10 xl:pb-0 xl:border-r xl:border-linha xl:pr-10"
+                className="pb-6 xl:pb-0 xl:border-r xl:border-linha xl:pr-6 2xl:pr-10"
               />
               <Coluna
                 titulo="Em atendimento" cor="bg-ativo" itens={abertas} aberta
                 vazio="Nenhuma conversa assumida."
-                className="border-t border-linha pt-10 xl:border-t-0 xl:pt-0 xl:pl-10"
+                className="border-t border-linha pt-6 xl:border-t-0 xl:pt-0 xl:pl-6 2xl:pl-10"
               />
             </div>
           )}
@@ -446,14 +814,17 @@ function TelaSemConversa() {
 // Skeleton (sem spinner) enquanto a lista carrega pela primeira vez.
 function SkeletonCard() {
   return (
-    <div className="p-3.5 rounded-xl border border-linha/60 bg-grafite-600/40 flex flex-col gap-2 animate-pulse">
+    <div className="p-2 rounded-xl border border-linha/60 bg-grafite-600/40 flex flex-col gap-1 animate-pulse">
       <div className="flex items-center gap-2">
         <div className="w-8 h-8 rounded-full bg-slate-700/50" />
-        <div className="h-3 w-28 rounded bg-slate-700/50" />
-        <div className="ml-auto h-2.5 w-10 rounded bg-slate-700/40" />
+        <div className="flex flex-col gap-1 flex-1">
+          <div className="h-3 w-28 rounded bg-slate-700/50" />
+          <div className="h-2.5 w-24 rounded bg-slate-700/40" />
+          <div className="h-3 w-32 rounded bg-slate-700/40" />
+        </div>
+        <div className="h-2.5 w-8 rounded bg-slate-700/40" />
       </div>
-      <div className="h-2.5 w-24 rounded bg-slate-700/40" />
-      <div className="h-8 rounded-lg bg-grafite-700 border border-linha" />
+      <div className="h-6 rounded-lg bg-grafite-700 border border-linha" />
     </div>
   );
 }
@@ -765,10 +1136,15 @@ const CardConversa = React.memo(function CardConversa({
   // era acessivel depois de clicar em ATENDER.
   const clicavel  = true;
 
+  // Badges do cartao. O CNPJ completo fica no `title`: escrito por inteiro,
+  // "Parceiro: 12.345.678/0001-90" nao caberia na largura da lista.
+  const chipCnpj = chipDoCnpj(c, parceiros);
+  const setor = setorDaConversa(c);
+
   return (
     <div
       onClick={() => { if (clicavel) onSelecionar(c.id); }}
-      className={`p-3.5 rounded-xl border transition-all duration-200 flex flex-col gap-2 ${clicavel ? 'cursor-pointer' : ''} ${
+      className={`p-2 rounded-xl border transition-all duration-200 flex flex-col gap-1 ${clicavel ? 'cursor-pointer' : ''} ${
         ehAtivo
           ? 'bg-gradient-to-r from-acao/10 to-transparent border-acao/50 shadow-sm'
           : naoLidas > 0
@@ -778,9 +1154,11 @@ const CardConversa = React.memo(function CardConversa({
               : 'bg-grafite-600/40 border-linha/60 hover:border-linha-forte'
       }`}
     >
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <Avatar nome={c.cliente} size="sm" fotoUrl={c.fotoUrl} online={whatsAppConectado} />
+      {/* Linha 1: quem e a conversa. Nome, sinais de estado e nao lidas. */}
+      <div className="flex items-center gap-2 min-w-0">
+        <Avatar nome={c.cliente} size="sm" fotoUrl={c.fotoUrl} online={whatsAppConectado} />
+
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 min-w-0">
             <span className={`w-2 h-2 rounded-full shrink-0 ${meta.dot}`} title={meta.label} />
             {c.favorita && <Star size={11} className="text-espera-400 fill-current shrink-0" title="Favorita" />}
@@ -789,48 +1167,83 @@ const CardConversa = React.memo(function CardConversa({
             <span className={`text-xs truncate ${naoLidas > 0 ? 'font-extrabold text-white' : 'font-bold text-slate-300'}`}>
               {c.cliente}
             </span>
+            {naoLidas > 0 && (
+              <span className="ml-auto min-w-[16px] h-[16px] px-1 rounded-full bg-espera text-grafite-900 text-[10px] font-extrabold flex items-center justify-center shrink-0" title={`${naoLidas} não lida(s)`}>
+                {naoLidas > 99 ? '99+' : naoLidas}
+              </span>
+            )}
           </div>
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <span className="text-[10px] text-slate-500" title="Última mensagem">
-            {tempoDesde(c.ultimaMensagemEm)}
-          </span>
-          {naoLidas > 0 && (
-            <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-espera text-grafite-900 text-[10px] font-extrabold flex items-center justify-center" title={`${naoLidas} não lida(s)`}>
-              {naoLidas > 99 ? '99+' : naoLidas}
+
+          {/* Linha 2: numero da conversa e telefone. */}
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="text-[10px] font-mono font-bold text-acao-200/90 shrink-0"
+              title={`Conversa ${c.id}`}>
+              #{idCurto(c.id)}
             </span>
-          )}
+            <span className="text-[10px] text-slate-600 shrink-0">•</span>
+            <span className="text-[10px] text-slate-400 font-mono truncate">
+              {c.telefone || '-'}
+            </span>
+          </div>
+
+          {/* Linha 3: badges. Situacao do CNPJ e, quando o cliente pediu, o
+              setor que ele quer. Sao os dois avisos que mudam o que o operador
+              faz em seguida, entao ficam antes de abrir a conversa. */}
+          <div className="flex items-center gap-1 flex-wrap mt-0.5">
+            <span className={`inline-flex items-center text-[9px] font-bold px-1.5 py-px rounded-md border ${chipCnpj.classe}`}
+              title={chipCnpj.titulo}>
+              {chipCnpj.label}
+            </span>
+            {setor && (
+              <span className={`inline-flex items-center text-[9px] font-bold px-1.5 py-px rounded-md border ${setor.classe}`}
+                title={`Cliente quer o setor ${setor.setor}`}>
+                {setor.label}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] text-slate-400 font-mono truncate">
-          {c.telefone || '-'}
-        </span>
-        <div className="flex items-center gap-1 shrink-0">
+      {/* Linha 4: balao com a previa da ultima mensagem e, dentro dele, a data e
+          a hora dessa mensagem -- como no WhatsApp, onde o horario mora no
+          proprio balao. As acoes rapidas dividem a faixa: antes cada uma tinha
+          sua linha e o cartao passava de 130px de altura. */}
+      <div className="flex items-center gap-1.5">
+        <div className={`flex-1 min-w-0 bg-grafite-700/70 px-2 py-1 rounded-lg border border-linha flex items-center gap-2 ${naoLidas > 0 ? 'text-slate-100' : 'text-slate-300'}`}
+          title={dataHoraCompleta(c.ultimaMensagemEm)}>
+          <span className="flex-1 min-w-0 text-[11px] truncate">
+            {ultimaMsg ? ultimaMsg.texto : 'Sem mensagens'}
+          </span>
+          {c.ultimaMensagemEm && (
+            <span className="text-[9px] text-slate-500 shrink-0 whitespace-nowrap font-mono">
+              {dataHoraCurta(c.ultimaMensagemEm)}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-0.5 shrink-0">
           <button onClick={e => { e.stopPropagation(); onFixar(c.id); }} title={fixado ? 'Desafixar conversa' : 'Fixar no topo'}
-            className={`p-1.5 rounded-lg transition-colors ${fixado ? 'bg-acao/20 text-acao-200' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-400'}`}>
+            className={`p-1 rounded-md transition-colors ${fixado ? 'bg-acao/20 text-acao-200' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-400'}`}>
             <Pin size={12} className={fixado ? 'fill-current' : ''} />
           </button>
           <button onClick={e => { e.stopPropagation(); onEspiar(c); }} title="Espiar conversa"
-            className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-blue-400 transition-colors">
+            className="p-1 rounded-md bg-slate-800/80 hover:bg-slate-700 text-blue-400 transition-colors">
             <Eye size={12} />
           </button>
           {encerrado ? (
             <button onClick={e => { e.stopPropagation(); onReabrir(c.id); }} title="Reabrir atendimento"
-              className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-ativo/20 text-ativo-400 transition-colors">
+              className="p-1 rounded-md bg-slate-800/80 hover:bg-ativo/20 text-ativo-400 transition-colors">
               <RotateCcw size={12} />
             </button>
           ) : (
             <button onClick={e => { e.stopPropagation(); onFechar(c.id); }} title="Fechar atendimento"
-              className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-falha/20 text-falha-400 transition-colors">
+              className="p-1 rounded-md bg-slate-800/80 hover:bg-falha/20 text-falha-400 transition-colors">
               <CheckCircle2 size={12} />
             </button>
           )}
 
           <div className="relative" ref={menuRef}>
             <button onClick={e => { e.stopPropagation(); setMenuAberto(v => !v); }} title="Mais ações"
-              className={`p-1.5 rounded-lg transition-colors ${menuAberto ? 'bg-slate-700 text-white' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-400'}`}>
+              className={`p-1 rounded-md transition-colors ${menuAberto ? 'bg-slate-700 text-white' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-400'}`}>
               <MoreVertical size={12} />
             </button>
             {menuAberto && (
@@ -853,25 +1266,12 @@ const CardConversa = React.memo(function CardConversa({
         </div>
       </div>
 
-      <div>
-        {c.cnpjVerificado
-          ? c.cnpj && parceiros.some(p => p.cnpj === limparCnpj(c.cnpj) && p.status === 'ativo')
-            ? <EmojiIcon name="shield"   label={`Parceiro: ${mascararCnpj(c.cnpj)}`} size="sm" />
-            : <EmojiIcon name="warning"  label={`Avulso (${mascararCnpj(c.cnpj)})`}  size="sm" />
-          : <EmojiIcon name="question" label="CNPJ Pendente" size="sm" />
-        }
-      </div>
-
-      <div className={`text-[11px] truncate bg-grafite-700 p-2 rounded-lg border border-linha ${naoLidas > 0 ? 'text-slate-100' : 'text-slate-300'}`}>
-        {ultimaMsg ? ultimaMsg.texto : 'Sem mensagens'}
-      </div>
-
       {c.statusAtendimento === 'pendente' && (
         <button
           onClick={e => { e.stopPropagation(); onAtender(c.id, e); }}
-          className="w-full mt-1 py-2 px-3 rounded-lg bg-ativo hover:bg-ativo-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-ativo/20 transition-all"
+          className="w-full py-1.5 px-3 rounded-lg bg-ativo hover:bg-ativo-400 text-slate-950 font-bold text-[11px] flex items-center justify-center gap-1.5 shadow-md shadow-ativo/20 transition-all"
         >
-          <UserCheck size={13} /> ATENDER CONVERSA
+          <UserCheck size={12} /> ATENDER CONVERSA
         </button>
       )}
     </div>
@@ -1027,6 +1427,7 @@ function PainelChat({
   const parceiroCadastrado = conversa.cnpjVerificado
     ? parceiros.find(p => p.cnpj === limparCnpj(conversa.cnpj))
     : null;
+  const setorPedido = setorDaConversa(conversa);
 
   return (
     <>
@@ -1046,6 +1447,12 @@ function PainelChat({
               <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
               {meta.label}
             </span>
+            {/* Mesmo numero que aparece no cartao da lista, do lado do status:
+                e por ele que o operador cita a conversa. */}
+            <span className="inline-flex items-center text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-grafite-700 border border-linha text-acao-200"
+              title={`Conversa ${conversa.id}`}>
+              #{idCurto(conversa.id)}
+            </span>
           </div>
           <div className="mt-1 flex items-center gap-2 flex-wrap">
             {!conversa.cnpjVerificado
@@ -1054,6 +1461,14 @@ function PainelChat({
                 ? <EmojiIcon name="shield" label={`${parceiroCadastrado?.razaoSocial} (${mascararCnpj(conversa.cnpj)})`} size="sm" />
                 : <EmojiIcon name="warning" label={`CNPJ ${mascararCnpj(conversa.cnpj)} (Sem Contrato)`} size="sm" />
             }
+            {/* Mesma badge de setor do cartao: com o chat aberto ela continua
+                sendo o motivo pelo qual o cliente chamou. */}
+            {setorPedido && (
+              <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border ${setorPedido.classe}`}
+                title={`Cliente quer o setor ${setorPedido.setor}`}>
+                {setorPedido.label}
+              </span>
+            )}
             {atendente && (
               <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 font-semibold"
                 title={`Conversa atribuida a ${atendente.nome}`}>
@@ -1484,12 +1899,17 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   const primeiroNome = (usuario?.nome || '').trim().split(/\s+/)[0] || '';
   // Toggle de assinatura, por operador (sobrevive ao F5).
   const [assinar, setAssinar] = usePreferencia('central.assinatura', false);
-  const [abaAtual,      setAbaAtual]     = usePreferencia('central.aba', 'todas');
+  const [abaAtual,      setAbaAtual]     = usePreferencia('central.aba', 'abertas');
   const [selecionada,   setSelecionada]  = useState(null);
   const [texto,         setTexto]        = useState('');
   const [espiandoChat,  setEspiandoChat] = useState(null);
   const [modalCnpj,     setModalCnpj]    = useState(false);
   const [inputCnpj,     setInputCnpj]    = useState('');
+  // Conversa iniciada por nos (botao de enviar). `erroNova` fica no estado do
+  // pai porque o erro vem da API -- o modal so o exibe.
+  const [modalNova,     setModalNova]    = useState(false);
+  const [enviandoNova,  setEnviandoNova] = useState(false);
+  const [erroNova,      setErroNova]     = useState('');
   // Semente vinda de "Iniciar chat" nos Contatos (/atendimento?busca=5511...).
   const [busca,         setBusca]        = useState(
     () => new URLSearchParams(window.location.search).get('busca') || ''
@@ -1662,7 +2082,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     .filter(c => ABAS.find(a => a.id === abaAtual)?.statusMatch(c))
     .sort((a, b) => (b.fixada ? 1 : 0) - (a.fixada ? 1 : 0));
 
-  // Abas realmente exibidas: os checkboxes escondem "Todas" e "Fechadas".
+  // Abas realmente exibidas: o checkbox esconde "Fechadas".
   const abasVisiveis = ABAS.filter(a => {
     const chave = Object.keys(ABA_POR_VISIBILIDADE).find(k => ABA_POR_VISIBILIDADE[k] === a.id);
     return chave ? visibilidade[chave] : true;
@@ -1685,11 +2105,47 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     return acc;
   }, {});
 
+  // Abre uma conversa vinda de fora da lista (sino, atalho) trocando para a aba
+  // do status dela. O efeito que limpa a selecao quando a conversa nao pertence
+  // a aba atual desfaria o pulo se ficassemos na aba errada.
+  const irParaConversa = useCallback((id) => {
+    const conv = conversas.find(c => c.id === id);
+    const aba = conv && ABAS.find(a => a.statusMatch(conv));
+    if (aba) setAbaAtual(aba.id);
+    setSelecionada(id);
+  }, [conversas, setAbaAtual]);
+
   // Atualiza uma conversa no estado global a partir da resposta do back-end.
   const aplicarConversa = useCallback((atualizada) => {
     if (!atualizada?.id) return;
     setConversas(prev => prev.map(c => c.id === atualizada.id ? atualizada : c));
   }, [setConversas]);
+
+  // Inicia conversa com um numero digitado. O servidor acha ou cria a conversa,
+  // ja aberta e no setor escolhido, e envia a primeira mensagem.
+  const iniciarConversaNova = useCallback(async (dados) => {
+    setEnviandoNova(true);
+    setErroNova('');
+    try {
+      const nova = await ConversasAPI.iniciarConversa(dados);
+      // Upsert, e nao `map`: numero novo nao esta na lista ainda. O SSE tambem
+      // vai emitir esta conversa, e por isso a checagem de id -- sem ela a
+      // conversa apareceria duplicada por um instante.
+      setConversas(prev =>
+        prev.some(c => c.id === nova.id)
+          ? prev.map(c => (c.id === nova.id ? nova : c))
+          : [nova, ...prev]
+      );
+      // Ela nasce aberta, entao a aba Abertas e onde ela aparece.
+      setAbaAtual('abertas');
+      setSelecionada(nova.id);
+      setModalNova(false);
+    } catch (e) {
+      setErroNova(e.message || 'Não foi possível iniciar a conversa.');
+    } finally {
+      setEnviandoNova(false);
+    }
+  }, [setConversas, setAbaAtual]);
 
   const atenderConversa = useCallback(async (id, e) => {
     if (e) e.stopPropagation();
@@ -1878,6 +2334,17 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
 
         {/* Sino + status do WhatsApp lado a lado, no canto direito. */}
         <div className="self-start sm:self-auto flex items-center gap-2">
+          {/* Iniciar conversa: o unico caminho da Central que nao depende de o
+              cliente escrever primeiro. */}
+          <button
+            onClick={() => { setErroNova(''); setModalNova(true); }}
+            title="Iniciar conversa com um número"
+            aria-label="Iniciar conversa com um número"
+            className="flex items-center justify-center w-9 h-9 rounded-full border bg-acao/15 border-acao/40 text-acao-200 hover:bg-acao/25 transition-colors"
+          >
+            <Send size={15} />
+          </button>
+
           {/* Sino de notificacoes: abre o painel; NAO toca som ao clicar
               (o som so dispara quando chega mensagem, via AppContext). */}
           {/* Modo TV: so na aba Pendentes, que e a fila projetada na parede. */}
@@ -1935,7 +2402,11 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                       <button
                         key={n.id}
                         onClick={() => {
-                          if (n.convId) { setAbaAtual('todas'); setSelecionada(n.convId); }
+                          // Sem a aba "Todas", pular para a conversa exige
+                          // trocar para a aba do status dela -- senao a lista
+                          // filtra a conversa recem-selecionada e o clique na
+                          // notificacao parece nao ter feito nada.
+                          if (n.convId) { irParaConversa(n.convId); }
                           setShowNotif(false);
                         }}
                         className="w-full text-left p-3 flex items-start gap-2.5 hover:bg-grafite-600/70 transition-colors"
@@ -1972,9 +2443,17 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-0 lg:min-h-[550px]">
+      {/* `items-start` abaixo de lg: sem ele o painel da lista era esticado
+          para toda a altura sobrando na pagina, e com duas ou tres conversas
+          ficava um retangulo de fundo vazio ocupando meia tela. No desktop
+          volta a esticar (`lg:items-stretch`), que la e o certo: a lista e o
+          chat ficam lado a lado e precisam da mesma altura. */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-0 items-start lg:items-stretch lg:min-h-[550px]">
 
-        <div className={`${chatAberto ? 'hidden lg:flex' : 'flex'} lg:col-span-4 glass-panel rounded-2xl flex-col overflow-hidden border border-linha min-h-[420px] lg:min-h-0`}>
+        {/* Sem altura minima: o painel passa a ter a altura das conversas que
+            existem. O teto de 70vh e o que mantem a rolagem DENTRO da lista
+            quando a fila cresce, em vez de esticar a pagina inteira. */}
+        <div className={`${chatAberto ? 'hidden lg:flex' : 'flex'} lg:col-span-4 glass-panel rounded-2xl flex-col overflow-hidden border border-linha max-h-[70vh] lg:max-h-none lg:min-h-0`}>
        
           <div className="grid bg-grafite-600/80 border-b border-linha"
             style={{ gridTemplateColumns: `repeat(${Math.max(abasVisiveis.length, 1)}, minmax(0, 1fr))` }}>
@@ -1984,17 +2463,16 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               const ativo = abaAtual === aba.id;
               return (
                 <button key={aba.id} onClick={() => setAbaAtual(aba.id)}
-                  className={`py-3 px-2 text-[11px] font-bold transition-all border-b-2 flex flex-col items-center justify-center gap-0.5 ${
+                  title={`${aba.label} (${count})`}
+                  className={`py-2 px-2 text-[11px] font-bold transition-all border-b-2 flex items-center justify-center gap-1 ${
                     ativo
                       ? 'border-acao text-acao-200 bg-grafite-700'
                       : 'border-transparent text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  <div className="flex items-center gap-1">
-                    <Icon size={12} />
-                    <span>{aba.label}</span>
-                  </div>
-                  <span className={`text-[10px] font-semibold ${ativo ? 'text-acao-200' : 'text-slate-500'}`}>
+                  <Icon size={12} className="shrink-0" />
+                  <span className="truncate">{aba.label}</span>
+                  <span className={`text-[10px] font-semibold shrink-0 ${ativo ? 'text-acao-200' : 'text-slate-500'}`}>
                     ({count})
                   </span>
                 </button>
@@ -2167,6 +2645,15 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
         </Portal>
       )}
 
+      {modalNova && (
+        <ModalNovaConversa
+          onFechar={() => setModalNova(false)}
+          onEnviar={iniciarConversaNova}
+          enviando={enviandoNova}
+          erro={erroNova}
+        />
+      )}
+
       {modoTv && (
         <PainelTv
           // Mais antiga primeiro nas duas colunas: na fila e quem espera ha
@@ -2177,6 +2664,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
           abertas={conversas
             .filter(c => c.statusAtendimento === 'aberta' && !c.arquivada && !c.oculta)
             .sort((a, b) => new Date(a.ultimaMensagemEm || 0) - new Date(b.ultimaMensagemEm || 0))}
+          parceiros={parceiros}
           onFechar={fecharModoTv}
         />
       )}

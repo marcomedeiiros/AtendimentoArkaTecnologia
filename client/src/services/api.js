@@ -208,6 +208,11 @@ export const ConfiguracoesAPI = {
 export const ConversasAPI = {
   listar: () => request('/conversas'),
   atender: (id) => request(`/conversas/${id}/atender`, { method: 'POST' }),
+  // Conversa nova a partir de um numero digitado. Diferente de
+  // `WhatsAppAPI.enviar`, que dispara no WhatsApp mas nao registra nada na
+  // Central quando o numero ainda nao tem conversa.
+  iniciarConversa: ({ telefone, nome, setor, texto }) =>
+    request('/conversas/iniciar', { method: 'POST', body: JSON.stringify({ telefone, nome, setor, texto }) }),
   enviarMensagem: (id, texto, respondendoAId = null) => request(`/conversas/${id}/mensagens`, { method: 'POST', body: JSON.stringify({ texto, respondendoAId }) }),
   editarMensagem: (mensagemId, texto) => request(`/conversas/mensagens/${mensagemId}`, { method: 'PATCH', body: JSON.stringify({ texto }) }),
   transcreverAudio: (mensagemId) => request(`/conversas/mensagens/${mensagemId}/transcrever`, { method: 'POST' }),
