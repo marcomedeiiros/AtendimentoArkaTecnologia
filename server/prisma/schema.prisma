@@ -240,6 +240,25 @@ model SessaoChatbot {
   @@map("sessoes_chatbot")
 }
 
+// Relato de bug/feedback enviado pelo botao flutuante presente em toda tela.
+// Guarda um retrato de quem reportou (id/nome/email) em vez de uma FK para
+// Usuario: mesmo que a conta seja excluida depois, o relato preserva a autoria.
+// Valores validos de status (controlados pelo DTO): aberto | resolvido.
+model RelatoBug {
+  id            String   @id @default(uuid())
+  descricao     String
+  pagina        String?  // rota de onde o relato foi aberto (ex: /atendimento)
+  status        String   @default("aberto")
+  usuarioId     String?  @map("usuario_id")
+  usuarioNome   String?  @map("usuario_nome")
+  usuarioEmail  String?  @map("usuario_email")
+  criadoEm      DateTime @default(now()) @map("criado_em")
+  atualizadoEm  DateTime @updatedAt @map("atualizado_em")
+
+  @@index([status, criadoEm])
+  @@map("relatos_bug")
+}
+
 model LogExecucaoFluxo {
   id          String   @id @default(uuid())
   instanciaId String   @map("instancia_id")

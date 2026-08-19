@@ -62,12 +62,18 @@ export default function AvisoSessao({ aviso, onFechar }) {
     // pressa nao deveria precisar esperar uma animacao terminar.
     <div
       onClick={onFechar}
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-grafite-900/75 px-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-grafite-900 px-4"
     >
       <div
         role="status"
-        className="fade-in glass-panel flex w-[min(92vw,20rem)] flex-col items-center gap-4 rounded-3xl px-8 py-9 text-center shadow-2xl shadow-black/60 ring-1 ring-linha-forte"
+        className="fade-in flex w-[min(92vw,20rem)] flex-col items-center gap-4 text-center"
       >
+        <img
+          src="/arka_tecnologia_logo-removebg-preview.png"
+          alt="Arka Tecnologia"
+          className="h-9 w-auto"
+          style={{ filter: 'brightness(0) invert(1)' }}
+        />
         <Girando cor={entrando ? 'border-t-acao' : 'border-t-texto-suave'} />
         <p className={`text-sm font-bold leading-snug ${entrando ? 'text-acao-200' : 'text-texto'}`}>
           {aviso.texto}

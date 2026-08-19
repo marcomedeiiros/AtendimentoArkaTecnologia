@@ -205,6 +205,16 @@ export const HelpDeskAPI = {
   metricas: () => request('/helpdesk'),
 };
 
+// ── Relatos de Bug / Feedback ──
+// `criar` e aberto a qualquer pessoa logada (botao flutuante). Listar e mudar
+// status/excluir sao restritos a Administrador tambem no servidor.
+export const BugsAPI = {
+  criar: (dados) => request('/bugs', { method: 'POST', body: JSON.stringify(dados) }),
+  listar: (status = '') => request(`/bugs${status ? `?status=${encodeURIComponent(status)}` : ''}`),
+  atualizarStatus: (id, status) => request(`/bugs/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  remover: (id) => request(`/bugs/${id}`, { method: 'DELETE' }),
+};
+
 // ── Configurações API ──
 export const ConfiguracoesAPI = {
   obter: () => request('/configuracoes'),

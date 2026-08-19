@@ -40,7 +40,11 @@ class UsuarioRepository {
         nome,
         email,
         senhaHash,
-        cargo: ePrimeiro ? "Administrador" : cargo || "Atendente",
+        // Conta nova entra como "Técnico" (papel comum). Precisa ser um dos
+        // cargos que a tela de Equipe conhece (Administrador, Financeiro,
+        // Técnico, Comercial) -- senao o <select> nao acha a opcao e exibe a
+        // primeira ("Administrador"), dando a impressao de admin sem ser.
+        cargo: ePrimeiro ? "Administrador" : cargo || "Técnico",
         ativo: ePrimeiro ? true : false,
       },
       select: { id: true, nome: true, email: true, cargo: true, ativo: true },

@@ -694,6 +694,11 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
       return;
     }
     if (nodes.length === 0) return;
+    // Anotacoes (tipo "comentario") sao post-its da equipe: nunca executam e
+    // muitas vezes nem estao ligadas a bloco nenhum. A simulacao percorre so os
+    // blocos de fluxo de fato, ignorando os comentarios.
+    const simNodes = nodes.filter(n => n.tipo !== 'comentario');
+    if (simNodes.length === 0) return;
     if (fluxoSimId) setSimAtiva(prev => ({ ...prev, [fluxoSimId]: true }));
     setIsRunningSim(true);
     setShowLogsConsole(true);
@@ -701,13 +706,13 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
     setSimLogs([{ type: 'info', title: 'Iniciando Simulação de Fluxo', message: `Fluxo: "${flow?.nome}"`, timeMs: 0 }]);
     let index = 0;
     const runStep = () => {
-      if (index >= nodes.length) {
+      if (index >= simNodes.length) {
         setIsRunningSim(false);
         setActiveSimNodeId(null);
         setSimLogs(prev => [...prev, { type: 'success', title: 'Fluxo Concluído ✅', message: 'Todas as etapas foram executadas.', timeMs: 1450 }]);
         return;
       }
-      const curr = nodes[index];
+      const curr = simNodes[index];
       setActiveSimNodeId(curr.id);
       setExecutedNodeIds(prev => [...prev, curr.id]);
       setSimLogs(prev => [...prev, {
@@ -727,15 +732,16 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
   return (
     <div className="flex flex-col h-full min-h-[360px] sm:min-h-[500px] w-full relative bg-grafite-900 overflow-hidden select-none font-sans">
 
-      {/* Barra de ferramentas: UMA linha so, com rolagem horizontal quando
-          falta espaco. Antes era flex-wrap + justify-between, e cada botao novo
-          (importar/exportar) empurrava o grupo inteiro para uma segunda linha,
-          roubando altura do canvas. Agora os rotulos somem por breakpoint e
-          sobram os icones, entao a rolagem quase nunca aparece. */}
-      <div className="shrink-0 flex items-center gap-1.5 px-2 sm:px-3 py-2 bg-grafite-800/90 backdrop-blur-md border-b border-linha overflow-x-auto z-20">
-        <div className="flex items-center gap-1.5 shrink-0">
-          <span className="hidden sm:flex p-2 rounded-xl bg-acao/10 text-acao-200 border border-acao/30">
-            <Zap size={18} />
+      {/* Barra de ferramentas responsiva: em telas largas fica em uma linha so
+          (o espacador elastico separa os dois grupos como um justify-between).
+          Quando falta espaco, primeiro os rotulos somem por breakpoint e, se
+          ainda assim nao couber, os botoes QUEBRAM para a linha de baixo em vez
+          de serem cortados por uma rolagem horizontal. O canvas (flex-1) apenas
+          cede a altura extra nesses casos. */}
+      <div className="shrink-0 flex flex-wrap items-center gap-1 px-2 sm:px-3 py-1 bg-grafite-800/90 backdrop-blur-md border-b border-linha z-20">
+        <div className="flex flex-wrap items-center gap-1 min-w-0">
+          <span className="hidden sm:flex p-1.5 rounded-lg bg-acao/10 text-acao-200 border border-acao/30">
+            <Zap size={15} />
           </span>
 
           {!isRenaming ? (
@@ -745,7 +751,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                   <select
                     value={selectedFlowId || ''}
                     onChange={e => setSelectedFlowId(e.target.value)}
-                    className="bg-grafite-700 border border-linha rounded-xl px-2.5 sm:px-3 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-acao w-[128px] sm:w-[180px] lg:w-[220px] truncate"
+                    className="bg-grafite-700 border border-linha rounded-lg px-2 py-1 text-xs font-bold text-white focus:outline-none focus:border-acao w-[120px] sm:w-[170px] lg:w-[200px] truncate"
                   >
                     {fluxos.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
                   </select>
@@ -753,7 +759,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                     <>
                       <button
                         onClick={() => { setNomeEditado(flow.nome); setGatilhoEditado(flow.gatilho || ''); setIsRenaming(true); }}
-                        className="p-1.5 rounded-xl bg-grafite-700 hover:bg-grafite-600 border border-linha text-slate-400 hover:text-white transition-colors shrink-0"
+                        className="p-1 rounded-lg bg-grafite-700 hover:bg-grafite-600 border border-linha text-slate-400 hover:text-white transition-colors shrink-0"
                         title={`Editar nome e gatilho (gatilho atual: ${flow.gatilho || '-'})`}
                       >
                         <Pencil size={13} />
@@ -785,7 +791,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                 onKeyDown={e => e.key === 'Enter' && handleRenameFlow()}
                 placeholder="Nome do fluxo"
                 autoFocus
-                className="bg-grafite-700 border border-acao/60 rounded-xl px-3 py-1.5 text-xs font-bold text-white focus:outline-none w-28 sm:w-40"
+                className="bg-grafite-700 border border-acao/60 rounded-lg px-2.5 py-1 text-xs font-bold text-white focus:outline-none w-28 sm:w-40"
               />
               <input
                 value={gatilhoEditado}
@@ -793,17 +799,17 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                 onKeyDown={e => e.key === 'Enter' && handleRenameFlow()}
                 placeholder="gatilho ou *"
                 title="Palavra-chave que faz o bot abrir este fluxo. Separe várias por vírgula. Use * para qualquer mensagem."
-                className="bg-grafite-700 border border-acao/60 rounded-xl px-3 py-1.5 text-xs font-mono text-white focus:outline-none w-28 sm:w-40"
+                className="bg-grafite-700 border border-acao/60 rounded-lg px-2.5 py-1 text-xs font-mono text-white focus:outline-none w-28 sm:w-40"
               />
               <button
                 onClick={handleRenameFlow}
-                className="px-2.5 py-1.5 rounded-xl bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold transition-all shrink-0"
+                className="px-2 py-1 rounded-lg bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold transition-all shrink-0"
               >
                 Salvar
               </button>
               <button
                 onClick={() => setIsRenaming(false)}
-                className="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white transition-colors shrink-0"
+                className="p-1 rounded-lg bg-slate-800 text-slate-400 hover:text-white transition-colors shrink-0"
               >
                 <X size={13} />
               </button>
@@ -826,7 +832,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
               } catch {}
             }}
             title="Criar um novo fluxo"
-            className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-acao/15 hover:bg-acao/25 text-acao-200 text-xs font-semibold border border-acao/30 flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap"
+            className="px-2 py-1 rounded-lg bg-acao/15 hover:bg-acao/25 text-acao-200 text-xs font-semibold border border-acao/30 flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap"
           >
             <Plus size={14} /> <span className="hidden md:inline">Novo Fluxo</span>
           </button>
@@ -841,7 +847,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                 disabled={isImportando}
                 title="Importar fluxo de um arquivo .json"
                 aria-label="Importar fluxo de um arquivo JSON"
-                className="p-1.5 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 transition-all disabled:opacity-50 shrink-0"
+                className="p-1 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 transition-all disabled:opacity-50 shrink-0"
               >
                 <Upload size={14} className={isImportando ? 'animate-pulse' : ''} />
               </button>
@@ -850,7 +856,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                 disabled={!flow}
                 title={flow ? 'Exportar este fluxo como .json' : 'Selecione um fluxo para exportar'}
                 aria-label="Exportar este fluxo como JSON"
-                className="p-1.5 rounded-xl bg-ativo/10 hover:bg-ativo/20 text-ativo-400 border border-ativo/30 transition-all disabled:opacity-50 shrink-0"
+                className="p-1 rounded-lg bg-ativo/10 hover:bg-ativo/20 text-ativo-400 border border-ativo/30 transition-all disabled:opacity-50 shrink-0"
               >
                 <Download size={14} />
               </button>
@@ -868,13 +874,13 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
             <button
               onClick={() => setShowDeleteConfirm(true)}
               title="Deletar este fluxo"
-              className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-falha/10 hover:bg-falha/20 text-falha-400 text-xs font-semibold border border-falha/30 flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap"
+              className="px-2 py-1 rounded-lg bg-falha/10 hover:bg-falha/20 text-falha-400 text-xs font-semibold border border-falha/30 flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap"
             >
               <Trash2 size={14} /> <span className="hidden lg:inline">Deletar Fluxo</span>
             </button>
           )}
           {showDeleteConfirm && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-falha/15 border border-falha/40 text-xs shrink-0 whitespace-nowrap">
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-falha/15 border border-falha/40 text-xs shrink-0 whitespace-nowrap">
               <AlertCircle size={13} className="text-falha-400 shrink-0" />
               <span className="text-falha-400 font-semibold hidden sm:inline">Excluir este fluxo?</span>
               <span className="text-falha-400 font-semibold sm:hidden">Excluir?</span>
@@ -886,14 +892,14 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
           {fluxos.length > 0 && !showDeleteAllConfirm && !showDeleteConfirm && (
             <button
               onClick={() => setShowDeleteAllConfirm(true)}
-              className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-falha-600/60 hover:bg-falha-600/80 text-falha-400 text-xs font-semibold border border-falha/50 flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap"
+              className="px-2 py-1 rounded-lg bg-falha-600/60 hover:bg-falha-600/80 text-falha-400 text-xs font-semibold border border-falha/50 flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap"
               title="Apagar todos os fluxos cadastrados"
             >
               <Flame size={14} className="text-falha-400" /> <span className="hidden xl:inline">Apagar Todos</span>
             </button>
           )}
           {showDeleteAllConfirm && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-falha-600 border border-falha-600 text-xs shrink-0 whitespace-nowrap">
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-falha-600 border border-falha-600 text-xs shrink-0 whitespace-nowrap">
               <AlertCircle size={13} className="text-falha-400 shrink-0" />
               <span className="text-falha-400 font-bold hidden sm:inline">Apagar TODOS os fluxos?</span>
               <span className="text-falha-400 font-bold sm:hidden">Apagar tudo?</span>
@@ -903,28 +909,29 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
           )}
         </div>
 
-        {/* Espacador elastico em vez de justify-between: com overflow-x-auto o
-            justify-between nao separa nada quando o conteudo transborda. */}
-        <div className="flex-1 min-w-[8px]" />
+        {/* Espacador elastico: separa os dois grupos como um justify-between nas
+            telas largas. Some abaixo de lg para os grupos se juntarem e quebrarem
+            de forma compacta quando o espaco aperta, sem deixar um vao gigante. */}
+        <div className="hidden lg:block flex-1 min-w-[8px]" />
 
-        <div className="flex items-center gap-1.5 shrink-0">
-          <div className="flex items-center bg-grafite-700 border border-linha rounded-xl p-1 text-xs text-slate-300 shrink-0">
-            <button onClick={() => setZoom(z => Math.max(z / 1.15, 0.25))} className="p-1.5 hover:text-white" title="Diminuir zoom"><ZoomOut size={14} /></button>
-            <span className="px-1.5 font-mono text-[11px] text-slate-400 hidden sm:inline">{Math.round(zoom * 100)}%</span>
-            <button onClick={() => setZoom(z => Math.min(z * 1.15, 2.5))} className="p-1.5 hover:text-white" title="Aumentar zoom"><ZoomIn size={14} /></button>
-            <button onClick={() => { setZoom(1); setCanvasOffset({ x: 100, y: 100 }); }} className="p-1.5 hover:text-white border-l border-linha ml-1" title="Resetar"><Maximize2 size={13} /></button>
+        <div className="flex flex-wrap items-center gap-1">
+          <div className="flex items-center bg-grafite-700 border border-linha rounded-lg p-0.5 text-xs text-slate-300 shrink-0">
+            <button onClick={() => setZoom(z => Math.max(z / 1.15, 0.25))} className="p-1 hover:text-white" title="Diminuir zoom"><ZoomOut size={13} /></button>
+            <span className="px-1 font-mono text-[10px] text-slate-400 hidden sm:inline">{Math.round(zoom * 100)}%</span>
+            <button onClick={() => setZoom(z => Math.min(z * 1.15, 2.5))} className="p-1 hover:text-white" title="Aumentar zoom"><ZoomIn size={13} /></button>
+            <button onClick={() => { setZoom(1); setCanvasOffset({ x: 100, y: 100 }); }} className="p-1 hover:text-white border-l border-linha ml-0.5" title="Resetar"><Maximize2 size={12} /></button>
           </div>
-          <div className="flex items-center bg-grafite-700 border border-linha rounded-xl p-1 shrink-0">
-            <button onClick={handleUndo} disabled={historyIndex <= 0} className="p-1.5 text-slate-400 hover:text-white disabled:opacity-30" title="Desfazer"><RotateCcw size={14} /></button>
-            <button onClick={handleRedo} disabled={historyIndex >= history.length - 1} className="p-1.5 text-slate-400 hover:text-white disabled:opacity-30" title="Refazer"><RefreshCw size={14} /></button>
+          <div className="flex items-center bg-grafite-700 border border-linha rounded-lg p-0.5 shrink-0">
+            <button onClick={handleUndo} disabled={historyIndex <= 0} className="p-1 text-slate-400 hover:text-white disabled:opacity-30" title="Desfazer"><RotateCcw size={13} /></button>
+            <button onClick={handleRedo} disabled={historyIndex >= history.length - 1} className="p-1 text-slate-400 hover:text-white disabled:opacity-30" title="Refazer"><RefreshCw size={13} /></button>
           </div>
-          <button onClick={handleAutoOrganize} title="Organizar blocos automaticamente" className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 border border-linha transition-colors shrink-0 whitespace-nowrap">
+          <button onClick={handleAutoOrganize} title="Organizar blocos automaticamente" className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 border border-linha transition-colors shrink-0 whitespace-nowrap">
             <LayoutGrid size={14} /> <span className="hidden lg:inline">Organizar</span>
           </button>
-          <button onClick={() => setShowSequencePanel(s => !s)} title="Painel de sequência" className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all shrink-0 whitespace-nowrap ${showSequencePanel ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'bg-slate-800 text-slate-300 border-linha'}`}>
+          <button onClick={() => setShowSequencePanel(s => !s)} title="Painel de sequência" className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-all shrink-0 whitespace-nowrap ${showSequencePanel ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'bg-slate-800 text-slate-300 border-linha'}`}>
             <Settings size={14} /> <span className="hidden lg:inline">Sequência</span>
           </button>
-          <button onClick={() => setShowLogsConsole(s => !s)} title="Console de execução" className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all shrink-0 whitespace-nowrap ${showLogsConsole ? 'bg-acao/20 text-acao-200 border-acao/40' : 'bg-slate-800 text-slate-300 border-linha'}`}>
+          <button onClick={() => setShowLogsConsole(s => !s)} title="Console de execução" className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-all shrink-0 whitespace-nowrap ${showLogsConsole ? 'bg-acao/20 text-acao-200 border-acao/40' : 'bg-slate-800 text-slate-300 border-linha'}`}>
             <Sparkles size={14} /> <span className="hidden lg:inline">Console</span> ({simLogs.length})
           </button>
           {/* "Testar" conversa com o motor real; "Simular" (ao lado) so percorre
@@ -933,14 +940,14 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
             onClick={() => setShowTestChat(s => !s)}
             disabled={!flow}
             title="Conversar com o bot para testar este fluxo (não envia WhatsApp)"
-            className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all shrink-0 whitespace-nowrap disabled:opacity-50 ${showTestChat ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'bg-slate-800 text-slate-300 border-linha'}`}
+            className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-all shrink-0 whitespace-nowrap disabled:opacity-50 ${showTestChat ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'bg-slate-800 text-slate-300 border-linha'}`}
           >
             <MessageSquare size={14} /> <span className="hidden lg:inline">Testar</span>
           </button>
           <button
             onClick={handleRunSimulation}
             title={simulacaoMarcada && !isRunningSim ? 'Clique para parar a simulação' : 'Executar simulação do fluxo'}
-            className={`px-3 sm:px-4 py-1.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-all shrink-0 whitespace-nowrap ${
+            className={`px-2.5 sm:px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md transition-all shrink-0 whitespace-nowrap ${
               simulacaoMarcada
                 ? 'bg-gradient-to-r from-ativo to-green-500 text-slate-950 shadow-ativo/30 animate-pulse'
                 : 'bg-gradient-to-r from-acao to-espera hover:from-acao-200 hover:to-espera-400 text-slate-950 shadow-acao/20'

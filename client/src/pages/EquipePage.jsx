@@ -136,6 +136,27 @@ export default function EquipePage() {
     }
   }
 
+  // Recusar um cadastro pendente = apagar a conta. Como so aparece antes da
+  // aprovacao, e uma rejeicao do pedido de acesso, nao a exclusao de alguem que
+  // ja fazia parte da equipe.
+  async function recusarConta(membro) {
+    if (!window.confirm(
+      `Recusar e excluir o cadastro de ${membro.nome}? A pessoa precisará se cadastrar novamente para solicitar acesso.`
+    )) return;
+    setLoadingId(membro.id);
+    setErro('');
+    setOkMsg('');
+    try {
+      await EquipeAPI.excluir(membro.id);
+      if (recarregarEquipe) await recarregarEquipe();
+      setOkMsg(`Cadastro de ${membro.nome} recusado.`);
+    } catch (e) {
+      setErro(e.message);
+    } finally {
+      setLoadingId(null);
+    }
+  }
+
   return (
     <div className="fade-in space-y-6">
       <div className="mb-8 flex flex-col gap-4 border-b border-linha pb-4 sm:flex-row sm:items-center sm:justify-between">
@@ -208,8 +229,12 @@ export default function EquipePage() {
 
                 <div className="flex items-center justify-between gap-2 border-t border-linha pt-3">
                   <div className="flex items-center gap-1.5 text-[11px]">
-                    <ShieldCheck size={13} className="text-acao-200" />
-                    {ehAdmin ? (
+                    <ShieldCheck size={13} className={estaInativo ? 'text-texto-fraco' : 'text-acao-200'} />
+                    {estaInativo ? (
+                      // Conta ainda pendente: o cargo so faz sentido depois de
+                      // aprovada, entao aqui nao ha seletor -- so aprovar ou recusar.
+                      <span className="italic text-texto-fraco">Cargo definido após aprovação</span>
+                    ) : ehAdmin ? (
                       <select
                         value={m.cargo}
                         disabled={loadingId === m.id}
@@ -243,40 +268,54 @@ export default function EquipePage() {
               {ehAdmin && !ehVoce && (
                 <div className="pt-3 border-t border-linha flex items-center justify-end gap-2">
                   {estaInativo ? (
-                    <button
-                      disabled={loadingId === m.id}
-                      onClick={() => alternarStatus(m.id, true)}
-                      className="flex-1 px-3 py-1.5 rounded-xl bg-ativo/20 hover:bg-ativo/30 text-ativo-400 border border-ativo/30 text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
-                    >
-                      <CheckCircle2 size={14} /> Aprovar Acesso
-                    </button>
+                    // Passo de triagem: uma conta recem-criada so pode ser aceita
+                    // ou rejeitada. As demais acoes (cargo, senha, excluir) so
+                    // aparecem depois que ela vira membro de fato.
+                    <>
+                      <button
+                        disabled={loadingId === m.id}
+                        onClick={() => alternarStatus(m.id, true)}
+                        className="flex-1 px-3 py-1.5 rounded-xl bg-ativo/20 hover:bg-ativo/30 text-ativo-400 border border-ativo/30 text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+                      >
+                        <CheckCircle2 size={14} /> Aprovar
+                      </button>
+                      <button
+                        disabled={loadingId === m.id}
+                        onClick={() => recusarConta(m)}
+                        className="flex-1 px-3 py-1.5 rounded-xl bg-falha/15 hover:bg-falha/25 text-falha-400 border border-falha/30 text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+                      >
+                        <XCircle size={14} /> Recusar
+                      </button>
+                    </>
                   ) : (
-                    <button
-                      disabled={loadingId === m.id}
-                      onClick={() => alternarStatus(m.id, false)}
-                      className="px-2.5 py-1.5 rounded-xl bg-falha/15 hover:bg-falha/25 text-falha-400 border border-falha/30 text-[11px] font-semibold flex items-center gap-1 transition-all"
-                    >
-                      <XCircle size={13} /> Bloquear
-                    </button>
+                    <>
+                      <button
+                        disabled={loadingId === m.id}
+                        onClick={() => alternarStatus(m.id, false)}
+                        className="px-2.5 py-1.5 rounded-xl bg-falha/15 hover:bg-falha/25 text-falha-400 border border-falha/30 text-[11px] font-semibold flex items-center gap-1 transition-all"
+                      >
+                        <XCircle size={13} /> Bloquear
+                      </button>
+
+                      <button
+                        disabled={loadingId === m.id}
+                        onClick={() => abrirReset(m)}
+                        title="Redefinir senha"
+                        className="px-2.5 py-1.5 rounded-xl bg-grafite-700 hover:bg-grafite-600 text-texto-suave hover:text-white border border-linha text-[11px] font-semibold flex items-center gap-1 transition-all"
+                      >
+                        <KeyRound size={13} /> Senha
+                      </button>
+
+                      <button
+                        disabled={loadingId === m.id}
+                        onClick={() => excluirConta(m)}
+                        title="Excluir conta"
+                        className="px-2.5 py-1.5 rounded-xl bg-falha/15 hover:bg-falha/25 text-falha-400 border border-falha/30 text-[11px] font-semibold flex items-center gap-1 transition-all"
+                      >
+                        <Trash2 size={13} /> Excluir
+                      </button>
+                    </>
                   )}
-
-                  <button
-                    disabled={loadingId === m.id}
-                    onClick={() => abrirReset(m)}
-                    title="Redefinir senha"
-                    className="px-2.5 py-1.5 rounded-xl bg-grafite-700 hover:bg-grafite-600 text-texto-suave hover:text-white border border-linha text-[11px] font-semibold flex items-center gap-1 transition-all"
-                  >
-                    <KeyRound size={13} /> Senha
-                  </button>
-
-                  <button
-                    disabled={loadingId === m.id}
-                    onClick={() => excluirConta(m)}
-                    title="Excluir conta"
-                    className="px-2.5 py-1.5 rounded-xl bg-falha/15 hover:bg-falha/25 text-falha-400 border border-falha/30 text-[11px] font-semibold flex items-center gap-1 transition-all"
-                  >
-                    <Trash2 size={13} /> Excluir
-                  </button>
                 </div>
               )}
             </div>

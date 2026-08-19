@@ -102,10 +102,24 @@ function mapFluxo(f) {
   };
 }
 
+function mapRelatoBug(r) {
+  return {
+    id: r.id,
+    descricao: r.descricao,
+    pagina: r.pagina || null,
+    status: r.status,
+    usuarioId: r.usuarioId || null,
+    usuarioNome: r.usuarioNome || null,
+    usuarioEmail: r.usuarioEmail || null,
+    criadoEm: r.criadoEm ? r.criadoEm.toISOString?.() || r.criadoEm : null,
+  };
+}
+
 module.exports = {
   mapMensagem,
   mapConversa,
   mapParceiro,
   mapContato,
   mapFluxo,
+  mapRelatoBug,
 };

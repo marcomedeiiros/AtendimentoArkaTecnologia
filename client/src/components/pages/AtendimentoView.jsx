@@ -1136,15 +1136,16 @@ const CardConversa = React.memo(function CardConversa({
   // era acessivel depois de clicar em ATENDER.
   const clicavel  = true;
 
-  // Badges do cartao. O CNPJ completo fica no `title`: escrito por inteiro,
-  // "Parceiro: 12.345.678/0001-90" nao caberia na largura da lista.
+  // #id e badges (situacao do CNPJ e setor pedido pelo cliente) ficam ao lado
+  // do nome, na primeira linha do cartao.
   const chipCnpj = chipDoCnpj(c, parceiros);
   const setor = setorDaConversa(c);
 
   return (
     <div
       onClick={() => { if (clicavel) onSelecionar(c.id); }}
-      className={`p-2 rounded-xl border transition-all duration-200 flex flex-col gap-1 ${clicavel ? 'cursor-pointer' : ''} ${
+      title={`${c.cliente}${c.telefone ? ' · ' + c.telefone : ''} · #${idCurto(c.id)}`}
+      className={`group p-2 rounded-xl border transition-all duration-200 flex flex-col gap-1 ${clicavel ? 'cursor-pointer' : ''} ${
         ehAtivo
           ? 'bg-gradient-to-r from-acao/10 to-transparent border-acao/50 shadow-sm'
           : naoLidas > 0
@@ -1154,114 +1155,103 @@ const CardConversa = React.memo(function CardConversa({
               : 'bg-grafite-600/40 border-linha/60 hover:border-linha-forte'
       }`}
     >
-      {/* Linha 1: quem e a conversa. Nome, sinais de estado e nao lidas. */}
+      {/* Cartao compacto de duas linhas ao lado do avatar. Linha de cima: nome,
+          #id e badges (CNPJ/setor). Linha de baixo: previa da ultima mensagem
+          com a data/hora dela ao lado, mais o nao lidas (que vira as acoes
+          rapidas ao passar o mouse). */}
       <div className="flex items-center gap-2 min-w-0">
         <Avatar nome={c.cliente} size="sm" fotoUrl={c.fotoUrl} online={whatsAppConectado} />
 
         <div className="min-w-0 flex-1">
+          {/* Linha 1: estado + nome + #id + badges */}
           <div className="flex items-center gap-1.5 min-w-0">
             <span className={`w-2 h-2 rounded-full shrink-0 ${meta.dot}`} title={meta.label} />
             {c.favorita && <Star size={11} className="text-espera-400 fill-current shrink-0" title="Favorita" />}
             {c.arquivada && <Archive size={11} className="text-slate-500 shrink-0" title="Arquivada" />}
             {c.oculta && <EyeOff size={11} className="text-slate-500 shrink-0" title="Oculta" />}
-            <span className={`text-xs truncate ${naoLidas > 0 ? 'font-extrabold text-white' : 'font-bold text-slate-300'}`}>
+            <span className={`min-w-0 truncate text-xs ${naoLidas > 0 ? 'font-extrabold text-white' : 'font-bold text-slate-300'}`}>
               {c.cliente}
             </span>
-            {naoLidas > 0 && (
-              <span className="ml-auto min-w-[16px] h-[16px] px-1 rounded-full bg-espera text-grafite-900 text-[10px] font-extrabold flex items-center justify-center shrink-0" title={`${naoLidas} não lida(s)`}>
-                {naoLidas > 99 ? '99+' : naoLidas}
-              </span>
-            )}
-          </div>
-
-          {/* Linha 2: numero da conversa e telefone. */}
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className="text-[10px] font-mono font-bold text-acao-200/90 shrink-0"
-              title={`Conversa ${c.id}`}>
+            <span className="shrink-0 text-[9px] font-mono font-bold text-acao-200/90" title={`Conversa ${c.id}`}>
               #{idCurto(c.id)}
             </span>
-            <span className="text-[10px] text-slate-600 shrink-0">•</span>
-            <span className="text-[10px] text-slate-400 font-mono truncate">
-              {c.telefone || '-'}
-            </span>
-          </div>
-
-          {/* Linha 3: badges. Situacao do CNPJ e, quando o cliente pediu, o
-              setor que ele quer. Sao os dois avisos que mudam o que o operador
-              faz em seguida, entao ficam antes de abrir a conversa. */}
-          <div className="flex items-center gap-1 flex-wrap mt-0.5">
-            <span className={`inline-flex items-center text-[9px] font-bold px-1.5 py-px rounded-md border ${chipCnpj.classe}`}
+            <span className={`shrink-0 inline-flex items-center text-[9px] font-bold px-1.5 py-px rounded-md border ${chipCnpj.classe}`}
               title={chipCnpj.titulo}>
               {chipCnpj.label}
             </span>
             {setor && (
-              <span className={`inline-flex items-center text-[9px] font-bold px-1.5 py-px rounded-md border ${setor.classe}`}
+              <span className={`shrink-0 inline-flex items-center text-[9px] font-bold px-1.5 py-px rounded-md border ${setor.classe}`}
                 title={`Cliente quer o setor ${setor.setor}`}>
                 {setor.label}
               </span>
             )}
           </div>
-        </div>
-      </div>
 
-      {/* Linha 4: balao com a previa da ultima mensagem e, dentro dele, a data e
-          a hora dessa mensagem -- como no WhatsApp, onde o horario mora no
-          proprio balao. As acoes rapidas dividem a faixa: antes cada uma tinha
-          sua linha e o cartao passava de 130px de altura. */}
-      <div className="flex items-center gap-1.5">
-        <div className={`flex-1 min-w-0 bg-grafite-700/70 px-2 py-1 rounded-lg border border-linha flex items-center gap-2 ${naoLidas > 0 ? 'text-slate-100' : 'text-slate-300'}`}
-          title={dataHoraCompleta(c.ultimaMensagemEm)}>
-          <span className="flex-1 min-w-0 text-[11px] truncate">
-            {ultimaMsg ? ultimaMsg.texto : 'Sem mensagens'}
-          </span>
-          {c.ultimaMensagemEm && (
-            <span className="text-[9px] text-slate-500 shrink-0 whitespace-nowrap font-mono">
-              {dataHoraCurta(c.ultimaMensagemEm)}
+          {/* Linha 2: previa + data/hora da mensagem + nao lidas / acoes (hover) */}
+          <div className="flex items-center gap-1.5 min-w-0 mt-0.5">
+            <span className={`flex-1 min-w-0 truncate text-[11px] ${naoLidas > 0 ? 'text-slate-100 font-medium' : 'text-slate-400'}`}>
+              {ultimaMsg ? ultimaMsg.texto : 'Sem mensagens'}
             </span>
-          )}
-        </div>
-        <div className="flex items-center gap-0.5 shrink-0">
-          <button onClick={e => { e.stopPropagation(); onFixar(c.id); }} title={fixado ? 'Desafixar conversa' : 'Fixar no topo'}
-            className={`p-1 rounded-md transition-colors ${fixado ? 'bg-acao/20 text-acao-200' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-400'}`}>
-            <Pin size={12} className={fixado ? 'fill-current' : ''} />
-          </button>
-          <button onClick={e => { e.stopPropagation(); onEspiar(c); }} title="Espiar conversa"
-            className="p-1 rounded-md bg-slate-800/80 hover:bg-slate-700 text-blue-400 transition-colors">
-            <Eye size={12} />
-          </button>
-          {encerrado ? (
-            <button onClick={e => { e.stopPropagation(); onReabrir(c.id); }} title="Reabrir atendimento"
-              className="p-1 rounded-md bg-slate-800/80 hover:bg-ativo/20 text-ativo-400 transition-colors">
-              <RotateCcw size={12} />
-            </button>
-          ) : (
-            <button onClick={e => { e.stopPropagation(); onFechar(c.id); }} title="Fechar atendimento"
-              className="p-1 rounded-md bg-slate-800/80 hover:bg-falha/20 text-falha-400 transition-colors">
-              <CheckCircle2 size={12} />
-            </button>
-          )}
 
-          <div className="relative" ref={menuRef}>
-            <button onClick={e => { e.stopPropagation(); setMenuAberto(v => !v); }} title="Mais ações"
-              className={`p-1 rounded-md transition-colors ${menuAberto ? 'bg-slate-700 text-white' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-400'}`}>
-              <MoreVertical size={12} />
-            </button>
-            {menuAberto && (
-              <div className="absolute right-0 top-full mt-1 w-44 glass-panel border border-linha rounded-xl shadow-2xl shadow-black/50 z-50 overflow-hidden py-1">
-                {[
-                  { id: 'favorita',  ativo: c.favorita,  on: 'Desfavoritar',  off: 'Favoritar',        Icon: Star },
-                  { id: 'arquivada', ativo: c.arquivada, on: 'Desarquivar',   off: 'Arquivar conversa', Icon: Archive },
-                  { id: 'oculta',    ativo: c.oculta,    on: 'Reexibir',      off: 'Ocultar conversa',  Icon: EyeOff },
-                ].map(({ id, ativo, on, off, Icon }) => (
-                  <button key={id}
-                    onClick={e => { e.stopPropagation(); onFlag(c.id, { [id]: !ativo }); setMenuAberto(false); }}
-                    className="w-full text-left px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-grafite-600 hover:text-white transition-colors flex items-center gap-2">
-                    <Icon size={12} className={ativo ? 'text-acao-200' : 'text-slate-500'} />
-                    {ativo ? on : off}
-                  </button>
-                ))}
-              </div>
+            {c.ultimaMensagemEm && (
+              <span className="shrink-0 text-[9px] text-slate-500 font-mono whitespace-nowrap"
+                title={dataHoraCompleta(c.ultimaMensagemEm)}>
+                {dataHoraCurta(c.ultimaMensagemEm)}
+              </span>
             )}
+
+            {naoLidas > 0 && (
+              <span className="shrink-0 min-w-[16px] h-[16px] px-1 rounded-full bg-espera text-grafite-900 text-[10px] font-extrabold flex items-center justify-center group-hover:hidden"
+                title={`${naoLidas} não lida(s)`}>
+                {naoLidas > 99 ? '99+' : naoLidas}
+              </span>
+            )}
+
+            {/* Acoes rapidas: aparecem so ao passar o mouse (estilo WhatsApp Web) */}
+            <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
+              <button onClick={e => { e.stopPropagation(); onFixar(c.id); }} title={fixado ? 'Desafixar conversa' : 'Fixar no topo'}
+                className={`p-1 rounded-md transition-colors ${fixado ? 'bg-acao/20 text-acao-200' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-400'}`}>
+                <Pin size={12} className={fixado ? 'fill-current' : ''} />
+              </button>
+              <button onClick={e => { e.stopPropagation(); onEspiar(c); }} title="Espiar conversa"
+                className="p-1 rounded-md bg-slate-800/80 hover:bg-slate-700 text-blue-400 transition-colors">
+                <Eye size={12} />
+              </button>
+              {encerrado ? (
+                <button onClick={e => { e.stopPropagation(); onReabrir(c.id); }} title="Reabrir atendimento"
+                  className="p-1 rounded-md bg-slate-800/80 hover:bg-ativo/20 text-ativo-400 transition-colors">
+                  <RotateCcw size={12} />
+                </button>
+              ) : (
+                <button onClick={e => { e.stopPropagation(); onFechar(c.id); }} title="Fechar atendimento"
+                  className="p-1 rounded-md bg-slate-800/80 hover:bg-falha/20 text-falha-400 transition-colors">
+                  <CheckCircle2 size={12} />
+                </button>
+              )}
+
+              <div className="relative" ref={menuRef}>
+                <button onClick={e => { e.stopPropagation(); setMenuAberto(v => !v); }} title="Mais ações"
+                  className={`p-1 rounded-md transition-colors ${menuAberto ? 'bg-slate-700 text-white' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-400'}`}>
+                  <MoreVertical size={12} />
+                </button>
+                {menuAberto && (
+                  <div className="absolute right-0 top-full mt-1 w-44 glass-panel border border-linha rounded-xl shadow-2xl shadow-black/50 z-50 overflow-hidden py-1">
+                    {[
+                      { id: 'favorita',  ativo: c.favorita,  on: 'Desfavoritar',  off: 'Favoritar',        Icon: Star },
+                      { id: 'arquivada', ativo: c.arquivada, on: 'Desarquivar',   off: 'Arquivar conversa', Icon: Archive },
+                      { id: 'oculta',    ativo: c.oculta,    on: 'Reexibir',      off: 'Ocultar conversa',  Icon: EyeOff },
+                    ].map(({ id, ativo, on, off, Icon }) => (
+                      <button key={id}
+                        onClick={e => { e.stopPropagation(); onFlag(c.id, { [id]: !ativo }); setMenuAberto(false); }}
+                        className="w-full text-left px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-grafite-600 hover:text-white transition-colors flex items-center gap-2">
+                        <Icon size={12} className={ativo ? 'text-acao-200' : 'text-slate-500'} />
+                        {ativo ? on : off}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1269,7 +1259,7 @@ const CardConversa = React.memo(function CardConversa({
       {c.statusAtendimento === 'pendente' && (
         <button
           onClick={e => { e.stopPropagation(); onAtender(c.id, e); }}
-          className="w-full py-1.5 px-3 rounded-lg bg-ativo hover:bg-ativo-400 text-slate-950 font-bold text-[11px] flex items-center justify-center gap-1.5 shadow-md shadow-ativo/20 transition-all"
+          className="w-full py-1 px-3 rounded-lg bg-ativo hover:bg-ativo-400 text-slate-950 font-bold text-[11px] flex items-center justify-center gap-1.5 shadow-md shadow-ativo/20 transition-all"
         >
           <UserCheck size={12} /> ATENDER CONVERSA
         </button>
@@ -1535,7 +1525,7 @@ function PainelChat({
         onDragOver={(e) => { e.preventDefault(); if (!arrastando) setArrastando(true); }}
         onDragLeave={(e) => { e.preventDefault(); setArrastando(false); }}
         onDrop={(e) => { e.preventDefault(); setArrastando(false); const f = e.dataTransfer.files?.[0]; if (f) selecionarArquivo(f); }}
-        style={WHATSAPP_BG} className="flex-1 overflow-y-auto p-4 space-y-3 relative">
+        style={WHATSAPP_BG} className="flex-1 overflow-y-auto p-3 space-y-1.5 relative">
         {arrastando && (
           <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/70 border-2 border-dashed border-acao rounded-xl pointer-events-none">
             <div className="text-acao-200 font-bold text-sm flex items-center gap-2">
@@ -1561,7 +1551,7 @@ function PainelChat({
                 {m.texto}
               </div>
             ) : (
-              <div className={`max-w-[80%] p-3.5 rounded-2xl text-xs shadow-md space-y-1 ${
+              <div className={`max-w-[78%] px-2.5 py-1.5 rounded-2xl text-xs shadow-sm space-y-0.5 ${
                 /* O papel de parede em uso e a arte ESCURA do WhatsApp, entao as
                    bolhas seguem o tema escuro: recebida em #202C33, enviada em
                    #005C4B, texto claro. Bolha branca aqui brilharia demais. */
@@ -2522,7 +2512,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+          <div className="flex-1 overflow-y-auto p-2 space-y-1">
             {carregando && conversas.length === 0
               ? Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)
               : conversasFiltradas.map(c => (

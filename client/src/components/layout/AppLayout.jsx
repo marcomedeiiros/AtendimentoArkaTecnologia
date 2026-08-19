@@ -9,12 +9,13 @@ import React, { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   LayoutGrid, Users, Zap, MessageSquare, ShieldCheck,
-  GitFork, MessageCircle, CalendarDays, Send, Loader2, Menu, X, WifiOff, Settings, LogOut
+  GitFork, MessageCircle, CalendarDays, Send, Loader2, Menu, X, WifiOff, Settings, LogOut, Bug
 } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import NotificacoesToast from '../NotificacoesToast';
 import Avatar from '../Avatar';
+import ReportarBug from '../ReportarBug';
 
 const NAV_PRINCIPAL = [
   { to: '/atendimento', label: 'Central de Atendimento', icon: MessageSquare },
@@ -33,6 +34,7 @@ const NAV_FERRAMENTAS = [
   { to: '/mensagens',  label: 'Mensagens Rápidas',    icon: Zap           },
   { to: '/agenda',     label: 'Agenda',                icon: CalendarDays  },
   { to: '/massa',      label: 'Envio em Massa',        icon: Send          },
+  { to: '/bugs',       label: 'Relatos de Bugs',       icon: Bug, adminOnly: true },
   { to: '/configuracoes', label: 'Configurações',      icon: Settings      },
 ];
 
@@ -104,6 +106,9 @@ function Sidebar({ aberto, onClose }) {
   ).length;
   const badgeAtendimento = naFila > 0 ? naFila : naoLidos;
 
+  const ehAdmin = usuario?.cargo === 'Administrador';
+  const ferramentas = NAV_FERRAMENTAS.filter(item => !item.adminOnly || ehAdmin);
+
   return (
     <aside
       /* 17rem, nao 16: em w-64 o rotulo mais longo do proprio menu ("Central de
@@ -151,7 +156,7 @@ function Sidebar({ aberto, onClose }) {
         <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider px-3 mt-3 mb-1">
           Ferramentas
         </p>
-        {NAV_FERRAMENTAS.map(item => (
+        {ferramentas.map(item => (
           <NavItem key={item.to} {...item} onNavigate={onClose} />
         ))}
       </nav>
@@ -197,6 +202,7 @@ export default function AppLayout() {
   return (
     <div className="min-h-screen bg-grafite-900 text-[#F3F4F8] flex font-sans antialiased selection:bg-acao/30 selection:text-acao-200">
       <NotificacoesToast />
+      <ReportarBug />
       <Sidebar aberto={menuAberto} onClose={() => setMenuAberto(false)} />
 
       {/* Backdrop do menu no mobile */}

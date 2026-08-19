@@ -68,8 +68,11 @@ export function AuthProvider({ children }) {
   const entrar = useCallback(async (email, senha, lembrar = true) => {
     const eu = await AuthAPI.entrar(email, senha, lembrar);
     setUsuario(eu);
-    // Primeiro nome: o aviso e uma saudacao curta, nao um cabecalho de cadastro.
-    avisar(`Você entrou como ${String(eu.nome || '').split(' ')[0]}.`, 'entrada');
+    // Saudacao curta: primeiro + ultimo nome (2 nomes, incluindo o sobrenome),
+    // nao o nome inteiro nem so o primeiro. Nome de uma palavra so aparece ele.
+    const partes = String(eu.nome || '').trim().split(/\s+/).filter(Boolean);
+    const nomeCurto = partes.length > 1 ? `${partes[0]} ${partes[partes.length - 1]}` : (partes[0] || '');
+    avisar(`Você entrou como ${nomeCurto}.`, 'entrada');
     return eu;
   }, [avisar]);
 

@@ -27,6 +27,7 @@ import MensagensPage    from './pages/MensagensPage';
 import AgendaPage       from './pages/AgendaPage';
 import MassaPage        from './pages/MassaPage';
 import ConfiguracoesPage from './pages/ConfiguracoesPage';
+import BugsPage         from './pages/BugsPage';
 
 export default function App() {
   return (
@@ -53,6 +54,7 @@ export default function App() {
               <Route path="/mensagens"   element={<MensagensPage />} />
               <Route path="/agenda"      element={<AgendaPage />} />
               <Route path="/massa"       element={<MassaPage />} />
+              <Route path="/bugs"        element={<BugsPage />} />
             </Route>
           </Route>
 
