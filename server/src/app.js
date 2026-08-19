@@ -21,6 +21,7 @@ const helpdeskRoutes = require("./modules/helpdesk/helpdesk.routes");
 const chatbotRoutes = require("./modules/chatbot/chatbot.routes");
 const n8nRoutes = require("./modules/n8n/n8n.routes");
 const configuracaoRoutes = require("./modules/configuracoes/configuracao.routes");
+const permissaoRoutes = require("./modules/permissoes/permissao.routes");
 const preferenciaRoutes = require("./modules/preferencias/preferencia.routes");
 const bugRoutes = require("./modules/bugs/bug.routes");
 const {
@@ -55,6 +56,7 @@ function createApp() {
   app.use("/api/chatbot", chatbotRoutes);
   app.use("/api/n8n", n8nRoutes);
   app.use("/api/configuracoes", configuracaoRoutes);
+  app.use("/api/permissoes", permissaoRoutes);
   app.use("/api/preferencias", preferenciaRoutes);
   app.use("/api/bugs", bugRoutes);
   app.use("/api/whatsapp", adminRouter);

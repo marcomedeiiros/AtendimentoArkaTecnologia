@@ -12,10 +12,10 @@
  * pelo servidor a cada requisicao autenticada.
  */
 import { useState, useEffect } from 'react';
-import { Users, Circle, ShieldCheck, CheckCircle2, XCircle, KeyRound, Loader2, X, Clock, Trash2 } from 'lucide-react';
+import { Users, Circle, ShieldCheck, CheckCircle2, XCircle, KeyRound, Loader2, X, Clock, Trash2, SlidersHorizontal, Save, Lock } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
-import { EquipeAPI } from '../services/api';
+import { EquipeAPI, PermissoesAPI } from '../services/api';
 import Avatar from '../components/Avatar';
 
 function vistoEm(iso) {
@@ -44,6 +44,15 @@ export default function EquipePage() {
   const [novaSenha, setNovaSenha] = useState('');
   const [resetErro, setResetErro] = useState('');
   const [salvandoSenha, setSalvandoSenha] = useState(false);
+
+  // Editor de permissoes por perfil (so Administrador). `perm` traz o catalogo
+  // de modulos + a matriz efetiva; `permMatriz` e o rascunho editavel.
+  const [perm, setPerm] = useState(null);
+  const [permMatriz, setPermMatriz] = useState(null);
+  const [permLoading, setPermLoading] = useState(false);
+  const [permSalvando, setPermSalvando] = useState(false);
+  const [permErro, setPermErro] = useState('');
+  const [permOk, setPermOk] = useState('');
 
   function abrirReset(membro) {
     setResetAlvo(membro);
@@ -88,6 +97,47 @@ export default function EquipePage() {
   const ehAdmin = usuario?.cargo === 'Administrador';
   const online = equipe.filter(m => m.status === 'online').length;
   const pendentes = equipe.filter(m => m.ativo === false).length;
+
+  // Carrega a matriz de permissoes so para Administrador (o servidor tambem so
+  // devolve para admin -- aqui e a 1a camada).
+  useEffect(() => {
+    if (!ehAdmin) return;
+    let vivo = true;
+    setPermLoading(true);
+    setPermErro('');
+    PermissoesAPI.obter()
+      .then(d => { if (vivo) { setPerm(d); setPermMatriz(d.matriz); } })
+      .catch(e => { if (vivo) setPermErro(e.message); })
+      .finally(() => { if (vivo) setPermLoading(false); });
+    return () => { vivo = false; };
+  }, [ehAdmin]);
+
+  function alternarPermissao(cargo, modulo) {
+    setPermOk('');
+    setPermMatriz(prev => ({
+      ...prev,
+      [cargo]: { ...prev[cargo], [modulo]: !prev[cargo]?.[modulo] },
+    }));
+  }
+
+  async function salvarPermissoes() {
+    setPermSalvando(true);
+    setPermErro('');
+    setPermOk('');
+    try {
+      // Envia so os perfis editaveis; Administrador nunca vai (acesso total).
+      const payload = {};
+      for (const c of perm.cargosEditaveis) payload[c] = permMatriz[c];
+      const atualizado = await PermissoesAPI.salvar(payload);
+      setPerm(atualizado);
+      setPermMatriz(atualizado.matriz);
+      setPermOk('Permissões salvas elas valem na próxima vez que cada pessoa carregar o painel no servidor já valem agora.');
+    } catch (e) {
+      setPermErro(e.message);
+    } finally {
+      setPermSalvando(false);
+    }
+  }
 
   async function alternarStatus(id, novoStatus) {
     setLoadingId(id);
@@ -194,6 +244,97 @@ export default function EquipePage() {
             <X size={14} />
           </button>
         </div>
+      )}
+
+      {ehAdmin && (
+        <section className="glass-panel space-y-4 rounded-2xl border border-linha p-4 sm:p-5">
+          <div className="flex flex-col gap-1 border-b border-linha pb-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <SlidersHorizontal size={16} className="text-acao-200" />
+              <h2 className="text-sm font-bold text-white">Permissões dos perfis</h2>
+            </div>
+            <p className="text-[11px] text-texto-suave">
+              Escolha quais telas cada perfil acessa o acesso é conferido no servidor.
+            </p>
+          </div>
+
+          {permErro && (
+            <div className="rounded-xl border border-falha/30 bg-falha/15 p-2.5 text-[11px] font-semibold text-falha-400">
+              {permErro}
+            </div>
+          )}
+          {permOk && (
+            <div className="flex items-start justify-between gap-3 rounded-xl border border-ativo/30 bg-ativo/15 p-2.5 text-[11px] font-semibold text-ativo-400">
+              <span>{permOk}</span>
+              <button onClick={() => setPermOk('')} className="shrink-0 text-ativo-400/70 hover:text-ativo-400"><X size={13} /></button>
+            </div>
+          )}
+
+          {permLoading || !perm || !permMatriz ? (
+            <div className="flex items-center justify-center gap-2 py-8 text-xs text-texto-suave">
+              <Loader2 size={15} className="animate-spin" /> Carregando permissões...
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[520px] border-collapse text-xs">
+                  <thead>
+                    <tr className="text-texto-suave">
+                      <th className="px-2 py-2 text-left font-semibold">Tela / Módulo</th>
+                      {perm.cargosEditaveis.map(c => (
+                        <th key={c} className="px-2 py-2 text-center font-semibold">{c}</th>
+                      ))}
+                      <th className="px-2 py-2 text-center font-semibold">
+                        <span className="inline-flex items-center gap-1 text-acao-200">
+                          <Lock size={11} /> Administrador
+                        </span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {perm.modulos.map(mod => (
+                      <tr key={mod.chave} className="border-t border-linha/70">
+                        <td className="px-2 py-2 text-white">
+                          {mod.nome}
+                          {mod.grupo === 'B' && (
+                            <span className="ml-1.5 rounded bg-grafite-700 px-1 py-0.5 font-mono text-[9px] text-texto-fraco">operacional</span>
+                          )}
+                        </td>
+                        {perm.cargosEditaveis.map(c => (
+                          <td key={c} className="px-2 py-2 text-center">
+                            <input
+                              type="checkbox"
+                              checked={!!permMatriz[c]?.[mod.chave]}
+                              onChange={() => alternarPermissao(c, mod.chave)}
+                              className="h-4 w-4 cursor-pointer accent-acao"
+                              aria-label={`${c} pode acessar ${mod.nome}`}
+                            />
+                          </td>
+                        ))}
+                        <td className="px-2 py-2 text-center">
+                          {/* Administrador: acesso total imutavel. */}
+                          <Lock size={13} className="mx-auto text-texto-fraco" />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  onClick={salvarPermissoes}
+                  disabled={permSalvando}
+                  className="flex items-center gap-1.5 rounded-xl bg-acao px-3.5 py-2 text-xs font-bold text-slate-950 hover:bg-acao-200 disabled:opacity-60"
+                >
+                  {permSalvando
+                    ? <><Loader2 size={13} className="animate-spin" /> Salvando...</>
+                    : <><Save size={13} /> Salvar permissões</>}
+                </button>
+              </div>
+            </>
+          )}
+        </section>
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

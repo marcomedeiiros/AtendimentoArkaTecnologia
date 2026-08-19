@@ -2,9 +2,11 @@ const router = require("express").Router();
 const fluxoController = require("./fluxo.controller");
 const validate = require("../../shared/middlewares/validate.middleware");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
+const { exigirModulo } = require("../permissoes/modulo.middleware");
 const { fluxoSchema, atualizarFluxoSchema } = require("./fluxo.dto");
 
-router.use(authMiddleware);
+// Fluxo de Automacoes: controlado pela matriz (modulo "fluxos").
+router.use(authMiddleware, exigirModulo("fluxos"));
 
 router.get("/", (req, res, next) => fluxoController.listar(req, res).catch(next));
 router.get("/:id", (req, res, next) => fluxoController.obter(req, res).catch(next));

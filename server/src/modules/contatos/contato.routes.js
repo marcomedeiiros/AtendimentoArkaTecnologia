@@ -2,9 +2,10 @@ const router = require("express").Router();
 const contatoController = require("./contato.controller");
 const validate = require("../../shared/middlewares/validate.middleware");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
+const { exigirModulo } = require("../permissoes/modulo.middleware");
 const { criarContatoSchema, atualizarContatoSchema } = require("./contato.dto");
 
-router.use(authMiddleware);
+router.use(authMiddleware, exigirModulo("contatos"));
 
 router.get("/", (req, res, next) => contatoController.listar(req, res).catch(next));
 router.post("/", validate(criarContatoSchema), (req, res, next) => contatoController.criar(req, res).catch(next));

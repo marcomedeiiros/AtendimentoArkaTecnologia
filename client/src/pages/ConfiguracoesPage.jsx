@@ -20,8 +20,8 @@ const CAMPOS = {
 
 // Quem responde o cliente quando chega uma mensagem.
 const MODOS = [
-  { id: 'n8n',    titulo: 'n8n no controle',   desc: 'Cada mensagem é encaminhada ao n8n, que decide e responde. O bot local nunca envia nada sozinho.' },
-  { id: 'humano', titulo: 'Somente humano',    desc: 'A conversa só é registrada na Central. Nenhuma resposta automática é enviada.' },
+  { id: 'n8n',    titulo: 'n8n no controle',   desc: 'Cada mensagem é encaminhada ao n8n, que decide e responde o bot local nunca envia nada sozinho.' },
+  { id: 'humano', titulo: 'Somente humano',    desc: 'A conversa só é registrada na Central nenhuma resposta automática é enviada.' },
   { id: 'local',  titulo: 'Fluxos do Arka',    desc: 'O motor de fluxos local responde por gatilho (comportamento antigo, sem n8n).' },
 ];
 
@@ -231,7 +231,7 @@ export default function ConfiguracoesPage() {
             Liga o botão <strong className="text-slate-300">Transcrever</strong> nos áudios da conversa
             use uma chave <strong className="text-slate-300">gratuita</strong> da{' '}
             <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-acao-200 underline underline-offset-2">Groq</a>{' '}
-            (cadastro rápido) o Whisper roda na camada gratuita. Sem chave, o botão avisa que a transcrição não está configurada.
+            (cadastro rápido) o Whisper roda na camada gratuita sem chave, o botão avisa que a transcrição não está configurada.
           </p>
           <Campo
             def={{ chave: 'transcricao.apiKey', label: 'Chave de API (Groq)', placeholder: 'gsk_...', segredo: true }}

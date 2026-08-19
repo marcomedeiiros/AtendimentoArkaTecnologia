@@ -215,6 +215,14 @@ export const BugsAPI = {
   remover: (id) => request(`/bugs/${id}`, { method: 'DELETE' }),
 };
 
+// ── Permissões de perfis ──
+// Matriz perfil × módulo. Só Administrador lê/edita (o servidor barra o resto).
+// O acesso em si é sempre decidido no servidor; isto é só o editor.
+export const PermissoesAPI = {
+  obter: () => request('/permissoes'),
+  salvar: (matriz) => request('/permissoes', { method: 'PUT', body: JSON.stringify(matriz) }),
+};
+
 // ── Configurações API ──
 export const ConfiguracoesAPI = {
   obter: () => request('/configuracoes'),

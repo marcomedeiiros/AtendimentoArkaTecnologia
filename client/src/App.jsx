@@ -10,6 +10,7 @@ import { AuthProvider } from './context/AuthContext';
 
 import AppLayout from './components/layout/AppLayout';
 import RotaProtegida from './components/layout/RotaProtegida';
+import RotaModulo from './components/layout/RotaModulo';
 
 import NotFound from './pages/NotFound';
 import LoginPage from './pages/LoginPage';
@@ -43,18 +44,22 @@ export default function App() {
           <Route element={<RotaProtegida />}>
             <Route path="/" element={<Navigate to="/atendimento" replace />} />
             <Route element={<AppLayout />}>
-              <Route path="/dashboard"   element={<DashboardPage />} />
-              <Route path="/atendimento" element={<AtendimentoPage />} />
-              <Route path="/contatos"    element={<ContatosPage />} />
-              <Route path="/fluxos"      element={<FluxosPage />} />
-              <Route path="/whatsapp"    element={<WhatsAppPage />} />
-              <Route path="/configuracoes" element={<ConfiguracoesPage />} />
-              <Route path="/equipe"      element={<EquipePage />} />
-              <Route path="/parceiros"   element={<ParceirosPage />} />
-              <Route path="/mensagens"   element={<MensagensPage />} />
-              <Route path="/agenda"      element={<AgendaPage />} />
-              <Route path="/massa"       element={<MassaPage />} />
-              <Route path="/bugs"        element={<BugsPage />} />
+              {/* Acesso por modulo, dirigido pela matriz de permissoes.
+                  RotaModulo guarda no front; o servidor barra de verdade. */}
+              <Route element={<RotaModulo />}>
+                <Route path="/atendimento" element={<AtendimentoPage />} />
+                <Route path="/contatos"    element={<ContatosPage />} />
+                <Route path="/parceiros"   element={<ParceirosPage />} />
+                <Route path="/mensagens"   element={<MensagensPage />} />
+                <Route path="/massa"       element={<MassaPage />} />
+                <Route path="/dashboard"   element={<DashboardPage />} />
+                <Route path="/fluxos"      element={<FluxosPage />} />
+                <Route path="/whatsapp"    element={<WhatsAppPage />} />
+                <Route path="/configuracoes" element={<ConfiguracoesPage />} />
+                <Route path="/equipe"      element={<EquipePage />} />
+                <Route path="/agenda"      element={<AgendaPage />} />
+                <Route path="/bugs"        element={<BugsPage />} />
+              </Route>
             </Route>
           </Route>
 

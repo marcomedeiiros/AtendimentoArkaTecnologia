@@ -3,6 +3,7 @@ const conversaController = require("./conversa.controller");
 const conversaStream = require("./conversa.stream");
 const validate = require("../../shared/middlewares/validate.middleware");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
+const { exigirModulo } = require("../permissoes/modulo.middleware");
 const {
   enviarMensagemSchema,
   iniciarConversaSchema,
@@ -17,6 +18,8 @@ const {
 router.get("/stream", (req, res) => conversaStream.stream(req, res));
 
 router.use(authMiddleware);
+// Central de Atendimento -> modulo "atendimento" na matriz de permissoes.
+router.use(exigirModulo("atendimento"));
 
 router.post("/stream-ticket", (req, res) => conversaStream.criarTicket(req, res));
 router.get("/", (req, res, next) => conversaController.listar(req, res).catch(next));

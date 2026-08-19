@@ -17,25 +17,29 @@ import NotificacoesToast from '../NotificacoesToast';
 import Avatar from '../Avatar';
 import ReportarBug from '../ReportarBug';
 
+// Cada item aponta para um `modulo`. O que aparece vem de `usuario.permissoes`
+// (lista de modulos que o perfil pode ver, entregue pelo servidor). Isto e so a
+// 1a camada (esconder o menu): o servidor decide o acesso de verdade a cada
+// requisicao, entao digitar a URL na mao nao contorna nada.
 const NAV_PRINCIPAL = [
-  { to: '/atendimento', label: 'Central de Atendimento', icon: MessageSquare },
-  { to: '/contatos',    label: 'Contatos',               icon: Users         },
-  { to: '/fluxos',      label: 'Fluxo de Automações',    icon: GitFork       },
+  { to: '/atendimento', label: 'Central de Atendimento', icon: MessageSquare, modulo: 'atendimento' },
+  { to: '/contatos',    label: 'Contatos',               icon: Users,         modulo: 'contatos' },
+  { to: '/fluxos',      label: 'Fluxo de Automações',    icon: GitFork,       modulo: 'fluxos' },
 ];
 
 const NAV_MONITORAMENTO = [
-  { to: '/dashboard',  label: 'Visão Geral',          icon: LayoutGrid    },
+  { to: '/dashboard',  label: 'Visão Geral',          icon: LayoutGrid, modulo: 'dashboard' },
 ];
 
 const NAV_FERRAMENTAS = [
-  { to: '/whatsapp',   label: 'Integração WhatsApp',  icon: MessageCircle, adminOnly: true },
-  { to: '/equipe',     label: 'Gestão da Equipe',     icon: Users         },
-  { to: '/parceiros',  label: 'Clientes (CNPJ)',     icon: ShieldCheck   },
-  { to: '/mensagens',  label: 'Mensagens Rápidas',    icon: Zap           },
-  { to: '/agenda',     label: 'Agenda',                icon: CalendarDays  },
-  { to: '/massa',      label: 'Envio em Massa',        icon: Send          },
-  { to: '/bugs',       label: 'Relatos de Bugs',       icon: Bug, adminOnly: true },
-  { to: '/configuracoes', label: 'Configurações',      icon: Settings, adminOnly: true },
+  { to: '/whatsapp',   label: 'Integração WhatsApp',  icon: MessageCircle, modulo: 'whatsapp' },
+  { to: '/equipe',     label: 'Gestão da Equipe',     icon: Users,         modulo: 'equipe' },
+  { to: '/parceiros',  label: 'Clientes (CNPJ)',     icon: ShieldCheck,   modulo: 'parceiros' },
+  { to: '/mensagens',  label: 'Mensagens Rápidas',    icon: Zap,           modulo: 'mensagens' },
+  { to: '/agenda',     label: 'Agenda',                icon: CalendarDays, modulo: 'agenda' },
+  { to: '/massa',      label: 'Envio em Massa',        icon: Send,          modulo: 'massa' },
+  { to: '/bugs',       label: 'Relatos de Bugs',       icon: Bug,           modulo: 'bugs' },
+  { to: '/configuracoes', label: 'Configurações',      icon: Settings,      modulo: 'configuracoes' },
 ];
 
 function ArkaLogo({ size = 32 }) {
@@ -106,8 +110,15 @@ function Sidebar({ aberto, onClose }) {
   ).length;
   const badgeAtendimento = naFila > 0 ? naFila : naoLidos;
 
-  const ehAdmin = usuario?.cargo === 'Administrador';
-  const ferramentas = NAV_FERRAMENTAS.filter(item => !item.adminOnly || ehAdmin);
+  // Visibilidade por modulo, a partir de `usuario.permissoes` (do servidor). Se
+  // a lista nao veio (sessao antiga), mostra tudo -- o servidor ainda barra o
+  // que nao for permitido. Isto aqui e so o "esconder".
+  const permissoes = usuario?.permissoes;
+  const temLista = Array.isArray(permissoes);
+  const podeVer = (item) => !temLista || !item.modulo || permissoes.includes(item.modulo);
+  const principais = NAV_PRINCIPAL.filter(podeVer);
+  const monitoramento = NAV_MONITORAMENTO.filter(podeVer);
+  const ferramentas = NAV_FERRAMENTAS.filter(podeVer);
 
   return (
     <aside
@@ -137,7 +148,7 @@ function Sidebar({ aberto, onClose }) {
         <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-1">
           Principal
         </p>
-        {NAV_PRINCIPAL.map(item => (
+        {principais.map(item => (
           <NavItem
             key={item.to}
             {...item}
@@ -146,19 +157,27 @@ function Sidebar({ aberto, onClose }) {
           />
         ))}
 
-        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider px-3 mt-3 mb-1">
-          Monitoramento
-        </p>
-        {NAV_MONITORAMENTO.map(item => (
-          <NavItem key={item.to} {...item} onNavigate={onClose} />
-        ))}
+        {monitoramento.length > 0 && (
+          <>
+            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider px-3 mt-3 mb-1">
+              Monitoramento
+            </p>
+            {monitoramento.map(item => (
+              <NavItem key={item.to} {...item} onNavigate={onClose} />
+            ))}
+          </>
+        )}
 
-        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider px-3 mt-3 mb-1">
-          Ferramentas
-        </p>
-        {ferramentas.map(item => (
-          <NavItem key={item.to} {...item} onNavigate={onClose} />
-        ))}
+        {ferramentas.length > 0 && (
+          <>
+            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider px-3 mt-3 mb-1">
+              Ferramentas
+            </p>
+            {ferramentas.map(item => (
+              <NavItem key={item.to} {...item} onNavigate={onClose} />
+            ))}
+          </>
+        )}
       </nav>
 
       {/* Quem esta logado, e a saida. No rodape porque e o unico item que nao e

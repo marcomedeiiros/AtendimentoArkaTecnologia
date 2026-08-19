@@ -2,9 +2,10 @@ const router = require("express").Router();
 const parceiroController = require("./parceiro.controller");
 const validate = require("../../shared/middlewares/validate.middleware");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
+const { exigirModulo } = require("../permissoes/modulo.middleware");
 const { criarParceiroSchema, atualizarParceiroSchema } = require("./parceiro.dto");
 
-router.use(authMiddleware);
+router.use(authMiddleware, exigirModulo("parceiros"));
 
 router.get("/", (req, res, next) => parceiroController.listar(req, res).catch(next));
 router.post("/", validate(criarParceiroSchema), (req, res, next) => parceiroController.criar(req, res).catch(next));

@@ -3,7 +3,7 @@ const whatsappController = require("./whatsapp.controller");
 const webhookAuth = require("../../shared/middlewares/webhook.middleware");
 const { webhookLimiter } = require("../../shared/middlewares/rateLimit.middleware");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
-const { adminMiddleware } = require("../../shared/middlewares/admin.middleware");
+const { exigirModulo } = require("../permissoes/modulo.middleware");
 
 const webhookRouter = require("express").Router();
 
@@ -50,9 +50,10 @@ const adminRouter = require("express").Router();
 adminRouter.use(authMiddleware);
 
 // Gerir a instancia (conectar, criar/excluir, configurar webhook, ver o token)
-// e privilegio de Administrador. `/status`, `/qrcode` e `/enviar` seguem
-// abertos a qualquer conta logada, pois a operacao do dia a dia usa esses.
-const somenteAdmin = adminMiddleware;
+// e a tela "Integracao WhatsApp" -> modulo "whatsapp" na matriz de permissoes.
+// `/status` segue aberto a qualquer conta logada (alimenta o badge de conexao);
+// `/enviar` e o Envio em Massa -> modulo "massa".
+const somenteAdmin = exigirModulo("whatsapp");
 
 /**
  * @openapi
@@ -74,7 +75,7 @@ adminRouter.get("/status", (req, res, next) =>
  *     security: [{ bearerAuth: [] }]
  *     summary: Envia uma mensagem de texto a um numero (usado pelo Envio em Massa)
  */
-adminRouter.post("/enviar", (req, res, next) =>
+adminRouter.post("/enviar", exigirModulo("massa"), (req, res, next) =>
   whatsappController.enviar(req, res).catch(next)
 );
 
@@ -86,7 +87,7 @@ adminRouter.post("/desconectar", somenteAdmin, (req, res, next) =>
   whatsappController.desconectar(req, res).catch(next)
 );
 
-adminRouter.get("/qrcode", (req, res, next) =>
+adminRouter.get("/qrcode", somenteAdmin, (req, res, next) =>
   whatsappController.qrcode(req, res).catch(next)
 );
 

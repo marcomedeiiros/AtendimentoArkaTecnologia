@@ -3,6 +3,7 @@ const jwt = require("jsonwebtoken");
 const env = require("../../config/env");
 const AppError = require("../../shared/errors/AppError");
 const usuarioRepository = require("../../infrastructure/repositories/usuario.repository");
+const permissaoService = require("../permissoes/permissao.service");
 
 class AuthService {
   _assinar(usuario) {
@@ -89,13 +90,18 @@ class AuthService {
       );
     }
 
-    return this._assinar(usuario);
+    const assinado = this._assinar(usuario);
+    // Modulos que este perfil pode ver -- o cliente usa so para montar o menu.
+    // O servidor continua sendo a autoridade a cada requisicao.
+    assinado.usuario.permissoes = await permissaoService.modulosDe(usuario.cargo);
+    return assinado;
   }
 
   async me(userId) {
     const usuario = await usuarioRepository.findById(userId);
     if (!usuario) throw new AppError("Usuario nao encontrado", 404, "NOT_FOUND");
-    return usuario;
+    const permissoes = await permissaoService.modulosDe(usuario.cargo);
+    return { ...usuario, permissoes };
   }
 }
 

@@ -5,10 +5,12 @@ const n8nClient = require("../../infrastructure/external/n8n.client");
 const prisma = require("../../infrastructure/database/prisma.client");
 const { success } = require("../../shared/helpers/response.helper");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
-const { adminMiddleware } = require("../../shared/middlewares/admin.middleware");
+const { exigirModulo } = require("../permissoes/modulo.middleware");
 const env = require("../../config/env");
 
-router.use(authMiddleware);
+// Configuracoes (integracoes/segredos): controlado pela matriz (modulo
+// "configuracoes").
+router.use(authMiddleware, exigirModulo("configuracoes"));
 
 const rota = (fn) => (req, res, next) => Promise.resolve(fn(req, res)).catch(next);
 
@@ -54,11 +56,9 @@ router.get(
 );
 
 // Gravar configuracao mexe em segredos e URLs de integracao (Evolution, n8n,
-// transcricao). So Administrador: um nao-admin poderia repontar o webhook do
-// n8n para um servidor proprio e exfiltrar toda mensagem que entra.
+// transcricao). Ja restrito ao Grupo A pelo router.use acima.
 router.put(
   "/",
-  adminMiddleware,
   rota(async (req, res) => success(res, await configuracaoService.salvar(req.body || {})))
 );
 
@@ -71,7 +71,6 @@ router.put(
  */
 router.post(
   "/testar/:servico",
-  adminMiddleware,
   rota(async (req, res) => {
     const servico = req.params.servico;
 

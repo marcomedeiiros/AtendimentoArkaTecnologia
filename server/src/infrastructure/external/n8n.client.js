@@ -42,7 +42,7 @@ class N8nClient {
       if (error instanceof AppError) throw error;
       logger.error("n8n indisponivel", { message: error.message });
       throw new AppError(
-        "n8n indisponivel. Verifique a URL em Configuracoes.",
+        "n8n indisponivel verifique a URL em Configurações.",
         503,
         "N8N_UNAVAILABLE"
       );

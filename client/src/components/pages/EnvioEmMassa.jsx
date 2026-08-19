@@ -360,7 +360,7 @@ export default function EnvioEmMassa({ conversas = [] }) {
             </div>
             <div className="p-3 rounded-xl bg-espera/5 border border-espera/20 text-[11px] text-espera-400 flex items-start gap-2">
               <AlertTriangle size={13} className="shrink-0 mt-0.5" />
-              Intervalo aleatório entre envios evita bloqueio por spam. Recomendado: mínimo 2s / máximo 8s.
+              Intervalo aleatório entre envios evita bloqueio por spam recomendado: mínimo 2s / máximo 8s.
             </div>
           </div>
 
