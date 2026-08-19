@@ -9,13 +9,14 @@ class EquipeController {
   alterarStatus(req, res) {
     const { id } = req.params;
     const { ativo } = req.body;
-    return equipeService.alterarStatus(id, ativo).then((data) => success(res, data));
+    // req.user.sub identifica quem pede; o service confere no banco se e Admin.
+    return equipeService.alterarStatus(id, ativo, req.user.sub).then((data) => success(res, data));
   }
 
   alterarCargo(req, res) {
     const { id } = req.params;
     const { cargo } = req.body;
-    return equipeService.alterarCargo(id, cargo).then((data) => success(res, data));
+    return equipeService.alterarCargo(id, cargo, req.user.sub).then((data) => success(res, data));
   }
 
   redefinirSenha(req, res) {

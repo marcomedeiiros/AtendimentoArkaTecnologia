@@ -1,1 +1,19 @@
 node_modules
+
+# Segredos: NUNCA versionar. O .env real fica so na maquina/servidor.
+.env
+.env.*
+!.env.example
+
+# Banco SQLite: contem hashes de senha e todas as conversas dos clientes.
+*.db
+*.db-journal
+*.sqlite
+prisma/dev.db
+
+# Logs
+*.log
+logs/
+
+# Bancos descartaveis dos testes
+.test-dbs/

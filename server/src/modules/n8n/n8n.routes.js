@@ -2,10 +2,16 @@ const router = require("express").Router();
 const n8nService = require("./n8n.service");
 const { success } = require("../../shared/helpers/response.helper");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
+const { adminMiddleware } = require("../../shared/middlewares/admin.middleware");
 
 router.use(authMiddleware);
 
 const rota = (fn) => (req, res, next) => Promise.resolve(fn(req, res)).catch(next);
+
+// Criar/alterar/executar/excluir workflow muda a automacao da empresa inteira
+// e pode disparar acoes externas -- privilegio de Administrador. Status e
+// listagem seguem abertos (leitura) para o painel operacional.
+const somenteAdmin = adminMiddleware;
 
 /**
  * @openapi
@@ -36,26 +42,31 @@ router.get("/workflows", rota(async (req, res) => success(res, await n8nService.
 
 router.post(
   "/workflows",
+  somenteAdmin,
   rota(async (req, res) => success(res, await n8nService.criar(req.body?.nome || "Novo fluxo"), 201))
 );
 
 router.put(
   "/workflows/:id",
+  somenteAdmin,
   rota(async (req, res) => success(res, await n8nService.renomear(req.params.id, req.body?.nome)))
 );
 
 router.patch(
   "/workflows/:id/ativo",
+  somenteAdmin,
   rota(async (req, res) => success(res, await n8nService.alternarAtivo(req.params.id, !!req.body?.ativo)))
 );
 
 router.post(
   "/workflows/:id/executar",
+  somenteAdmin,
   rota(async (req, res) => success(res, await n8nService.executar(req.params.id, req.body?.payload || {})))
 );
 
 router.delete(
   "/workflows/:id",
+  somenteAdmin,
   rota(async (req, res) => success(res, await n8nService.excluir(req.params.id)))
 );
 

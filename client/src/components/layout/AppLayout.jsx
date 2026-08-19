@@ -28,14 +28,14 @@ const NAV_MONITORAMENTO = [
 ];
 
 const NAV_FERRAMENTAS = [
-  { to: '/whatsapp',   label: 'Integração WhatsApp',  icon: MessageCircle },
+  { to: '/whatsapp',   label: 'Integração WhatsApp',  icon: MessageCircle, adminOnly: true },
   { to: '/equipe',     label: 'Gestão da Equipe',     icon: Users         },
   { to: '/parceiros',  label: 'Clientes (CNPJ)',     icon: ShieldCheck   },
   { to: '/mensagens',  label: 'Mensagens Rápidas',    icon: Zap           },
   { to: '/agenda',     label: 'Agenda',                icon: CalendarDays  },
   { to: '/massa',      label: 'Envio em Massa',        icon: Send          },
   { to: '/bugs',       label: 'Relatos de Bugs',       icon: Bug, adminOnly: true },
-  { to: '/configuracoes', label: 'Configurações',      icon: Settings      },
+  { to: '/configuracoes', label: 'Configurações',      icon: Settings, adminOnly: true },
 ];
 
 function ArkaLogo({ size = 32 }) {

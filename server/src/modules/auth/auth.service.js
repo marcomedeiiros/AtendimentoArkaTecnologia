@@ -47,8 +47,14 @@ class AuthService {
       );
     }
 
+    // Camada 2 (defesa em profundidade): mesmo que o DTO mude ou seja
+    // contornado, o auto-cadastro nunca cria um Administrador. So papeis
+    // comuns; qualquer coisa fora disso vira "Técnico".
+    const CARGOS_AUTOCADASTRO = ["Financeiro", "Técnico", "Comercial"];
+    const cargoSeguro = CARGOS_AUTOCADASTRO.includes(cargo) ? cargo : "Técnico";
+
     const senhaHash = await bcrypt.hash(senha, 10);
-    const usuario = await usuarioRepository.criar({ nome, email, senhaHash, cargo });
+    const usuario = await usuarioRepository.criar({ nome, email, senhaHash, cargo: cargoSeguro });
 
     // Sem token: criar conta nao e entrar. Quem acabou de se cadastrar passa
     // pelo login como qualquer outra pessoa -- assim a senha e exercitada uma

@@ -253,7 +253,8 @@ class WhatsAppService {
       conectadoDesde: this._conectadoDesde[nome] || null,
       ultimaSincronizacao: new Date().toISOString(),
       webhookUrl: `/api/webhook/v1/whatsapp`,
-      webhookSecret: env.webhookSecret,
+      // NAO expor o webhookSecret aqui: /status e aberto a qualquer conta
+      // logada. O segredo so sai em /detalhes, que e restrito a Administrador.
     };
   }
 
@@ -282,6 +283,9 @@ class WhatsAppService {
 
     return {
       ...status,
+      // Restrito a Administrador na rota; a tela de Integracao mostra o segredo
+      // para configurar o webhook na Evolution.
+      webhookSecret: env.webhookSecret,
       perfil: {
         // v2 devolve `ownerJid`; v1 usava `owner`. Mantemos os dois.
         nome: info?.profileName || null,

@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 const bus = require("../../shared/events/event-bus");
 const logger = require("../../config/logger");
+const { podeAcessarSetor } = require("../../shared/helpers/setor.helper");
 
 // Tickets de uso unico para autenticar o EventSource: o navegador nao consegue
 // mandar o header Authorization no GET do SSE, e por privacidade nao colocamos o
@@ -8,12 +9,12 @@ const logger = require("../../config/logger");
 // o stream com ?ticket=. Ticket vive ~30s e some ao ser consumido.
 const TICKET_TTL_MS = 30_000;
 const HEARTBEAT_MS = 20_000;
-const tickets = new Map(); // ticketId -> expiresAt
+const tickets = new Map(); // ticketId -> { exp, cargo }
 
 function limparExpirados() {
   const agora = Date.now();
-  for (const [id, exp] of tickets) {
-    if (exp < agora) tickets.delete(id);
+  for (const [id, t] of tickets) {
+    if (t.exp < agora) tickets.delete(id);
   }
 }
 
@@ -22,15 +23,18 @@ class ConversaStreamController {
   criarTicket(req, res) {
     limparExpirados();
     const ticket = crypto.randomUUID();
-    tickets.set(ticket, Date.now() + TICKET_TTL_MS);
+    // Guarda o cargo de quem pediu (do token ja validado). O stream so entrega
+    // eventos dos setores que esse cargo pode ver -- senao o SSE vazaria ao
+    // vivo justamente o que listar/obter filtram na leitura.
+    tickets.set(ticket, { exp: Date.now() + TICKET_TTL_MS, cargo: req.user?.cargo || null });
     res.json({ success: true, data: { ticket } });
   }
 
   // GET /api/conversas/stream?ticket=...  (autenticada pelo ticket)
   stream(req, res) {
     const ticket = req.query.ticket;
-    const exp = ticket && tickets.get(ticket);
-    if (!exp || exp < Date.now()) {
+    const dados = ticket && tickets.get(ticket);
+    if (!dados || dados.exp < Date.now()) {
       tickets.delete(ticket);
       return res.status(401).json({
         success: false,
@@ -38,6 +42,7 @@ class ConversaStreamController {
       });
     }
     tickets.delete(ticket); // uso unico
+    const cargo = dados.cargo;
 
     res.writeHead(200, {
       "Content-Type": "text/event-stream",
@@ -49,6 +54,8 @@ class ConversaStreamController {
     res.write(`event: ready\ndata: {"ok":true}\n\n`);
 
     const onConversa = (evento) => {
+      // Mesmo guard da leitura: quem nao pode ver o setor nao recebe o evento.
+      if (!podeAcessarSetor(cargo, evento?.setor)) return;
       try {
         res.write(`data: ${JSON.stringify(evento)}\n\n`);
       } catch (err) {

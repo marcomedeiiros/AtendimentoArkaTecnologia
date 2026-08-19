@@ -33,15 +33,61 @@ class EquipeService {
       };
     });
   }
-  async alterarStatus(id, ativo) {
+  // Confere no BANCO (nao no JWT) que quem pede e Administrador. Fonte unica
+  // usada por todas as acoes de gestao -- assim um rebaixamento vale na hora,
+  // sem esperar o token da pessoa expirar.
+  async _exigirAdmin(solicitanteId) {
+    const solicitante = await usuarioRepository.findById(solicitanteId);
+    if (!solicitante || solicitante.cargo !== "Administrador") {
+      throw new AppError(
+        "Apenas Administradores podem gerenciar a equipe.",
+        403,
+        "SEM_PERMISSAO"
+      );
+    }
+    return solicitante;
+  }
+
+  async alterarStatus(id, ativo, solicitanteId) {
+    await this._exigirAdmin(solicitanteId);
+
+    // Nao pode desativar a propria conta (auto-lockout) nem o ultimo Admin ativo.
+    if (id === solicitanteId && !ativo) {
+      throw new AppError("Você não pode desativar a sua própria conta.", 400, "AUTO_DESATIVACAO");
+    }
+    if (!ativo) {
+      const alvo = await usuarioRepository.findById(id);
+      if (alvo?.cargo === "Administrador" && alvo.ativo) {
+        const admins = await usuarioRepository.contarAdminsAtivos();
+        if (admins <= 1) {
+          throw new AppError("Não é possível desativar o último Administrador ativo.", 400, "ULTIMO_ADMIN");
+        }
+      }
+    }
+
     return usuarioRepository.atualizarStatus(id, ativo);
   }
 
-  async alterarCargo(id, cargo) {
+  async alterarCargo(id, cargo, solicitanteId) {
+    await this._exigirAdmin(solicitanteId);
+
     const cargosValidos = ["Administrador", "Financeiro", "Técnico", "Comercial"];
     if (!cargosValidos.includes(cargo)) {
-      throw new Error("Cargo inválido");
+      throw new AppError("Cargo inválido", 400, "CARGO_INVALIDO");
     }
+
+    // Rebaixar o ultimo Administrador ativo travaria a gestao: ninguem mais
+    // aprovaria contas, trocaria cargos ou redefiniria senhas.
+    if (cargo !== "Administrador") {
+      const alvo = await usuarioRepository.findById(id);
+      if (alvo?.cargo === "Administrador" && alvo.ativo) {
+        const admins = await usuarioRepository.contarAdminsAtivos();
+        if (admins <= 1) {
+          throw new AppError("Não é possível rebaixar o último Administrador ativo.", 400, "ULTIMO_ADMIN");
+        }
+      }
+    }
+
     return usuarioRepository.atualizarCargo(id, cargo);
   }
 

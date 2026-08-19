@@ -11,12 +11,12 @@ class ConversaController {
   }
 
   atender(req, res) {
-    return conversaService.atender(req.params.id, req.user?.sub).then((data) => success(res, data));
+    return conversaService.atender(req.params.id, req.user?.sub, req.user?.cargo).then((data) => success(res, data));
   }
 
   enviarMensagem(req, res) {
     return conversaService
-      .enviarMensagem(req.params.id, req.body.texto, "equipe", req.body.respondendoAId)
+      .enviarMensagem(req.params.id, req.body.texto, "equipe", req.body.respondendoAId, req.user?.cargo)
       .then((data) => success(res, data));
   }
 
@@ -30,68 +30,69 @@ class ConversaController {
         setor: req.body.setor,
         texto: req.body.texto,
         atendenteId: req.user?.sub || null,
+        userCargo: req.user?.cargo,
       })
       .then((data) => success(res, data, 201));
   }
 
   encaminharMensagem(req, res) {
     return conversaService
-      .encaminharMensagem(req.body.mensagemId, req.body.conversaDestinoId)
+      .encaminharMensagem(req.body.mensagemId, req.body.conversaDestinoId, req.user?.cargo)
       .then((data) => success(res, data));
   }
 
   editarMensagem(req, res) {
     return conversaService
-      .editarMensagem(req.params.mensagemId, req.body.texto)
+      .editarMensagem(req.params.mensagemId, req.body.texto, req.user?.cargo)
       .then((data) => success(res, data));
   }
 
   enviarMidia(req, res) {
-    return conversaService.enviarMidia(req.params.id, req.body).then((data) => success(res, data));
+    return conversaService.enviarMidia(req.params.id, req.body, "equipe", req.user?.cargo).then((data) => success(res, data));
   }
 
   transcreverAudio(req, res) {
     return conversaService
-      .transcreverAudio(req.params.mensagemId)
+      .transcreverAudio(req.params.mensagemId, req.user?.cargo)
       .then((data) => success(res, data));
   }
 
   apagarMensagem(req, res) {
     return conversaService
-      .apagarMensagem(req.params.mensagemId)
+      .apagarMensagem(req.params.mensagemId, req.user?.cargo)
       .then((data) => success(res, data));
   }
 
   solicitarCnpj(req, res) {
-    return conversaService.solicitarCnpj(req.params.id).then((data) => success(res, data));
+    return conversaService.solicitarCnpj(req.params.id, req.user?.cargo).then((data) => success(res, data));
   }
 
   validarCnpj(req, res) {
-    return conversaService.validarCnpjManual(req.params.id, req.body.cnpj).then((data) => success(res, data));
+    return conversaService.validarCnpjManual(req.params.id, req.body.cnpj, req.user?.cargo).then((data) => success(res, data));
   }
 
   atualizarStatus(req, res) {
-    return conversaService.atualizarStatus(req.params.id, req.body.status).then((data) => success(res, data));
+    return conversaService.atualizarStatus(req.params.id, req.body.status, req.user?.cargo).then((data) => success(res, data));
   }
 
   atualizarSetor(req, res) {
-    return conversaService.atualizarSetor(req.params.id, req.body.setor).then((data) => success(res, data));
+    return conversaService.atualizarSetor(req.params.id, req.body.setor, req.user?.cargo).then((data) => success(res, data));
   }
 
   avaliarAtendimento(req, res) {
-    return conversaService.avaliarAtendimento(req.params.id, req.body).then((data) => success(res, data));
+    return conversaService.avaliarAtendimento(req.params.id, req.body, req.user?.cargo).then((data) => success(res, data));
   }
 
   atualizarFlags(req, res) {
-    return conversaService.atualizarFlags(req.params.id, req.body).then((data) => success(res, data));
+    return conversaService.atualizarFlags(req.params.id, req.body, req.user?.cargo).then((data) => success(res, data));
   }
 
   marcarLido(req, res) {
-    return conversaService.marcarLido(req.params.id).then((data) => success(res, data));
+    return conversaService.marcarLido(req.params.id, req.user?.cargo).then((data) => success(res, data));
   }
 
   remover(req, res) {
-    return conversaService.remover(req.params.id).then((data) => success(res, data));
+    return conversaService.remover(req.params.id, req.user?.cargo).then((data) => success(res, data));
   }
 }
 

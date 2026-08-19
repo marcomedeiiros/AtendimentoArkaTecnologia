@@ -3,6 +3,7 @@ const whatsappController = require("./whatsapp.controller");
 const webhookAuth = require("../../shared/middlewares/webhook.middleware");
 const { webhookLimiter } = require("../../shared/middlewares/rateLimit.middleware");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
+const { adminMiddleware } = require("../../shared/middlewares/admin.middleware");
 
 const webhookRouter = require("express").Router();
 
@@ -48,6 +49,11 @@ webhookRouter.post("/responder", (req, res, next) =>
 const adminRouter = require("express").Router();
 adminRouter.use(authMiddleware);
 
+// Gerir a instancia (conectar, criar/excluir, configurar webhook, ver o token)
+// e privilegio de Administrador. `/status`, `/qrcode` e `/enviar` seguem
+// abertos a qualquer conta logada, pois a operacao do dia a dia usa esses.
+const somenteAdmin = adminMiddleware;
+
 /**
  * @openapi
  * /api/whatsapp/status:
@@ -72,11 +78,11 @@ adminRouter.post("/enviar", (req, res, next) =>
   whatsappController.enviar(req, res).catch(next)
 );
 
-adminRouter.post("/conectar", (req, res, next) =>
+adminRouter.post("/conectar", somenteAdmin, (req, res, next) =>
   whatsappController.conectar(req, res).catch(next)
 );
 
-adminRouter.post("/desconectar", (req, res, next) =>
+adminRouter.post("/desconectar", somenteAdmin, (req, res, next) =>
   whatsappController.desconectar(req, res).catch(next)
 );
 
@@ -92,23 +98,23 @@ adminRouter.get("/qrcode", (req, res, next) =>
  *     security: [{ bearerAuth: [] }]
  *     summary: Painel completo da instancia (perfil, webhook, versao, token)
  */
-adminRouter.get("/detalhes", (req, res, next) =>
+adminRouter.get("/detalhes", somenteAdmin, (req, res, next) =>
   whatsappController.detalhes(req, res).catch(next)
 );
 
-adminRouter.post("/instancia", (req, res, next) =>
+adminRouter.post("/instancia", somenteAdmin, (req, res, next) =>
   whatsappController.criarInstancia(req, res).catch(next)
 );
 
-adminRouter.post("/webhook", (req, res, next) =>
+adminRouter.post("/webhook", somenteAdmin, (req, res, next) =>
   whatsappController.configurarWebhook(req, res).catch(next)
 );
 
-adminRouter.post("/reiniciar", (req, res, next) =>
+adminRouter.post("/reiniciar", somenteAdmin, (req, res, next) =>
   whatsappController.reiniciar(req, res).catch(next)
 );
 
-adminRouter.delete("/instancia", (req, res, next) =>
+adminRouter.delete("/instancia", somenteAdmin, (req, res, next) =>
   whatsappController.excluir(req, res).catch(next)
 );
 

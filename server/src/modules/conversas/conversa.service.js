@@ -4,24 +4,26 @@ const evolutionApi = require("../../infrastructure/external/evolution-api.client
 const transcricaoClient = require("../../infrastructure/external/transcricao.client");
 const { mapConversa } = require("../../shared/helpers/mapper.helper");
 const { limparCnpj, cnpjValido, mascararCnpj, normalizarTelefoneBr } = require("../../shared/helpers/cnpj.helper");
-const { normalizarSetor } = require("../../shared/helpers/setor.helper");
+const { normalizarSetor, podeAcessarSetor } = require("../../shared/helpers/setor.helper");
 const parceiroRepository = require("../../infrastructure/repositories/parceiro.repository");
 const bus = require("../../shared/events/event-bus");
 const AppError = require("../../shared/errors/AppError");
 const env = require("../../config/env");
 
-function podeAcessarSetor(userCargo, setorConversa) {
-  if (!userCargo || userCargo === "Administrador") return true;
-  const setorNorm = (setorConversa || "Geral").trim();
-  if (setorNorm === "Geral") return true;
-
-  if (setorNorm === "Financeiro" && userCargo === "Técnico") return false;
-
-  if (["Financeiro", "Técnico", "Comercial"].includes(userCargo)) {
-    return setorNorm === userCargo;
+// Guard de autorizacao por setor para operacoes por id/mensagem.
+//
+// A leitura (listar/obter) ja filtrava por setor, mas TODA acao de escrita
+// (atender, responder, apagar, mudar status/setor, remover...) recebia so o id
+// vindo do front e agia sem conferir -- um IDOR classico: um Tecnico que nao
+// PODE LER uma conversa do Financeiro ainda conseguia apaga-la ou responder ao
+// cliente sabendo o id. Este guard fecha isso no servidor.
+//
+// `userCargo` vem do token ja validado (req.user.cargo). Quando null (chamadas
+// internas do bot/n8n, que tem acesso total) o guard e um no-op de proposito.
+function exigirAcessoSetor(userCargo, setorConversa) {
+  if (userCargo && !podeAcessarSetor(userCargo, setorConversa)) {
+    throw new AppError("Sem permissao para acessar este setor", 403, "FORBIDDEN_SECTOR");
   }
-
-  return true;
 }
 
 class ConversaService {
@@ -36,15 +38,14 @@ class ConversaService {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
     const dto = mapConversa(conversa);
-    if (userCargo && !podeAcessarSetor(userCargo, dto.setor)) {
-      throw new AppError("Sem permissao para acessar este setor", 403, "FORBIDDEN_SECTOR");
-    }
+    exigirAcessoSetor(userCargo, dto.setor);
     return dto;
   }
 
-  async atender(id, atendenteId = null) {
+  async atender(id, atendenteId = null, userCargo = null) {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
+    exigirAcessoSetor(userCargo, conversa.setor);
 
     // Auto-recuperacao da foto: se a Evolution estava fora (ou sem foto) quando
     // a conversa nasceu, tentamos de novo ao assumir o atendimento.
@@ -84,7 +85,7 @@ class ConversaService {
    * O envio em si e delegado a `enviarMensagem`, para herdar de graca o
    * waMessageId, o status de entrega e a emissao no SSE.
    */
-  async iniciarConversa({ telefone, nome, setor, texto, atendenteId = null }) {
+  async iniciarConversa({ telefone, nome, setor, texto, atendenteId = null, userCargo = null }) {
     const conteudo = String(texto || "").trim();
     if (!conteudo) {
       throw new AppError("Escreva a mensagem que abre a conversa", 400, "TEXTO_OBRIGATORIO");
@@ -100,6 +101,8 @@ class ConversaService {
     }
 
     const setorFinal = normalizarSetor(setor);
+    // Nao deixa abrir conversa num setor que a pessoa nem poderia ler depois.
+    exigirAcessoSetor(userCargo, setorFinal);
     const nomeInstancia = env.evolutionApi.instance;
     const instancia = await instanciaRepository.findByNome(nomeInstancia);
     if (!instancia) {
@@ -176,9 +179,18 @@ class ConversaService {
     throw new AppError(motivo, 409, "CONVERSA_NAO_ABERTA");
   }
 
-  async enviarMensagem(id, texto, origem = "equipe", respondendoAId = null) {
+  // Guard de setor para operacoes que chegam por mensagemId: resolve a conversa
+  // dona da mensagem e aplica a mesma regra das operacoes por conversa.
+  async _exigirAcessoMensagem(mensagem, userCargo) {
+    if (!userCargo) return; // chamada interna (bot/n8n): acesso total
+    const conversa = await conversaRepository.findById(mensagem.conversaId);
+    exigirAcessoSetor(userCargo, conversa?.setor);
+  }
+
+  async enviarMensagem(id, texto, origem = "equipe", respondendoAId = null, userCargo = null) {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
+    exigirAcessoSetor(userCargo, conversa.setor);
     this._exigirAberta(conversa, origem);
 
     // "Responder" do WhatsApp: cita a mensagem original na bolha do cliente.
@@ -244,9 +256,10 @@ class ConversaService {
   // registra a mensagem. `media` aceita URL pública ou base64 (data URL). Para
   // a bolha do operador renderizar de volta, guardamos a própria mídia em
   // metadata.url.
-  async enviarMidia(id, payload, origem = "equipe") {
+  async enviarMidia(id, payload, origem = "equipe", userCargo = null) {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
+    exigirAcessoSetor(userCargo, conversa.setor);
     this._exigirAberta(conversa, origem);
 
     const { tipo, media, mimetype, fileName, caption, latitude, longitude, name, address } = payload;
@@ -293,9 +306,10 @@ class ConversaService {
   // Transcreve o audio de uma mensagem (fala -> texto) e guarda o resultado no
   // metadata, para nao pagar/reprocessar de novo no proximo F5. Sob demanda: so
   // roda quando o operador clica em "Transcrever".
-  async transcreverAudio(mensagemId) {
+  async transcreverAudio(mensagemId, userCargo = null) {
     const mensagem = await conversaRepository.findMensagem(mensagemId);
     if (!mensagem) throw new AppError("Mensagem nao encontrada", 404, "NOT_FOUND");
+    await this._exigirAcessoMensagem(mensagem, userCargo);
 
     const meta = mensagem.metadata || {};
     if (meta.tipo !== "audio") {
@@ -328,12 +342,16 @@ class ConversaService {
 
   // Encaminha uma mensagem existente para outra conversa (o WhatsApp reenvia o
   // conteudo; nao existe "forward nativo" pela API, entao reenviamos o texto).
-  async encaminharMensagem(mensagemId, conversaDestinoId) {
+  async encaminharMensagem(mensagemId, conversaDestinoId, userCargo = null) {
     const original = await conversaRepository.findMensagem(mensagemId);
     if (!original) throw new AppError("Mensagem nao encontrada", 404, "NOT_FOUND");
+    // Precisa poder ler a ORIGEM (senao encaminhar seria uma leitura disfarcada)
+    // e escrever no DESTINO.
+    await this._exigirAcessoMensagem(original, userCargo);
 
     const destino = await conversaRepository.findById(conversaDestinoId);
     if (!destino) throw new AppError("Conversa de destino nao encontrada", 404, "NOT_FOUND");
+    exigirAcessoSetor(userCargo, destino.setor);
 
     const meta = original.metadata || null;
     if (meta?.tipo && meta.tipo !== "texto" && meta.url) {
@@ -351,9 +369,10 @@ class ConversaService {
 
   // Edicao de mensagem propria, como no WhatsApp. Se a Evolution recusar
   // (versao sem suporte ou janela de 15 min expirada), nada e alterado.
-  async editarMensagem(mensagemId, novoTexto) {
+  async editarMensagem(mensagemId, novoTexto, userCargo = null) {
     const msg = await conversaRepository.findMensagem(mensagemId);
     if (!msg) throw new AppError("Mensagem nao encontrada", 404, "NOT_FOUND");
+    await this._exigirAcessoMensagem(msg, userCargo);
     if (msg.origem === "cliente") {
       throw new AppError("Só é possível editar mensagens enviadas por você", 400, "EDICAO_NAO_PERMITIDA");
     }
@@ -394,11 +413,12 @@ class ConversaService {
   // "apagar para todos" do WhatsApp (some tambem no aparelho do cliente). Em
   // mensagem do cliente isso e impossivel pelo WhatsApp -- entao ela some so do
   // painel. Em ambos os casos removemos a linha aqui, entao some da Central.
-  async apagarMensagem(mensagemId) {
+  async apagarMensagem(mensagemId, userCargo = null) {
     const msg = await conversaRepository.findMensagem(mensagemId);
     if (!msg) throw new AppError("Mensagem nao encontrada", 404, "NOT_FOUND");
 
     const conversa = await conversaRepository.findById(msg.conversaId);
+    exigirAcessoSetor(userCargo, conversa?.setor);
     const nossa = msg.origem !== "cliente";
 
     if (msg.waMessageId && nossa && conversa) {
@@ -424,12 +444,19 @@ class ConversaService {
     return this._emitir(await conversaRepository.findById(msg.conversaId));
   }
 
-  async solicitarCnpj(id) {
+  async solicitarCnpj(id, userCargo = null) {
+    const conversa = await conversaRepository.findById(id);
+    if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
+    exigirAcessoSetor(userCargo, conversa.setor);
     const msg = "[Arka Tecnologia]: Para prosseguirmos e verificar beneficios de parceiro, informe o CNPJ da sua empresa:";
     return this.enviarMensagem(id, msg, "bot");
   }
 
-  async validarCnpjManual(id, cnpj) {
+  async validarCnpjManual(id, cnpj, userCargo = null) {
+    const conversa = await conversaRepository.findById(id);
+    if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
+    exigirAcessoSetor(userCargo, conversa.setor);
+
     const cnpjLimpo = limparCnpj(cnpj);
     if (!cnpjValido(cnpjLimpo)) {
       throw new AppError("CNPJ invalido", 400, "INVALID_CNPJ");
@@ -450,9 +477,10 @@ class ConversaService {
     return this._emitir(await conversaRepository.findById(id));
   }
 
-  async atualizarStatus(id, status) {
+  async atualizarStatus(id, status, userCargo = null) {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
+    exigirAcessoSetor(userCargo, conversa.setor);
 
     const data = { statusAtendimento: status };
     if (status === "fechada") {
@@ -471,9 +499,10 @@ class ConversaService {
 
   // Favoritar / fixar / arquivar / ocultar. Nenhuma delas apaga a conversa:
   // arquivada e oculta apenas somem da listagem quando o filtro esta desligado.
-  async atualizarFlags(id, flags) {
+  async atualizarFlags(id, flags, userCargo = null) {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
+    exigirAcessoSetor(userCargo, conversa.setor);
 
     const data = {};
     for (const campo of ["favorita", "fixada", "arquivada", "oculta"]) {
@@ -485,23 +514,29 @@ class ConversaService {
     return this._emitir(atualizada);
   }
 
-  async marcarLido(id) {
+  async marcarLido(id, userCargo = null) {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
+    exigirAcessoSetor(userCargo, conversa.setor);
     const atualizada = await conversaRepository.zerarNaoLidas(id);
     return this._emitir(atualizada);
   }
 
-  async atualizarSetor(id, setor) {
+  async atualizarSetor(id, setor, userCargo = null) {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
+    // Precisa poder mexer na conversa de ORIGEM. O destino fica livre de
+    // proposito: triar/encaminhar uma conversa "Geral" para o setor certo e
+    // justamente o fluxo esperado, e mover nao expoe conteudo nenhum.
+    exigirAcessoSetor(userCargo, conversa.setor);
     const atualizada = await conversaRepository.update(id, { setor });
     return this._emitir(atualizada);
   }
 
-  async avaliarAtendimento(id, { avaliacao, feedback }) {
+  async avaliarAtendimento(id, { avaliacao, feedback }, userCargo = null) {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
+    exigirAcessoSetor(userCargo, conversa.setor);
     const atualizada = await conversaRepository.update(id, {
       avaliacao: Number(avaliacao) || null,
       feedback: feedback ? String(feedback).trim() : null,
@@ -509,9 +544,10 @@ class ConversaService {
     return this._emitir(atualizada);
   }
 
-  async remover(id) {
+  async remover(id, userCargo = null) {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
+    exigirAcessoSetor(userCargo, conversa.setor);
     await conversaRepository.delete(id);
     bus.emitDelete(id);
     return { removido: true };

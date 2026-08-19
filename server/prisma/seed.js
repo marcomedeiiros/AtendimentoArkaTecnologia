@@ -10,9 +10,23 @@ const bcrypt = require("bcryptjs");
 
 const prisma = new PrismaClient();
 
+const ehProducao = process.env.NODE_ENV === "production";
+
 async function main() {
   const instanciaNome = process.env.WHATSAPP_INSTANCE || "arka-wapi-oficial";
   const webhookSecret = process.env.WEBHOOK_SECRET || "arka-webhook-secret";
+
+  // Em producao, recusa semear com a senha/segredo padrao: um admin com
+  // "Admin@123" ou um webhook com o segredo do codigo e porta de entrada
+  // conhecida. Em dev, mantem a conveniencia.
+  if (ehProducao) {
+    if (!process.env.ADMIN_PASSWORD) {
+      throw new Error("Defina ADMIN_PASSWORD no ambiente antes de semear em producao.");
+    }
+    if (!process.env.WEBHOOK_SECRET) {
+      throw new Error("Defina WEBHOOK_SECRET no ambiente antes de semear em producao.");
+    }
+  }
 
   await prisma.instancia.upsert({
     where: { nome: instanciaNome },

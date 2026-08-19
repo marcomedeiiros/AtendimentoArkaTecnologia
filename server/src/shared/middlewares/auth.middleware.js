@@ -23,7 +23,7 @@ function registrarPresenca(userId) {
   usuarioRepository.marcarAcesso(userId).catch(() => ultimaEscrita.delete(userId));
 }
 
-function authMiddleware(req, res, next) {
+async function authMiddleware(req, res, next) {
   const header = req.headers.authorization;
 
   if (!header || !header.startsWith("Bearer ")) {
@@ -32,13 +32,35 @@ function authMiddleware(req, res, next) {
 
   const token = header.slice(7);
 
+  let payload;
   try {
-    const payload = jwt.verify(token, env.jwt.secret);
-    req.user = payload;
-    registrarPresenca(payload.sub);
-    return next();
+    payload = jwt.verify(token, env.jwt.secret);
   } catch {
     return next(new AppError("Token invalido ou expirado", 401, "INVALID_TOKEN"));
+  }
+
+  // O token so PROVA quem e a pessoa (sub). Cargo e status vem do BANCO, nao do
+  // que o token carrega: assim um rebaixamento ou uma conta desativada valem na
+  // hora, sem esperar o token expirar (ate 8h). Toda checagem de permissao
+  // adiante (admin, setor) passa a se basear no estado real, nao no congelado.
+  try {
+    const usuario = await usuarioRepository.findById(payload.sub);
+    if (!usuario) {
+      return next(new AppError("Conta nao encontrada", 401, "CONTA_INEXISTENTE"));
+    }
+    if (!usuario.ativo) {
+      return next(new AppError("Conta desativada", 403, "CONTA_INATIVA"));
+    }
+    req.user = {
+      sub: usuario.id,
+      email: usuario.email,
+      nome: usuario.nome,
+      cargo: usuario.cargo, // autoritativo (do banco), sobrepoe o do token
+    };
+    registrarPresenca(usuario.id);
+    return next();
+  } catch (err) {
+    return next(err);
   }
 }
 
