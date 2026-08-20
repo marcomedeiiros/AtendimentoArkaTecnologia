@@ -34,6 +34,10 @@ const webhookAuth = require("./shared/middlewares/webhook.middleware");
 function createApp() {
   const app = express();
 
+  // Precisa vir antes do rate limit: e o que faz o req.ip valer o IP real do
+  // atendente quando existe um proxy (nginx) na frente, em vez do IP do proxy.
+  app.set("trust proxy", env.trustProxy);
+
   app.use(cors({ origin: env.corsOrigin }));
   app.use(express.json({ limit: "30mb" })); // mídia enviada em base64 passa de 2mb
   app.use(apiLimiter);

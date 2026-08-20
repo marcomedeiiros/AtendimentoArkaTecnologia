@@ -26,6 +26,12 @@ const env = {
     expiresIn: process.env.JWT_EXPIRES_IN || "8h",
   },
   corsOrigin: process.env.CORS_ORIGIN || "http://localhost:5173",
+  // Quantos proxies existem na frente da API. Em producao o nginx do painel
+  // fica na frente (TRUST_PROXY=1), entao o Express precisa ler o
+  // X-Forwarded-For para identificar quem chamou -- sem isso o rate limit
+  // enxerga um IP unico (o do nginx) e a cota vira compartilhada entre todos
+  // os atendentes. Em desenvolvimento nao ha proxy: 0.
+  trustProxy: Number(process.env.TRUST_PROXY) || 0,
   evolutionApi: {
     url: process.env.EVOLUTION_API_URL || "http://localhost:8080",
     key: process.env.EVOLUTION_API_KEY || "",
