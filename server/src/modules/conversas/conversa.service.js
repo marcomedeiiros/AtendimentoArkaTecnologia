@@ -9,6 +9,7 @@ const parceiroRepository = require("../../infrastructure/repositories/parceiro.r
 const bus = require("../../shared/events/event-bus");
 const AppError = require("../../shared/errors/AppError");
 const env = require("../../config/env");
+const logger = require("../../config/logger");
 
 // Guard de autorizacao por setor para operacoes por id/mensagem.
 //
@@ -497,7 +498,34 @@ class ConversaService {
     }
 
     const atualizada = await conversaRepository.update(id, data);
-    return this._emitir(atualizada);
+    const dto = this._emitir(atualizada);
+
+    // Ao FECHAR manualmente (atendimento humano), dispara a mesma pesquisa de
+    // satisfacao do bot: pergunta a nota de 1 a 5 e o comentario. Best-effort e
+    // nao-bloqueante - um erro na pesquisa nunca deve impedir o fechamento
+    // pedido pelo atendente. O proprio motor respeita o modo "local", o toggle
+    // de configuracao e nao repergunta se a conversa ja tem nota.
+    if (status === "fechada" && conversa.statusAtendimento !== "fechada") {
+      this._dispararPesquisaSatisfacao(atualizada).catch((e) =>
+        logger.warn("Falha ao iniciar pesquisa de satisfacao", { id, message: e.message })
+      );
+    }
+
+    return dto;
+  }
+
+  // Ponte para o motor do chatbot: require tardio para evitar ciclo de import
+  // (o engine nao depende deste service, mas manter o require local e mais seguro).
+  async _dispararPesquisaSatisfacao(conversa) {
+    const chatbotEngine = require("../chatbot/chatbot.engine");
+    // instanceName fica null de proposito: o engine cai no env.evolutionApi.instance,
+    // mesma instancia usada por _enviarWhatsApp neste service (setup single-instance).
+    await chatbotEngine.iniciarPesquisaSatisfacao({
+      conversa,
+      telefone: conversa.telefone,
+      instanciaId: conversa.instanciaId,
+      instanceName: null,
+    });
   }
 
   // Favoritar / fixar / arquivar / ocultar. Nenhuma delas apaga a conversa:

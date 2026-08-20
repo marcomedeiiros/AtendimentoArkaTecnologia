@@ -7,11 +7,37 @@
  * corpo), então ninguém edita a conta de outro por aqui.
  */
 import { useState } from 'react';
-import { User, PenLine, KeyRound, Loader2, Save, ShieldCheck, ArrowLeft } from 'lucide-react';
+import { User, PenLine, KeyRound, Loader2, Save, ShieldCheck, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AuthAPI } from '../services/api';
 import Avatar from '../components/Avatar';
+
+// Campo de senha com botao de mostrar/ocultar. Em escopo de MODULO de proposito:
+// definido dentro do componente da pagina, ele seria recriado a cada render e o
+// input perderia o foco no meio da digitacao. Comeca sempre oculto; mostrar e
+// acao explicita da pessoa e nao guarda nada -- so alterna o `type` do input.
+function CampoSenha({ id, rotulo, inputCls, labelCls, ...props }) {
+  const [mostrar, setMostrar] = useState(false);
+  return (
+    <div>
+      <label htmlFor={id} className={labelCls}>{rotulo}</label>
+      <div className="relative">
+        <input id={id} type={mostrar ? 'text' : 'password'} className={`${inputCls} pr-11`} {...props} />
+        <button
+          type="button"
+          onClick={() => setMostrar(m => !m)}
+          aria-label={mostrar ? 'Ocultar senha' : 'Mostrar senha'}
+          aria-pressed={mostrar}
+          title={mostrar ? 'Ocultar senha' : 'Mostrar senha'}
+          className="absolute inset-y-0 right-0 flex items-center rounded-r-xl px-3 text-texto-suave transition-colors hover:text-texto focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-acao-200"
+        >
+          {mostrar ? <EyeOff size={16} /> : <Eye size={16} />}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function PerfilPage() {
   const navigate = useNavigate();
@@ -160,18 +186,21 @@ export default function PerfilPage() {
             <KeyRound size={15} className="text-acao-200" /> Segurança
           </h2>
 
-          <div>
-            <label htmlFor="senha-atual" className={labelCls}>Senha atual</label>
-            <input id="senha-atual" type="password" autoComplete="current-password" value={senhaAtual} onChange={(e) => setSenhaAtual(e.target.value)} className={inputCls} placeholder="••••••" />
-          </div>
-          <div>
-            <label htmlFor="senha-nova" className={labelCls}>Nova senha</label>
-            <input id="senha-nova" type="password" autoComplete="new-password" value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} className={inputCls} placeholder="Mínimo de 6 caracteres" />
-          </div>
-          <div>
-            <label htmlFor="senha-confirmar" className={labelCls}>Confirmar nova senha</label>
-            <input id="senha-confirmar" type="password" autoComplete="new-password" value={confirmar} onChange={(e) => setConfirmar(e.target.value)} className={inputCls} placeholder="Repita a nova senha" />
-          </div>
+          <CampoSenha
+            id="senha-atual" rotulo="Senha atual" autoComplete="current-password"
+            inputCls={inputCls} labelCls={labelCls} placeholder="••••••"
+            value={senhaAtual} onChange={(e) => setSenhaAtual(e.target.value)}
+          />
+          <CampoSenha
+            id="senha-nova" rotulo="Nova senha" autoComplete="new-password"
+            inputCls={inputCls} labelCls={labelCls} placeholder="Mínimo de 6 caracteres"
+            value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)}
+          />
+          <CampoSenha
+            id="senha-confirmar" rotulo="Confirmar nova senha" autoComplete="new-password"
+            inputCls={inputCls} labelCls={labelCls} placeholder="Repita a nova senha"
+            value={confirmar} onChange={(e) => setConfirmar(e.target.value)}
+          />
 
           <Aviso msg={msgSenha} />
           <div className="flex justify-end">

@@ -42,7 +42,16 @@ const DEPENDENCIAS_PADRAO = {
 //   opcao  -> proxima mensagem e casada com as opcoes do passo atual
 //             (`config.opcoes`, vindo de fluxos importados)
 //   humano -> conversa transferida; o bot fica calado ate expirar ou ser atendida
-const AGUARDANDO = { CNPJ: "cnpj", MENU: "menu", OPCAO: "opcao", HUMANO: "humano" };
+//   avaliacao_nota       -> proxima mensagem e a nota (1..5) da pesquisa de satisfacao
+//   avaliacao_comentario -> proxima mensagem e o comentario livre da pesquisa
+const AGUARDANDO = {
+  CNPJ: "cnpj",
+  MENU: "menu",
+  OPCAO: "opcao",
+  HUMANO: "humano",
+  AVALIACAO_NOTA: "avaliacao_nota",
+  AVALIACAO_COMENTARIO: "avaliacao_comentario",
+};
 
 // Gatilho que casa com qualquer primeira mensagem (fluxo de boas-vindas).
 const GATILHO_CURINGA = "*";
@@ -477,11 +486,24 @@ class ChatbotEngine {
   // comando "sair", aqui a conversa e fechada de fato, com a mensagem de
   // despedida que o proprio fluxo definiu.
   async encerrarAtendimento(ctx, mensagem) {
-    const { conversa, telefone, instanciaId, instanceName } = ctx;
+    const { conversa, telefone, instanceName } = ctx;
 
     if (mensagem) {
       await this.enviarBot(conversa.id, telefone, mensagem, instanceName);
     }
+
+    // Antes de fechar de fato, oferece a pesquisa de satisfacao. Se ela iniciar,
+    // a conversa ja fica marcada como fechada e a sessao segue viva apenas para
+    // capturar a nota/comentario do cliente (ver continuarPesquisaSatisfacao).
+    const pesquisa = await this.iniciarPesquisaSatisfacao(ctx);
+    if (pesquisa) return pesquisa;
+
+    return this.fecharConversa(ctx, { motivo: "fluxo" });
+  }
+
+  // Fechamento efetivo: marca a conversa como fechada e desliga a sessao.
+  async fecharConversa(ctx, { motivo = "fluxo" } = {}) {
+    const { conversa, telefone, instanciaId } = ctx;
 
     await this.deps.conversaRepository.update(conversa.id, {
       statusAtendimento: "fechada",
@@ -499,9 +521,155 @@ class ChatbotEngine {
     });
 
     await this._emitirConversa(conversa.id);
-    logger.info("Atendimento encerrado pelo fluxo", { conversaId: conversa.id });
+    logger.info("Atendimento encerrado", { conversaId: conversa.id, motivo });
 
     return { processado: true, conversaId: conversa.id, encerrado: true, fechada: true };
+  }
+
+  // ------------------------------------------------ pesquisa de satisfacao ---
+
+  // Extrai a nota de 1 a 5 do texto do cliente. Usa o ULTIMO numero valido: o
+  // cliente costuma responder "4" ou "nota 4", e se ele ecoar o enunciado
+  // ("de 1 a 5, dou 4") o "1" e o "5" vem antes da nota que interessa.
+  interpretarNota(texto) {
+    const nums = String(texto || "").match(/\d+/g) || [];
+    let nota = null;
+    for (const n of nums) {
+      const v = Number(n);
+      if (v >= 1 && v <= 5) nota = v;
+    }
+    return nota;
+  }
+
+  // Dispara a pesquisa (CSAT) ao encerrar. Retorna o resultado quando iniciada,
+  // ou null quando nao se aplica (modo != local, desligada ou ja avaliada) -
+  // nesse caso o chamador segue com o fechamento normal.
+  async iniciarPesquisaSatisfacao(ctx) {
+    const { conversa, telefone, instanciaId, instanceName } = ctx;
+
+    // Fora do modo "local" o bot NUNCA envia nada por conta propria.
+    const modo = await this.deps.configuracaoService.modoAtendimento();
+    if (modo !== "local") return null;
+
+    const cfg = await this.deps.configuracaoService.pesquisaSatisfacao();
+    if (!cfg.ativo) return null;
+
+    // Nao pergunta duas vezes: se ja existe nota, apenas segue para o fechamento.
+    const atual = await this.deps.conversaRepository.findById(conversa.id);
+    if (atual && atual.avaliacao != null) return null;
+
+    await this.enviarBot(conversa.id, telefone, cfg.mensagemNota, instanceName);
+
+    await this.deps.sessaoRepository.upsert(instanciaId, conversa.id, telefone, {
+      fluxoAtualId: null,
+      passoAtualId: null,
+      aguardando: AGUARDANDO.AVALIACAO_NOTA,
+      ativo: true,
+      contexto: { pesquisa: true, tentativasAval: 0 },
+    });
+
+    // Fecha desde ja: a conversa sai da fila, mas a sessao da pesquisa continua
+    // viva para capturar a resposta. Sem resposta, a sessao expira pelo TTL.
+    await this.deps.conversaRepository.update(conversa.id, {
+      statusAtendimento: "fechada",
+      fechadoEm: new Date(),
+      lido: true,
+      naoLidas: 0,
+    });
+    await this._emitirConversa(conversa.id);
+
+    logger.info("Pesquisa de satisfacao iniciada", { conversaId: conversa.id });
+    return {
+      processado: true,
+      conversaId: conversa.id,
+      pesquisaSatisfacao: true,
+      aguardando: AGUARDANDO.AVALIACAO_NOTA,
+    };
+  }
+
+  // Trata a resposta do cliente durante a pesquisa: primeiro a nota, depois o
+  // comentario. Ao final agradece e encerra a sessao da pesquisa.
+  async continuarPesquisaSatisfacao(sessao, ctx, textoEntrada) {
+    const { conversa, telefone, instanceName } = ctx;
+    const cfg = await this.deps.configuracaoService.pesquisaSatisfacao();
+
+    if (sessao.aguardando === AGUARDANDO.AVALIACAO_NOTA) {
+      const nota = this.interpretarNota(textoEntrada);
+
+      if (nota == null) {
+        const tentativas = (sessao.contexto?.tentativasAval || 0) + 1;
+        // Cliente nao colabora: encerra sem insistir, para nao virar spam.
+        if (tentativas >= limites.maxTentativasOpcao) {
+          return this.finalizarPesquisa(ctx, sessao);
+        }
+        await this.enviarBot(conversa.id, telefone, cfg.mensagemNotaInvalida, instanceName);
+        await this.deps.sessaoRepository.update(sessao.id, {
+          contexto: { ...(sessao.contexto || {}), tentativasAval: tentativas },
+        });
+        return { processado: true, conversaId: conversa.id, aguardando: AGUARDANDO.AVALIACAO_NOTA };
+      }
+
+      await this.deps.conversaRepository.update(conversa.id, { avaliacao: nota });
+      await this._emitirConversa(conversa.id);
+
+      // Pediu comentario? avanca; senao agradece e encerra.
+      if (cfg.pedirComentario) {
+        await this.enviarBot(conversa.id, telefone, cfg.mensagemComentario, instanceName);
+        await this.deps.sessaoRepository.update(sessao.id, {
+          aguardando: AGUARDANDO.AVALIACAO_COMENTARIO,
+          ativo: true,
+          contexto: { ...(sessao.contexto || {}), avaliacao: nota, tentativasAval: 0 },
+        });
+        return {
+          processado: true,
+          conversaId: conversa.id,
+          aguardando: AGUARDANDO.AVALIACAO_COMENTARIO,
+        };
+      }
+
+      await this.enviarBot(conversa.id, telefone, cfg.mensagemAgradecimento, instanceName);
+      return this.finalizarPesquisa(ctx, sessao);
+    }
+
+    // AVALIACAO_COMENTARIO: o texto e o feedback livre. "pular"/vazio ignora.
+    const comentario = String(textoEntrada || "").trim();
+    const pular = ["pular", "nao", "nao quero", "-", "n"];
+    const ehPular = !comentario || pular.includes(this.normalizarTexto(comentario));
+    if (!ehPular) {
+      await this.deps.conversaRepository.update(conversa.id, {
+        feedback: comentario.slice(0, 1000),
+      });
+      await this._emitirConversa(conversa.id);
+    }
+    await this.enviarBot(conversa.id, telefone, cfg.mensagemAgradecimento, instanceName);
+    return this.finalizarPesquisa(ctx, sessao);
+  }
+
+  // Encerra a sessao da pesquisa e garante que a conversa fique fechada.
+  async finalizarPesquisa(ctx, sessao) {
+    const { conversa } = ctx;
+    await this.deps.sessaoRepository.update(sessao.id, {
+      fluxoAtualId: null,
+      passoAtualId: null,
+      aguardando: null,
+      ativo: false,
+      contexto: {},
+    });
+    const atual = await this.deps.conversaRepository.findById(conversa.id);
+    if (atual && atual.statusAtendimento !== "fechada") {
+      await this.deps.conversaRepository.update(conversa.id, {
+        statusAtendimento: "fechada",
+        fechadoEm: new Date(),
+        lido: true,
+        naoLidas: 0,
+      });
+    }
+    await this._emitirConversa(conversa.id);
+    logger.info("Pesquisa de satisfacao concluida", {
+      conversaId: conversa.id,
+      nota: atual?.avaliacao ?? null,
+    });
+    return { processado: true, conversaId: conversa.id, encerrado: true, avaliado: true };
   }
 
   async encerrarSessao(ctx) {
@@ -953,8 +1121,16 @@ class ChatbotEngine {
     const horario = await this.deps.configuracaoService.horarioAtendimento();
     if (this.foraDoHorario(horario)) {
       const sessaoEmCurso = await this.deps.sessaoRepository.findByTelefone(instanciaId, telefone);
-      const noMeioDoFluxo = sessaoEmCurso?.ativo && sessaoEmCurso.aguardando === AGUARDANDO.OPCAO;
-      if (!noMeioDoFluxo) {
+      // Nao interrompe quem ja esta no meio de um menu OU respondendo a pesquisa
+      // de satisfacao: joga-los na fila por causa do expediente abandona o fluxo.
+      const emCurso =
+        sessaoEmCurso?.ativo &&
+        [
+          AGUARDANDO.OPCAO,
+          AGUARDANDO.AVALIACAO_NOTA,
+          AGUARDANDO.AVALIACAO_COMENTARIO,
+        ].includes(sessaoEmCurso.aguardando);
+      if (!emCurso) {
         if (horario.mensagem) {
           await this.enviarBot(
             conversa.id,
@@ -999,6 +1175,17 @@ class ChatbotEngine {
     };
 
     try {
+      // Pesquisa de satisfacao em andamento: a resposta do cliente e a nota ou o
+      // comentario. Tratado antes de tudo para que as palavras de controle
+      // (sair, menu, atendente...) nao sequestrem a resposta da pesquisa.
+      if (
+        sessao?.ativo &&
+        (sessao.aguardando === AGUARDANDO.AVALIACAO_NOTA ||
+          sessao.aguardando === AGUARDANDO.AVALIACAO_COMENTARIO)
+      ) {
+        return await this.continuarPesquisaSatisfacao(sessao, ctx, textoLimpo);
+      }
+
       const comandoBruto = this.detectarComando(textoLimpo);
 
       // Com o cliente parado num menu do fluxo, as palavras-chave globais do

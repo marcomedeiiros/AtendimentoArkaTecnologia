@@ -16,7 +16,7 @@ const AppError = require("../../shared/errors/AppError");
 const TELEFONE_TESTE = "0000000000";
 const MAX_MENSAGENS = 40;
 
-function criarAmbiente({ fluxo, nomeCliente, horario, filas, agora }) {
+function criarAmbiente({ fluxo, nomeCliente, horario, filas, agora, pesquisaAtiva = true }) {
   const respostas = [];
   const estado = {
     conversa: {
@@ -102,6 +102,23 @@ function criarAmbiente({ fluxo, nomeCliente, horario, filas, agora }) {
       modoAtendimento: async () => "local",
       horarioAtendimento: async () => horario,
       filasParaSetor: async () => filas,
+      // Pesquisa de satisfacao no "Testar": por padrao ligada, para o operador
+      // ver as perguntas de nota/comentario ao encerrar. Passe
+      // `pesquisaSatisfacao: false` nas opcoes para testar so o desenho do fluxo.
+      pesquisaSatisfacao: async () =>
+        !pesquisaAtiva
+          ? { ativo: false }
+          : {
+              ativo: true,
+              pedirComentario: true,
+              mensagemNota:
+                "Antes de encerrar: de 1 a 5, que nota voce da para este atendimento? (1 = pessimo, 5 = otimo)",
+              mensagemComentario:
+                'Obrigado! Em poucas palavras, o que foi bom ou o que podemos melhorar? (ou responda "pular")',
+              mensagemAgradecimento:
+                "Sua avaliacao foi registrada. Obrigado pelo seu feedback!",
+              mensagemNotaInvalida: "Por favor, responda apenas com um numero de 1 a 5.",
+            },
     },
     // Nada de SSE: nao existe conversa real para empurrar ao front.
     bus: { emitConversa: () => {} },
@@ -137,6 +154,7 @@ class ChatbotSimulador {
       // horario" passa `respeitarHorario`.
       horario: opcoes.respeitarHorario ? opcoes.horario : { ativo: false },
       filas: opcoes.filas || {},
+      pesquisaAtiva: opcoes.pesquisaSatisfacao !== false,
     });
 
     const turnos = [];

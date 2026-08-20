@@ -34,6 +34,15 @@ const DEFINICOES = {
   // mapa e o que permite a transferencia cair no setor certo do HelpDesk.
   // JSON: { "33": "Suporte", "35": "Comercial" }
   "chatbot.filas":      { padrao: () => process.env.CHATBOT_FILAS || "", segredo: false },
+  // Pesquisa de satisfacao (CSAT) que o bot dispara ao encerrar o atendimento:
+  // pergunta a nota de 1 a 5 e, em seguida, um comentario livre. As respostas
+  // vao para os campos `avaliacao`/`feedback` da conversa e alimentam a aba
+  // Avaliacoes da Visao Geral.
+  // JSON: { "ativo": bool, "pedirComentario": bool, "mensagemNota": "...",
+  //         "mensagemComentario": "...", "mensagemAgradecimento": "...",
+  //         "mensagemNotaInvalida": "..." }
+  // Ligada por padrao; desligue com {"ativo": false}. So atua no modo "local".
+  "chatbot.pesquisaSatisfacao": { padrao: () => process.env.CHATBOT_PESQUISA || "", segredo: false },
 };
 
 // Mascara em ASCII puro: caracteres como "•" se corrompem dependendo da
@@ -121,6 +130,35 @@ class ConfiguracaoService {
       fim: typeof h.fim === "string" ? h.fim : "18:00",
       dias: Array.isArray(h.dias) ? h.dias.map(Number).filter((d) => d >= 0 && d <= 6) : [1, 2, 3, 4, 5],
       mensagem: typeof h.mensagem === "string" ? h.mensagem : "",
+    };
+  }
+
+  // Pesquisa de satisfacao disparada pelo bot ao encerrar. Ligada por padrao;
+  // textos customizaveis pela tela de Configuracoes (chave chatbot.pesquisaSatisfacao).
+  async pesquisaSatisfacao() {
+    const c = await this._carregar();
+    const p = this._json(c["chatbot.pesquisaSatisfacao"], {});
+    const txt = (valor, padrao) =>
+      typeof valor === "string" && valor.trim() ? valor : padrao;
+    return {
+      ativo: p.ativo !== false,
+      pedirComentario: p.pedirComentario !== false,
+      mensagemNota: txt(
+        p.mensagemNota,
+        "Antes de encerrar: de 1 a 5, que nota voce da para este atendimento? (1 = pessimo, 5 = otimo)"
+      ),
+      mensagemComentario: txt(
+        p.mensagemComentario,
+        'Obrigado! Em poucas palavras, o que foi bom ou o que podemos melhorar? (ou responda "pular")'
+      ),
+      mensagemAgradecimento: txt(
+        p.mensagemAgradecimento,
+        "Sua avaliacao foi registrada. Obrigado pelo seu feedback!"
+      ),
+      mensagemNotaInvalida: txt(
+        p.mensagemNotaInvalida,
+        "Por favor, responda apenas com um numero de 1 a 5."
+      ),
     };
   }
 

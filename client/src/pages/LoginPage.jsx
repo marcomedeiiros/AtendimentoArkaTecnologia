@@ -19,10 +19,13 @@ export default function LoginPage() {
   const emailInicial = local.state?.email || emailLembrado;
   const [email, setEmail] = useState(emailInicial);
   const [senha, setSenha] = useState('');
-  // Marcado por padrao: manter a sessao e o caso comum (maquina propria). Se ha
-  // e-mail lembrado, foi porque a pessoa deixou marcado antes. Quem esta em
-  // maquina compartilhada desmarca e o token/e-mail nao ficam.
-  const [lembrar, setLembrar] = useState(true);
+  // DESMARCADO por padrao: por seguranca, a sessao nao deve se manter sozinha
+  // sem a pessoa pedir. Sem marcar, o token fica so na aba (sessionStorage) e
+  // sobrevive a um F5, mas nao a fechar o navegador -- ao reabrir, pede login de
+  // novo. Quem esta na propria maquina e quer continuar logado marca a caixa;
+  // ai o token vai para o localStorage. Se ha e-mail lembrado de um login
+  // anterior com a caixa marcada, ja reativamos a opcao para nao surpreender.
+  const [lembrar, setLembrar] = useState(!!emailLembrado);
   const [erro, setErro] = useState(null);
   const [enviando, setEnviando] = useState(false);
 

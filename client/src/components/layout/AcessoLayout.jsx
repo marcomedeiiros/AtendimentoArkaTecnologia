@@ -9,8 +9,9 @@
  * A grade atras existe para dar leitura de console, nao de papel de parede:
  * ela e mascarada para aparecer perto do conteudo e sumir nas bordas.
  */
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check } from 'lucide-react';
+import { Check, Eye, EyeOff } from 'lucide-react';
 
 function Logo({ size = 34 }) {
   return (
@@ -112,21 +113,45 @@ export default function AcessoLayout({ titulo, subtitulo, children, rodape }) {
 
 // Campo de formulario. O rotulo em mono, curto e em caixa alta, faz o
 // formulario ler como painel de operacao e nao como cadastro de site.
-export function Campo({ id, rotulo, erro, dica, ...props }) {
+//
+// Para type="password" o campo ganha um botao de olho que alterna entre
+// esconder e mostrar o que foi digitado. O padrao e SEMPRE escondido: mostrar
+// e uma acao explicita da pessoa (evita a senha exposta por descuido). Nada e
+// guardado ou logado -- so troca o atributo `type` do proprio input.
+export function Campo({ id, rotulo, erro, dica, type = 'text', ...props }) {
+  const ehSenha = type === 'password';
+  const [mostrarSenha, setMostrarSenha] = useState(false);
+  const tipoEfetivo = ehSenha ? (mostrarSenha ? 'text' : 'password') : type;
+
   return (
     <div>
       <label htmlFor={id} className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.14em] text-texto-suave">
         {rotulo}
       </label>
-      <input
-        id={id}
-        aria-invalid={!!erro}
-        aria-describedby={erro ? `${id}-erro` : undefined}
-        className={`w-full rounded-xl border bg-grafite-800 px-3.5 py-2.5 text-sm text-texto placeholder-texto-fraco outline-none transition-colors focus:border-acao focus:ring-2 focus:ring-acao/25 ${
-          erro ? 'border-falha/60' : 'border-linha'
-        }`}
-        {...props}
-      />
+      <div className="relative">
+        <input
+          id={id}
+          type={tipoEfetivo}
+          aria-invalid={!!erro}
+          aria-describedby={erro ? `${id}-erro` : undefined}
+          className={`w-full rounded-xl border bg-grafite-800 px-3.5 py-2.5 text-sm text-texto placeholder-texto-fraco outline-none transition-colors focus:border-acao focus:ring-2 focus:ring-acao/25 ${
+            ehSenha ? 'pr-11' : ''
+          } ${erro ? 'border-falha/60' : 'border-linha'}`}
+          {...props}
+        />
+        {ehSenha && (
+          <button
+            type="button"
+            onClick={() => setMostrarSenha(m => !m)}
+            aria-label={mostrarSenha ? 'Ocultar senha' : 'Mostrar senha'}
+            aria-pressed={mostrarSenha}
+            title={mostrarSenha ? 'Ocultar senha' : 'Mostrar senha'}
+            className="absolute inset-y-0 right-0 flex items-center rounded-r-xl px-3 text-texto-suave transition-colors hover:text-texto focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-acao-200"
+          >
+            {mostrarSenha ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+        )}
+      </div>
       {erro && (
         <p id={`${id}-erro`} className="mt-1.5 text-[11px] text-falha-400">{erro}</p>
       )}

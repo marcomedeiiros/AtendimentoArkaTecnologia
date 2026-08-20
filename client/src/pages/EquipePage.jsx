@@ -12,7 +12,7 @@
  * pelo servidor a cada requisicao autenticada.
  */
 import { useState, useEffect } from 'react';
-import { Users, Circle, ShieldCheck, CheckCircle2, XCircle, KeyRound, Loader2, X, Clock, Trash2, SlidersHorizontal, Save, Lock } from 'lucide-react';
+import { Users, Circle, ShieldCheck, CheckCircle2, XCircle, KeyRound, Loader2, X, Clock, Trash2, SlidersHorizontal, Save, Lock, Eye, EyeOff } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { EquipeAPI, PermissoesAPI } from '../services/api';
@@ -42,6 +42,7 @@ export default function EquipePage() {
   // Modal de redefinicao de senha: guarda o membro alvo e o rascunho da senha.
   const [resetAlvo, setResetAlvo] = useState(null);
   const [novaSenha, setNovaSenha] = useState('');
+  const [mostrarSenha, setMostrarSenha] = useState(false);
   const [resetErro, setResetErro] = useState('');
   const [salvandoSenha, setSalvandoSenha] = useState(false);
 
@@ -57,6 +58,7 @@ export default function EquipePage() {
   function abrirReset(membro) {
     setResetAlvo(membro);
     setNovaSenha('');
+    setMostrarSenha(false);
     setResetErro('');
   }
 
@@ -64,6 +66,7 @@ export default function EquipePage() {
     if (salvandoSenha) return;
     setResetAlvo(null);
     setNovaSenha('');
+    setMostrarSenha(false);
     setResetErro('');
   }
 
@@ -526,16 +529,28 @@ export default function EquipePage() {
               <label htmlFor="nova-senha" className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.14em] text-texto-suave">
                 Nova senha
               </label>
-              <input
-                id="nova-senha"
-                type="password"
-                autoFocus
-                autoComplete="new-password"
-                value={novaSenha}
-                onChange={e => setNovaSenha(e.target.value)}
-                placeholder="Mínimo de 6 caracteres"
-                className="w-full rounded-xl border border-linha bg-grafite-800 px-3.5 py-2.5 text-sm text-texto placeholder-texto-fraco outline-none transition-colors focus:border-acao focus:ring-2 focus:ring-acao/25"
-              />
+              <div className="relative">
+                <input
+                  id="nova-senha"
+                  type={mostrarSenha ? 'text' : 'password'}
+                  autoFocus
+                  autoComplete="new-password"
+                  value={novaSenha}
+                  onChange={e => setNovaSenha(e.target.value)}
+                  placeholder="Mínimo de 6 caracteres"
+                  className="w-full rounded-xl border border-linha bg-grafite-800 px-3.5 py-2.5 pr-11 text-sm text-texto placeholder-texto-fraco outline-none transition-colors focus:border-acao focus:ring-2 focus:ring-acao/25"
+                />
+                <button
+                  type="button"
+                  onClick={() => setMostrarSenha(m => !m)}
+                  aria-label={mostrarSenha ? 'Ocultar senha' : 'Mostrar senha'}
+                  aria-pressed={mostrarSenha}
+                  title={mostrarSenha ? 'Ocultar senha' : 'Mostrar senha'}
+                  className="absolute inset-y-0 right-0 flex items-center rounded-r-xl px-3 text-texto-suave transition-colors hover:text-texto focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-acao-200"
+                >
+                  {mostrarSenha ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
 
             {resetErro && (
