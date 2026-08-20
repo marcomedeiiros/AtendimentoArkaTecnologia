@@ -6,7 +6,7 @@
  * Substitui o sistema de aba/useState que estava em Home.jsx
  */
 import React, { useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutGrid, Users, Zap, MessageSquare, ShieldCheck,
   GitFork, MessageCircle, CalendarDays, Send, Loader2, Menu, X, WifiOff, Settings, LogOut, Bug
@@ -103,6 +103,7 @@ function NavItem({ to, label, icon: Icon, badge, onNavigate }) {
 function Sidebar({ aberto, onClose }) {
   const { conversas } = useAppContext();
   const { usuario, sair } = useAuth();
+  const navigate = useNavigate();
 
   const naFila = conversas.filter(c => c.statusAtendimento === 'pendente').length;
   const naoLidos = conversas.filter(
@@ -184,11 +185,18 @@ function Sidebar({ aberto, onClose }) {
           navegacao: nao leva a lugar nenhum do painel, encerra a sessao. */}
       <div className="mt-3 shrink-0 border-t border-linha pt-3">
         <div className="flex items-center gap-2.5 px-1">
-          <Avatar nome={usuario?.nome || ''} size="sm" />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-semibold text-texto">{usuario?.nome}</p>
-            <p className="truncate font-mono text-[10px] text-texto-fraco">{usuario?.email}</p>
-          </div>
+          {/* Bloco do usuario = atalho para a pagina de perfil (/perfil). */}
+          <button
+            onClick={() => { navigate('/perfil'); onClose(); }}
+            title="Meu perfil"
+            className="flex min-w-0 flex-1 items-center gap-2.5 -mx-1 rounded-lg px-1 py-1 text-left transition-colors hover:bg-slate-800/40"
+          >
+            <Avatar nome={usuario?.nome || ''} size="sm" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-semibold text-texto">{usuario?.nome}</p>
+              <p className="truncate font-mono text-[10px] text-texto-fraco">{usuario?.email}</p>
+            </div>
+          </button>
           <button
             onClick={sair}
             title="Sair da conta"

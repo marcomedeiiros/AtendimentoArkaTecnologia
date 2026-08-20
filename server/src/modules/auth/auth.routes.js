@@ -2,7 +2,8 @@ const router = require("express").Router();
 const authController = require("./auth.controller");
 const validate = require("../../shared/middlewares/validate.middleware");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
-const { loginSchema, cadastroSchema } = require("./auth.dto");
+const { authLimiter } = require("../../shared/middlewares/rateLimit.middleware");
+const { loginSchema, cadastroSchema, atualizarPerfilSchema, trocarSenhaSchema } = require("./auth.dto");
 
 /**
  * @openapi
@@ -24,7 +25,7 @@ const { loginSchema, cadastroSchema } = require("./auth.dto");
  *       200:
  *         description: Token JWT
  */
-router.post("/login", validate(loginSchema), (req, res, next) =>
+router.post("/login", authLimiter, validate(loginSchema), (req, res, next) =>
   authController.login(req, res).catch(next)
 );
 
@@ -51,7 +52,7 @@ router.post("/login", validate(loginSchema), (req, res, next) =>
  *       201: { description: "Conta criada. Devolve apenas os dados do usuario; o token sai do /login" }
  *       409: { description: E-mail ja cadastrado }
  */
-router.post("/cadastrar", validate(cadastroSchema), (req, res, next) =>
+router.post("/cadastrar", authLimiter, validate(cadastroSchema), (req, res, next) =>
   authController.cadastrar(req, res).catch(next)
 );
 
@@ -74,6 +75,30 @@ router.get("/registro-info", (req, res) => authController.registroInfo(req, res)
  */
 router.get("/me", authMiddleware, (req, res, next) =>
   authController.me(req, res).catch(next)
+);
+
+/**
+ * @openapi
+ * /api/auth/perfil:
+ *   patch:
+ *     tags: [Auth]
+ *     security: [{ bearerAuth: [] }]
+ *     summary: Edita o proprio perfil (nome). O alvo vem do token, nao do body.
+ */
+router.patch("/perfil", authMiddleware, validate(atualizarPerfilSchema), (req, res, next) =>
+  authController.atualizarPerfil(req, res).catch(next)
+);
+
+/**
+ * @openapi
+ * /api/auth/senha:
+ *   patch:
+ *     tags: [Auth]
+ *     security: [{ bearerAuth: [] }]
+ *     summary: Troca a propria senha (exige a senha atual)
+ */
+router.patch("/senha", authLimiter, authMiddleware, validate(trocarSenhaSchema), (req, res, next) =>
+  authController.trocarSenha(req, res).catch(next)
 );
 
 module.exports = router;

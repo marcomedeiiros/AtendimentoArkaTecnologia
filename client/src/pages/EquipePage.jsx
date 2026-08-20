@@ -207,6 +207,222 @@ export default function EquipePage() {
     }
   }
 
+  // Pendentes primeiro (aguardando aprovacao para entrar), ativos depois.
+  const pendentesLista = equipe.filter(m => m.ativo === false);
+  const ativos = equipe.filter(m => m.ativo !== false);
+
+  function renderCard(m) {
+    const ehVoce = m.id === usuario?.id;
+    const estaInativo = m.ativo === false;
+    return (
+      <div
+        key={m.id}
+        className={`glass-panel space-y-3 rounded-2xl p-4 flex flex-col justify-between border ${
+          estaInativo
+            ? 'border-espera/50 bg-espera/5'
+            : m.status === 'online'
+            ? 'border-ativo/40'
+            : 'border-linha'
+        }`}
+      >
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <Avatar nome={m.nome} size="md" online={m.status === 'online' && !estaInativo} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <span className="truncate text-xs font-bold text-white">{m.nome}</span>
+                {ehVoce && (
+                  <span className="shrink-0 rounded-md bg-acao/15 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-acao-200">
+                    você
+                  </span>
+                )}
+              </div>
+              <div className="truncate font-mono text-[11px] text-texto-suave">{m.email}</div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-2 border-t border-linha pt-3">
+            <div className="flex items-center gap-1.5 text-[11px]">
+              <ShieldCheck size={13} className={estaInativo ? 'text-texto-fraco' : 'text-acao-200'} />
+              {estaInativo ? (
+                <span className="italic text-texto-fraco">Cargo definido após aprovação</span>
+              ) : ehAdmin ? (
+                <select
+                  value={m.cargo}
+                  disabled={loadingId === m.id}
+                  onChange={e => mudarCargo(m.id, e.target.value)}
+                  className="bg-grafite-700 border border-linha rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-acao/50"
+                >
+                  {CARGOS.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              ) : (
+                <span className="font-semibold text-white">{m.cargo}</span>
+              )}
+            </div>
+
+            <span
+              className={`flex shrink-0 items-center gap-1.5 text-[11px] font-semibold ${
+                estaInativo
+                  ? 'text-espera-400'
+                  : m.status === 'online'
+                  ? 'text-ativo-400'
+                  : 'text-texto-fraco'
+              }`}
+            >
+              <Circle size={7} fill="currentColor" />
+              {estaInativo ? 'Pendente' : m.status === 'online' ? 'Online' : vistoEm(m.ultimoAcessoEm)}
+            </span>
+          </div>
+        </div>
+
+        {ehAdmin && !ehVoce && (
+          <div className="pt-3 border-t border-linha flex items-center justify-end gap-2">
+            {estaInativo ? (
+              <>
+                <button
+                  disabled={loadingId === m.id}
+                  onClick={() => alternarStatus(m.id, true)}
+                  className="flex-1 px-3 py-1.5 rounded-xl bg-ativo/20 hover:bg-ativo/30 text-ativo-400 border border-ativo/30 text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <CheckCircle2 size={14} /> Aprovar
+                </button>
+                <button
+                  disabled={loadingId === m.id}
+                  onClick={() => recusarConta(m)}
+                  className="flex-1 px-3 py-1.5 rounded-xl bg-falha/15 hover:bg-falha/25 text-falha-400 border border-falha/30 text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <XCircle size={14} /> Recusar
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  disabled={loadingId === m.id}
+                  onClick={() => alternarStatus(m.id, false)}
+                  className="px-2.5 py-1.5 rounded-xl bg-falha/15 hover:bg-falha/25 text-falha-400 border border-falha/30 text-[11px] font-semibold flex items-center gap-1 transition-all"
+                >
+                  <XCircle size={13} /> Bloquear
+                </button>
+
+                <button
+                  disabled={loadingId === m.id}
+                  onClick={() => abrirReset(m)}
+                  title="Redefinir senha"
+                  className="px-2.5 py-1.5 rounded-xl bg-grafite-700 hover:bg-grafite-600 text-texto-suave hover:text-white border border-linha text-[11px] font-semibold flex items-center gap-1 transition-all"
+                >
+                  <KeyRound size={13} /> Senha
+                </button>
+
+                <button
+                  disabled={loadingId === m.id}
+                  onClick={() => excluirConta(m)}
+                  title="Excluir conta"
+                  className="px-2.5 py-1.5 rounded-xl bg-falha/15 hover:bg-falha/25 text-falha-400 border border-falha/30 text-[11px] font-semibold flex items-center gap-1 transition-all"
+                >
+                  <Trash2 size={13} /> Excluir
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function renderPermissoes() {
+    return (
+      <section className="glass-panel space-y-4 rounded-2xl border border-linha p-4 sm:p-5">
+        <div className="flex flex-col gap-1 border-b border-linha pb-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal size={16} className="text-acao-200" />
+            <h2 className="text-sm font-bold text-white">Permissões dos perfis</h2>
+          </div>
+          <p className="text-[11px] text-texto-suave">
+            Escolha quais telas cada perfil acessa o acesso é conferido no servidor.
+          </p>
+        </div>
+
+        {permErro && (
+          <div className="rounded-xl border border-falha/30 bg-falha/15 p-2.5 text-[11px] font-semibold text-falha-400">
+            {permErro}
+          </div>
+        )}
+        {permOk && (
+          <div className="flex items-start justify-between gap-3 rounded-xl border border-ativo/30 bg-ativo/15 p-2.5 text-[11px] font-semibold text-ativo-400">
+            <span>{permOk}</span>
+            <button onClick={() => setPermOk('')} className="shrink-0 text-ativo-400/70 hover:text-ativo-400"><X size={13} /></button>
+          </div>
+        )}
+
+        {permLoading || !perm || !permMatriz ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-xs text-texto-suave">
+            <Loader2 size={15} className="animate-spin" /> Carregando permissões...
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[520px] border-collapse text-xs">
+                <thead>
+                  <tr className="text-texto-suave">
+                    <th className="px-2 py-2 text-left font-semibold">Tela / Módulo</th>
+                    {perm.cargosEditaveis.map(c => (
+                      <th key={c} className="px-2 py-2 text-center font-semibold">{c}</th>
+                    ))}
+                    <th className="px-2 py-2 text-center font-semibold">
+                      <span className="inline-flex items-center gap-1 text-acao-200">
+                        <Lock size={11} /> Administrador
+                      </span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {perm.modulos.map(mod => (
+                    <tr key={mod.chave} className="border-t border-linha/70">
+                      <td className="px-2 py-2 text-white">
+                        {mod.nome}
+                        {mod.grupo === 'B' && (
+                          <span className="ml-1.5 rounded bg-grafite-700 px-1 py-0.5 font-mono text-[9px] text-texto-fraco">operacional</span>
+                        )}
+                      </td>
+                      {perm.cargosEditaveis.map(c => (
+                        <td key={c} className="px-2 py-2 text-center">
+                          <input
+                            type="checkbox"
+                            checked={!!permMatriz[c]?.[mod.chave]}
+                            onChange={() => alternarPermissao(c, mod.chave)}
+                            className="h-4 w-4 cursor-pointer accent-acao"
+                            aria-label={`${c} pode acessar ${mod.nome}`}
+                          />
+                        </td>
+                      ))}
+                      <td className="px-2 py-2 text-center">
+                        <Lock size={13} className="mx-auto text-texto-fraco" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                onClick={salvarPermissoes}
+                disabled={permSalvando}
+                className="flex items-center gap-1.5 rounded-xl bg-acao px-3.5 py-2 text-xs font-bold text-slate-950 hover:bg-acao-200 disabled:opacity-60"
+              >
+                {permSalvando
+                  ? <><Loader2 size={13} className="animate-spin" /> Salvando...</>
+                  : <><Save size={13} /> Salvar permissões</>}
+              </button>
+            </div>
+          </>
+        )}
+      </section>
+    );
+  }
+
   return (
     <div className="fade-in space-y-6">
       <div className="mb-8 flex flex-col gap-4 border-b border-linha pb-4 sm:flex-row sm:items-center sm:justify-between">
@@ -246,222 +462,26 @@ export default function EquipePage() {
         </div>
       )}
 
-      {ehAdmin && (
-        <section className="glass-panel space-y-4 rounded-2xl border border-linha p-4 sm:p-5">
-          <div className="flex flex-col gap-1 border-b border-linha pb-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <SlidersHorizontal size={16} className="text-acao-200" />
-              <h2 className="text-sm font-bold text-white">Permissões dos perfis</h2>
-            </div>
-            <p className="text-[11px] text-texto-suave">
-              Escolha quais telas cada perfil acessa o acesso é conferido no servidor.
-            </p>
+      {pendentesLista.length > 0 && (
+        <section className="glass-panel space-y-3 rounded-2xl border border-espera/40 bg-espera/5 p-4 sm:p-5">
+          <div className="flex items-center gap-2 border-b border-espera/30 pb-3">
+            <Clock size={16} className="text-espera-400" />
+            <h2 className="text-sm font-bold text-white">Contas pendentes de aprovação</h2>
+            <span className="ml-auto rounded-full border border-espera/30 bg-espera/20 px-2 py-0.5 text-[11px] font-semibold text-espera-400">
+              {pendentesLista.length}
+            </span>
           </div>
-
-          {permErro && (
-            <div className="rounded-xl border border-falha/30 bg-falha/15 p-2.5 text-[11px] font-semibold text-falha-400">
-              {permErro}
-            </div>
-          )}
-          {permOk && (
-            <div className="flex items-start justify-between gap-3 rounded-xl border border-ativo/30 bg-ativo/15 p-2.5 text-[11px] font-semibold text-ativo-400">
-              <span>{permOk}</span>
-              <button onClick={() => setPermOk('')} className="shrink-0 text-ativo-400/70 hover:text-ativo-400"><X size={13} /></button>
-            </div>
-          )}
-
-          {permLoading || !perm || !permMatriz ? (
-            <div className="flex items-center justify-center gap-2 py-8 text-xs text-texto-suave">
-              <Loader2 size={15} className="animate-spin" /> Carregando permissões...
-            </div>
-          ) : (
-            <>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[520px] border-collapse text-xs">
-                  <thead>
-                    <tr className="text-texto-suave">
-                      <th className="px-2 py-2 text-left font-semibold">Tela / Módulo</th>
-                      {perm.cargosEditaveis.map(c => (
-                        <th key={c} className="px-2 py-2 text-center font-semibold">{c}</th>
-                      ))}
-                      <th className="px-2 py-2 text-center font-semibold">
-                        <span className="inline-flex items-center gap-1 text-acao-200">
-                          <Lock size={11} /> Administrador
-                        </span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {perm.modulos.map(mod => (
-                      <tr key={mod.chave} className="border-t border-linha/70">
-                        <td className="px-2 py-2 text-white">
-                          {mod.nome}
-                          {mod.grupo === 'B' && (
-                            <span className="ml-1.5 rounded bg-grafite-700 px-1 py-0.5 font-mono text-[9px] text-texto-fraco">operacional</span>
-                          )}
-                        </td>
-                        {perm.cargosEditaveis.map(c => (
-                          <td key={c} className="px-2 py-2 text-center">
-                            <input
-                              type="checkbox"
-                              checked={!!permMatriz[c]?.[mod.chave]}
-                              onChange={() => alternarPermissao(c, mod.chave)}
-                              className="h-4 w-4 cursor-pointer accent-acao"
-                              aria-label={`${c} pode acessar ${mod.nome}`}
-                            />
-                          </td>
-                        ))}
-                        <td className="px-2 py-2 text-center">
-                          {/* Administrador: acesso total imutavel. */}
-                          <Lock size={13} className="mx-auto text-texto-fraco" />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-1">
-                <button
-                  onClick={salvarPermissoes}
-                  disabled={permSalvando}
-                  className="flex items-center gap-1.5 rounded-xl bg-acao px-3.5 py-2 text-xs font-bold text-slate-950 hover:bg-acao-200 disabled:opacity-60"
-                >
-                  {permSalvando
-                    ? <><Loader2 size={13} className="animate-spin" /> Salvando...</>
-                    : <><Save size={13} /> Salvar permissões</>}
-                </button>
-              </div>
-            </>
-          )}
+          <p className="text-[11px] text-texto-suave">
+            Estas pessoas se cadastraram e aguardam liberação para entrar na plataforma.
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {pendentesLista.map((m) => renderCard(m))}
+          </div>
         </section>
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {equipe.map(m => {
-          const ehVoce = m.id === usuario?.id;
-          const estaInativo = m.ativo === false;
-          return (
-            <div
-              key={m.id}
-              className={`glass-panel space-y-3 rounded-2xl p-4 flex flex-col justify-between border ${
-                estaInativo
-                  ? 'border-espera/50 bg-espera/5'
-                  : m.status === 'online'
-                  ? 'border-ativo/40'
-                  : 'border-linha'
-              }`}
-            >
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <Avatar nome={m.nome} size="md" online={m.status === 'online' && !estaInativo} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="truncate text-xs font-bold text-white">{m.nome}</span>
-                      {ehVoce && (
-                        <span className="shrink-0 rounded-md bg-acao/15 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-acao-200">
-                          você
-                        </span>
-                      )}
-                    </div>
-                    <div className="truncate font-mono text-[11px] text-texto-suave">{m.email}</div>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between gap-2 border-t border-linha pt-3">
-                  <div className="flex items-center gap-1.5 text-[11px]">
-                    <ShieldCheck size={13} className={estaInativo ? 'text-texto-fraco' : 'text-acao-200'} />
-                    {estaInativo ? (
-                      // Conta ainda pendente: o cargo so faz sentido depois de
-                      // aprovada, entao aqui nao ha seletor -- so aprovar ou recusar.
-                      <span className="italic text-texto-fraco">Cargo definido após aprovação</span>
-                    ) : ehAdmin ? (
-                      <select
-                        value={m.cargo}
-                        disabled={loadingId === m.id}
-                        onChange={e => mudarCargo(m.id, e.target.value)}
-                        className="bg-grafite-700 border border-linha rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-acao/50"
-                      >
-                        {CARGOS.map(c => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className="font-semibold text-white">{m.cargo}</span>
-                    )}
-                  </div>
-
-                  <span
-                    className={`flex shrink-0 items-center gap-1.5 text-[11px] font-semibold ${
-                      estaInativo
-                        ? 'text-espera-400'
-                        : m.status === 'online'
-                        ? 'text-ativo-400'
-                        : 'text-texto-fraco'
-                    }`}
-                  >
-                    <Circle size={7} fill="currentColor" />
-                    {estaInativo ? 'Pendente' : m.status === 'online' ? 'Online' : vistoEm(m.ultimoAcessoEm)}
-                  </span>
-                </div>
-              </div>
-
-              {ehAdmin && !ehVoce && (
-                <div className="pt-3 border-t border-linha flex items-center justify-end gap-2">
-                  {estaInativo ? (
-                    // Passo de triagem: uma conta recem-criada so pode ser aceita
-                    // ou rejeitada. As demais acoes (cargo, senha, excluir) so
-                    // aparecem depois que ela vira membro de fato.
-                    <>
-                      <button
-                        disabled={loadingId === m.id}
-                        onClick={() => alternarStatus(m.id, true)}
-                        className="flex-1 px-3 py-1.5 rounded-xl bg-ativo/20 hover:bg-ativo/30 text-ativo-400 border border-ativo/30 text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
-                      >
-                        <CheckCircle2 size={14} /> Aprovar
-                      </button>
-                      <button
-                        disabled={loadingId === m.id}
-                        onClick={() => recusarConta(m)}
-                        className="flex-1 px-3 py-1.5 rounded-xl bg-falha/15 hover:bg-falha/25 text-falha-400 border border-falha/30 text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
-                      >
-                        <XCircle size={14} /> Recusar
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        disabled={loadingId === m.id}
-                        onClick={() => alternarStatus(m.id, false)}
-                        className="px-2.5 py-1.5 rounded-xl bg-falha/15 hover:bg-falha/25 text-falha-400 border border-falha/30 text-[11px] font-semibold flex items-center gap-1 transition-all"
-                      >
-                        <XCircle size={13} /> Bloquear
-                      </button>
-
-                      <button
-                        disabled={loadingId === m.id}
-                        onClick={() => abrirReset(m)}
-                        title="Redefinir senha"
-                        className="px-2.5 py-1.5 rounded-xl bg-grafite-700 hover:bg-grafite-600 text-texto-suave hover:text-white border border-linha text-[11px] font-semibold flex items-center gap-1 transition-all"
-                      >
-                        <KeyRound size={13} /> Senha
-                      </button>
-
-                      <button
-                        disabled={loadingId === m.id}
-                        onClick={() => excluirConta(m)}
-                        title="Excluir conta"
-                        className="px-2.5 py-1.5 rounded-xl bg-falha/15 hover:bg-falha/25 text-falha-400 border border-falha/30 text-[11px] font-semibold flex items-center gap-1 transition-all"
-                      >
-                        <Trash2 size={13} /> Excluir
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
+        {ativos.map((m) => renderCard(m))}
 
         {equipe.length === 0 && (
           <div className="glass-panel col-span-full rounded-2xl border border-linha py-12 text-center text-xs text-texto-suave">
@@ -469,6 +489,8 @@ export default function EquipePage() {
           </div>
         )}
       </div>
+
+      {ehAdmin && renderPermissoes()}
 
       {resetAlvo && (
         <div
@@ -496,8 +518,8 @@ export default function EquipePage() {
             </div>
 
             <p className="text-xs leading-relaxed text-texto-suave">
-              Definindo uma nova senha para <strong className="text-white">{resetAlvo.nome}</strong>.
-              Ela entra com esta senha e pode trocá-la depois.
+              Definindo uma nova senha para <strong className="text-white">{resetAlvo.nome} </strong> 
+              ela(e) entra com esta senha e pode trocá-la depois.
             </p>
 
             <div>

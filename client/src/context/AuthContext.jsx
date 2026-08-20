@@ -7,10 +7,14 @@
  * de 401 antes mesmo de a pessoa digitar o e-mail.
  */
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { AuthAPI, getToken } from '../services/api';
+import { AuthAPI, PreferenciasAPI, getToken } from '../services/api';
 import AvisoSessao from '../components/AvisoSessao';
 
 const AuthContext = createContext(null);
+
+// Preferencia (por usuario, no servidor) com o nome usado ao assinar mensagens.
+const CHAVE_ASSINATURA = 'central.assinatura.nome';
+const primeiroNomeDe = (nome) => String(nome || '').trim().split(/\s+/)[0] || '';
 
 // Entrada e saida cobrem a tela inteira, entao saem rapido: tempo de ler a
 // frase e nada mais. O aviso de sessao expirada e uma faixa que nao bloqueia
@@ -26,6 +30,8 @@ export function AuthProvider({ children }) {
   const [verificando, setVerificando] = useState(true);
   const [aviso, setAviso] = useState(null);
   const timerAviso = useRef(null);
+  // Nome de assinatura personalizado (null = ainda nao carregado / usa o padrao).
+  const [assinaturaCustom, setAssinaturaCustom] = useState(null);
 
   const avisar = useCallback((texto, tipo = 'entrada') => {
     clearTimeout(timerAviso.current);
@@ -65,6 +71,31 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener(AuthAPI.EVENTO_SEM_SESSAO, aoPerderSessao);
   }, [avisar]);
 
+  // Carrega o nome de assinatura personalizado quando ha usuario logado. Vazio
+  // = usa o padrao (primeiro nome). null enquanto nao carregou.
+  useEffect(() => {
+    if (!usuario?.id) { setAssinaturaCustom(null); return; }
+    let vivo = true;
+    PreferenciasAPI.obter(CHAVE_ASSINATURA)
+      .then((r) => { if (vivo) setAssinaturaCustom(typeof r?.valor === 'string' ? r.valor : ''); })
+      .catch(() => { if (vivo) setAssinaturaCustom(''); });
+    return () => { vivo = false; };
+  }, [usuario?.id]);
+
+  // Salva o nome de assinatura (preferencia por usuario). Reativo: como fica no
+  // AuthContext, a Central e o menu de perfil enxergam o mesmo valor na hora.
+  const salvarAssinatura = useCallback((nome) => {
+    const limpo = String(nome || '').trim();
+    setAssinaturaCustom(limpo);
+    return PreferenciasAPI.salvar(CHAVE_ASSINATURA, limpo).catch(() => {});
+  }, []);
+
+  // Atualiza em memoria o usuario logado (ex.: apos editar o nome no perfil),
+  // para o painel refletir sem precisar de F5.
+  const atualizarUsuario = useCallback((parcial) => {
+    setUsuario((u) => (u ? { ...u, ...parcial } : u));
+  }, []);
+
   const entrar = useCallback(async (email, senha, lembrar = true) => {
     const eu = await AuthAPI.entrar(email, senha, lembrar);
     setUsuario(eu);
@@ -86,8 +117,15 @@ export function AuthProvider({ children }) {
     avisar('Você saiu da plataforma.', 'saida');
   }, [avisar]);
 
+  // Nome efetivo da assinatura: o personalizado, ou o primeiro nome como padrao.
+  const assinaturaNome = (assinaturaCustom && assinaturaCustom.trim()) || primeiroNomeDe(usuario?.nome);
+
   return (
-    <AuthContext.Provider value={{ usuario, verificando, entrar, cadastrar, sair, avisar }}>
+    <AuthContext.Provider value={{
+      usuario, verificando, entrar, cadastrar, sair, avisar,
+      atualizarUsuario,
+      assinaturaNome, assinaturaCustom, salvarAssinatura,
+    }}>
       {children}
       <AvisoSessao aviso={aviso} onFechar={() => setAviso(null)} />
     </AuthContext.Provider>

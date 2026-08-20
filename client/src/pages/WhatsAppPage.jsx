@@ -56,8 +56,8 @@ export default function WhatsAppPage() {
   const erroEvolution = useCallback((e) => {
     const detalhe = String(e?.message || '').replace(/\.\s*$/, '');
     setAviso(
-      `Não foi possível falar com a Evolution API${detalhe ? `: ${detalhe}` : ''}. ` +
-      'Verifique se ela está no ar e se EVOLUTION_API_URL/KEY estão configurados no servidor.'
+      `Não foi possível falar com a Evolution API${detalhe ? `: ${detalhe}` : ''} ` +
+      'verifique se ela está no ar e se EVOLUTION_API_URL/KEY estão configurados no servidor.'
     );
   }, []);
 

@@ -127,6 +127,22 @@ class ConversaRepository {
     return prisma.mensagem.delete({ where: { id } });
   }
 
+  // "Apagar para todos" NAO remove a linha do banco: o Registro (Visao Geral)
+  // precisa do log completo de tudo que foi enviado e recebido. Em vez disso,
+  // marca a mensagem como deletada dentro do metadata (campo Json que ja existe,
+  // sem migracao). O mapper expoe a flag `deletada` e o chat ao vivo mostra
+  // "Mensagem apagada" no lugar do conteudo, enquanto o texto original continua
+  // gravado para a transcricao/CSV.
+  async marcarMensagemApagada(id) {
+    const msg = await prisma.mensagem.findUnique({ where: { id } });
+    const metadata = {
+      ...(msg?.metadata || {}),
+      deletada: true,
+      deletadaEm: new Date().toISOString(),
+    };
+    return prisma.mensagem.update({ where: { id }, data: { metadata } });
+  }
+
   zerarNaoLidas(id) {
     return prisma.conversa.update({
       where: { id },

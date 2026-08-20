@@ -440,7 +440,10 @@ class ConversaService {
       }
     }
 
-    await conversaRepository.removerMensagem(mensagemId);
+    // Soft-delete: some do WhatsApp do cliente (acima), mas a mensagem continua
+    // no banco marcada como apagada, para o Registro/Visao Geral manter o log
+    // completo. Sem isto, "Apagar para todos" tambem apagava do historico.
+    await conversaRepository.marcarMensagemApagada(mensagemId);
     return this._emitir(await conversaRepository.findById(msg.conversaId));
   }
 

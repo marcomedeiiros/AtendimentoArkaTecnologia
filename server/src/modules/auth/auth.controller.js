@@ -20,6 +20,17 @@ class AuthController {
     const data = await authService.me(req.user.sub);
     return success(res, data);
   }
+
+  // Perfil proprio: o alvo e SEMPRE req.user.sub (do token), nunca um id do body.
+  async atualizarPerfil(req, res) {
+    const data = await authService.atualizarPerfil(req.user.sub, req.body);
+    return success(res, data);
+  }
+
+  async trocarSenha(req, res) {
+    const data = await authService.trocarSenha(req.user.sub, req.body.senhaAtual, req.body.novaSenha);
+    return success(res, data);
+  }
 }
 
 module.exports = new AuthController();

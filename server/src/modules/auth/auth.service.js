@@ -103,6 +103,29 @@ class AuthService {
     const permissoes = await permissaoService.modulosDe(usuario.cargo);
     return { ...usuario, permissoes };
   }
+
+  // Edita o proprio perfil. `userId` vem SEMPRE do token (req.user.sub), nunca
+  // do corpo -- por isso ninguem edita a conta de outro.
+  async atualizarPerfil(userId, { nome }) {
+    const usuario = await usuarioRepository.atualizarNome(userId, String(nome).trim());
+    const permissoes = await permissaoService.modulosDe(usuario.cargo);
+    return { ...usuario, permissoes };
+  }
+
+  // Troca a propria senha conferindo a atual. `userId` do token.
+  async trocarSenha(userId, senhaAtual, novaSenha) {
+    const atual = await usuarioRepository.senhaHashDe(userId);
+    if (!atual) throw new AppError("Usuario nao encontrado", 404, "NOT_FOUND");
+
+    const confere = await bcrypt.compare(String(senhaAtual), atual.senhaHash);
+    if (!confere) {
+      throw new AppError("Senha atual incorreta.", 400, "SENHA_ATUAL_INVALIDA");
+    }
+
+    const senhaHash = await bcrypt.hash(String(novaSenha), 10);
+    await usuarioRepository.atualizarSenha(userId, senhaHash);
+    return { trocada: true };
+  }
 }
 
 module.exports = new AuthService();

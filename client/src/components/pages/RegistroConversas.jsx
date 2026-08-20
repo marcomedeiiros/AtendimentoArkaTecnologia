@@ -7,6 +7,7 @@
  */
 import { useState, useMemo } from 'react';
 import { Search, Download, FileText } from 'lucide-react';
+import { exportarTranscricaoPdf } from '../../utils/exportarPdf';
 
 function fmtData(iso) {
   if (!iso) return '-';
@@ -15,11 +16,81 @@ function fmtData(iso) {
   return d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 }
 
+// Mesmo "protocolo" curto que a Central mostra (#408619D2): tira os hifens,
+// pega os 8 primeiros e passa pra maiusculo. O UUID completo fica no tooltip
+// (e no CSV/PDF) para rastreio.
+function idCurto(id) {
+  return String(id || '').replace(/-/g, '').slice(0, 8).toUpperCase();
+}
+
 const STATUS = {
   pendente: { label: 'Na fila', cls: 'bg-espera/15 text-espera-400 border-espera/30' },
   aberta: { label: 'Em atendimento', cls: 'bg-ativo/15 text-ativo-400 border-ativo/30' },
   fechada: { label: 'Fechada', cls: 'bg-slate-500/15 text-slate-300 border-slate-500/30' },
 };
+
+// Normaliza para comparar palavra-chave (minusculo, sem acento).
+function semAcento(s) {
+  return String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+// Mesmas palavras-chave do badge da Central: o que o cliente escreveu revela o
+// setor. `explicito` (ele nomeou o setor) vale mais que `assunto` (deduzido).
+const GATILHOS_SETOR = [
+  {
+    setor: 'Técnico',
+    explicito: ['tecnico', 'tecnica'],
+    assunto: [
+      'nao funciona', 'nao esta funcionando', 'parou de funcionar', 'deu erro',
+      'erro no', 'travou', 'travando', 'lento', 'sem sinal', 'sem internet',
+      'sem conexao', 'configurar', 'configuracao', 'instalacao', 'instalar',
+      'manutencao', 'defeito', 'suporte',
+    ],
+  },
+  {
+    setor: 'Financeiro',
+    explicito: ['financeiro', 'financeira'],
+    assunto: [
+      'boleto', 'fatura', 'segunda via', '2 via', 'pagamento', 'pagar',
+      'cobranca', 'cobrado', 'mensalidade', 'nota fiscal', 'pix', 'estorno',
+      'reembolso', 'vencimento', 'em atraso', 'debito',
+    ],
+  },
+  {
+    setor: 'Comercial',
+    explicito: ['comercial', 'vendas', 'vendedor'],
+    assunto: [
+      'orcamento', 'proposta', 'contratar', 'quanto custa', 'preco', 'valor',
+      'plano', 'assinar', 'upgrade', 'revenda', 'parceria', 'tabela de preco',
+    ],
+  },
+];
+
+const SETORES_CONHECIDOS = ['Financeiro', 'Técnico', 'Comercial'];
+
+// Setor "efetivo" mostrado no Registro: o que o CLIENTE escolheu.
+//   1) se a conversa ja tem um setor especifico gravado, usa ele;
+//   2) senao, deduz pelo que o cliente escreveu (explicito > assunto), lendo
+//      da fala mais recente para a mais antiga;
+//   3) senao, "Geral".
+function setorEfetivo(c) {
+  if (SETORES_CONHECIDOS.includes(c.setor)) return c.setor;
+
+  const falas = (c.mensagens || [])
+    .filter((m) => m.de === 'cliente' && m.texto)
+    .map((m) => semAcento(m.texto))
+    .reverse();
+
+  for (const t of falas) {
+    const achou = GATILHOS_SETOR.find((g) => g.explicito.some((p) => t.includes(p)));
+    if (achou) return achou.setor;
+  }
+  for (const t of falas) {
+    const achou = GATILHOS_SETOR.find((g) => g.assunto.some((p) => t.includes(p)));
+    if (achou) return achou.setor;
+  }
+  return 'Geral';
+}
 
 function baixar(nome, conteudo, tipo = 'text/plain;charset=utf-8;') {
   const blob = new Blob(['﻿' + conteudo], { type: tipo });
@@ -42,7 +113,7 @@ export default function RegistroConversas({ conversas = [], equipe = [] }) {
     [equipe]
   );
   const setores = useMemo(
-    () => Array.from(new Set(conversas.map((c) => c.setor || 'Geral'))).sort(),
+    () => Array.from(new Set(conversas.map(setorEfetivo))).sort(),
     [conversas]
   );
 
@@ -53,7 +124,7 @@ export default function RegistroConversas({ conversas = [], equipe = [] }) {
     return conversas
       .filter((c) => {
         if (status && c.statusAtendimento !== status) return false;
-        if (setor && (c.setor || 'Geral') !== setor) return false;
+        if (setor && setorEfetivo(c) !== setor) return false;
         if (limite != null) {
           const base = c.criadoEm || c.ultimaMensagemEm;
           if (!base || agora - new Date(base).getTime() > limite) return false;
@@ -73,11 +144,12 @@ export default function RegistroConversas({ conversas = [], equipe = [] }) {
 
   function exportarCsv() {
     const linhas = [
-      ['Cliente', 'Telefone', 'Setor', 'Status', 'Início', 'Fim', 'Mensagens', 'Avaliação', 'Atendente'],
+      ['ID', 'Cliente', 'Telefone', 'Setor', 'Status', 'Início', 'Fim', 'Mensagens', 'Avaliação', 'Atendente'],
       ...filtradas.map((c) => [
+        c.id || '',
         c.cliente || '',
         c.telefone || '',
-        c.setor || 'Geral',
+        setorEfetivo(c),
         STATUS[c.statusAtendimento]?.label || c.statusAtendimento || '',
         fmtData(c.criadoEm),
         fmtData(c.fechadoEm),
@@ -92,22 +164,13 @@ export default function RegistroConversas({ conversas = [], equipe = [] }) {
     baixar(`registro-conversas-${Date.now()}.csv`, csv, 'text/csv;charset=utf-8;');
   }
 
+  // Baixa a transcricao da conversa em PDF (antes era .txt). Inclui o ID da
+  // conversa no cabecalho do documento.
   function baixarTranscricao(c) {
-    const cab = [
-      `Conversa com ${c.cliente || 'Cliente'} (${c.telefone || 'sem telefone'})`,
-      `Setor: ${c.setor || 'Geral'} · Status: ${STATUS[c.statusAtendimento]?.label || c.statusAtendimento}`,
-      `Início: ${fmtData(c.criadoEm)} · Fim: ${fmtData(c.fechadoEm)}`,
-      `Atendente: ${nomePorId[c.atendenteId] || '-'}`,
-      `Avaliação: ${c.avaliacao ? `${c.avaliacao}/5` : '-'}${c.feedback ? ` - ${c.feedback}` : ''}`,
-      '-'.repeat(50),
-      '',
-    ];
-    const linhas = (c.mensagens || []).map((m) => {
-      const quem = m.de === 'cliente' ? (c.cliente || 'Cliente') : m.de === 'sistema' ? 'Sistema' : 'Atendente';
-      return `[${m.hora || ''}] ${quem}: ${m.texto || ''}`;
+    return exportarTranscricaoPdf({ ...c, setor: setorEfetivo(c) }, {
+      atendente: nomePorId[c.atendenteId] || '-',
+      statusLabel: STATUS[c.statusAtendimento]?.label || c.statusAtendimento || '',
     });
-    const nomeArq = `conversa-${String(c.cliente || 'cliente').replace(/[^\w]+/g, '-').toLowerCase()}.txt`;
-    baixar(nomeArq, cab.concat(linhas).join('\n'));
   }
 
   const selectCls =
@@ -163,6 +226,7 @@ export default function RegistroConversas({ conversas = [], equipe = [] }) {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-linha text-slate-400 bg-grafite-700/40">
+                  <th className="text-left py-2.5 px-3 font-semibold">ID</th>
                   <th className="text-left py-2.5 px-3 font-semibold">Cliente</th>
                   <th className="text-left py-2.5 px-3 font-semibold">Telefone</th>
                   <th className="text-left py-2.5 px-3 font-semibold">Setor</th>
@@ -179,9 +243,10 @@ export default function RegistroConversas({ conversas = [], equipe = [] }) {
                   const st = STATUS[c.statusAtendimento] || { label: c.statusAtendimento, cls: 'bg-slate-500/15 text-slate-300 border-slate-500/30' };
                   return (
                     <tr key={c.id} className="border-b border-linha/40 hover:bg-grafite-600/40 transition-colors">
+                      <td className="py-2.5 px-3 text-slate-400 font-mono text-[11px] whitespace-nowrap" title={c.id}>#{idCurto(c.id)}</td>
                       <td className="py-2.5 px-3 text-white font-semibold whitespace-nowrap">{c.cliente || '-'}</td>
                       <td className="py-2.5 px-3 text-slate-400 font-mono whitespace-nowrap">{c.telefone || '-'}</td>
-                      <td className="py-2.5 px-3 text-slate-300">{c.setor || 'Geral'}</td>
+                      <td className="py-2.5 px-3 text-slate-300">{setorEfetivo(c)}</td>
                       <td className="py-2.5 px-3">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${st.cls}`}>{st.label}</span>
                       </td>
@@ -192,9 +257,9 @@ export default function RegistroConversas({ conversas = [], equipe = [] }) {
                       <td className="py-2.5 px-3 text-right">
                         <button
                           onClick={() => baixarTranscricao(c)}
-                          title="Baixar transcrição (.txt)"
+                          title="Baixar transcrição (PDF)"
                           className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-grafite-700 border border-linha text-slate-300 hover:text-acao-200 hover:border-acao/30 text-[10px] font-semibold transition-all">
-                          <FileText size={11} /> Baixar
+                          <FileText size={11} /> Baixar PDF
                         </button>
                       </td>
                     </tr>

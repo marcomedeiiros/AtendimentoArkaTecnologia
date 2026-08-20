@@ -680,6 +680,9 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
   const pararSimulacao = () => {
     setIsRunningSim(false);
     setActiveSimNodeId(null);
+    // Limpa os blocos executados: sem isto, os checks e as conexoes verdes de um
+    // run anterior continuariam na tela mesmo com a simulacao desligada.
+    setExecutedNodeIds([]);
     setSimAtiva(prev => {
       const novo = { ...prev };
       delete novo[fluxoSimId];
@@ -728,6 +731,18 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
   };
 
   const activePropertyNode = nodes.find(n => n.id === activePropertyNodeId);
+
+  // Enquanto a animacao roda, `executedNodeIds` cresce passo a passo. Mas quando
+  // a simulacao esta marcada como ativa e nao esta rodando naquele instante (o
+  // operador saiu da aba, ou recarregou a pagina e o botao voltou verde pelo
+  // `simAtiva` persistido), esse array nasce vazio e os checks, a pulsacao e as
+  // conexoes verdes somem. Aqui, nesse caso, tratamos todos os blocos (menos os
+  // comentarios) como executados: o estado visual acompanha o indicador do
+  // botao. Ao desativar, `simulacaoMarcada` fica falso e tudo volta ao normal.
+  const simPersistida = simulacaoMarcada && !isRunningSim;
+  const executedNodeIdsEff = simPersistida
+    ? nodes.filter(n => n.tipo !== 'comentario').map(n => n.id)
+    : executedNodeIds;
 
   return (
     <div className="flex flex-col h-full min-h-[360px] sm:min-h-[500px] w-full relative bg-grafite-900 overflow-hidden select-none font-sans">
@@ -1065,7 +1080,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                 const ex = target.x, ey = target.y + (target.h || 96) / 2;
                 const dx = Math.abs(ex - sx) * 0.5;
                 const d = `M ${sx} ${sy} C ${sx + dx} ${sy}, ${ex - dx} ${ey}, ${ex} ${ey}`;
-                const active  = activeSimNodeId === node.id || executedNodeIds.includes(node.id);
+                const active  = activeSimNodeId === node.id || executedNodeIdsEff.includes(node.id);
                 const edgeSel = selectedEdgeTargetId === node.targetId;
                 return (
                   <g key={`${node.id}->${target.id}`}>
@@ -1142,7 +1157,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
             {nodes.map(node => {
               const isSelected  = selectedNodeIds.includes(node.id);
               const isExecuting = activeSimNodeId === node.id;
-              const isExecuted  = executedNodeIds.includes(node.id);
+              const isExecuted  = executedNodeIdsEff.includes(node.id);
               const isNoTeste   = testPassoId === node.id;
               const isComment   = node.tipo === 'comentario';
               const meta        = BLOCK_META[node.tipo] || BLOCK_META.mensagem;

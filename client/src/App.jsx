@@ -29,6 +29,7 @@ import AgendaPage       from './pages/AgendaPage';
 import MassaPage        from './pages/MassaPage';
 import ConfiguracoesPage from './pages/ConfiguracoesPage';
 import BugsPage         from './pages/BugsPage';
+import PerfilPage       from './pages/PerfilPage';
 
 export default function App() {
   return (
@@ -46,6 +47,9 @@ export default function App() {
             <Route element={<AppLayout />}>
               {/* Acesso por modulo, dirigido pela matriz de permissoes.
                   RotaModulo guarda no front; o servidor barra de verdade. */}
+              {/* Perfil: proprio de cada usuario, sem gate de modulo. */}
+              <Route path="/perfil" element={<PerfilPage />} />
+
               <Route element={<RotaModulo />}>
                 <Route path="/atendimento" element={<AtendimentoPage />} />
                 <Route path="/contatos"    element={<ContatosPage />} />

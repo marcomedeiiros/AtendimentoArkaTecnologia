@@ -62,12 +62,28 @@ const MIMES_PERMITIDOS = {
 const MAX_BYTES = 20 * 1024 * 1024;
 
 // Aceita data URL, base64 cru ou URL http(s). Devolve { mimeDeclarado, bytes }.
+//
+// O cabecalho do data URL pode ter parametros ANTES do `;base64`, ex.:
+//   data:audio/ogg; codecs=opus;base64,AAAA...
+// (o gravador de audio gera exatamente isso). Por isso separamos pela PRIMEIRA
+// virgula, em vez de um regex rigido -- senao o audio era rejeitado como
+// "base64 invalido" e nao enviava.
 function inspecionarMedia(media) {
   const s = String(media || "");
   if (/^https?:\/\//i.test(s)) return { url: true };
-  const dataUrl = s.match(/^data:([^;,]+)?(;base64)?,(.*)$/is);
-  const base64 = dataUrl ? dataUrl[3] : s;
-  const mimeDeclarado = dataUrl && dataUrl[1] ? dataUrl[1] : null;
+
+  let base64 = s;
+  let mimeDeclarado = null;
+  if (s.startsWith("data:")) {
+    const virgula = s.indexOf(",");
+    if (virgula === -1) return { invalido: true };
+    const cabecalho = s.slice(5, virgula); // ex.: "audio/ogg; codecs=opus;base64"
+    mimeDeclarado = (cabecalho.split(";")[0] || "").trim() || null;
+    base64 = s.slice(virgula + 1);
+    // data URL sem base64 (texto puro) e incomum aqui; nao validamos como base64.
+    if (!/;base64/i.test(cabecalho)) return { mimeDeclarado, bytes: base64.length };
+  }
+
   // base64 valido: so o alfabeto correto e comprimento multiplo de 4.
   const limpo = base64.replace(/\s/g, "");
   if (!limpo || !/^[A-Za-z0-9+/]+={0,2}$/.test(limpo) || limpo.length % 4 !== 0) {

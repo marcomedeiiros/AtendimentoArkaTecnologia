@@ -187,6 +187,17 @@ export function AppProvider({ children }) {
   const limparHistorico = useCallback(() => setHistorico([]), []);
 
   useEffect(() => {
+    // Durante o carregamento inicial (tela de loading), o historico de conversas
+    // que ja existia ao logar NAO e "mensagem nova". Zeramos a base e saimos sem
+    // tocar: sem isto, a primeira leitura das conversas do servidor tratava todo
+    // o historico como recem-chegado e o som de notificacao disparava ainda na
+    // tela de carregamento. So depois que o painel de atendimento carrega
+    // (`carregando` falso) e que uma mensagem de fato nova passa a tocar.
+    if (carregando) {
+      msgCountsRef.current = null;
+      return;
+    }
+
     const counts = {};
     conversas.forEach(c => {
       counts[c.id] = (c.mensagens || []).filter(m => m.de === 'cliente').length;
@@ -219,7 +230,7 @@ export function AppProvider({ children }) {
       }
     }
     msgCountsRef.current = counts;
-  }, [conversas, removerNotificacao, registrarNoHistorico]);
+  }, [conversas, carregando, removerNotificacao, registrarNoHistorico]);
 
   const fluxosAtivos = fluxos.filter(f => f.ativo).length;
   useEffect(() => {

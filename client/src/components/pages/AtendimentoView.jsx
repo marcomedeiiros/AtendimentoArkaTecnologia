@@ -669,7 +669,7 @@ function PainelTv({ pendentes, abertas, parceiros, onFechar }) {
         </div>
 
         <p className="text-base sm:text-lg 2xl:text-xl text-texto-suave line-clamp-2 leading-snug">
-          {ultima ? ultima.texto : 'Sem mensagens'}
+          {ultima ? (ultima.deletada ? 'Mensagem apagada' : ultima.texto) : 'Sem mensagens'}
         </p>
 
         <div className={`flex items-center gap-2 text-lg sm:text-xl 2xl:text-2xl font-bold ${u.cor}`}>
@@ -855,33 +855,36 @@ function MenuMensagem({ m, ehPropria, onResponder, onEncaminhar, onEditar, onApa
     return () => document.removeEventListener('mousedown', fora);
   }, [aberto]);
 
-  const item = 'w-full text-left px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-grafite-600 hover:text-white transition-colors flex items-center gap-2';
+  const item = 'w-full text-left px-3 py-2.5 text-xs font-semibold text-slate-300 hover:bg-grafite-600 hover:text-white transition-colors flex items-center gap-2.5';
 
   return (
     <div className="relative shrink-0 self-center" ref={ref}>
       <button
-        onClick={() => setAberto(v => !v)}
+        onClick={(e) => { e.stopPropagation(); setAberto(v => !v); }}
         title="Mais ações"
-        className={`p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-grafite-600 transition-all ${
-          aberto ? 'opacity-100 bg-grafite-600 text-white' : 'opacity-0 group-hover:opacity-100'
+        aria-label="Mais ações"
+        className={`rounded-lg p-2 text-slate-400 transition-all hover:bg-grafite-600 hover:text-white ${
+          aberto ? 'bg-grafite-600 text-white opacity-100' : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100'
         }`}
       >
-        <MoreHorizontal size={15} />
+        <MoreHorizontal size={16} />
       </button>
 
       {aberto && (
-        <div className={`absolute top-full mt-1 w-40 glass-panel border border-linha rounded-xl shadow-2xl shadow-black/50 z-50 overflow-hidden py-1 ${
+        // Abre PARA CIMA (bottom-full): nas mensagens de baixo o menu ficava
+        // cortado pelo overflow do chat. z alto para nao ficar atras das bolhas.
+        <div className={`absolute bottom-full mb-1 w-44 glass-panel border border-linha rounded-xl shadow-2xl shadow-black/50 z-50 overflow-hidden py-1 ${
           ehPropria ? 'left-0' : 'right-0'
         }`}>
           <button className={item} onClick={() => { onResponder(m); setAberto(false); }}>
-            <CornerUpLeft size={12} className="text-slate-500" /> Responder
+            <CornerUpLeft size={14} className="text-slate-500" /> Responder
           </button>
           <button className={item} onClick={() => { onEncaminhar(m); setAberto(false); }}>
-            <Share2 size={12} className="text-slate-500" /> Encaminhar
+            <Share2 size={14} className="text-slate-500" /> Encaminhar
           </button>
           {ehPropria && m.tipo === 'texto' && (
             <button className={item} onClick={() => { onEditar(m); setAberto(false); }}>
-              <Pencil size={12} className="text-slate-500" /> Editar
+              <Pencil size={14} className="text-slate-500" /> Editar
             </button>
           )}
           {onApagar && (
@@ -889,7 +892,7 @@ function MenuMensagem({ m, ehPropria, onResponder, onEncaminhar, onEditar, onApa
               className={`${item} text-falha-400 hover:text-falha-400`}
               onClick={() => { onApagar(m); setAberto(false); }}
             >
-              <Trash2 size={12} className="text-falha-400" /> {ehPropria ? 'Apagar para todos' : 'Apagar'}
+              <Trash2 size={14} className="text-falha-400" /> {ehPropria ? 'Apagar para todos' : 'Apagar'}
             </button>
           )}
         </div>
@@ -1190,7 +1193,7 @@ const CardConversa = React.memo(function CardConversa({
           {/* Linha 2: previa + data/hora da mensagem + nao lidas / acoes (hover) */}
           <div className="flex items-center gap-1.5 min-w-0 mt-0.5">
             <span className={`flex-1 min-w-0 truncate text-[11px] ${naoLidas > 0 ? 'text-slate-100 font-medium' : 'text-slate-400'}`}>
-              {ultimaMsg ? ultimaMsg.texto : 'Sem mensagens'}
+              {ultimaMsg ? (ultimaMsg.deletada ? 'Mensagem apagada' : ultimaMsg.texto) : 'Sem mensagens'}
             </span>
 
             {c.ultimaMensagemEm && (
@@ -1535,6 +1538,17 @@ function PainelChat({
         )}
         {conversa.mensagens.map((m, i) => (
           <div key={i} className={`group flex items-center gap-1 ${m.de === 'cliente' ? 'justify-start' : m.de === 'sistema' ? 'justify-center' : 'justify-end'}`}>
+            {m.deletada ? (
+              /* "Apagar para todos": some para o cliente no WhatsApp e vira este
+                 aviso no chat ao vivo. O texto original continua no Registro
+                 (Visao Geral) como log permanente -- nao e apagado do banco. */
+              <div className={`max-w-[80%] px-2.5 py-1.5 rounded-lg text-[12px] italic text-texto-suave bg-grafite-700/50 border border-linha/60 flex items-center gap-1.5 ${m.de === 'cliente' ? 'rounded-tl-sm' : 'rounded-tr-sm'}`}>
+                <Trash2 size={12} className="shrink-0 opacity-70" />
+                Mensagem apagada
+                <span className="text-[9px] not-italic ml-1">{m.hora}</span>
+              </div>
+            ) : (
+            <>
             {/* Nas mensagens enviadas por nos (direita), o menu fica a ESQUERDA da bolha */}
             {m.de !== 'cliente' && m.de !== 'sistema' && (
               <MenuMensagem
@@ -1551,7 +1565,7 @@ function PainelChat({
                 {m.texto}
               </div>
             ) : (
-              <div className={`max-w-[78%] px-2.5 py-1.5 rounded-2xl text-xs shadow-sm space-y-0.5 ${
+              <div className={`max-w-[80%] sm:max-w-[72%] px-2.5 py-1.5 rounded-lg text-[13px] shadow-sm space-y-0.5 break-words ${
                 /* O papel de parede em uso e a arte ESCURA do WhatsApp, entao as
                    bolhas seguem o tema escuro: recebida em #202C33, enviada em
                    #005C4B, texto claro. Bolha branca aqui brilharia demais. */
@@ -1605,6 +1619,8 @@ function PainelChat({
                 onEditar={iniciarEdicao}
                 onApagar={onApagarMensagem}
               />
+            )}
+            </>
             )}
           </div>
         ))}
@@ -1884,9 +1900,10 @@ function PainelChat({
 
 export default function AtendimentoView({ conversas, setConversas, fluxos, parceiros, equipe = [] }) {
   const { whatsAppConectado, carregando, historico = [], marcarNotificacoesLidas, limparHistorico } = useAppContext();
-  const { usuario } = useAuth();
-  // Primeiro nome de quem esta logado, usado como assinatura das mensagens.
-  const primeiroNome = (usuario?.nome || '').trim().split(/\s+/)[0] || '';
+  const { usuario, assinaturaNome } = useAuth();
+  // Nome usado ao assinar mensagens: vem do perfil (personalizavel no menu de
+  // perfil) e cai no primeiro nome como padrao. Fica no AuthContext, entao muda
+  // na hora quando o operador edita no perfil.
   // Toggle de assinatura, por operador (sobrevive ao F5).
   const [assinar, setAssinar] = usePreferencia('central.assinatura', false);
   const [abaAtual,      setAbaAtual]     = usePreferencia('central.aba', 'abertas');
@@ -2212,13 +2229,10 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   }, [aplicarConversa]);
 
   const apagarMensagem = useCallback(async (mensagem) => {
-    // "Apagar para todos" so alcanca o aparelho do cliente nas mensagens que
-    // NOS enviamos -- o WhatsApp nao deixa apagar de la o que o cliente mandou.
-    const nossa = mensagem.de !== 'cliente';
-    const aviso = nossa
-      ? 'Apagar esta mensagem para todos? Ela some para você e para o cliente no WhatsApp.'
-      : 'Esta é uma mensagem do cliente: o WhatsApp não permite apagá-la do aparelho dele. Ela será removida apenas do painel. Continuar?';
-    if (!window.confirm(aviso)) return;
+    // Sem pop-up de confirmacao: "Apagar para todos" some da hora para o cliente
+    // no WhatsApp (so alcanca o aparelho dele nas mensagens que NOS enviamos). O
+    // texto NAO e apagado do banco -- continua no Registro (Visao Geral) como log
+    // permanente, e o chat ao vivo passa a mostrar "Mensagem apagada".
     try {
       aplicarConversa(await ConversasAPI.apagarMensagem(mensagem.id));
     } catch (e) {
@@ -2233,7 +2247,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     // acima da mensagem -- assim o cliente ve quem falou. So quando o toggle
     // esta ligado e ha nome. O negrito e a sintaxe do WhatsApp.
     const corpo = txt.trim();
-    const final = assinar && primeiroNome ? `*${primeiroNome}*\n${corpo}` : corpo;
+    const final = assinar && assinaturaNome ? `*${assinaturaNome}*\n${corpo}` : corpo;
     // Otimista: mostra a mensagem da equipe na hora (ja assinada).
     setConversas(prev => prev.map(c =>
       c.id === id ? { ...c, mensagens: [...c.mensagens, { de: 'equipe', texto: final, hora: horaAgora() }] } : c
@@ -2241,7 +2255,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     setTexto('');
     // O back-end persiste, detecta CNPJ e devolve a conversa completa.
     try { aplicarConversa(await ConversasAPI.enviarMensagem(id, final, respondendoAId)); } catch {}
-  }, [conversa, setConversas, aplicarConversa, assinar, primeiroNome]);
+  }, [conversa, setConversas, aplicarConversa, assinar, assinaturaNome]);
 
   // Envio de mídia com progresso/cancelamento. Devolve { promise, cancel } para
   // o PainelChat controlar a barra e o botão de cancelar. A conversa atualizada
@@ -2576,7 +2590,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               conversas={conversas}
               assinar={assinar}
               onToggleAssinar={() => setAssinar(v => !v)}
-              assinaturaNome={primeiroNome}
+              assinaturaNome={assinaturaNome}
               onApagarMensagem={apagarMensagem}
             />
           )}

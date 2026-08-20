@@ -180,3 +180,142 @@ export async function exportarRelatorioPdf({ elemento, metricas = [], filtros = 
 
   pdf.save(`relatorio-arka-${new Date().toISOString().slice(0, 10)}.pdf`);
 }
+
+// Formata ISO -> data/hora pt-BR curta (ou '-').
+function fmtDataHora(iso) {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? '-' : d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+}
+
+/**
+ * Gera a transcricao de UMA conversa em PDF (substitui o antigo .txt).
+ * Inclui o ID da conversa no cabecalho.
+ * @param {Object} conversa  DTO da conversa (com `id`, `mensagens`, etc).
+ * @param {Object} [opts]
+ * @param {string} [opts.atendente]   Nome do atendente.
+ * @param {string} [opts.statusLabel] Rotulo do status (ex.: "Fechada").
+ */
+export async function exportarTranscricaoPdf(conversa, { atendente = '-', statusLabel = '' } = {}) {
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+  const larguraPg = pdf.internal.pageSize.getWidth();
+  const alturaPg = pdf.internal.pageSize.getHeight();
+  const margem = 14;
+  let y = margem;
+
+  const quebraPagina = (precisa = 6) => {
+    if (y + precisa > alturaPg - margem) { pdf.addPage(); y = margem; }
+  };
+
+  // ---------- Cabecalho ----------
+  const logo = await carregarLogo();
+  if (logo) {
+    try { pdf.addImage(logo, 'PNG', margem, y, 26, 12); } catch { /* formato invalido */ }
+  }
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(15);
+  pdf.setTextColor(15, 23, 42);
+  pdf.text('Transcrição da Conversa', logo ? margem + 32 : margem, y + 6);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(9);
+  pdf.setTextColor(...CINZA);
+  pdf.text(`Gerado em ${new Date().toLocaleString('pt-BR')}`, logo ? margem + 32 : margem, y + 11);
+
+  y += 18;
+  pdf.setDrawColor(...LARANJA);
+  pdf.setLineWidth(0.6);
+  pdf.line(margem, y, larguraPg - margem, y);
+  y += 7;
+
+  // ---------- Metadados (com o ID da conversa) ----------
+  // Protocolo curto (igual ao da Central: #408619D2) + o UUID completo.
+  const protocolo = String(conversa.id || '').replace(/-/g, '').slice(0, 8).toUpperCase();
+  const idTexto = conversa.id ? `#${protocolo}  (${conversa.id})` : '-';
+  const meta = [
+    ['ID da conversa', idTexto],
+    ['Cliente', conversa.cliente || 'Cliente'],
+    ['Telefone', conversa.telefone || '-'],
+    ['Setor', conversa.setor || 'Geral'],
+    ['Status', statusLabel || conversa.statusAtendimento || '-'],
+    ['Início', fmtDataHora(conversa.criadoEm)],
+    ['Fim', fmtDataHora(conversa.fechadoEm)],
+    ['Atendente', atendente || '-'],
+    ['Avaliação', conversa.avaliacao ? `${conversa.avaliacao}/5${conversa.feedback ? ` ${conversa.feedback}` : ''}` : '-'],
+  ];
+  const rotuloX = margem;
+  const valorX = margem + 34;
+  pdf.setFontSize(9);
+  meta.forEach(([rotulo, valor]) => {
+    quebraPagina(6);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(30, 41, 59);
+    pdf.text(`${rotulo}:`, rotuloX, y);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(...CINZA);
+    const linhas = pdf.splitTextToSize(String(valor), larguraPg - valorX - margem);
+    linhas.forEach((linha, i) => {
+      if (i > 0) { y += 4.5; quebraPagina(6); }
+      pdf.text(linha, valorX, y);
+    });
+    y += 5.5;
+  });
+
+  y += 2;
+  pdf.setDrawColor(...CINZA);
+  pdf.setLineWidth(0.2);
+  pdf.line(margem, y, larguraPg - margem, y);
+  y += 7;
+
+  // ---------- Mensagens ----------
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(10);
+  pdf.setTextColor(15, 23, 42);
+  quebraPagina(6);
+  pdf.text('Mensagens', margem, y);
+  y += 6;
+
+  const mensagens = conversa.mensagens || [];
+  if (mensagens.length === 0) {
+    pdf.setFont('helvetica', 'italic');
+    pdf.setFontSize(9);
+    pdf.setTextColor(...CINZA);
+    pdf.text('Sem mensagens registradas.', margem, y);
+    y += 5;
+  } else {
+    mensagens.forEach((m) => {
+      const quem = m.de === 'cliente'
+        ? (conversa.cliente || 'Cliente')
+        : m.de === 'sistema' ? 'Sistema' : 'Atendente';
+      const ehCliente = m.de === 'cliente';
+      const prefixo = `[${m.hora || ''}] ${quem}: `;
+      const texto = prefixo + (m.texto || '');
+      const linhas = pdf.splitTextToSize(texto, larguraPg - margem * 2);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(9);
+      linhas.forEach((linha, i) => {
+        quebraPagina(5);
+        // Cliente em cinza, equipe em laranja escuro, para diferenciar de relance.
+        pdf.setTextColor(...(ehCliente ? CINZA : [180, 83, 9]));
+        pdf.text(linha, margem, y);
+        y += 4.6;
+        if (i === 0) { /* mantem cor nas continuacoes */ }
+      });
+      y += 1.5;
+    });
+  }
+
+  // ---------- Rodape ----------
+  const totalPgs = pdf.internal.getNumberOfPages();
+  for (let i = 1; i <= totalPgs; i++) {
+    pdf.setPage(i);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(8);
+    pdf.setTextColor(...CINZA);
+    pdf.text('Arka Tecnologia • Transcrição de Atendimento', margem, alturaPg - 8);
+    pdf.text(`Página ${i} de ${totalPgs}`, larguraPg - margem - 20, alturaPg - 8);
+  }
+
+  const slug = String(conversa.cliente || 'cliente').replace(/[^\w]+/g, '-').toLowerCase();
+  const idCurto = String(conversa.id || '').slice(0, 8);
+  pdf.save(`conversa-${slug}${idCurto ? `-${idCurto}` : ''}.pdf`);
+}

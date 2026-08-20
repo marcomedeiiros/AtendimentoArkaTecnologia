@@ -26,4 +26,17 @@ const cadastroSchema = z.object({
   codigo: z.string().optional(),
 });
 
-module.exports = { loginSchema, cadastroSchema };
+// Edicao do proprio perfil. So o nome -- nunca cargo/ativo/email (email e chave
+// de login; cargo/ativo sao gestao). O id do dono vem do token, nunca do body.
+const atualizarPerfilSchema = z.object({
+  nome: z.string().trim().min(2, "Informe o nome completo").max(120),
+});
+
+// Troca da propria senha: exige a senha atual (defesa em profundidade -- um
+// token roubado nao troca a senha sem conhecer a atual).
+const trocarSenhaSchema = z.object({
+  senhaAtual: z.string().min(1, "Informe a senha atual"),
+  novaSenha: z.string().min(6, "A nova senha precisa de pelo menos 6 caracteres"),
+});
+
+module.exports = { loginSchema, cadastroSchema, atualizarPerfilSchema, trocarSenhaSchema };

@@ -64,6 +64,10 @@ model Usuario {
   senhaHash    String   @map("senha_hash")
   cargo        String   @default("Administrador")
   ativo        Boolean  @default(false)
+  // Reservado (opcional). O nome de assinatura em uso e guardado como
+  // preferencia do operador; esta coluna existe para o Prisma Client bater com
+  // o banco e pode alimentar a assinatura no futuro sem migracao.
+  assinatura   String?
   // Ultima requisicao autenticada desta pessoa. E o que sustenta o "online" da
   // Gestao da Equipe: com o painel aberto, o front consulta o servidor a cada
   // poucos segundos, entao presenca recente aqui significa aba aberta agora.

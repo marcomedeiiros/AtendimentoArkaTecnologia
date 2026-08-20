@@ -107,6 +107,11 @@ export const AuthAPI = {
   },
   // Confirma que o token guardado ainda vale, e devolve quem e o dono dele.
   eu: () => request('/auth/me'),
+  // Edita o proprio perfil (nome). O servidor usa o token para saber de quem e.
+  atualizarPerfil: (dados) => request('/auth/perfil', { method: 'PATCH', body: JSON.stringify(dados) }),
+  // Troca a propria senha (exige a senha atual).
+  trocarSenha: (senhaAtual, novaSenha) =>
+    request('/auth/senha', { method: 'PATCH', body: JSON.stringify({ senhaAtual, novaSenha }) }),
   registroInfo: async () => {
     const r = await fetch(`${API_BASE}/auth/registro-info`);
     if (!r.ok) return { exigeCodigo: false };

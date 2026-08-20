@@ -113,7 +113,7 @@ export function FlowTestChat({ fluxo, onClose, onPassoAtivo }) {
         {turnos.length === 0 && !carregando && (
           <div className="text-[11px] text-slate-500 leading-relaxed space-y-2">
             <p>
-              Escreva como se fosse o cliente no WhatsApp. As respostas vêm do motor
+              Escreva como se fosse o cliente no WhatsApp as respostas vêm do motor
               real do chatbot, mas <strong className="text-slate-400">nada é enviado</strong> e
               nada é gravado.
             </p>
@@ -203,7 +203,7 @@ export function FlowTestChat({ fluxo, onClose, onPassoAtivo }) {
         )}
         {finalizado && (
           <p className="text-[10px] text-slate-500">
-            Conversa finalizada. Use o botão de reiniciar para testar outro caminho.
+            Conversa finalizada use o botão de reiniciar para testar outro caminho.
           </p>
         )}
         <div className="flex items-center gap-1.5">

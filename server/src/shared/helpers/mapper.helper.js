@@ -12,6 +12,9 @@ function mapMensagem(m) {
     status: m.origem === "cliente" ? null : m.status || null,
     respondendoAId: m.respondendoAId || null,
     editada: !!m.editadaEm,
+    // Marcada por "Apagar para todos": some do WhatsApp do cliente e vira aviso
+    // no chat ao vivo, mas segue no Registro (o texto original continua aqui).
+    deletada: !!meta.deletada,
     tipo,
     // Dados da midia (url/base64, mimetype, nome, legenda, coords, contato)
     // quando a mensagem nao for de texto puro.

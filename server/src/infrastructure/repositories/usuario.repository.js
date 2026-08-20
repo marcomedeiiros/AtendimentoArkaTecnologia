@@ -77,6 +77,22 @@ class UsuarioRepository {
     });
   }
 
+  // Edicao do proprio perfil (nome). NAO toca em cargo/ativo -- isso e gestao,
+  // exclusiva de Administrador em outro fluxo.
+  atualizarNome(id, nome) {
+    return prisma.usuario.update({
+      where: { id },
+      data: { nome },
+      select: { id: true, nome: true, email: true, cargo: true, ativo: true },
+    });
+  }
+
+  // Hash atual, so para conferir a senha antiga antes de trocar. Fica isolado
+  // para o hash nunca vazar junto de findById/listagens.
+  senhaHashDe(id) {
+    return prisma.usuario.findUnique({ where: { id }, select: { senhaHash: true } });
+  }
+
   contar() {
     return prisma.usuario.count();
   }
