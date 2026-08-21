@@ -71,8 +71,7 @@ export default function AvisoSessao({ aviso, onFechar }) {
         <img
           src="/arka_tecnologia_logo-removebg-preview.png"
           alt="Arka Tecnologia"
-          className="h-9 w-auto"
-          style={{ filter: 'brightness(0) invert(1)' }}
+          className="arka-logo h-9 w-auto object-contain"
         />
         <Girando cor={entrando ? 'border-t-acao' : 'border-t-texto-suave'} />
         <p className={`text-sm font-bold leading-snug ${entrando ? 'text-acao-200' : 'text-texto'}`}>

@@ -13,12 +13,13 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, Eye, EyeOff } from 'lucide-react';
 
-function Logo({ size = 34 }) {
+function Logo({ size = 34, className = '' }) {
   return (
     <img
       src="/arka_tecnologia_logo-removebg-preview.png"
       alt="Arka Tecnologia"
-      style={{ height: size, width: 'auto', objectFit: 'contain', filter: 'brightness(0) invert(1)' }}
+      className={`arka-logo ${className}`}
+      style={{ height: size, width: 'auto', objectFit: 'contain' }}
     />
   );
 }

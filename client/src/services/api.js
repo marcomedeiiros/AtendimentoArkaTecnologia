@@ -220,6 +220,27 @@ export const BugsAPI = {
   remover: (id) => request(`/bugs/${id}`, { method: 'DELETE' }),
 };
 
+// ── Mensagens rápidas (compartilhadas pela equipe) ──
+// `listar` é aberto a qualquer pessoa logada (o painel do atendimento precisa).
+// Criar/editar/excluir é restrito ao módulo "mensagens" -- o servidor barra.
+export const MensagensRapidasAPI = {
+  listar: () => request('/mensagens-rapidas'),
+  criar: (dados) => request('/mensagens-rapidas', { method: 'POST', body: JSON.stringify(dados) }),
+  atualizar: (id, dados) => request(`/mensagens-rapidas/${id}`, { method: 'PUT', body: JSON.stringify(dados) }),
+  remover: (id) => request(`/mensagens-rapidas/${id}`, { method: 'DELETE' }),
+};
+
+// ── Agenda (compartilhada pela equipe) ──
+// Tudo controlado pelo módulo "agenda" (o servidor barra quem não tem acesso).
+export const AgendaAPI = {
+  listar: () => request('/agenda'),
+  criar: (dados) => request('/agenda', { method: 'POST', body: JSON.stringify(dados) }),
+  atualizar: (id, dados) => request(`/agenda/${id}`, { method: 'PUT', body: JSON.stringify(dados) }),
+  definirConcluido: (id, concluido) => request(`/agenda/${id}/concluido`, { method: 'PATCH', body: JSON.stringify({ concluido }) }),
+  remover: (id) => request(`/agenda/${id}`, { method: 'DELETE' }),
+  limparConcluidosAntigos: () => request('/agenda/concluidos-antigos', { method: 'DELETE' }),
+};
+
 // ── Permissões de perfis ──
 // Matriz perfil × módulo. Só Administrador lê/edita (o servidor barra o resto).
 // O acesso em si é sempre decidido no servidor; isto é só o editor.
@@ -253,6 +274,8 @@ export const ConversasAPI = {
   validarCnpj: (id, cnpj) => request(`/conversas/${id}/validar-cnpj`, { method: 'POST', body: JSON.stringify({ cnpj }) }),
   atualizarStatus: (id, status) => request(`/conversas/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   atualizarSetor: (id, setor) => request(`/conversas/${id}/setor`, { method: 'PATCH', body: JSON.stringify({ setor }) }),
+  // Define/limpa o responsavel (compartilhado). atendenteId null = remover.
+  definirAtendente: (id, atendenteId) => request(`/conversas/${id}/atendente`, { method: 'PATCH', body: JSON.stringify({ atendenteId }) }),
   avaliarAtendimento: (id, avaliacao, feedback) => request(`/conversas/${id}/avaliacao`, { method: 'POST', body: JSON.stringify({ avaliacao, feedback }) }),
   // Atalhos de status (os 3 estados da Central).
   pendente: (id) => request(`/conversas/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'pendente' }) }),

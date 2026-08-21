@@ -1,5 +1,16 @@
 const prisma = require("../database/prisma.client");
 
+// Proximo numero da sequencia. Incremento atomico por linha: criacoes
+// simultaneas nunca recebem o mesmo numero.
+async function proximoNumero(chave) {
+  const r = await prisma.contador.upsert({
+    where: { chave },
+    create: { chave, valor: 1 },
+    update: { valor: { increment: 1 } },
+  });
+  return r.valor;
+}
+
 class ConversaRepository {
   findAll(filtros = {}) {
     const where = {};
@@ -22,6 +33,7 @@ class ConversaRepository {
       where,
       include: {
         mensagens: { orderBy: { criadoEm: "asc" } },
+        atendente: { select: { id: true, nome: true, cargo: true } },
       },
       orderBy: { atualizadoEm: "desc" },
     });
@@ -33,6 +45,7 @@ class ConversaRepository {
       include: {
         mensagens: { orderBy: { criadoEm: "asc" } },
         sessao: true,
+        atendente: { select: { id: true, nome: true, cargo: true } },
       },
     });
   }
@@ -44,15 +57,24 @@ class ConversaRepository {
         telefone,
         statusAtendimento: { in: ["pendente", "aberta"] },
       },
-      include: { mensagens: { orderBy: { criadoEm: "asc" } }, sessao: true },
+      include: {
+        mensagens: { orderBy: { criadoEm: "asc" } },
+        sessao: true,
+        atendente: { select: { id: true, nome: true, cargo: true } },
+      },
       orderBy: { atualizadoEm: "desc" },
     });
   }
 
-  create(data) {
+  async create(data) {
+    // Numero unico e sequencial para TODA conversa (exibido como OS00001).
+    const numeroTicket = data.numeroTicket ?? (await proximoNumero("ticket"));
     return prisma.conversa.create({
-      data,
-      include: { mensagens: true },
+      data: { ...data, numeroTicket },
+      include: {
+        mensagens: true,
+        atendente: { select: { id: true, nome: true, cargo: true } },
+      },
     });
   }
 
@@ -60,7 +82,10 @@ class ConversaRepository {
     return prisma.conversa.update({
       where: { id },
       data,
-      include: { mensagens: { orderBy: { criadoEm: "asc" } } },
+      include: {
+        mensagens: { orderBy: { criadoEm: "asc" } },
+        atendente: { select: { id: true, nome: true, cargo: true } },
+      },
     });
   }
 

@@ -106,15 +106,24 @@ export default function RegistroConversas({ conversas = [], equipe = [] }) {
   const [busca, setBusca] = useState('');
   const [status, setStatus] = useState('');
   const [setor, setSetor] = useState('');
+  const [atendente, setAtendente] = useState('');
   const [periodo, setPeriodo] = useState('tudo'); // '7' | '30' | 'tudo'
 
   const nomePorId = useMemo(
     () => Object.fromEntries((equipe || []).map((m) => [m.id, m.nome])),
     [equipe]
   );
+  // Quem atendeu a conversa: prioriza o nome que o servidor ja manda
+  // (atendenteNome), com o mapa da equipe como reserva. Vazio = sem atendente.
+  const atendenteDe = (c) => c.atendenteNome || nomePorId[c.atendenteId] || '';
   const setores = useMemo(
     () => Array.from(new Set(conversas.map(setorEfetivo))).sort(),
     [conversas]
+  );
+  const atendentes = useMemo(
+    () => Array.from(new Set(conversas.map(atendenteDe).filter(Boolean))).sort(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [conversas, nomePorId]
   );
 
   const filtradas = useMemo(() => {
@@ -125,6 +134,7 @@ export default function RegistroConversas({ conversas = [], equipe = [] }) {
       .filter((c) => {
         if (status && c.statusAtendimento !== status) return false;
         if (setor && setorEfetivo(c) !== setor) return false;
+        if (atendente && atendenteDe(c) !== atendente) return false;
         if (limite != null) {
           const base = c.criadoEm || c.ultimaMensagemEm;
           if (!base || agora - new Date(base).getTime() > limite) return false;
@@ -140,12 +150,14 @@ export default function RegistroConversas({ conversas = [], equipe = [] }) {
           new Date(b.criadoEm || b.ultimaMensagemEm || 0) -
           new Date(a.criadoEm || a.ultimaMensagemEm || 0)
       );
-  }, [conversas, busca, status, setor, periodo]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversas, busca, status, setor, atendente, periodo]);
 
   function exportarCsv() {
     const linhas = [
-      ['ID', 'Cliente', 'Telefone', 'Setor', 'Status', 'Início', 'Fim', 'Mensagens', 'Avaliação', 'Atendente'],
+      ['OS', 'ID', 'Cliente', 'Telefone', 'Setor', 'Status', 'Início', 'Fim', 'Mensagens', 'Avaliação', 'Atendente'],
       ...filtradas.map((c) => [
+        c.ticket || '',
         c.id || '',
         c.cliente || '',
         c.telefone || '',
@@ -155,7 +167,7 @@ export default function RegistroConversas({ conversas = [], equipe = [] }) {
         fmtData(c.fechadoEm),
         (c.mensagens || []).length,
         c.avaliacao || '',
-        nomePorId[c.atendenteId] || '',
+        atendenteDe(c) || '',
       ]),
     ];
     const csv = linhas
@@ -168,7 +180,7 @@ export default function RegistroConversas({ conversas = [], equipe = [] }) {
   // conversa no cabecalho do documento.
   function baixarTranscricao(c) {
     return exportarTranscricaoPdf({ ...c, setor: setorEfetivo(c) }, {
-      atendente: nomePorId[c.atendenteId] || '-',
+      atendente: atendenteDe(c) || '-',
       statusLabel: STATUS[c.statusAtendimento]?.label || c.statusAtendimento || '',
     });
   }
@@ -200,6 +212,10 @@ export default function RegistroConversas({ conversas = [], equipe = [] }) {
             <option value="">Todos os setores</option>
             {setores.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
+          <select value={atendente} onChange={(e) => setAtendente(e.target.value)} className={selectCls}>
+            <option value="">Todos os atendentes</option>
+            {atendentes.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
           <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className={selectCls}>
             <option value="tudo">Todo o período</option>
             <option value="7">Últimos 7 dias</option>
@@ -226,10 +242,11 @@ export default function RegistroConversas({ conversas = [], equipe = [] }) {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-linha text-slate-400 bg-grafite-700/40">
-                  <th className="text-left py-2.5 px-3 font-semibold">ID</th>
+                  <th className="text-left py-2.5 px-3 font-semibold">OS</th>
                   <th className="text-left py-2.5 px-3 font-semibold">Cliente</th>
                   <th className="text-left py-2.5 px-3 font-semibold">Telefone</th>
                   <th className="text-left py-2.5 px-3 font-semibold">Setor</th>
+                  <th className="text-left py-2.5 px-3 font-semibold">Atendente</th>
                   <th className="text-left py-2.5 px-3 font-semibold">Status</th>
                   <th className="text-left py-2.5 px-3 font-semibold">Início</th>
                   <th className="text-left py-2.5 px-3 font-semibold">Fim</th>
@@ -243,10 +260,11 @@ export default function RegistroConversas({ conversas = [], equipe = [] }) {
                   const st = STATUS[c.statusAtendimento] || { label: c.statusAtendimento, cls: 'bg-slate-500/15 text-slate-300 border-slate-500/30' };
                   return (
                     <tr key={c.id} className="border-b border-linha/40 hover:bg-grafite-600/40 transition-colors">
-                      <td className="py-2.5 px-3 text-slate-400 font-mono text-[11px] whitespace-nowrap" title={c.id}>#{idCurto(c.id)}</td>
+                      <td className="py-2.5 px-3 text-acao-200 font-mono font-bold text-[11px] whitespace-nowrap" title={c.id}>#{c.ticket || idCurto(c.id)}</td>
                       <td className="py-2.5 px-3 text-white font-semibold whitespace-nowrap">{c.cliente || '-'}</td>
                       <td className="py-2.5 px-3 text-slate-400 font-mono whitespace-nowrap">{c.telefone || '-'}</td>
                       <td className="py-2.5 px-3 text-slate-300">{setorEfetivo(c)}</td>
+                      <td className="py-2.5 px-3 text-slate-300 whitespace-nowrap">{atendenteDe(c) || '-'}</td>
                       <td className="py-2.5 px-3">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${st.cls}`}>{st.label}</span>
                       </td>

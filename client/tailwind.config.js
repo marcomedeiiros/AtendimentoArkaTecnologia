@@ -21,42 +21,50 @@ export default {
       // do Tailwind (#E5E7EB) e vira uma linha esbranquiçada sobre o tema
       // escuro -- fora da paleta.
       borderColor: {
-        DEFAULT: '#2A3942',
+        DEFAULT: 'rgb(var(--linha) / <alpha-value>)',
       },
+      // Cores tematizaveis: cada uma referencia uma variavel CSS (canais RGB)
+      // definida em index.css. O `<alpha-value>` deixa os modificadores de
+      // opacidade do Tailwind (bg-acao/15, border-linha/60...) continuarem
+      // funcionando. Trocar de tema so redefine as variaveis -- nada aqui muda.
       colors: {
-        // Neutros do WhatsApp Web (tema escuro). Sao verde-azulados, nao cinza
-        // puro: e o que da o ar de "produto de mensageria" em vez de painel
-        // generico -- e foram calibrados para leitura de conversa o dia inteiro.
+        white: 'rgb(var(--c-white) / <alpha-value>)',
         grafite: {
-          900: '#0B141A', // fundo da aplicacao
-          800: '#111B21', // sidebar / cabecalho
-          700: '#182229', // painel
-          600: '#202C33', // painel elevado / hover / bolha recebida
-          500: '#2A3942', // divisor
+          900: 'rgb(var(--grafite-900) / <alpha-value>)', // fundo da aplicacao
+          800: 'rgb(var(--grafite-800) / <alpha-value>)', // sidebar / cabecalho
+          700: 'rgb(var(--grafite-700) / <alpha-value>)', // painel
+          600: 'rgb(var(--grafite-600) / <alpha-value>)', // painel elevado / hover
+          500: 'rgb(var(--grafite-500) / <alpha-value>)', // divisor
         },
         linha: {
-          DEFAULT: '#2A3942',
-          forte: '#3B4A54',
+          DEFAULT: 'rgb(var(--linha) / <alpha-value>)',
+          forte: 'rgb(var(--linha-forte) / <alpha-value>)',
         },
-        // Acao primaria: o verde-teal do WhatsApp. O operador ja associa essa
-        // cor a "enviar/confirmar", entao ela nao precisa ser aprendida.
         acao: {
-          DEFAULT: '#00A884',
-          200: '#06CF9C', // hover
-          400: '#00BD96',
-          600: '#017561', // pressionado
+          DEFAULT: 'rgb(var(--acao) / <alpha-value>)',
+          200: 'rgb(var(--acao-200) / <alpha-value>)',
+          400: 'rgb(var(--acao-400) / <alpha-value>)',
+          600: 'rgb(var(--acao-600) / <alpha-value>)',
         },
-        bolha: '#005C4B', // mensagem enviada (verde escuro do WhatsApp)
+        bolha: 'rgb(var(--bolha) / <alpha-value>)',
         // ---- estados ----
-        espera: { DEFAULT: '#FFAB00', 400: '#FFC24D', 600: '#C98600' }, // pendente / nao lidas
-        ativo:  { DEFAULT: '#06CF9C', 400: '#4FE0BC', 600: '#049A75' }, // aberta / online
-        quieto: { DEFAULT: '#8696A0', 400: '#A4B2BB', 600: '#667781' }, // fechada (recua)
-        falha:  { DEFAULT: '#F15C6D', 400: '#F58A96', 600: '#C23D4C' }, // SO erro real
-        lida:   { DEFAULT: '#53BDEB', 400: '#7FD1F0', 600: '#3A93BA' }, // check-duplo (o azul do WhatsApp)
+        espera: { DEFAULT: 'rgb(var(--espera) / <alpha-value>)', 400: 'rgb(var(--espera-400) / <alpha-value>)', 600: 'rgb(var(--espera-600) / <alpha-value>)' },
+        ativo:  { DEFAULT: 'rgb(var(--ativo) / <alpha-value>)',  400: 'rgb(var(--ativo-400) / <alpha-value>)',  600: 'rgb(var(--ativo-600) / <alpha-value>)' },
+        quieto: { DEFAULT: 'rgb(var(--quieto) / <alpha-value>)', 400: 'rgb(var(--quieto-400) / <alpha-value>)', 600: 'rgb(var(--quieto-600) / <alpha-value>)' },
+        falha:  { DEFAULT: 'rgb(var(--falha) / <alpha-value>)',  400: 'rgb(var(--falha-400) / <alpha-value>)',  600: 'rgb(var(--falha-600) / <alpha-value>)' },
+        lida:   { DEFAULT: 'rgb(var(--lida) / <alpha-value>)',   400: 'rgb(var(--lida-400) / <alpha-value>)',   600: 'rgb(var(--lida-600) / <alpha-value>)' },
         texto: {
-          DEFAULT: '#E9EDEF',
-          suave: '#8696A0',
-          fraco: '#667781',
+          DEFAULT: 'rgb(var(--texto) / <alpha-value>)',
+          suave: 'rgb(var(--texto-suave) / <alpha-value>)',
+          fraco: 'rgb(var(--texto-fraco) / <alpha-value>)',
+        },
+        slate: {
+          50: 'rgb(var(--slate-50) / <alpha-value>)',   100: 'rgb(var(--slate-100) / <alpha-value>)',
+          200: 'rgb(var(--slate-200) / <alpha-value>)', 300: 'rgb(var(--slate-300) / <alpha-value>)',
+          400: 'rgb(var(--slate-400) / <alpha-value>)', 500: 'rgb(var(--slate-500) / <alpha-value>)',
+          600: 'rgb(var(--slate-600) / <alpha-value>)', 700: 'rgb(var(--slate-700) / <alpha-value>)',
+          800: 'rgb(var(--slate-800) / <alpha-value>)', 900: 'rgb(var(--slate-900) / <alpha-value>)',
+          950: 'rgb(var(--slate-950) / <alpha-value>)',
         },
       }
     },

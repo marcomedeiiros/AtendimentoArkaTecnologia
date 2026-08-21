@@ -1,14 +1,20 @@
 const relatoBugRepository = require("../../infrastructure/repositories/relatoBug.repository");
 const { mapRelatoBug } = require("../../shared/helpers/mapper.helper");
+const { validarImagensBug } = require("./bug.imagens");
 const AppError = require("../../shared/errors/AppError");
 
 class BugService {
   // Cria o relato. O autor NAO vem do corpo: e derivado do token (quem esta
-  // logado), para ninguem forjar autoria de outra pessoa.
-  async criar({ descricao, pagina }, autor) {
+  // logado), para ninguem forjar autoria de outra pessoa. As imagens passam
+  // pela validacao de seguranca (whitelist de tipo + magic bytes) antes de
+  // serem guardadas -- ver bug.imagens.js.
+  async criar({ descricao, pagina, imagens, prioridade }, autor) {
+    const imagensValidadas = validarImagensBug(imagens);
     const relato = await relatoBugRepository.create({
       descricao: descricao.trim(),
       pagina: pagina ? pagina.trim() : null,
+      imagens: imagensValidadas,
+      prioridade: prioridade || "media",
       usuarioId: autor?.sub || null,
       usuarioNome: autor?.nome || null,
       usuarioEmail: autor?.email || null,

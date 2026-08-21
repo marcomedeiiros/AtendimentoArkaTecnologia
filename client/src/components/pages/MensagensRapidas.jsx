@@ -1,70 +1,36 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Zap, Plus, Pencil, Trash2, Save, X, Copy, Check,
-  CreditCard, Search, Clock, HandHeart, PhoneOff, Monitor
+  CreditCard, Search, Clock, HandHeart, PhoneOff, Monitor, ImagePlus, Paperclip, Loader2
 } from 'lucide-react';
 import Portal from '../Portal';
+import { MensagensRapidasAPI } from '../../services/api';
 
-async function carregar(chave, padrao) {
-  try {
-    const raw = localStorage.getItem(chave);
-    return raw ? JSON.parse(raw) : padrao;
-  } catch { return padrao; }
-}
-async function salvar(chave, valor) {
-  try { localStorage.setItem(chave, JSON.stringify(valor)); } catch {}
+// Segurança (defesa em profundidade): o anexo de uma mensagem rápida e uma
+// imagem que sera enviada ao cliente e exibida no painel. Aqui validamos tipo e
+// tamanho ANTES de mandar ao servidor; SVG e recusado de proposito (pode
+// carregar script). O servidor revalida tudo de novo (whitelist de MIME, magic
+// bytes, tamanho) e e a autoridade -- esta checagem do cliente e so conveniencia.
+const TIPOS_IMG = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+const MAX_ANEXO_BYTES = 5 * 1024 * 1024; // 5 MB (mesmo teto do servidor)
+
+function lerImagemAnexo(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) return reject(new Error('Nenhum arquivo.'));
+    if (!TIPOS_IMG.includes(file.type)) {
+      return reject(new Error('Só são aceitas imagens PNG, JPEG, WebP ou GIF.'));
+    }
+    if (file.size > MAX_ANEXO_BYTES) {
+      return reject(new Error('Imagem muito grande (máx. 5 MB).'));
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve({ media: reader.result, mimetype: file.type, fileName: file.name });
+    reader.onerror = () => reject(new Error('Não foi possível ler a imagem.'));
+    reader.readAsDataURL(file);
+  });
 }
 
-const MENSAGENS_PADRAO = [
-  {
-    id: 'mr_pix',
-    titulo: 'PIX',
-    categoria: 'pagamento',
-    icon: 'pix',
-    texto: 'Olá! Para realizar o pagamento via PIX, utilize a chave abaixo:\n\n🔑 Chave PIX: pagamentos@arkatecnologia.com.br\n\nApós o pagamento, envie o comprovante neste chat para confirmarmos. 😊',
-    editavel: true
-  },
-  {
-    id: 'mr_limite',
-    titulo: 'Limite de Pesquisa',
-    categoria: 'consulta',
-    icon: 'search',
-    texto: 'Olá! Informamos que você atingiu o limite de pesquisas disponíveis para este período.\n\nPara continuar utilizando o serviço, entre em contato com nossa equipe comercial para verificar as opções disponíveis.',
-    editavel: true
-  },
-  {
-    id: 'mr_tempo',
-    titulo: 'Pesquisa Finalizada por Tempo',
-    categoria: 'consulta',
-    icon: 'clock',
-    texto: 'Olá! Sua pesquisa foi encerrada automaticamente por exceder o tempo limite configurado.\n\nCaso precise de mais informações, fique à vontade para iniciar uma nova consulta ou entrar em contato com nosso suporte.',
-    editavel: true
-  },
-  {
-    id: 'mr_proxima',
-    titulo: 'Até a Próxima!',
-    categoria: 'encerramento',
-    icon: 'bye',
-    texto: 'Foi um prazer atendê-lo(a)! 😊\n\nSe precisar de mais alguma coisa, é só entrar em contato. Estamos sempre aqui para ajudar.\n\n*Equipe Arka Tecnologia* Até a próxima! 👋',
-    editavel: true
-  },
-  {
-    id: 'mr_sem_retorno',
-    titulo: 'Sem Retorno',
-    categoria: 'encerramento',
-    icon: 'noreturn',
-    texto: 'Olá! Percebemos que não obtivemos retorno após nossos contatos.\n\nEste atendimento será encerrado por falta de resposta. Caso precise de auxílio, basta enviar uma nova mensagem será um prazer atendê-lo(a) novamente!',
-    editavel: true
-  },
-  {
-    id: 'mr_anydesk',
-    titulo: 'AnyDesk',
-    categoria: 'suporte',
-    icon: 'monitor',
-    texto: 'Olá! Para darmos continuidade ao suporte remoto, precisamos acessar seu computador via AnyDesk.\n\n📥 *Download AnyDesk:* https://anydesk.com/pt\n\n1. Baixe e instale o AnyDesk\n2. Abra o programa\n3. Envie o número de 9 dígitos que aparecer na tela\n\nAguardamos! 🛠️',
-    editavel: true
-  },
-];
+
 
 function IconeMensagem({ icon, size = 16 }) {
   const mapa = {
@@ -88,20 +54,38 @@ const CATEGORIAS = {
   geral: { label: 'Geral', color: 'bg-slate-600/30 text-slate-300 border-linha' }
 };
 
-function ModalEdicao({ msg, onSalvar, onFechar }) {
+function ModalEdicao({ msg, onSalvar, onFechar, salvando }) {
   const [titulo, setTitulo] = useState(msg?.titulo || '');
   const [texto, setTexto] = useState(msg?.texto || '');
   const [categoria, setCategoria] = useState(msg?.categoria || 'geral');
+  const [anexo, setAnexo] = useState(msg?.anexo || null); // { media, mimetype, fileName }
+  const [erroAnexo, setErroAnexo] = useState('');
+  const fileRef = useRef(null);
+
+  // Permite salvar quando ha titulo e (texto OU anexo) -- uma mensagem so com
+  // imagem (ex.: QR Code) tambem e valida.
+  const podeSalvar = !!titulo.trim() && (!!texto.trim() || !!anexo);
+
+  async function escolherAnexo(file) {
+    if (!file) return;
+    setErroAnexo('');
+    try {
+      setAnexo(await lerImagemAnexo(file));
+    } catch (e) {
+      setErroAnexo(e.message);
+    }
+  }
 
   function salvar() {
-    if (!titulo.trim() || !texto.trim()) return;
+    if (!podeSalvar) return;
+    // O id NAO e fabricado aqui: quem cria vs. edita e decidido pelo componente
+    // pai (com base no registro que estava sendo editado) e o id vem do servidor.
     onSalvar({
-      id: msg?.id || 'mr_' + Date.now(),
       titulo: titulo.trim(),
       texto: texto.trim(),
       categoria,
       icon: msg?.icon || 'default',
-      editavel: true
+      anexo: anexo || null,
     });
   }
 
@@ -159,6 +143,56 @@ function ModalEdicao({ msg, onSalvar, onFechar }) {
               className="w-full min-h-[140px] bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 resize-y transition-colors font-mono leading-relaxed"
             />
           </div>
+
+          {/* Anexo de imagem (ex.: QR Code do PIX). Enviado junto com o texto
+              quando a mensagem for usada no atendimento. */}
+          <div>
+            <label className="text-xs text-slate-400 font-medium block mb-1.5">
+              Anexo de imagem <span className="text-slate-500">(opcional)</span>
+            </label>
+
+            {anexo ? (
+              <div className="flex items-center gap-3 bg-grafite-700 border border-linha rounded-xl p-2.5">
+                <img
+                  src={anexo.media}
+                  alt="Anexo"
+                  className="w-14 h-14 rounded-lg object-cover border border-linha shrink-0 bg-grafite-800"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11px] font-semibold text-white truncate flex items-center gap-1">
+                    <Paperclip size={11} className="text-acao-200 shrink-0" /> {anexo.fileName || 'imagem'}
+                  </div>
+                  <div className="text-[10px] text-slate-500 uppercase">{(anexo.mimetype || '').replace('image/', '') || 'imagem'}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setAnexo(null); setErroAnexo(''); }}
+                  title="Remover anexo"
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-falha/20 text-falha-400 shrink-0"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-linha px-3 py-2.5 text-xs font-semibold text-slate-400 transition-colors hover:border-acao/50 hover:text-white"
+              >
+                <ImagePlus size={15} /> Anexar imagem
+              </button>
+            )}
+
+            <input
+              ref={fileRef}
+              type="file"
+              accept={TIPOS_IMG.join(',')}
+              className="hidden"
+              onChange={e => { escolherAnexo(e.target.files?.[0]); e.target.value = ''; }}
+            />
+            {erroAnexo && <p className="mt-1.5 text-[11px] font-semibold text-falha-400">{erroAnexo}</p>}
+            <p className="mt-1 text-[10px] text-slate-500">PNG, JPEG, WebP ou GIF · máx. 2 MB</p>
+          </div>
         </div>
 
         <div className="p-4 bg-grafite-600 border-t border-linha flex flex-col-reverse sm:flex-row sm:justify-end gap-2 shrink-0 rounded-b-2xl">
@@ -170,10 +204,10 @@ function ModalEdicao({ msg, onSalvar, onFechar }) {
           </button>
           <button
             onClick={salvar}
-            disabled={!titulo.trim() || !texto.trim()}
+            disabled={!podeSalvar || salvando}
             className="px-4 py-2 sm:py-1.5 rounded-lg bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-acao/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Save size={13} /> Salvar Mensagem
+            {salvando ? <><Loader2 size={13} className="animate-spin" /> Salvando...</> : <><Save size={13} /> Salvar Mensagem</>}
           </button>
         </div>
       </div>
@@ -210,30 +244,34 @@ function CardMensagem({ msg, onEditar, onRemover, onCopiar, copiado }) {
               ? <Check size={13} className="text-ativo-400" />
               : <Copy size={13} className="text-slate-400" />}
           </button>
-          {msg.editavel && (
-            <>
-              <button
-                onClick={() => onEditar(msg)}
-                title="Editar mensagem"
-                className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-blue-400 transition-colors"
-              >
-                <Pencil size={13} />
-              </button>
-              <button
-                onClick={() => onRemover(msg.id)}
-                title="Remover mensagem"
-                className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-falha-400 transition-colors"
-              >
-                <Trash2 size={13} />
-              </button>
-            </>
-          )}
+          <button
+            onClick={() => onEditar(msg)}
+            title="Editar mensagem"
+            className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-blue-400 transition-colors"
+          >
+            <Pencil size={13} />
+          </button>
+          <button
+            onClick={() => onRemover(msg.id)}
+            title="Remover mensagem"
+            className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-falha-400 transition-colors"
+          >
+            <Trash2 size={13} />
+          </button>
         </div>
       </div>
 
-      <div className="bg-grafite-700 rounded-xl p-3 border border-linha">
-        <p className="text-[11px] text-slate-300 leading-relaxed line-clamp-3 whitespace-pre-line">
-          {msg.texto}
+      <div className="bg-grafite-700 rounded-xl p-3 border border-linha flex gap-3">
+        {msg.anexo?.media && (
+          <img
+            src={msg.anexo.media}
+            alt="Anexo"
+            className="w-12 h-12 rounded-lg object-cover border border-linha shrink-0 bg-grafite-800"
+            title="Imagem anexada"
+          />
+        )}
+        <p className="text-[11px] text-slate-300 leading-relaxed line-clamp-3 whitespace-pre-line flex-1 min-w-0">
+          {msg.texto || (msg.anexo ? '(somente imagem)' : '')}
         </p>
       </div>
     </div>
@@ -247,41 +285,55 @@ export default function MensagensRapidas({ onUsarMensagem }) {
   const [copiado, setCopiado] = useState(null);
   const [busca, setBusca] = useState('');
   const [catFiltro, setCatFiltro] = useState('todas');
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState('');
+  const [salvando, setSalvando] = useState(false);
 
-  const [carregado, setCarregado] = useState(false);
-
-  useEffect(() => {
-    carregar('arka:mensagens_rapidas', null).then(salvas => {
-      setMensagens(Array.isArray(salvas) ? salvas : MENSAGENS_PADRAO);
-      setCarregado(true);
-    });
-  }, []);
-
-  useEffect(() => {
-    // Salva SEMPRE apos o carregamento inicial -- inclusive lista vazia. Antes
-    // o guard `length > 0` impedia de gravar quando voce apagava a ultima
-    // mensagem, entao o localStorage ficava com a lista antiga e tudo
-    // "voltava" no F5. O flag `carregado` evita sobrescrever com o [] inicial.
-    if (carregado) salvar('arka:mensagens_rapidas', mensagens);
-  }, [mensagens, carregado]);
-
-  function salvarMensagem(msg) {
-    setMensagens(prev => {
-      const idx = prev.findIndex(m => m.id === msg.id);
-      if (idx >= 0) {
-        const nova = [...prev];
-        nova[idx] = msg;
-        return nova;
-      }
-      return [...prev, msg];
-    });
-    setModalAberto(false);
-    setEditando(null);
+  // Mensagens rapidas agora vivem no servidor (compartilhadas pela equipe).
+  async function carregarLista() {
+    setCarregando(true);
+    setErro('');
+    try {
+      setMensagens(await MensagensRapidasAPI.listar());
+    } catch (e) {
+      setErro(e.message || 'Não foi possível carregar as mensagens.');
+    } finally {
+      setCarregando(false);
+    }
   }
 
-  function removerMensagem(id) {
-    if (!window.confirm('Remover esta mensagem rápida?')) return;
-    setMensagens(prev => prev.filter(m => m.id !== id));
+  useEffect(() => { carregarLista(); }, []);
+
+  // Cria (sem id em edicao) ou atualiza (id do registro que estava aberto). O
+  // servidor valida titulo/conteudo e a imagem do anexo antes de gravar.
+  async function salvarMensagem(payload) {
+    setSalvando(true);
+    setErro('');
+    try {
+      if (editando?.id) {
+        await MensagensRapidasAPI.atualizar(editando.id, payload);
+      } else {
+        await MensagensRapidasAPI.criar(payload);
+      }
+      setModalAberto(false);
+      setEditando(null);
+      await carregarLista();
+    } catch (e) {
+      window.alert('Não foi possível salvar: ' + (e.message || 'erro desconhecido'));
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  async function removerMensagem(id) {
+    if (!window.confirm('Remover esta mensagem rápida? Isso vale para toda a equipe.')) return;
+    setErro('');
+    try {
+      await MensagensRapidasAPI.remover(id);
+      await carregarLista();
+    } catch (e) {
+      window.alert('Não foi possível remover: ' + (e.message || 'erro desconhecido'));
+    }
   }
 
   function copiarTexto(msg) {
@@ -368,42 +420,59 @@ export default function MensagensRapidas({ onUsarMensagem }) {
           );
         })}
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filtradas.map(msg => (
-          <CardMensagem
-            key={msg.id}
-            msg={msg}
-            onEditar={abrirEdicao}
-            onRemover={removerMensagem}
-            onCopiar={copiarTexto}
-            copiado={copiado}
-          />
-        ))}
-        {filtradas.length === 0 && (
-          <div className="col-span-full text-center text-slate-400 text-xs py-10">
-            Nenhuma mensagem encontrada.
-          </div>
-        )}
-      </div>
+      {erro && (
+        <div className="rounded-xl border border-falha/30 bg-falha/15 p-3 text-xs font-semibold text-falha-400">
+          {erro}
+        </div>
+      )}
+
+      {carregando ? (
+        <div className="flex items-center justify-center gap-2 py-16 text-slate-400 text-xs">
+          <Loader2 size={16} className="animate-spin" /> Carregando mensagens...
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtradas.map(msg => (
+            <CardMensagem
+              key={msg.id}
+              msg={msg}
+              onEditar={abrirEdicao}
+              onRemover={removerMensagem}
+              onCopiar={copiarTexto}
+              copiado={copiado}
+            />
+          ))}
+          {filtradas.length === 0 && (
+            <div className="col-span-full text-center text-slate-400 text-xs py-10">
+              Nenhuma mensagem encontrada.
+            </div>
+          )}
+        </div>
+      )}
 
       {modalAberto && (
         <ModalEdicao
           msg={editando}
+          salvando={salvando}
           onSalvar={salvarMensagem}
-          onFechar={() => { setModalAberto(false); setEditando(null); }}
+          onFechar={() => { if (!salvando) { setModalAberto(false); setEditando(null); } }}
         />
       )}
     </div>
   );
 }
 
+// Hook usado pelo painel de mensagens rapidas no atendimento (somente leitura).
+// Busca do servidor a cada montagem (o painel so monta ao ser aberto).
 export function useMensagensRapidas() {
-  const [mensagens, setMensagens] = useState(MENSAGENS_PADRAO);
+  const [mensagens, setMensagens] = useState([]);
 
   useEffect(() => {
-    carregar('arka:mensagens_rapidas', null).then(salvas => {
-      if (salvas) setMensagens(salvas);
-    });
+    let vivo = true;
+    MensagensRapidasAPI.listar()
+      .then(lista => { if (vivo) setMensagens(Array.isArray(lista) ? lista : []); })
+      .catch(() => { if (vivo) setMensagens([]); });
+    return () => { vivo = false; };
   }, []);
 
   return mensagens;

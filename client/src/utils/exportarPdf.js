@@ -232,6 +232,7 @@ export async function exportarTranscricaoPdf(conversa, { atendente = '-', status
   const protocolo = String(conversa.id || '').replace(/-/g, '').slice(0, 8).toUpperCase();
   const idTexto = conversa.id ? `#${protocolo}  (${conversa.id})` : '-';
   const meta = [
+    ['OS', conversa.ticket || '-'],
     ['ID da conversa', idTexto],
     ['Cliente', conversa.cliente || 'Cliente'],
     ['Telefone', conversa.telefone || '-'],

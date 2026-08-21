@@ -15,15 +15,15 @@ function obterAudioContext() {
 
 function obterAudioElemento() {
   if (!audioInstancia && typeof window !== 'undefined') {
-    audioInstancia = new Audio('/IFOOD.mp3');
+    audioInstancia = new Audio('/ARKACHAT.mp3');
     audioInstancia.preload = 'auto';
   }
   return audioInstancia;
 }
 
-// Pré-carrega e decodifica o arquivo /IFOOD.mp3 em memória via ArrayBuffer na inicialização
+// Pré-carrega e decodifica o arquivo /ARKACHAT.mp3 em memória via ArrayBuffer na inicialização
 if (typeof window !== 'undefined') {
-  fetch('/IFOOD.mp3')
+  fetch('/ARKACHAT.mp3')
     .then(r => r.arrayBuffer())
     .then(arrayBuffer => {
       const ctx = obterAudioContext();
