@@ -24,6 +24,8 @@ const configuracaoRoutes = require("./modules/configuracoes/configuracao.routes"
 const permissaoRoutes = require("./modules/permissoes/permissao.routes");
 const preferenciaRoutes = require("./modules/preferencias/preferencia.routes");
 const bugRoutes = require("./modules/bugs/bug.routes");
+const mensagemRapidaRoutes = require("./modules/mensagensRapidas/mensagemRapida.routes");
+const agendaRoutes = require("./modules/agenda/agenda.routes");
 const {
   webhookRouter,
   adminRouter,
@@ -63,6 +65,8 @@ function createApp() {
   app.use("/api/permissoes", permissaoRoutes);
   app.use("/api/preferencias", preferenciaRoutes);
   app.use("/api/bugs", bugRoutes);
+  app.use("/api/mensagens-rapidas", mensagemRapidaRoutes);
+  app.use("/api/agenda", agendaRoutes);
   app.use("/api/whatsapp", adminRouter);
 
   const mountWebhook = (path) => {

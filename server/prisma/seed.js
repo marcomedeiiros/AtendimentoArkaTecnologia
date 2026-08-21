@@ -52,6 +52,13 @@ async function main() {
       email: adminEmail,
       senhaHash,
       cargo: "Administrador",
+      // `ativo` PRECISA vir aqui, e nao so no update: o modelo tem
+      // @default(false) (contas novas nascem pendentes de aprovacao). Num banco
+      // que ja existia o upsert caia no update e ninguem percebia -- mas num
+      // banco NOVO o administrador nascia inativo e o login devolvia 403
+      // CONTA_PENDENTE, sem nenhum outro admin para aprova-lo. Instalacao do
+      // zero travava no primeiro login.
+      ativo: true,
     },
   });
 

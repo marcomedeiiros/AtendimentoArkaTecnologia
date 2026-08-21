@@ -72,11 +72,17 @@ class ConversaController {
   }
 
   atualizarStatus(req, res) {
-    return conversaService.atualizarStatus(req.params.id, req.body.status, req.user?.cargo).then((data) => success(res, data));
+    return conversaService.atualizarStatus(req.params.id, req.body.status, req.user?.cargo, req.user).then((data) => success(res, data));
   }
 
   atualizarSetor(req, res) {
     return conversaService.atualizarSetor(req.params.id, req.body.setor, req.user?.cargo).then((data) => success(res, data));
+  }
+
+  definirAtendente(req, res) {
+    return conversaService
+      .definirAtendente(req.params.id, req.body.atendenteId ?? null, req.user?.cargo)
+      .then((data) => success(res, data));
   }
 
   avaliarAtendimento(req, res) {

@@ -94,6 +94,7 @@ model Parceiro {
   email        String?
   telefones    String?
   cidades      String?
+  contratos    String?        @default("") // tipos de contrato, chaves separadas por virgula (ex: "ti,backups")
   status       String         @default("ativo")
   criadoEm     DateTime       @default(now()) @map("criado_em")
   atualizadoEm DateTime       @updatedAt @map("atualizado_em")
@@ -102,6 +103,28 @@ model Parceiro {
 
   @@index([status])
   @@map("parceiros")
+}
+
+// Agenda compartilhada pela equipe (antes vivia so no localStorage do
+// navegador). `data` fica como texto YYYY-MM-DD, igual ao front, para evitar
+// confusao de fuso.
+model Compromisso {
+  id           String   @id @default(uuid())
+  titulo       String
+  data         String   // YYYY-MM-DD
+  hora         String   @default("09:00")
+  tipo         String   @default("reuniao")  // reuniao|ligacao|tarefa|followup|lembrete
+  prioridade   String   @default("media")    // alta|media|baixa
+  descricao    String   @default("")
+  contato      String   @default("")
+  concluido    Boolean  @default(false)
+  usuarioId    String?  @map("usuario_id")
+  usuarioNome  String?  @map("usuario_nome")
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  @@index([data])
+  @@map("compromissos")
 }
 
 model Contato {
@@ -180,6 +203,11 @@ model Conversa {
   fixada            Boolean           @default(false)
   arquivada         Boolean           @default(false)
   oculta            Boolean           @default(false)
+  // Numeracao sequencial. Ticket para toda conversa (exibido como AK00001);
+  // OS gerada so quando o atendimento e do setor Tecnico (exibido como OS00001).
+  // Unicos e anulaveis (varios NULL convivem no SQLite ate serem atribuidos).
+  numeroTicket      Int?              @unique @map("numero_ticket")
+  numeroOS          Int?              @unique @map("numero_os")
   atendenteId       String?           @map("atendente_id")
   atendidoEm        DateTime?         @map("atendido_em")
   fechadoEm         DateTime?         @map("fechado_em")
@@ -196,6 +224,16 @@ model Conversa {
   @@index([statusAtendimento])
   @@index([instanciaId, telefone])
   @@map("conversas")
+}
+
+// Sequencias numericas atomicas (ex.: "ticket", "os"). O incremento via
+// update({ valor: { increment: 1 } }) e atomico por linha -- gera numeros
+// unicos mesmo com criacoes simultaneas.
+model Contador {
+  chave String @id
+  valor Int    @default(0)
+
+  @@map("contadores")
 }
 
 model Mensagem {
@@ -252,7 +290,9 @@ model RelatoBug {
   id            String   @id @default(uuid())
   descricao     String
   pagina        String?  // rota de onde o relato foi aberto (ex: /atendimento)
+  imagens       Json?    // prints anexados (array de data URLs base64), opcional
   status        String   @default("aberto")
+  prioridade    String   @default("media") // baixa | media | alta | critica (triagem do admin)
   usuarioId     String?  @map("usuario_id")
   usuarioNome   String?  @map("usuario_nome")
   usuarioEmail  String?  @map("usuario_email")
@@ -261,6 +301,26 @@ model RelatoBug {
 
   @@index([status, criadoEm])
   @@map("relatos_bug")
+}
+
+// Mensagens rapidas compartilhadas por toda a equipe (antes viviam no
+// localStorage de cada navegador). O anexo opcional (ex.: QR Code do PIX) e
+// guardado como data URL base64, ja validado no servidor (imagemSegura).
+model MensagemRapida {
+  id            String   @id @default(uuid())
+  titulo        String
+  texto         String   @default("")
+  categoria     String   @default("geral")
+  icon          String   @default("default")
+  anexoMedia    String?  @map("anexo_media")    // data URL base64 (raster), opcional
+  anexoMimetype String?  @map("anexo_mimetype")
+  anexoNome     String?  @map("anexo_nome")
+  ordem         Int      @default(0)
+  criadoEm      DateTime @default(now()) @map("criado_em")
+  atualizadoEm  DateTime @updatedAt @map("atualizado_em")
+
+  @@index([ordem, criadoEm])
+  @@map("mensagens_rapidas")
 }
 
 model LogExecucaoFluxo {

@@ -1,7 +1,45 @@
 import { useState } from 'react';
-import { Plus, Trash2, Search, Building2, Mail, Phone, MapPin, Pencil, X, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Search, Building2, Mail, Phone, MapPin, Pencil, X, Loader2, FileText } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { ParceirosAPI } from '../services/api';
+
+// Tipos de contrato oferecidos ao cliente. `chave` casa com o backend
+// (parceiro.dto.js); `label` e o que aparece na tela.
+const TIPOS_CONTRATO = [
+  { chave: 'ti', label: 'TI' },
+  { chave: 'backups', label: 'Backups' },
+  { chave: 'locacao', label: 'Locação' },
+  { chave: 'hospedagem', label: 'Hospedagem' },
+];
+const LABEL_CONTRATO = Object.fromEntries(TIPOS_CONTRATO.map(t => [t.chave, t.label]));
+
+// Seletor multiplo de contratos (chips que ligam/desligam).
+function ContratosSelect({ valor, onChange }) {
+  const lista = Array.isArray(valor) ? valor : [];
+  const alternar = (chave) =>
+    onChange(lista.includes(chave) ? lista.filter(c => c !== chave) : [...lista, chave]);
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {TIPOS_CONTRATO.map(t => {
+        const ativo = lista.includes(t.chave);
+        return (
+          <button
+            key={t.chave}
+            type="button"
+            onClick={() => alternar(t.chave)}
+            className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all ${
+              ativo
+                ? 'bg-acao/20 border-acao/40 text-acao-200'
+                : 'bg-grafite-700 border-linha text-slate-400 hover:text-white'
+            }`}
+          >
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 function limparCnpj(v) { return String(v || '').replace(/\D/g, ''); }
 
@@ -37,13 +75,15 @@ export default function ParceirosPage() {
   const [email, setEmail] = useState('');
   const [telefones, setTelefones] = useState('');
   const [cidades, setCidades] = useState('');
+  const [contratos, setContratos] = useState([]);
+  const [contratoFiltro, setContratoFiltro] = useState(''); // filtra a lista por tipo de contrato
   const [erro, setErro] = useState('');
   const [busca, setBusca] = useState('');
 
   // Edicao: guarda o parceiro em edicao e o rascunho dos campos. O CNPJ nao
   // entra no rascunho porque e a chave -- so leitura no modal.
   const [editando, setEditando] = useState(null);
-  const [rascunho, setRascunho] = useState({ razaoSocial: '', email: '', telefones: '', cidades: '' });
+  const [rascunho, setRascunho] = useState({ razaoSocial: '', email: '', telefones: '', cidades: '', contratos: [] });
   const [editErro, setEditErro] = useState('');
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
 
@@ -54,6 +94,7 @@ export default function ParceirosPage() {
       email: p.email || '',
       telefones: p.telefones || '',
       cidades: p.cidades || '',
+      contratos: Array.isArray(p.contratos) ? p.contratos : [],
     });
     setEditErro('');
   }
@@ -75,6 +116,7 @@ export default function ParceirosPage() {
         email: rascunho.email.trim() || null,
         telefones: rascunho.telefones.trim() || null,
         cidades: rascunho.cidades.trim() || null,
+        contratos: rascunho.contratos,
       });
       atualizarParceiros(parceiros.map(p => p.cnpj === editando.cnpj ? atualizado : p));
       setEditando(null);
@@ -97,13 +139,14 @@ export default function ParceirosPage() {
       email: email.trim() || null,
       telefones: telefones.trim() || null,
       cidades: cidades.trim() || null,
+      contratos,
       status: 'ativo'
     };
 
     try {
       const criado = await ParceirosAPI.criar(novo);
       atualizarParceiros([...parceiros.filter(p => p.cnpj !== c), criado]);
-      setCnpjInput(''); setNome(''); setEmail(''); setTelefones(''); setCidades('');
+      setCnpjInput(''); setNome(''); setEmail(''); setTelefones(''); setCidades(''); setContratos([]);
     } catch (err) {
       setErro(`Não foi possível salvar: ${err.message}. Verifique se o back-end está rodando.`);
     }
@@ -131,6 +174,10 @@ export default function ParceirosPage() {
   }
 
   const filtrados = parceiros.filter(p => {
+    // Filtro por tipo de contrato (combina com a busca por texto).
+    if (contratoFiltro && !(Array.isArray(p.contratos) && p.contratos.includes(contratoFiltro))) {
+      return false;
+    }
     if (!busca.trim()) return true;
     const term = busca.toLowerCase().trim();
     const cnpjDigits = limparCnpj(busca);
@@ -140,6 +187,12 @@ export default function ParceirosPage() {
     const matchCidade = (p.cidades || '').toLowerCase().includes(term);
     return matchNome || matchCnpj || matchEmail || matchCidade;
   });
+
+  // Contagem por tipo de contrato, para exibir no filtro.
+  const contagemContrato = TIPOS_CONTRATO.reduce((acc, t) => {
+    acc[t.chave] = parceiros.filter(p => Array.isArray(p.contratos) && p.contratos.includes(t.chave)).length;
+    return acc;
+  }, {});
 
   return (
     <div className="fade-in space-y-6">
@@ -190,6 +243,15 @@ export default function ParceirosPage() {
             <Plus size={15} /> Cadastrar Parceiro
           </button>
         </div>
+
+        <div>
+          <label className="mb-1 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-slate-400">
+            <FileText size={12} /> Tipos de contrato deste cliente
+          </label>
+          <p className="mb-2 text-[11px] text-slate-500">Marque os serviços que este cliente contratou (pode escolher mais de um).</p>
+          <ContratosSelect valor={contratos} onChange={setContratos} />
+        </div>
+
         {erro && <div className="text-xs text-falha-400 font-semibold">{erro}</div>}
       </div>
 
@@ -201,6 +263,36 @@ export default function ParceirosPage() {
           placeholder="Pesquisar por Nome, CNPJ, E-mail ou Cidade..."
           className="w-full bg-grafite-700 border border-linha rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50"
         />
+      </div>
+
+      {/* Filtro por tipo de contrato: mostra só quem tem o serviço escolhido. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+          <FileText size={12} /> Contrato
+        </span>
+        <button
+          onClick={() => setContratoFiltro('')}
+          className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all ${
+            contratoFiltro === ''
+              ? 'border-acao/40 bg-acao/15 text-acao-200'
+              : 'border-linha text-slate-400 hover:text-white'
+          }`}
+        >
+          Todos ({parceiros.length})
+        </button>
+        {TIPOS_CONTRATO.map(t => (
+          <button
+            key={t.chave}
+            onClick={() => setContratoFiltro(t.chave)}
+            className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all ${
+              contratoFiltro === t.chave
+                ? 'border-acao/40 bg-acao/15 text-acao-200'
+                : 'border-linha text-slate-400 hover:text-white'
+            }`}
+          >
+            {t.label} ({contagemContrato[t.chave] || 0})
+          </button>
+        ))}
       </div>
 
       <div className="space-y-2.5">
@@ -230,6 +322,18 @@ export default function ParceirosPage() {
                     </span>
                   )}
                 </div>
+                {Array.isArray(p.contratos) && p.contratos.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1.5">
+                    {p.contratos.map(c => (
+                      <span
+                        key={c}
+                        className="inline-flex items-center gap-1 rounded-md border border-acao/30 bg-acao/10 px-2 py-0.5 text-[10px] font-bold text-acao-200"
+                      >
+                        <FileText size={10} /> {LABEL_CONTRATO[c] || c}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
@@ -263,7 +367,11 @@ export default function ParceirosPage() {
 
         {filtrados.length === 0 && (
           <div className="text-xs text-slate-400 text-center py-10 glass-panel rounded-2xl border border-linha">
-            Nenhum parceiro encontrado para &quot;{busca}&quot;.
+            {contratoFiltro
+              ? `Nenhum cliente com contrato de ${LABEL_CONTRATO[contratoFiltro]}${busca.trim() ? ` para "${busca}"` : ''}.`
+              : busca.trim()
+                ? `Nenhum parceiro encontrado para "${busca}".`
+                : 'Nenhum parceiro cadastrado ainda.'}
           </div>
         )}
       </div>
@@ -327,6 +435,15 @@ export default function ParceirosPage() {
                 placeholder="Cidades atendidas"
                 className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50"
               />
+              <div>
+                <label className="mb-1.5 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-slate-400">
+                  <FileText size={12} /> Tipos de contrato
+                </label>
+                <ContratosSelect
+                  valor={rascunho.contratos}
+                  onChange={lista => setRascunho(r => ({ ...r, contratos: lista }))}
+                />
+              </div>
             </div>
 
             {editErro && <div className="text-[11px] font-semibold text-falha-400">{editErro}</div>}

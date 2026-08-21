@@ -8,8 +8,10 @@ import {
   // midia girava um icone de IMAGEM. Agora e o Loader2 de verdade.
   FileText, MapPin, Contact, Paperclip, Smile, Loader2,
   SlidersHorizontal, Star, Archive, EyeOff, MoreVertical,
-  ZoomIn, ZoomOut, Maximize2, Download, CornerUpLeft, Share2, Pencil, MoreHorizontal, Mic, Tag, PenLine
+  ZoomIn, ZoomOut, Maximize2, Download, CornerUpLeft, Share2, Pencil, MoreHorizontal, Mic, Tag, PenLine,
+  Sun, Moon
 } from 'lucide-react';
+import { temaAtual, alternarTema } from '../../utils/tema';
 import { EmojiIcon, FormattedMessage } from './EmojiIcon';
 import { useMensagensRapidas } from './MensagensRapidas';
 import Avatar from '../Avatar';
@@ -20,18 +22,15 @@ import { useAppContext } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { ConversasAPI } from '../../services/api';
 import { usePreferencia } from '../../hooks/usePreferencia';
-import { wallpaperStyle as WHATSAPP_BG } from '../../utils/wallpaper';
 
-// Atendente responsavel por cada conversa. Fica no localStorage (e nao no
-// back-end) porque a coluna atendenteId da conversa aponta para Usuario, nao
-// para a Equipe cadastrada nesta tela -- e persistir no servidor exigiria
-// migracao. Guardado por id de conversa, sobrevive ao polling de 8s e ao F5.
-const ATEND_KEY = 'arka_conversa_atendentes';
-function lerAtendentes() {
-  try { return JSON.parse(localStorage.getItem(ATEND_KEY)) || {}; } catch { return {}; }
-}
-function salvarAtendentes(map) {
-  try { localStorage.setItem(ATEND_KEY, JSON.stringify(map)); } catch {}
+// O responsavel pelo atendimento agora vem do banco (conversa.atendenteNome /
+// atendenteId), compartilhado por toda a equipe. Antes vivia no localStorage e
+// era so por navegador. Helper para o formato { nome } que as badges esperam.
+function atendenteDaConversa(c) {
+  // Conversa pendente (na fila) nao tem responsavel: a badge some ate alguem
+  // assumir. O servidor tambem limpa o atendenteId ao voltar para pendente.
+  if (!c?.atendenteNome || c.statusAtendimento === 'pendente') return null;
+  return { nome: c.atendenteNome, cargo: c.atendenteCargo || '' };
 }
 
 // "ha 5 min" para o painel de notificacoes do sino (recebe timestamp em ms).
@@ -315,11 +314,19 @@ function PainelMensagensRapidas({ onSelecionar, onFechar }) {
         {filtradas.map(m => (
           <button
             key={m.id}
-            onClick={() => onSelecionar(m.texto)}
-            className="w-full text-left p-2.5 rounded-xl hover:bg-grafite-600 border border-transparent hover:border-acao/30 transition-all group"
+            onClick={() => onSelecionar(m)}
+            className="w-full text-left p-2.5 rounded-xl hover:bg-grafite-600 border border-transparent hover:border-acao/30 transition-all group flex items-center gap-2.5"
           >
-            <div className="font-semibold text-xs text-white group-hover:text-acao-200 transition-colors">{m.titulo}</div>
-            <div className="text-[10px] text-slate-400 truncate mt-0.5">{m.texto}</div>
+            {m.anexo?.media && (
+              <img src={m.anexo.media} alt="" className="w-9 h-9 rounded-lg object-cover border border-linha shrink-0 bg-grafite-800" />
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold text-xs text-white group-hover:text-acao-200 transition-colors flex items-center gap-1">
+                {m.anexo?.media && <Paperclip size={11} className="text-acao-200 shrink-0" />}
+                <span className="truncate">{m.titulo}</span>
+              </div>
+              <div className="text-[10px] text-slate-400 truncate mt-0.5">{m.texto || '(somente imagem)'}</div>
+            </div>
           </button>
         ))}
         {filtradas.length === 0 && (
@@ -785,7 +792,7 @@ function PainelTv({ pendentes, abertas, parceiros, onFechar }) {
 // deixar tres elementos soltos boiando no meio dos doodles.
 function TelaSemConversa() {
   return (
-    <div className="flex-1 flex items-center justify-center relative overflow-hidden" style={WHATSAPP_BG}>
+    <div className="wp-chat flex-1 flex items-center justify-center relative overflow-hidden">
 
       {/* Baloezinhos de conversa ao fundo, nas cores do WhatsApp escuro */}
       <div className="absolute top-8 left-8 w-32 h-10 rounded-2xl rounded-tl-sm bg-grafite-600 opacity-60" />
@@ -1118,7 +1125,7 @@ function MensagemMidia({ m, escuro, onAbrirImagem }) {
 
 const CardConversa = React.memo(function CardConversa({
   c, selecionada, parceiros, whatsAppConectado,
-  onSelecionar, onAtender, onFechar, onReabrir, onEspiar, onFixar, fixado, onFlag
+  onSelecionar, onAtender, onFechar, onReabrir, onEspiar, onFixar, fixado, onFlag, atendente
 }) {
   const [menuAberto, setMenuAberto] = useState(false);
   const menuRef = useRef(null);
@@ -1175,8 +1182,8 @@ const CardConversa = React.memo(function CardConversa({
             <span className={`min-w-0 truncate text-xs ${naoLidas > 0 ? 'font-extrabold text-white' : 'font-bold text-slate-300'}`}>
               {c.cliente}
             </span>
-            <span className="shrink-0 text-[9px] font-mono font-bold text-acao-200/90" title={`Conversa ${c.id}`}>
-              #{idCurto(c.id)}
+            <span className="shrink-0 text-[9px] font-mono font-bold text-acao-200/90" title={`OS ${c.ticket || ''} · Conversa ${c.id}`}>
+              #{c.ticket || idCurto(c.id)}
             </span>
             <span className={`shrink-0 inline-flex items-center text-[9px] font-bold px-1.5 py-px rounded-md border ${chipCnpj.classe}`}
               title={chipCnpj.titulo}>
@@ -1186,6 +1193,12 @@ const CardConversa = React.memo(function CardConversa({
               <span className={`shrink-0 inline-flex items-center text-[9px] font-bold px-1.5 py-px rounded-md border ${setor.classe}`}
                 title={`Cliente quer o setor ${setor.setor}`}>
                 {setor.label}
+              </span>
+            )}
+            {atendente?.nome && (
+              <span className="shrink-0 inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-px rounded-md border bg-purple-500/15 text-purple-300 border-purple-500/30"
+                title={`Atendendo: ${atendente.nome}`}>
+                <UserCheck size={9} /> {atendente.nome.split(' ')[0]}
               </span>
             )}
           </div>
@@ -1283,7 +1296,7 @@ function tipoDoArquivo(file) {
 function PainelChat({
   conversa, parceiros,
   texto, setTexto, scrollRef, onEnviar, onEnviarMidia, onFechar, onPendente, onReabrir,
-  onMarcarLido, onApagarChat, onSolicitarCnpj, onValidarCnpjModal,
+  onMarcarLido, onSolicitarCnpj, onValidarCnpjModal,
   onExecutarFluxo, fluxoSugerido, onVoltar, atendente, onTransferir,
   onEditar, onEncaminharPara, conversas, onAtender,
   assinar, onToggleAssinar, assinaturaNome, onApagarMensagem
@@ -1440,11 +1453,11 @@ function PainelChat({
               <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
               {meta.label}
             </span>
-            {/* Mesmo numero que aparece no cartao da lista, do lado do status:
-                e por ele que o operador cita a conversa. */}
+            {/* Numero da OS (identificador unico da conversa): e por ele que o
+                operador cita o atendimento. */}
             <span className="inline-flex items-center text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-grafite-700 border border-linha text-acao-200"
-              title={`Conversa ${conversa.id}`}>
-              #{idCurto(conversa.id)}
+              title={`OS ${conversa.ticket || ''} · Conversa ${conversa.id}`}>
+              #{conversa.ticket || idCurto(conversa.id)}
             </span>
           </div>
           <div className="mt-1 flex items-center gap-2 flex-wrap">
@@ -1515,12 +1528,6 @@ function PainelChat({
             className="px-2.5 py-1.5 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 text-xs font-semibold border border-purple-500/30 transition-all flex items-center gap-1">
             <ArrowRightLeft size={13} /> Transferir
           </button>
-
-          <button onClick={() => onApagarChat(conversa.id)}
-            title="Apagar conversa"
-            className="p-1.5 rounded-lg bg-falha/15 hover:bg-falha/25 text-falha-400 border border-falha/30 transition-all">
-            <Trash2 size={13} />
-          </button>
         </div>
       </div>
 
@@ -1528,7 +1535,7 @@ function PainelChat({
         onDragOver={(e) => { e.preventDefault(); if (!arrastando) setArrastando(true); }}
         onDragLeave={(e) => { e.preventDefault(); setArrastando(false); }}
         onDrop={(e) => { e.preventDefault(); setArrastando(false); const f = e.dataTransfer.files?.[0]; if (f) selecionarArquivo(f); }}
-        style={WHATSAPP_BG} className="flex-1 overflow-y-auto p-3 space-y-1.5 relative">
+        className="wp-chat flex-1 overflow-y-auto p-3 space-y-1.5 relative">
         {arrastando && (
           <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/70 border-2 border-dashed border-acao rounded-xl pointer-events-none">
             <div className="text-acao-200 font-bold text-sm flex items-center gap-2">
@@ -1755,7 +1762,22 @@ function PainelChat({
       <div className="p-3 bg-grafite-600/80 border-t border-linha flex flex-wrap items-center gap-2 relative">
         {showMsgRapidas && (
           <PainelMensagensRapidas
-            onSelecionar={txt => { setTexto(txt); setShowMsgRapidas(false); }}
+            onSelecionar={m => {
+              setTexto(m.texto || '');
+              // Mensagem com imagem (ex.: QR Code do PIX): prepara a imagem na
+              // area de anexo e usa o texto como legenda. O operador confere e
+              // clica em enviar -- o servidor revalida a midia antes de sair.
+              if (m.anexo?.media) {
+                setAnexo({
+                  dataUrl: m.anexo.media,
+                  tipo: 'imagem',
+                  mimetype: m.anexo.mimetype || 'image/png',
+                  fileName: m.anexo.fileName || 'anexo.png',
+                  progresso: 0,
+                });
+              }
+              setShowMsgRapidas(false);
+            }}
             onFechar={() => setShowMsgRapidas(false)}
           />
         )}
@@ -1926,6 +1948,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   const [visibilidade,  setVisibilidade] = usePreferencia('central.visibilidade', VISIBILIDADE_PADRAO);
   const [showFiltros,   setShowFiltros]  = useState(false);
   const [modoTv, setModoTv] = useState(false);
+  const [tema, setTema] = useState(temaAtual()); // claro/escuro (só o ícone reage)
   const filtrosRef = useRef(null);
 
   // Pede tela cheia de verdade ao navegador: numa TV, a barra do sistema e o
@@ -1949,7 +1972,6 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   }, []);
   const [sinoTocando,   setSinoTocando]  = useState(false);
   const [showNotif,     setShowNotif]    = useState(false);
-  const [atendentes,    setAtendentes]   = useState(lerAtendentes);
   const [transferindo,  setTransferindo] = useState(null); // conversa alvo do modal de transferencia
   const scrollRef = useRef(null);
   const totalMsgClienteRef = useRef(null);
@@ -1988,16 +2010,6 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, [showFiltros]);
-
-  // Transfere a conversa para um membro da equipe (persistido em localStorage).
-  const transferirConversa = useCallback((conv, membro) => {
-    setAtendentes(prev => {
-      const novo = { ...prev, [conv.id]: { nome: membro.nome, cargo: membro.cargo || '', em: Date.now() } };
-      salvarAtendentes(novo);
-      return novo;
-    });
-    setTransferindo(null);
-  }, []);
 
   // Flags agora vivem no banco (antes: localStorage). Otimista + confirma na API.
   const atualizarFlag = useCallback(async (id, flags) => {
@@ -2128,13 +2140,40 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     setConversas(prev => prev.map(c => c.id === atualizada.id ? atualizada : c));
   }, [setConversas]);
 
+  // Define o responsavel pela conversa no banco (compartilhado com a equipe).
+  // membro.id e o id do usuario (vem de equipe.listar).
+  const transferirConversa = useCallback(async (conv, membro) => {
+    try {
+      aplicarConversa(await ConversasAPI.definirAtendente(conv.id, membro.id));
+    } catch (e) {
+      window.alert('Não foi possível transferir: ' + e.message);
+    }
+    setTransferindo(null);
+  }, [aplicarConversa]);
+
+  // Remove a atribuicao (deixa a conversa sem responsavel), tambem no banco.
+  const removerAtendente = useCallback(async (conv) => {
+    try {
+      aplicarConversa(await ConversasAPI.definirAtendente(conv.id, null));
+    } catch (e) {
+      window.alert('Não foi possível remover a atribuição: ' + e.message);
+    }
+    setTransferindo(null);
+  }, [aplicarConversa]);
+
   // Inicia conversa com um numero digitado. O servidor acha ou cria a conversa,
   // ja aberta e no setor escolhido, e envia a primeira mensagem.
   const iniciarConversaNova = useCallback(async (dados) => {
     setEnviandoNova(true);
     setErroNova('');
     try {
-      const nova = await ConversasAPI.iniciarConversa(dados);
+      // Assina a primeira mensagem igual ao envio normal (enviarResposta): com o
+      // toggle ligado e havendo nome, prefixa *Nome* numa linha acima. Sem isto,
+      // a mensagem de abertura de um numero avulso saia sem assinatura.
+      const texto = assinar && assinaturaNome && dados.texto
+        ? `*${assinaturaNome}*\n${dados.texto}`
+        : dados.texto;
+      const nova = await ConversasAPI.iniciarConversa({ ...dados, texto });
       // Upsert, e nao `map`: numero novo nao esta na lista ainda. O SSE tambem
       // vai emitir esta conversa, e por isso a checagem de id -- sem ela a
       // conversa apareceria duplicada por um instante.
@@ -2152,7 +2191,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     } finally {
       setEnviandoNova(false);
     }
-  }, [setConversas, setAbaAtual]);
+  }, [setConversas, setAbaAtual, assinar, assinaturaNome]);
 
   const atenderConversa = useCallback(async (id, e) => {
     if (e) e.stopPropagation();
@@ -2161,6 +2200,8 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     setConversas(prev => prev.map(c =>
       c.id === id ? { ...c, statusAtendimento: 'aberta', lido: true, naoLidas: 0 } : c
     ));
+    // O backend grava quem assumiu (atendenteId = usuario do token) e devolve a
+    // conversa com atendenteNome -- a badge do responsavel aparece para todos.
     try { aplicarConversa(await ConversasAPI.atender(id)); } catch {}
   }, [setConversas, aplicarConversa]);
 
@@ -2195,23 +2236,6 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   }, [setConversas, aplicarConversa]);
 
   // Remove da tela SO depois que o servidor confirma. Antes era otimista com
-  // `catch {}`: se o DELETE falhasse, o proximo polling (8s) trazia a conversa
-  // de volta sozinha -- e no F5 ela estava la de novo
-  const apagarChat = useCallback(async (id, e) => {
-    if (e) e.stopPropagation();
-    if (!window.confirm('Deseja realmente apagar este atendimento?')) return;
-    try {
-      await ConversasAPI.remover(id);
-      setConversas(prev => prev.filter(c => c.id !== id));
-      if (selecionada === id) setSelecionada(null);
-    } catch (err) {
-      window.alert(
-        `Nao foi possivel apagar o atendimento: ${err.message}\n\n` +
-        'Verifique se o back-end esta rodando (cd server && npm run dev).'
-      );
-    }
-  }, [setConversas, selecionada]);
-
   const editarMensagem = useCallback(async (mensagemId, texto) => {
     try {
       aplicarConversa(await ConversasAPI.editarMensagem(mensagemId, texto));
@@ -2347,6 +2371,16 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
             className="flex items-center justify-center w-9 h-9 rounded-full border bg-acao/15 border-acao/40 text-acao-200 hover:bg-acao/25 transition-colors"
           >
             <Send size={15} />
+          </button>
+
+          {/* Alternar tema (claro/escuro). */}
+          <button
+            onClick={() => setTema(alternarTema())}
+            title={tema === 'light' ? 'Mudar para modo escuro' : 'Mudar para modo claro'}
+            aria-label="Alternar tema claro/escuro"
+            className="flex items-center justify-center w-9 h-9 rounded-full border bg-slate-800/60 border-linha text-slate-400 hover:text-acao-200 hover:border-acao/50 transition-colors"
+          >
+            {tema === 'light' ? <Moon size={15} /> : <Sun size={15} />}
           </button>
 
           {/* Sino de notificacoes: abre o painel; NAO toca som ao clicar
@@ -2544,6 +2578,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                   onFixar={alternarFixado}
                   onFlag={atualizarFlag}
                   fixado={!!c.fixada}
+                  atendente={atendenteDaConversa(c)}
                 />
               ))}
             {!carregando && conversasFiltradas.length === 0 && (
@@ -2576,13 +2611,12 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               onPendente={moverPendente}
               onReabrir={reabrirConversa}
               onMarcarLido={marcarComoLido}
-              onApagarChat={apagarChat}
               onSolicitarCnpj={solicitarCnpjBot}
               onValidarCnpjModal={() => setModalCnpj(true)}
               onExecutarFluxo={executarFluxo}
               fluxoSugerido={fluxoSugerido}
               onVoltar={() => setSelecionada(null)}
-              atendente={atendentes[conversa.id]}
+              atendente={atendenteDaConversa(conversa)}
               onTransferir={() => setTransferindo(conversa)}
               onEditar={editarMensagem}
               onEncaminharPara={encaminharMensagem}
@@ -2695,7 +2729,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                 </div>
               )}
               {equipe.map(m => {
-                const atual = atendentes[transferindo.id]?.nome === m.nome;
+                const atual = transferindo.atendenteId === m.id;
                 return (
                   <button
                     key={m.id}
@@ -2728,17 +2762,9 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
             </div>
 
             <div className="p-4 bg-grafite-600 border-t border-linha flex justify-between items-center gap-2 shrink-0 rounded-b-2xl">
-              {atendentes[transferindo.id] ? (
+              {transferindo.atendenteId ? (
                 <button
-                  onClick={() => {
-                    setAtendentes(prev => {
-                      const novo = { ...prev };
-                      delete novo[transferindo.id];
-                      salvarAtendentes(novo);
-                      return novo;
-                    });
-                    setTransferindo(null);
-                  }}
+                  onClick={() => removerAtendente(transferindo)}
                   className="text-[11px] text-slate-400 hover:text-falha-400 font-semibold transition-colors">
                   Remover atribuicao
                 </button>

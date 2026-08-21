@@ -6,6 +6,7 @@ const { mapConversa } = require("../../shared/helpers/mapper.helper");
 const { limparCnpj, cnpjValido, mascararCnpj, normalizarTelefoneBr } = require("../../shared/helpers/cnpj.helper");
 const { normalizarSetor, podeAcessarSetor } = require("../../shared/helpers/setor.helper");
 const parceiroRepository = require("../../infrastructure/repositories/parceiro.repository");
+const usuarioRepository = require("../../infrastructure/repositories/usuario.repository");
 const bus = require("../../shared/events/event-bus");
 const AppError = require("../../shared/errors/AppError");
 const env = require("../../config/env");
@@ -481,11 +482,12 @@ class ConversaService {
     return this._emitir(await conversaRepository.findById(id));
   }
 
-  async atualizarStatus(id, status, userCargo = null) {
+  async atualizarStatus(id, status, userCargo = null, autor = null) {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
     exigirAcessoSetor(userCargo, conversa.setor);
 
+    const mudouStatus = conversa.statusAtendimento !== status;
     const data = { statusAtendimento: status };
     if (status === "fechada") {
       data.fechadoEm = new Date();
@@ -495,18 +497,35 @@ class ConversaService {
       // Reabertura: limpa o fechamento e garante marca de atendimento.
       data.fechadoEm = null;
       data.atendidoEm = conversa.atendidoEm || new Date();
+    } else if (status === "pendente") {
+      // Volta para a fila: perde o responsavel -- a badge some enquanto pendente.
+      data.atendenteId = null;
     }
 
-    const atualizada = await conversaRepository.update(id, data);
-    const dto = this._emitir(atualizada);
+    await conversaRepository.update(id, data);
+
+    // Aviso de sistema no chat, com o nome de quem fez a acao (nao vai para o
+    // WhatsApp do cliente). So quando o status muda de fato e ha um autor
+    // humano -- fechamentos automaticos do bot nao geram aviso.
+    const nome = autor?.nome;
+    if (nome && mudouStatus) {
+      if (status === "pendente") {
+        await conversaRepository.addMensagem(id, "sistema", `${nome} devolveu a conversa para a fila (Pendente)`);
+      } else if (status === "fechada") {
+        await conversaRepository.addMensagem(id, "sistema", `${nome} fechou o atendimento`);
+      }
+    }
+
+    const recarregada = await conversaRepository.findById(id);
+    const dto = this._emitir(recarregada);
 
     // Ao FECHAR manualmente (atendimento humano), dispara a mesma pesquisa de
     // satisfacao do bot: pergunta a nota de 1 a 5 e o comentario. Best-effort e
     // nao-bloqueante - um erro na pesquisa nunca deve impedir o fechamento
     // pedido pelo atendente. O proprio motor respeita o modo "local", o toggle
     // de configuracao e nao repergunta se a conversa ja tem nota.
-    if (status === "fechada" && conversa.statusAtendimento !== "fechada") {
-      this._dispararPesquisaSatisfacao(atualizada).catch((e) =>
+    if (status === "fechada" && mudouStatus) {
+      this._dispararPesquisaSatisfacao(recarregada).catch((e) =>
         logger.warn("Falha ao iniciar pesquisa de satisfacao", { id, message: e.message })
       );
     }
@@ -526,6 +545,36 @@ class ConversaService {
       instanciaId: conversa.instanciaId,
       instanceName: null,
     });
+  }
+
+  // Define (ou limpa) o responsavel pelo atendimento. Antes isso vivia so no
+  // localStorage de cada navegador; agora e do banco -- toda a equipe ve igual.
+  // Guardado pela mesma regra de setor: so mexe em conversa que a pessoa acessa,
+  // e o atendente precisa ser um usuario real (ou null para remover a atribuicao).
+  async definirAtendente(id, atendenteId, userCargo = null) {
+    const conversa = await conversaRepository.findById(id);
+    if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
+    exigirAcessoSetor(userCargo, conversa.setor);
+
+    let novoId = null;
+    let nome = null;
+    if (typeof atendenteId === "string" && atendenteId.trim()) {
+      const usuario = await usuarioRepository.findById(atendenteId.trim());
+      if (!usuario) throw new AppError("Atendente nao encontrado", 400, "ATENDENTE_INVALIDO");
+      novoId = usuario.id;
+      nome = usuario.nome;
+    }
+
+    await conversaRepository.update(id, { atendenteId: novoId });
+
+    // Aviso de sistema no chat quando ha um novo responsavel (mudou de fato).
+    // Fica so no historico interno -- nao vai para o WhatsApp do cliente.
+    if (novoId && novoId !== conversa.atendenteId) {
+      await conversaRepository.addMensagem(id, "sistema", `Conversa transferida para ${nome}`);
+    }
+
+    // Recarrega para o DTO/stream ja saírem com o aviso incluido.
+    return this._emitir(await conversaRepository.findById(id));
   }
 
   // Favoritar / fixar / arquivar / ocultar. Nenhuma delas apaga a conversa:

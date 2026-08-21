@@ -18,24 +18,17 @@
  * aparecem a cerca de 1/2,7 do tamanho do arquivo.
  */
 
-const ARQUIVO_WALLPAPER = '/wallpaper.jpg';
+const ARQUIVO_WALLPAPER = '/whatsapp-bg-dark.png';
 
 // Largura de cada repeticao. Altura fica em `auto` para nao distorcer.
 // Menor = doodles menores e mais densos.
 const LARGURA_TILE = '400px';
 
-// Veu translucido por cima do padrao. DESLIGADO (0): a arte do WhatsApp ja vem
-// com os doodles bem discretos, e qualquer veu so lavava o desenho.
-// Se um dia entrar uma imagem contrastada demais, suba para 0.5-0.9 -- em 0 a
-// camada nem chega a ser criada.
+// Veu translucido por cima do padrao. DESLIGADO (0)
 const VEU = 0;
 
-// Cor lisa do fundo da imagem (amostrada do proprio arquivo: e o tom que ocupa
-// ~48% dos pixels, entre um doodle e outro). Ela cobre dois buracos: o instante
-// antes de a imagem carregar e a faixa que sobra quando a area do chat nao e um
-// multiplo exato do tile. Trocar a imagem sem trocar esta cor deixa uma moldura
-// de cor errada nas bordas.
-const COR_FUNDO_CHAT = '#03141F';
+// Cor lisa do fundo da imagem
+const COR_FUNDO_CHAT = '#0b141a';
 
 const veu = COR_FUNDO_CHAT + Math.round(VEU * 255).toString(16).padStart(2, '0');
 const padrao = `url("${ARQUIVO_WALLPAPER}")`;

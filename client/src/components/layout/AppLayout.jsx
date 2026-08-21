@@ -42,14 +42,17 @@ const NAV_FERRAMENTAS = [
   { to: '/configuracoes', label: 'Configurações',      icon: Settings,      modulo: 'configuracoes' },
 ];
 
-function ArkaLogo({ size = 32 }) {
+function ArkaLogo({ size = 32, className = '' }) {
   return (
     <img
       src="/arka_tecnologia_logo-removebg-preview.png"
       alt="Logo Arka Tecnologia"
+      className={`arka-logo ${className}`}
       style={{
-        height: size, width: 'auto', maxHeight: size,
-        objectFit: 'contain', filter: 'brightness(0) invert(1)',
+        height: size,
+        width: 'auto',
+        maxHeight: size,
+        objectFit: 'contain',
       }}
     />
   );

@@ -1,19 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   CalendarDays, Plus, Pencil, Trash2, Save, X, Clock,
-  CheckCircle2, Circle, ChevronLeft, ChevronRight, Search
+  CheckCircle2, Circle, ChevronLeft, ChevronRight, Search, Loader2
 } from 'lucide-react';
 import Portal from '../Portal';
-
-async function carregar(chave, padrao) {
-  try {
-    const raw = localStorage.getItem(chave);
-    return raw ? JSON.parse(raw) : padrao;
-  } catch { return padrao; }
-}
-async function salvar(chave, valor) {
-  try { localStorage.setItem(chave, JSON.stringify(valor)); } catch {}
-}
+import { AgendaAPI } from '../../services/api';
 
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
                'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -39,7 +30,7 @@ const PRIORIDADES = {
   baixa:  { label: 'Baixa',  dot: 'bg-slate-400' }
 };
 
-function ModalCompromisso({ compromisso, onSalvar, onFechar }) {
+function ModalCompromisso({ compromisso, onSalvar, onFechar, salvando }) {
   const [titulo, setTitulo]       = useState(compromisso?.titulo    || '');
   const [data, setData]           = useState(compromisso?.data       || hojeISO());
   const [hora, setHora]           = useState(compromisso?.hora       || '09:00');
@@ -50,8 +41,10 @@ function ModalCompromisso({ compromisso, onSalvar, onFechar }) {
 
   function salvar() {
     if (!titulo.trim() || !data) return;
+    // Sem id fabricado: o componente pai decide criar (novo) ou atualizar (o que
+    // estava sendo editado); o id vem do servidor. `concluido` vai junto para o
+    // update nao zerar o estado ao salvar uma edicao.
     onSalvar({
-      id:         compromisso?.id || 'ag_' + Date.now(),
       titulo:     titulo.trim(),
       data,
       hora,
@@ -132,9 +125,9 @@ function ModalCompromisso({ compromisso, onSalvar, onFechar }) {
             className="px-3 py-2 sm:py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors">
             Cancelar
           </button>
-          <button onClick={salvar} disabled={!titulo.trim() || !data}
+          <button onClick={salvar} disabled={!titulo.trim() || !data || salvando}
             className="px-4 py-2 sm:py-1.5 rounded-lg bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-acao/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
-            <Save size={13} /> Salvar
+            {salvando ? <><Loader2 size={13} className="animate-spin" /> Salvando...</> : <><Save size={13} /> Salvar</>}
           </button>
         </div>
       </div>
@@ -261,10 +254,9 @@ function CardCompromisso({ comp, onEditar, onRemover, onToggleConcluido }) {
   );
 }
 
-const SEED_AGENDA = [
-  { id:'ag_1', titulo:'Reunião de planejamento', data: hojeISO(), hora:'10:00', tipo:'reuniao',  prioridade:'alta',  descricao:'Planejamento mensal da equipe.', contato:'Marina Souza', concluido: false },
-  { id:'ag_2', titulo:'Follow-up cliente Beatriz', data: hojeISO(), hora:'14:30', tipo:'followup', prioridade:'media', descricao:'Verificar renovação contratual.', contato:'Beatriz Santos', concluido: false },
-];
+function ordenar(lista) {
+  return [...lista].sort((a, b) => (a.data + a.hora).localeCompare(b.data + b.hora));
+}
 
 export default function Agenda() {
   const [compromissos, setCompromissos] = useState([]);
@@ -273,35 +265,80 @@ export default function Agenda() {
   const [dataFoco, setDataFoco]         = useState(hojeISO());
   const [busca, setBusca]               = useState('');
   const [verTodos, setVerTodos]         = useState(false);
-  const [carregado, setCarregado]       = useState(false);
+  const [carregando, setCarregando]     = useState(true);
+  const [erro, setErro]                 = useState('');
+  const [salvando, setSalvando]         = useState(false);
 
-  useEffect(() => {
-    carregar('arka:agenda', null).then(d => { setCompromissos(d || SEED_AGENDA); setCarregado(true); });
-  }, []);
-
-  useEffect(() => {
-    // Salva SEMPRE após o carregamento inicial inclusive lista vazia. Antes só
-    // salvava com length > 0, então apagar o último item não persistia e o
-    // compromisso "voltava" no F5.
-    if (carregado) salvar('arka:agenda', compromissos);
-  }, [compromissos, carregado]);
-
-  function salvarCompromisso(comp) {
-    setCompromissos(prev => {
-      const idx = prev.findIndex(c => c.id === comp.id);
-      if (idx >= 0) { const n = [...prev]; n[idx] = comp; return n; }
-      return [...prev, comp].sort((a,b) => (a.data+a.hora).localeCompare(b.data+b.hora));
-    });
-    setModalAberto(false); setEditando(null);
+  // Agenda agora vem do servidor (compartilhada pela equipe).
+  async function carregarLista() {
+    setCarregando(true);
+    setErro('');
+    try {
+      setCompromissos(ordenar(await AgendaAPI.listar()));
+    } catch (e) {
+      setErro(e.message || 'Não foi possível carregar a agenda.');
+    } finally {
+      setCarregando(false);
+    }
   }
 
-  function removerCompromisso(id) {
-    if (!window.confirm('Remover este compromisso?')) return;
-    setCompromissos(prev => prev.filter(c => c.id !== id));
+  useEffect(() => { carregarLista(); }, []);
+
+  // Cria (sem item em edicao) ou atualiza (o id do que estava aberto). Atualiza
+  // a lista local com o que o servidor devolveu, sem recarregar tudo.
+  async function salvarCompromisso(payload) {
+    setSalvando(true);
+    setErro('');
+    try {
+      if (editando?.id) {
+        const atualizado = await AgendaAPI.atualizar(editando.id, payload);
+        setCompromissos(prev => ordenar(prev.map(c => (c.id === atualizado.id ? atualizado : c))));
+      } else {
+        const criado = await AgendaAPI.criar(payload);
+        setCompromissos(prev => ordenar([...prev, criado]));
+      }
+      setModalAberto(false); setEditando(null);
+    } catch (e) {
+      window.alert('Não foi possível salvar: ' + (e.message || 'erro desconhecido'));
+    } finally {
+      setSalvando(false);
+    }
   }
 
-  function toggleConcluido(id) {
-    setCompromissos(prev => prev.map(c => c.id === id ? { ...c, concluido: !c.concluido } : c));
+  async function removerCompromisso(id) {
+    if (!window.confirm('Remover este compromisso? Isso vale para toda a equipe.')) return;
+    const anterior = compromissos;
+    setCompromissos(prev => prev.filter(c => c.id !== id)); // otimista
+    try {
+      await AgendaAPI.remover(id);
+    } catch (e) {
+      setCompromissos(anterior); // desfaz
+      window.alert('Não foi possível remover: ' + (e.message || 'erro desconhecido'));
+    }
+  }
+
+  async function toggleConcluido(id) {
+    const alvo = compromissos.find(c => c.id === id);
+    if (!alvo) return;
+    const novo = !alvo.concluido;
+    setCompromissos(prev => prev.map(c => (c.id === id ? { ...c, concluido: novo } : c))); // otimista
+    try {
+      await AgendaAPI.definirConcluido(id, novo);
+    } catch {
+      setCompromissos(prev => prev.map(c => (c.id === id ? { ...c, concluido: !novo } : c))); // desfaz
+    }
+  }
+
+  async function limparConcluidosAntigos() {
+    const anterior = compromissos;
+    const hoje = hojeISO();
+    setCompromissos(prev => prev.filter(c => !c.concluido || c.data >= hoje)); // otimista
+    try {
+      await AgendaAPI.limparConcluidosAntigos();
+    } catch (e) {
+      setCompromissos(anterior);
+      window.alert('Não foi possível limpar: ' + (e.message || 'erro desconhecido'));
+    }
   }
 
   const listagem = useMemo(() => {
@@ -351,7 +388,7 @@ export default function Agenda() {
               className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${verTodos ? 'bg-acao/15 border-acao/30 text-acao-200' : 'bg-grafite-600 border-linha text-slate-400 hover:text-slate-200'}`}>
               📋 Todos os compromissos ({compromissos.length})
             </button>
-            <button onClick={() => { setCompromissos(prev => prev.filter(c => !c.concluido || c.data >= hojeISO())); }}
+            <button onClick={limparConcluidosAntigos}
               className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold border bg-grafite-600 border-linha text-slate-400 hover:text-slate-200 transition-all">
               🗑️ Limpar concluídos antigos
             </button>
@@ -370,26 +407,38 @@ export default function Agenda() {
             </div>
           </div>
 
-          <div className="space-y-2.5">
-            {listagem.map(comp => (
-              <CardCompromisso key={comp.id} comp={comp}
-                onEditar={c => { setEditando(c); setModalAberto(true); }}
-                onRemover={removerCompromisso}
-                onToggleConcluido={toggleConcluido} />
-            ))}
-            {listagem.length === 0 && (
-              <div className="text-center text-slate-400 text-xs py-12 glass-panel rounded-2xl border border-linha">
-                <CalendarDays size={28} className="text-slate-600 mx-auto mb-2" />
-                {verTodos ? 'Nenhum compromisso cadastrado.' : 'Nenhum compromisso para este dia.'}
-              </div>
-            )}
-          </div>
+          {erro && (
+            <div className="rounded-xl border border-falha/30 bg-falha/15 p-3 text-xs font-semibold text-falha-400">
+              {erro}
+            </div>
+          )}
+
+          {carregando ? (
+            <div className="flex items-center justify-center gap-2 py-16 text-slate-400 text-xs">
+              <Loader2 size={16} className="animate-spin" /> Carregando agenda...
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {listagem.map(comp => (
+                <CardCompromisso key={comp.id} comp={comp}
+                  onEditar={c => { setEditando(c); setModalAberto(true); }}
+                  onRemover={removerCompromisso}
+                  onToggleConcluido={toggleConcluido} />
+              ))}
+              {listagem.length === 0 && (
+                <div className="text-center text-slate-400 text-xs py-12 glass-panel rounded-2xl border border-linha">
+                  <CalendarDays size={28} className="text-slate-600 mx-auto mb-2" />
+                  {verTodos ? 'Nenhum compromisso cadastrado.' : 'Nenhum compromisso para este dia.'}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
       {modalAberto && (
-        <ModalCompromisso compromisso={editando} onSalvar={salvarCompromisso}
-          onFechar={() => { setModalAberto(false); setEditando(null); }} />
+        <ModalCompromisso compromisso={editando} onSalvar={salvarCompromisso} salvando={salvando}
+          onFechar={() => { if (!salvando) { setModalAberto(false); setEditando(null); } }} />
       )}
     </div>
   );
