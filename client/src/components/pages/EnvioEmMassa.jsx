@@ -1,39 +1,27 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Send, Plus, Trash2, Upload, Play, Pause, StopCircle,
   CheckCircle2, XCircle, Clock, Users, MessageSquare,
   AlertTriangle, FileText, X, RotateCcw, Download
 } from 'lucide-react';
-import { WhatsAppAPI } from '../../services/api';
+import { CampanhasAPI } from '../../services/api';
 
-function sleep(ms) { return new Promise(res => setTimeout(res, ms)); }
 
-function horaAgora() {
-  return new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'America/Sao_Paulo' });
-}
+// A campanha vive no SERVIDOR (tabela `campanhas`), nao mais no localStorage.
+// Antes o rascunho e o laco de envio ficavam no navegador: fechar a aba parava
+// a campanha no meio e o intervalo anti-bloqueio era so uma regra de tela.
+// Agora a tela cria a campanha, manda iniciar/pausar e acompanha o progresso.
 
-// Persistencia da campanha. Antes esses helpers existiam mas nunca eram
-// chamados: por isso o F5 zerava nome, mensagem e destinatarios. Agora o rascunho
-// da campanha vive no localStorage e sobrevive a recarregar a pagina.
-const CHAVE = 'arka_envio_massa';
-function carregar(padrao) {
-  try {
-    const raw = localStorage.getItem(CHAVE);
-    return raw ? { ...padrao, ...JSON.parse(raw) } : padrao;
-  } catch { return padrao; }
-}
-function salvar(valor) {
-  try { localStorage.setItem(CHAVE, JSON.stringify(valor)); } catch { /* cota cheia */ }
-}
+// Status do servidor -> rotulo usado por esta tela.
+const STATUS_UI = {
+  rascunho: 'idle',
+  enviando: 'enviando',
+  pausada: 'pausado',
+  concluida: 'concluido',
+  cancelada: 'idle',
+};
 
-// Personaliza a mensagem por destinatario. {nome} vira o nome; {primeiro_nome}
-// vira so o primeiro. Sem placeholder, todo mundo recebe o mesmo texto.
-function personalizar(texto, dest) {
-  const nome = dest.nome || '';
-  return String(texto)
-    .replace(/\{nome\}/gi, nome)
-    .replace(/\{primeiro_nome\}/gi, nome.split(' ')[0] || nome);
-}
+// A personalizacao ({nome}, {primeiro_nome}) e feita pelo SERVIDOR, ao enviar.
 
 function FormContato({ onAdicionar }) {
   const [nome, setNome]       = useState('');
@@ -148,31 +136,82 @@ function exportarLog(logs, campanha) {
 }
 
 export default function EnvioEmMassa({ conversas = [] }) {
-  // Rascunho restaurado do localStorage (uma unica leitura na montagem).
-  const [inicial] = useState(() => carregar({
-    campanha: '', mensagem: '', destinatarios: [], intervaloDe: 2, intervaloAte: 5,
-  }));
-
-  const [campanha, setCampanha]       = useState(inicial.campanha);
-  const [mensagem, setMensagem]       = useState(inicial.mensagem);
-  const [destinatarios, setDest]      = useState(inicial.destinatarios);
-  const [intervaloDe, setIntervaloDe] = useState(inicial.intervaloDe);
-  const [intervaloAte, setIntervaloAte] = useState(inicial.intervaloAte);
-
-  // Salva o rascunho sempre que algo relevante muda. O status/progresso do envio
-  // NAO e persistido de proposito: e transitorio, cada envio recomeca do zero.
-  useEffect(() => {
-    salvar({ campanha, mensagem, destinatarios, intervaloDe, intervaloAte });
-  }, [campanha, mensagem, destinatarios, intervaloDe, intervaloAte]);
+  const [campanha, setCampanha]       = useState('');
+  const [mensagem, setMensagem]       = useState('');
+  const [destinatarios, setDest]      = useState([]);
+  const [intervaloDe, setIntervaloDe] = useState(2);
+  const [intervaloAte, setIntervaloAte] = useState(5);
 
   const [status, setStatus]   = useState('idle');
   const [enviados, setEnviados] = useState(0);
   const [erros, setErros]       = useState(0);
   const [logs, setLogs]         = useState([]);
   const [indiceAtual, setIndiceAtual] = useState(0);
+  const [erroApi, setErroApi]   = useState('');
+  // Id da campanha no servidor (existe a partir do "Iniciar").
+  const [campanhaId, setCampanhaId] = useState(null);
 
-  const pausadoRef = useRef(false);
-  const paradoRef  = useRef(false);
+  // Espelha o estado do servidor na tela. O progresso NAO e calculado aqui:
+  // enviados/falhas/status vem do banco, entao fechar a aba nao perde nada.
+  const aplicarDoServidor = useCallback((c) => {
+    if (!c) return;
+    setStatus(STATUS_UI[c.status] || 'idle');
+    setEnviados(c.enviados || 0);
+    setErros(c.falhas || 0);
+    setIndiceAtual((c.enviados || 0) + (c.falhas || 0));
+    if (Array.isArray(c.destinatarios)) {
+      setLogs(
+        c.destinatarios
+          .filter(d => d.status !== 'pendente')
+          .map(d => ({
+            nome: d.nome || d.telefone,
+            telefone: d.telefone,
+            status: d.status === 'enviado' ? 'ok' : 'erro',
+            motivo: d.erro || null,
+            hora: d.enviadoEm
+              ? new Date(d.enviadoEm).toLocaleTimeString('pt-BR', {
+                  hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'America/Sao_Paulo',
+                })
+              : '',
+          }))
+      );
+    }
+  }, []);
+
+  // Enquanto a campanha roda no servidor, a tela so consulta o progresso.
+  useEffect(() => {
+    if (!campanhaId || (status !== 'enviando' && status !== 'pausado')) return;
+    let vivo = true;
+    const id = setInterval(async () => {
+      try {
+        const c = await CampanhasAPI.obter(campanhaId);
+        if (vivo) aplicarDoServidor(c);
+      } catch { /* rede instavel: tenta de novo no proximo tique */ }
+    }, 2000);
+    return () => { vivo = false; clearInterval(id); };
+  }, [campanhaId, status, aplicarDoServidor]);
+
+  // Ao abrir a tela, retoma o acompanhamento de uma campanha que ficou rodando
+  // (ex.: o operador fechou a aba no meio do envio).
+  useEffect(() => {
+    (async () => {
+      try {
+        const lista = await CampanhasAPI.listar();
+        const ativa = (lista || []).find(c => c.status === 'enviando' || c.status === 'pausada');
+        if (!ativa) return;
+        const c = await CampanhasAPI.obter(ativa.id);
+        setCampanhaId(c.id);
+        setCampanha(c.nome || '');
+        setMensagem(c.mensagem || '');
+        setIntervaloDe(c.intervaloDe);
+        setIntervaloAte(c.intervaloAte);
+        setDest((c.destinatarios || []).map(d => ({
+          id: d.id, nome: d.nome || d.telefone, telefone: d.telefone,
+        })));
+        aplicarDoServidor(c);
+      } catch { /* sem campanha ativa ou sem permissao: tela em branco mesmo */ }
+    })();
+  }, [aplicarDoServidor]);
 
   function importarDasConversas() {
     const novos = conversas
@@ -206,95 +245,72 @@ export default function EnvioEmMassa({ conversas = [] }) {
     setDest(prev => prev.filter(d => d.id !== id));
   }
 
+  // Limpa a tela para montar uma nova campanha. Nao apaga nada no servidor: a
+  // campanha anterior fica no historico com o resultado dela.
   function resetar() {
-    paradoRef.current  = true;
-    pausadoRef.current = false;
+    setCampanhaId(null);
     setStatus('idle');
     setEnviados(0);
     setErros(0);
     setLogs([]);
     setIndiceAtual(0);
+    setErroApi('');
   }
 
-  const processarEnvio = useCallback(async (lista, inicio) => {
-    for (let i = inicio; i < lista.length; i++) {
-
-      if (paradoRef.current) break;
-
-      while (pausadoRef.current) {
-        await sleep(300);
-        if (paradoRef.current) return;
-      }
-
-      const dest = lista[i];
-      setIndiceAtual(i + 1);
-
-      // Intervalo aleatorio ANTES de cada envio: espaca os disparos para reduzir
-      // risco de bloqueio por spam.
-      const delay = (intervaloDe + Math.random() * (Math.max(intervaloAte, intervaloDe) - intervaloDe)) * 1000;
-      await sleep(delay);
-
-      // Envio REAL pelo WhatsApp (antes isto era um Math.random simulado, por
-      // isso "nada acontecia"). Cada falha vira um item de erro no log, sem
-      // derrubar a campanha inteira.
-      let sucesso = true;
-      let motivo = null;
-      try {
-        await WhatsAppAPI.enviar(dest.telefone, personalizar(mensagem, dest));
-      } catch (e) {
-        sucesso = false;
-        motivo = e.message;
-      }
-
-      const entry = {
-        nome:     dest.nome,
-        telefone: dest.telefone,
-        status:   sucesso ? 'ok' : 'erro',
-        motivo,
-        hora:     horaAgora()
-      };
-
-      setLogs(prev => [...prev, entry]);
-
-      if (sucesso) setEnviados(prev => prev + 1);
-      else         setErros(prev    => prev + 1);
-    }
-
-    if (!paradoRef.current) {
-      setStatus('concluido');
-    }
-  }, [intervaloDe, intervaloAte, mensagem]);
-
+  // Cria a campanha no servidor e manda iniciar. A partir daqui o disparo e do
+  // backend: fechar a aba NAO interrompe mais o envio.
   async function iniciarEnvio() {
     if (!mensagem.trim() || destinatarios.length === 0) return;
-    // Agora o envio e real: confirma antes de disparar para todos.
     if (!window.confirm(`Enviar esta mensagem para ${destinatarios.length} destinatário(s) pelo WhatsApp?`)) return;
-    paradoRef.current  = false;
-    pausadoRef.current = false;
-    setStatus('enviando');
-    setEnviados(0);
-    setErros(0);
-    setLogs([]);
-    setIndiceAtual(0);
-    await processarEnvio(destinatarios, 0);
-  }
-
-  function pausarResumir() {
-    if (status === 'enviando') {
-      pausadoRef.current = true;
-      setStatus('pausado');
-    } else if (status === 'pausado') {
-      pausadoRef.current = false;
-      setStatus('enviando');
-     
-      processarEnvio(destinatarios, indiceAtual);
+    setErroApi('');
+    try {
+      let id = campanhaId;
+      if (!id) {
+        const criada = await CampanhasAPI.criar({
+          nome: campanha,
+          mensagem,
+          destinatarios: destinatarios.map(d => ({ nome: d.nome, telefone: d.telefone })),
+          intervaloDe: Number(intervaloDe),
+          intervaloAte: Number(intervaloAte),
+        });
+        id = criada.id;
+        setCampanhaId(id);
+        // O servidor normaliza o intervalo (piso anti-bloqueio) e descarta
+        // telefones invalidos/repetidos: refletimos o que ele realmente gravou.
+        setIntervaloDe(criada.intervaloDe);
+        setIntervaloAte(criada.intervaloAte);
+      }
+      aplicarDoServidor(await CampanhasAPI.iniciar(id));
+      setStatus('enviando'); // o polling assume a partir daqui
+    } catch (e) {
+      setErroApi(e.message);
     }
   }
 
-  function pararEnvio() {
-    paradoRef.current  = true;
-    pausadoRef.current = false;
-    setStatus('idle');
+  async function pausarResumir() {
+    if (!campanhaId) return;
+    setErroApi('');
+    try {
+      const c = status === 'enviando'
+        ? await CampanhasAPI.pausar(campanhaId)
+        : await CampanhasAPI.iniciar(campanhaId);
+      aplicarDoServidor(c);
+      setStatus(status === 'enviando' ? 'pausado' : 'enviando');
+    } catch (e) {
+      setErroApi(e.message);
+    }
+  }
+
+  async function pararEnvio() {
+    if (!campanhaId) { resetar(); return; }
+    if (!window.confirm('Cancelar esta campanha? Os envios restantes não serão feitos.')) return;
+    try {
+      await CampanhasAPI.cancelar(campanhaId);
+      setStatus('idle');
+      setCampanhaId(null);
+    } catch (e) {
+      setErroApi(e.message);
+    }
   }
 
   const emExecucao = status === 'enviando' || status === 'pausado';
@@ -432,6 +448,14 @@ export default function EnvioEmMassa({ conversas = [] }) {
               {status === 'pausado'   && <><Pause size={13} /> Pausado em {indiceAtual}/{destinatarios.length}</>}
               {status === 'concluido' && <><CheckCircle2 size={13} /> Envio concluído!</>}
             </div>
+
+            {/* Erro vindo do servidor (ex.: ja existe campanha em andamento,
+                destinatario invalido, sem permissao). */}
+            {erroApi && (
+              <div className="p-2.5 rounded-xl bg-falha/10 border border-falha/30 text-[11px] text-falha-400">
+                {erroApi}
+              </div>
+            )}
 
             <div className="flex flex-wrap gap-2">
               {status === 'idle' && (

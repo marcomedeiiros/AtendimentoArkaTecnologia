@@ -325,3 +325,16 @@ export const ConversasAPI = {
     return { promise, cancel: () => xhr.abort() };
   },
 };
+
+// ── Campanhas (Envio em Massa) ──
+// O disparo roda no SERVIDOR: a tela cria a campanha, manda iniciar/pausar e
+// acompanha o progresso. Nada de laco de envio nem estado no navegador.
+export const CampanhasAPI = {
+  listar: () => request('/campanhas'),
+  obter: (id) => request(`/campanhas/${id}`),
+  criar: (dados) => request('/campanhas', { method: 'POST', body: JSON.stringify(dados) }),
+  iniciar: (id) => request(`/campanhas/${id}/iniciar`, { method: 'POST' }),
+  pausar: (id) => request(`/campanhas/${id}/pausar`, { method: 'POST' }),
+  cancelar: (id) => request(`/campanhas/${id}/cancelar`, { method: 'POST' }),
+  remover: (id) => request(`/campanhas/${id}`, { method: 'DELETE' }),
+};
