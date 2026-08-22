@@ -11,7 +11,6 @@ import {
   ZoomIn, ZoomOut, Maximize2, Download, CornerUpLeft, Share2, Pencil, MoreHorizontal, Mic, Tag, PenLine,
   Sun, Moon
 } from 'lucide-react';
-import { temaAtual, alternarTema } from '../../utils/tema';
 import { EmojiIcon, FormattedMessage } from './EmojiIcon';
 import { useMensagensRapidas } from './MensagensRapidas';
 import Avatar from '../Avatar';
@@ -44,6 +43,10 @@ function tempoRelativo(ts) {
   return `ha ${Math.floor(h / 24)}d`;
 }
 
+// Fuso fixo de Brasilia: horarios sempre batem com o de Brasilia,
+// independentemente do fuso da maquina do atendente.
+const FUSO_BR = 'America/Sao_Paulo';
+
 // "há 2 min / há 1 h / ontem / 12/03" a partir de um ISO (ultima mensagem).
 function tempoDesde(iso) {
   if (!iso) return '';
@@ -63,7 +66,7 @@ function tempoDesde(iso) {
   // ou do anterior. Entao aqui vai data completa com hora.
   return new Date(ms).toLocaleString('pt-BR', {
     day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
+    hour: '2-digit', minute: '2-digit', timeZone: FUSO_BR,
   }).replace(',', '');
 }
 
@@ -75,7 +78,7 @@ function dataHoraCurta(iso) {
   if (Number.isNaN(ms)) return '';
   return new Date(ms).toLocaleString('pt-BR', {
     day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
+    hour: '2-digit', minute: '2-digit', timeZone: FUSO_BR,
   }).replace(',', '');
 }
 
@@ -88,7 +91,7 @@ function dataHoraCompleta(iso) {
   if (Number.isNaN(ms)) return 'Sem mensagens';
   const fmt = new Date(ms).toLocaleString('pt-BR', {
     day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
+    hour: '2-digit', minute: '2-digit', timeZone: FUSO_BR,
   }).replace(',', ' às');
   return `Última mensagem: ${fmt} (${tempoDesde(iso)})`;
 }
@@ -265,7 +268,7 @@ function cnpjValido(v) {
   return c === c.slice(0,12)+String(d1)+String(d2);
 }
 function horaAgora() {
-  return new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: FUSO_BR });
 }
 
 
@@ -643,6 +646,7 @@ function PainelTv({ pendentes, abertas, parceiros, onFechar }) {
     const tempo = tempoEspera(c.ultimaMensagemEm);
     const chipCnpj = chipDoCnpj(c, parceiros);
     const setor = setorDaConversa(c);
+    const atendente = atendenteDaConversa(c);
 
     return (
       <div className={`bg-grafite-700 rounded-3xl border-2 ${u.borda} p-4 sm:p-5 2xl:p-7 flex flex-col gap-3 2xl:gap-4`}>
@@ -671,6 +675,16 @@ function PainelTv({ pendentes, abertas, parceiros, onFechar }) {
             <span className={`inline-flex items-center text-sm 2xl:text-base font-bold px-2.5 py-0.5 rounded-lg border ${setor.classe}`}
               title={`Cliente quer o setor ${setor.setor}`}>
               {setor.label}
+            </span>
+          )}
+          {/* Quem esta atendendo: numa parede, saber o responsavel evita duas
+              pessoas pegarem a mesma conversa. So aparece quando ja assumida. */}
+          {atendente?.nome && (
+            <span className="inline-flex items-center gap-1.5 text-sm 2xl:text-base font-bold px-2.5 py-0.5 rounded-lg border bg-purple-500/15 text-purple-300 border-purple-500/30"
+              title={`Atendendo: ${atendente.nome}${atendente.cargo ? ' (' + atendente.cargo + ')' : ''}`}>
+              <UserCheck size={14} className="shrink-0 2xl:hidden" />
+              <UserCheck size={18} className="shrink-0 hidden 2xl:block" />
+              {atendente.nome}
             </span>
           )}
         </div>
@@ -714,10 +728,10 @@ function PainelTv({ pendentes, abertas, parceiros, onFechar }) {
   );
 
   const d = new Date(agora);
-  const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: FUSO_BR });
   // "quinta-feira" -> "Quinta-feira"
-  const diaSemana = d.toLocaleDateString('pt-BR', { weekday: 'long' }).replace(/^./, l => l.toUpperCase());
-  const data = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const diaSemana = d.toLocaleDateString('pt-BR', { weekday: 'long', timeZone: FUSO_BR }).replace(/^./, l => l.toUpperCase());
+  const data = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: FUSO_BR });
 
   return (
     <Portal>
@@ -806,10 +820,10 @@ function TelaSemConversa() {
         <div className="inline-flex p-5 rounded-2xl bg-grafite-700 border border-linha mb-5 text-acao shadow-xl shadow-grafite-900/60">
           <MessageSquare size={38} />
         </div>
-        <h3 className="text-base font-bold text-texto font-display mb-2 [text-shadow:0_2px_10px_rgba(0,0,0,0.85)]">
+        <h3 className="text-base font-bold text-texto font-display mb-2">
           Nenhum Atendimento Selecionado
         </h3>
-        <p className="text-xs text-texto-suave leading-relaxed [text-shadow:0_1px_8px_rgba(0,0,0,0.85)]">
+        <p className="text-xs text-texto-suave leading-relaxed">
           Selecione uma conversa ou clique em{' '}
           <strong className="text-acao">"ATENDER CONVERSA"</strong> para iniciar o chat.
         </p>
@@ -853,21 +867,69 @@ function StatusMensagem({ status, escuro }) {
 // Menu de tres pontinhos da bolha: responder, encaminhar, editar.
 function MenuMensagem({ m, ehPropria, onResponder, onEncaminhar, onEditar, onApagar }) {
   const [aberto, setAberto] = useState(false);
-  const ref = useRef(null);
+  // Posicao FIXA (viewport) calculada na hora de abrir. O menu vai num Portal
+  // (document.body), entao nao e cortado pelo overflow do chat -- que era o que
+  // escondia o menu nas mensagens do topo, mesmo abrindo para cima ou para baixo.
+  const [pos, setPos] = useState({ left: 0 });
+  const botaoRef = useRef(null);
+  const menuRef = useRef(null);
+
+  const LARGURA = 176; // w-44
+  const ALTURA = 200;  // ~4 opcoes; usado SO para decidir cima/baixo
+  const MARGEM = 8;
+  const GAP = 4;       // colado ao botao
+
+  const alternar = (e) => {
+    e.stopPropagation();
+    setAberto((v) => {
+      const abrindo = !v;
+      if (abrindo && botaoRef.current) {
+        const r = botaoRef.current.getBoundingClientRect();
+        const espacoAbaixo = window.innerHeight - r.bottom;
+        const paraBaixo = espacoAbaixo >= ALTURA + MARGEM || espacoAbaixo >= r.top;
+        // Alinha pela borda do botao (propria = esquerda, senao direita) e
+        // mantem o menu dentro da tela.
+        let left = ehPropria ? r.left : r.right - LARGURA;
+        left = Math.min(Math.max(MARGEM, left), window.innerWidth - LARGURA - MARGEM);
+        // Abrindo para cima, ancoramos pela BASE (bottom) junto ao topo do botao:
+        // assim o menu fica colado, sem depender da altura estimada (o que deixava
+        // um vao grande quando o menu real era mais baixo que ALTURA).
+        setPos(
+          paraBaixo
+            ? { left, top: r.bottom + GAP }
+            : { left, bottom: window.innerHeight - r.top + GAP }
+        );
+      }
+      return abrindo;
+    });
+  };
 
   useEffect(() => {
     if (!aberto) return;
-    const fora = (e) => { if (ref.current && !ref.current.contains(e.target)) setAberto(false); };
+    const fora = (e) => {
+      if (botaoRef.current?.contains(e.target)) return;
+      if (menuRef.current?.contains(e.target)) return;
+      setAberto(false);
+    };
+    // Menu com posicao fixa "descola" do botao ao rolar/redimensionar: fecha.
+    const fechar = () => setAberto(false);
     document.addEventListener('mousedown', fora);
-    return () => document.removeEventListener('mousedown', fora);
+    window.addEventListener('scroll', fechar, true);
+    window.addEventListener('resize', fechar);
+    return () => {
+      document.removeEventListener('mousedown', fora);
+      window.removeEventListener('scroll', fechar, true);
+      window.removeEventListener('resize', fechar);
+    };
   }, [aberto]);
 
   const item = 'w-full text-left px-3 py-2.5 text-xs font-semibold text-slate-300 hover:bg-grafite-600 hover:text-white transition-colors flex items-center gap-2.5';
 
   return (
-    <div className="relative shrink-0 self-center" ref={ref}>
+    <div className="shrink-0 self-center">
       <button
-        onClick={(e) => { e.stopPropagation(); setAberto(v => !v); }}
+        ref={botaoRef}
+        onClick={alternar}
         title="Mais ações"
         aria-label="Mais ações"
         className={`rounded-lg p-2 text-slate-400 transition-all hover:bg-grafite-600 hover:text-white ${
@@ -878,31 +940,33 @@ function MenuMensagem({ m, ehPropria, onResponder, onEncaminhar, onEditar, onApa
       </button>
 
       {aberto && (
-        // Abre PARA CIMA (bottom-full): nas mensagens de baixo o menu ficava
-        // cortado pelo overflow do chat. z alto para nao ficar atras das bolhas.
-        <div className={`absolute bottom-full mb-1 w-44 glass-panel border border-linha rounded-xl shadow-2xl shadow-black/50 z-50 overflow-hidden py-1 ${
-          ehPropria ? 'left-0' : 'right-0'
-        }`}>
-          <button className={item} onClick={() => { onResponder(m); setAberto(false); }}>
-            <CornerUpLeft size={14} className="text-slate-500" /> Responder
-          </button>
-          <button className={item} onClick={() => { onEncaminhar(m); setAberto(false); }}>
-            <Share2 size={14} className="text-slate-500" /> Encaminhar
-          </button>
-          {ehPropria && m.tipo === 'texto' && (
-            <button className={item} onClick={() => { onEditar(m); setAberto(false); }}>
-              <Pencil size={14} className="text-slate-500" /> Editar
+        <Portal>
+          <div
+            ref={menuRef}
+            style={{ position: 'fixed', top: pos.top, bottom: pos.bottom, left: pos.left, width: LARGURA }}
+            className="glass-panel border border-linha rounded-xl shadow-2xl shadow-black/50 z-[70] overflow-hidden py-1"
+          >
+            <button className={item} onClick={() => { onResponder(m); setAberto(false); }}>
+              <CornerUpLeft size={14} className="text-slate-500" /> Responder
             </button>
-          )}
-          {onApagar && (
-            <button
-              className={`${item} text-falha-400 hover:text-falha-400`}
-              onClick={() => { onApagar(m); setAberto(false); }}
-            >
-              <Trash2 size={14} className="text-falha-400" /> {ehPropria ? 'Apagar para todos' : 'Apagar'}
+            <button className={item} onClick={() => { onEncaminhar(m); setAberto(false); }}>
+              <Share2 size={14} className="text-slate-500" /> Encaminhar
             </button>
-          )}
-        </div>
+            {ehPropria && m.tipo === 'texto' && (
+              <button className={item} onClick={() => { onEditar(m); setAberto(false); }}>
+                <Pencil size={14} className="text-slate-500" /> Editar
+              </button>
+            )}
+            {onApagar && (
+              <button
+                className={`${item} text-falha-400 hover:text-falha-400`}
+                onClick={() => { onApagar(m); setAberto(false); }}
+              >
+                <Trash2 size={14} className="text-falha-400" /> {ehPropria ? 'Apagar para todos' : 'Apagar'}
+              </button>
+            )}
+          </div>
+        </Portal>
       )}
     </div>
   );
@@ -1037,6 +1101,11 @@ function BolhaAudio({ m, escuro }) {
   return (
     <div className="space-y-1.5">
       <AudioPlayer src={md.url || m.texto} />
+      {md.caption && (
+        <div className={`text-[11px] leading-relaxed whitespace-pre-wrap break-words ${escuro ? 'text-slate-200' : 'text-slate-900'}`}>
+          {md.caption}
+        </div>
+      )}
       {texto ? (
         <div className={`text-[11px] leading-relaxed rounded-lg px-2.5 py-1.5 ${
           escuro ? 'bg-grafite-700/70 text-slate-200 border border-linha' : 'bg-slate-900/10 text-slate-900'
@@ -1077,17 +1146,40 @@ function MensagemMidia({ m, escuro, onAbrirImagem }) {
 
   if (m.tipo === 'imagem') {
     return (
-      <img
-        src={md.url}
-        alt={md.caption || 'imagem'}
-        title="Clique para ampliar"
-        className="rounded-lg max-w-full max-h-72 object-contain cursor-zoom-in hover:opacity-90 transition-opacity"
-        onClick={() => onAbrirImagem?.({ url: md.url, legenda: md.caption, nomeArquivo: md.fileName })}
-      />
+      <div className="space-y-1.5">
+        <img
+          src={md.url}
+          alt={md.caption || 'imagem'}
+          title="Clique para ampliar"
+          className="rounded-lg max-w-full max-h-72 object-contain cursor-zoom-in hover:opacity-90 transition-opacity"
+          onClick={() => onAbrirImagem?.({ url: md.url, legenda: md.caption, nomeArquivo: md.fileName })}
+        />
+        {md.caption && (
+          <div className={`text-[11px] leading-relaxed whitespace-pre-wrap break-words ${escuro ? 'text-slate-200' : 'text-slate-900'}`}>
+            {md.caption}
+          </div>
+        )}
+      </div>
     );
   }
   if (m.tipo === 'video') {
-    return <video src={md.url} controls className="rounded-lg max-w-full max-h-72" />;
+    return (
+      <div className="space-y-1.5">
+        <video
+          src={md.url}
+          controls
+          preload="metadata"
+          playsInline
+          controlsList="nodownload"
+          className="rounded-lg w-full max-w-[260px] max-h-80 bg-black object-contain"
+        />
+        {md.caption && (
+          <div className={`text-[11px] leading-relaxed whitespace-pre-wrap break-words ${escuro ? 'text-slate-200' : 'text-slate-900'}`}>
+            {md.caption}
+          </div>
+        )}
+      </div>
+    );
   }
   if (m.tipo === 'audio') {
     return <BolhaAudio m={m} escuro={escuro} />;
@@ -1293,6 +1385,34 @@ function tipoDoArquivo(file) {
   return 'documento';
 }
 
+// Espelha a allowlist do servidor (conversa.dto.js). E so a primeira barreira:
+// o backend revalida e nunca confia no que o front manda. Serve para dar retorno
+// imediato e barrar tipos perigosos (SVG/HTML/executaveis) antes do upload.
+const MIMES_PERMITIDOS = {
+  imagem: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+  video: ['video/mp4', 'video/3gpp', 'video/quicktime', 'video/webm'],
+  audio: ['audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/aac', 'audio/wav', 'audio/webm', 'audio/opus'],
+  documento: [
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'text/plain',
+    'text/csv',
+    'application/zip',
+    'application/octet-stream',
+  ],
+};
+
+function arquivoPermitido(file) {
+  const tipo = tipoDoArquivo(file);
+  const mime = (file.type || 'application/octet-stream').toLowerCase().split(';')[0].trim();
+  return (MIMES_PERMITIDOS[tipo] || []).includes(mime);
+}
+
 function PainelChat({
   conversa, parceiros,
   texto, setTexto, scrollRef, onEnviar, onEnviarMidia, onFechar, onPendente, onReabrir,
@@ -1334,8 +1454,12 @@ function PainelChat({
   // Le o arquivo como data URL (base64) para preview e envio.
   const selecionarArquivo = useCallback((file) => {
     if (!file) return;
-    const MAX = 25 * 1024 * 1024; // 25MB
-    if (file.size > MAX) { window.alert('Arquivo muito grande (máx. 25MB).'); return; }
+    const MAX = 20 * 1024 * 1024; // 20MB (alinhado ao teto do servidor)
+    if (file.size > MAX) { window.alert('Arquivo muito grande (máx. 20MB).'); return; }
+    if (!arquivoPermitido(file)) {
+      window.alert('Tipo de arquivo não permitido. Envie imagem (JPG, PNG, WEBP, GIF), vídeo, áudio ou documento.');
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => setAnexo({
       dataUrl: reader.result,
@@ -1346,6 +1470,22 @@ function PainelChat({
     });
     reader.readAsDataURL(file);
   }, []);
+
+  // Cola imagem/arquivo direto da area de transferencia (Ctrl+V), ex: print de tela.
+  const colarDaAreaTransferencia = useCallback((e) => {
+    const items = e.clipboardData?.items;
+    if (!items || !items.length) return;
+    for (const item of items) {
+      if (item.kind === 'file') {
+        const file = item.getAsFile();
+        if (file) {
+          e.preventDefault();
+          selecionarArquivo(file);
+          return;
+        }
+      }
+    }
+  }, [selecionarArquivo]);
 
   const cancelarAnexo = useCallback(() => {
     if (cancelarRef.current) cancelarRef.current();
@@ -1885,6 +2025,7 @@ function PainelChat({
             value={texto}
             rows={1}
             onChange={e => setTexto(e.target.value)}
+            onPaste={colarDaAreaTransferencia}
             onKeyDown={e => {
               // Enter envia; Ctrl/Cmd+Enter envia; Shift+Enter quebra linha.
               if (e.key === 'Enter' && (!e.shiftKey || e.ctrlKey || e.metaKey)) {
@@ -1922,7 +2063,7 @@ function PainelChat({
 
 export default function AtendimentoView({ conversas, setConversas, fluxos, parceiros, equipe = [] }) {
   const { whatsAppConectado, carregando, historico = [], marcarNotificacoesLidas, limparHistorico } = useAppContext();
-  const { usuario, assinaturaNome } = useAuth();
+  const { usuario, assinaturaNome, tema, alternarTema } = useAuth();
   // Nome usado ao assinar mensagens: vem do perfil (personalizavel no menu de
   // perfil) e cai no primeiro nome como padrao. Fica no AuthContext, entao muda
   // na hora quando o operador edita no perfil.
@@ -1948,7 +2089,6 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   const [visibilidade,  setVisibilidade] = usePreferencia('central.visibilidade', VISIBILIDADE_PADRAO);
   const [showFiltros,   setShowFiltros]  = useState(false);
   const [modoTv, setModoTv] = useState(false);
-  const [tema, setTema] = useState(temaAtual()); // claro/escuro (só o ícone reage)
   const filtrosRef = useRef(null);
 
   // Pede tela cheia de verdade ao navegador: numa TV, a barra do sistema e o
@@ -2375,7 +2515,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
 
           {/* Alternar tema (claro/escuro). */}
           <button
-            onClick={() => setTema(alternarTema())}
+            onClick={alternarTema}
             title={tema === 'light' ? 'Mudar para modo escuro' : 'Mudar para modo claro'}
             aria-label="Alternar tema claro/escuro"
             className="flex items-center justify-center w-9 h-9 rounded-full border bg-slate-800/60 border-linha text-slate-400 hover:text-acao-200 hover:border-acao/50 transition-colors"

@@ -30,10 +30,29 @@ class WhatsAppService {
     if (msg.conversation) return msg.conversation.trim();
     if (msg.extendedTextMessage?.text) return msg.extendedTextMessage.text.trim();
     if (msg.imageMessage?.caption) return msg.imageMessage.caption.trim();
+
+    // Resposta de BOTAO: o `id` (que enviamos = numero da opcao) casa direto com
+    // as palavras-chave no motor; por isso vem ANTES do texto do botao, que pode
+    // estar truncado pelo WhatsApp.
+    if (msg.buttonsResponseMessage?.selectedButtonId) {
+      return String(msg.buttonsResponseMessage.selectedButtonId).trim();
+    }
     if (msg.buttonsResponseMessage?.selectedDisplayText) {
       return msg.buttonsResponseMessage.selectedDisplayText.trim();
     }
+    // Resposta de LISTA: idem, o rowId primeiro; senao o titulo da linha.
+    if (msg.listResponseMessage?.singleSelectReply?.selectedRowId) {
+      return String(msg.listResponseMessage.singleSelectReply.selectedRowId).trim();
+    }
     if (msg.listResponseMessage?.title) return msg.listResponseMessage.title.trim();
+    // Formato "interactive" (algumas versoes): id da opcao escolhida.
+    if (msg.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson) {
+      try {
+        const p = JSON.parse(msg.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson);
+        const id = p?.id || p?.selectedId || p?.selectedRowId;
+        if (id) return String(id).trim();
+      } catch { /* ignora json invalido */ }
+    }
 
     return null;
   }

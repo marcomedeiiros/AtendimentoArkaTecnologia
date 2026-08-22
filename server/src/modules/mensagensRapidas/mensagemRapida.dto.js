@@ -7,10 +7,10 @@ const ICONES = ["pix", "search", "clock", "bye", "noreturn", "monitor", "default
 
 // Anexo cru vindo do cliente. O `media` e barrado cedo por tamanho de string
 // (a validacao real -- tipo raster + magic bytes -- roda no service, via
-// imagemSegura). ~7 MB de string cobre uma imagem de ate ~5 MB em base64.
+// imagemSegura). ~28 MB de string cobre uma imagem de ate ~20 MB em base64.
 const anexoSchema = z
   .object({
-    media: z.string().max(7_500_000),
+    media: z.string().max(28_000_000),
     mimetype: z.string().max(120).optional().nullable(),
     fileName: z.string().max(300).optional().nullable(),
   })

@@ -391,6 +391,96 @@ class ChatbotEngine {
     return texto;
   }
 
+  // Valor que o clique de um botao/linha "digita" para o motor: o numero da
+  // opcao (casa com palavrasChave em casarOpcao). Fallback: 1a palavra-chave.
+  _valorOpcao(op) {
+    const num = (op.palavrasChave || []).find((k) => /^\d+$/.test(k));
+    return num || (op.palavrasChave || [])[0] || String(op.rotulo || "").split(",")[0] || "";
+  }
+
+  // Rotulo amigavel do botao: tenta extrair da linha do menu (ex.: "1️⃣- Setor
+  // Técnico" -> "Setor Técnico"); senao usa uma palavra-chave legivel/numero.
+  _rotuloOpcao(op, texto) {
+    const num = (op.palavrasChave || []).find((k) => /^\d+$/.test(k));
+    if (num && texto) {
+      const re = new RegExp(`(?:^|\\n)\\s*${num}[^-\\n]*[-–—]\\s*(.+)`, "u");
+      const m = texto.match(re);
+      if (m && m[1].trim()) return m[1].trim();
+    }
+    const kw = (op.palavrasChave || []).find((k) => !/^\d+$/.test(k));
+    return kw || num || String(op.rotulo || "").split(",")[0] || "Opção";
+  }
+
+  // Remove do corpo as linhas de opcao numeradas (ex.: "1️⃣- Setor Técnico"),
+  // deixando so o cabecalho -- as opcoes viram BOTOES. Se sobrar vazio, usa um
+  // cabecalho padrao. (No fallback de texto puro, mandamos o texto ORIGINAL com
+  // os numeros, para o cliente nunca ficar sem opcao.)
+  _corpoInterativo(texto) {
+    const linhas = String(texto || "").split("\n");
+    const semOpcoes = linhas.filter((l) => !/^\s*\d+[^\p{L}\n]*[-–—]/u.test(l));
+    const corpo = semOpcoes.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+    return corpo || "Escolha uma opção:";
+  }
+
+  // Envia um menu como mensagem INTERATIVA (botoes se ate 3 opcoes, senao lista).
+  // Corpo = texto SEM as linhas numeradas (buttons-only). Se a instancia Baileys
+  // recusar/nao renderizar, cai para texto puro COM os numeros -- fallback que
+  // nunca deixa o cliente sem menu.
+  async enviarBotComOpcoes(conversaId, telefone, texto, opcoes, instanceName) {
+    const inst = instanceName || env.evolutionApi.instance;
+    const corpo = this._corpoInterativo(texto);
+    const msg = await this.deps.conversaRepository.addMensagem(conversaId, "bot", texto, null, null, {
+      status: "enviando",
+    });
+    const itens = opcoes.slice(0, 10).map((op) => ({
+      id: this._valorOpcao(op),
+      titulo: this._rotuloOpcao(op, texto),
+    }));
+
+    const marcar = (r, status) =>
+      this.deps.conversaRepository.vincularWaMessageId(msg.id, r?.key?.id || null, status);
+
+    try {
+      let r;
+      if (itens.length <= 3) {
+        r = await this.deps.evolutionApi.sendButtons(
+          telefone,
+          {
+            description: corpo,
+            buttons: itens.map((i) => ({ type: "reply", displayText: i.titulo.slice(0, 20), id: i.id })),
+          },
+          inst
+        );
+      } else {
+        r = await this.deps.evolutionApi.sendList(
+          telefone,
+          {
+            description: corpo,
+            buttonText: "Ver opções",
+            sections: [
+              { title: "Opções", rows: itens.map((i) => ({ title: i.titulo.slice(0, 24), description: "", rowId: i.id })) },
+            ],
+          },
+          inst
+        );
+      }
+      await marcar(r, "enviada");
+    } catch (error) {
+      logger.warn("Falha ao enviar menu interativo; caindo para texto", {
+        telefone,
+        message: error.message,
+      });
+      try {
+        const r = await this.deps.evolutionApi.sendText(telefone, texto, inst);
+        await marcar(r, "enviada");
+      } catch {
+        await marcar(null, "erro");
+      }
+    }
+    await this._emitirConversa(conversaId);
+    return texto;
+  }
+
   // Publica a conversa atualizada no barramento para o SSE empurrar ao front.
   // Best-effort: uma falha aqui nunca deve interromper o atendimento.
   async _emitirConversa(conversaId) {
@@ -492,9 +582,10 @@ class ChatbotEngine {
       await this.enviarBot(conversa.id, telefone, mensagem, instanceName);
     }
 
-    // Antes de fechar de fato, oferece a pesquisa de satisfacao. Se ela iniciar,
-    // a conversa ja fica marcada como fechada e a sessao segue viva apenas para
-    // capturar a nota/comentario do cliente (ver continuarPesquisaSatisfacao).
+    // Antes de fechar de fato, oferece a pesquisa de satisfacao automatica. Se
+    // ela iniciar, a conversa ja fica marcada como fechada e a sessao segue viva
+    // apenas para capturar a nota/comentario (ver continuarPesquisaSatisfacao).
+    // Nao dispara se um no de avaliacao ja tiver perguntado (checa avaliacao).
     const pesquisa = await this.iniciarPesquisaSatisfacao(ctx);
     if (pesquisa) return pesquisa;
 
@@ -541,9 +632,41 @@ class ChatbotEngine {
     return nota;
   }
 
-  // Dispara a pesquisa (CSAT) ao encerrar. Retorna o resultado quando iniciada,
-  // ou null quando nao se aplica (modo != local, desligada ou ja avaliada) -
-  // nesse caso o chamador segue com o fechamento normal.
+  // Config efetiva da pesquisa para um PASSO de fluxo do tipo "avaliacao": parte
+  // dos padroes globais (Configuracoes) e deixa o passo sobrescrever cada texto e
+  // o "pedir comentario". Assim cada fluxo pode ter a sua pesquisa sem depender
+  // da config global.
+  async _configPesquisaPasso(passo) {
+    const global = await this.deps.configuracaoService.pesquisaSatisfacao();
+    const c = (passo && passo.config) || {};
+    const txt = (v, padrao) => (typeof v === "string" && v.trim() ? v : padrao);
+    return {
+      ativo: true,
+      pedirComentario:
+        typeof c.pedirComentario === "boolean" ? c.pedirComentario : global.pedirComentario,
+      mensagemNota: txt(c.mensagemNota, global.mensagemNota),
+      mensagemComentario: txt(c.mensagemComentario, global.mensagemComentario),
+      mensagemAgradecimento: txt(c.mensagemAgradecimento, global.mensagemAgradecimento),
+      mensagemNotaInvalida: txt(c.mensagemNotaInvalida, global.mensagemNotaInvalida),
+    };
+  }
+
+  // Config da pesquisa usada pela pesquisa AUTOMATICA (ao fechar): se algum fluxo
+  // ativo tiver um no "avaliacao", usa os textos DELE (editaveis no editor de
+  // fluxos, sem passar por Configuracoes). Sem no, cai nos padroes globais.
+  async _configPesquisaAtiva() {
+    const fluxos = await this.deps.fluxoRepository.findAtivos();
+    for (const f of fluxos || []) {
+      const no = (f.passos || []).find((p) => p.tipo === "avaliacao");
+      if (no) return this._configPesquisaPasso(no);
+    }
+    return this.deps.configuracaoService.pesquisaSatisfacao();
+  }
+
+  // Dispara a pesquisa (CSAT) AUTOMATICAMENTE ao encerrar. Retorna o resultado
+  // quando iniciada, ou null quando nao se aplica (modo != local, desligada ou ja
+  // avaliada) - nesse caso o chamador segue com o fechamento normal. Usa os
+  // textos padrao da configuracao (chatbot.pesquisaSatisfacao / defaults).
   async iniciarPesquisaSatisfacao(ctx) {
     const { conversa, telefone, instanciaId, instanceName } = ctx;
 
@@ -551,10 +674,11 @@ class ChatbotEngine {
     const modo = await this.deps.configuracaoService.modoAtendimento();
     if (modo !== "local") return null;
 
-    const cfg = await this.deps.configuracaoService.pesquisaSatisfacao();
+    const cfg = await this._configPesquisaAtiva();
     if (!cfg.ativo) return null;
 
-    // Nao pergunta duas vezes: se ja existe nota, apenas segue para o fechamento.
+    // Nao pergunta duas vezes: se ja existe nota (ex.: um no de avaliacao no
+    // fluxo ja perguntou), apenas segue para o fechamento.
     const atual = await this.deps.conversaRepository.findById(conversa.id);
     if (atual && atual.avaliacao != null) return null;
 
@@ -565,7 +689,7 @@ class ChatbotEngine {
       passoAtualId: null,
       aguardando: AGUARDANDO.AVALIACAO_NOTA,
       ativo: true,
-      contexto: { pesquisa: true, tentativasAval: 0 },
+      contexto: { pesquisa: true, pesquisaCfg: cfg, tentativasAval: 0 },
     });
 
     // Fecha desde ja: a conversa sai da fila, mas a sessao da pesquisa continua
@@ -591,7 +715,9 @@ class ChatbotEngine {
   // comentario. Ao final agradece e encerra a sessao da pesquisa.
   async continuarPesquisaSatisfacao(sessao, ctx, textoEntrada) {
     const { conversa, telefone, instanceName } = ctx;
-    const cfg = await this.deps.configuracaoService.pesquisaSatisfacao();
+    // Passo "avaliacao" do fluxo guarda a config dele no contexto da sessao;
+    // fora isso, cai na config global (pesquisa automatica ao encerrar).
+    const cfg = sessao.contexto?.pesquisaCfg || (await this.deps.configuracaoService.pesquisaSatisfacao());
 
     if (sessao.aguardando === AGUARDANDO.AVALIACAO_NOTA) {
       const nota = this.interpretarNota(textoEntrada);
@@ -693,12 +819,36 @@ class ChatbotEngine {
     let resposta = null;
     let aguardando = null;
     let proximo = null;
+    // Contexto de sessao que este passo precisa persistir (ex.: a pesquisa de
+    // satisfacao guarda aqui a sua config). Quando null, o chamador usa o reset
+    // padrao (tentativas zeradas).
+    let contextoSessao = null;
 
     switch (passo.tipo) {
       case "gatilho":
       case "comentario":
         proximo = this.proximoPasso(fluxo.passos, passo);
         break;
+
+      case "avaliacao": {
+        // Pesquisa de satisfacao como PASSO do fluxo: pergunta a nota e para
+        // aqui. A resposta e capturada por continuarPesquisaSatisfacao, que le a
+        // config guardada no contexto da sessao (contextoSessao abaixo).
+        const cfg = await this._configPesquisaPasso(passo);
+        resposta = cfg.mensagemNota;
+        aguardando = AGUARDANDO.AVALIACAO_NOTA;
+        contextoSessao = { pesquisa: true, pesquisaCfg: cfg, tentativasAval: 0 };
+        // Tira a conversa da fila desde ja (como a pesquisa automatica ao
+        // encerrar); a sessao segue viva para capturar a nota/comentario.
+        await this.deps.conversaRepository.update(conversa.id, {
+          statusAtendimento: "fechada",
+          fechadoEm: new Date(),
+          lido: true,
+          naoLidas: 0,
+        });
+        await this._emitirConversa(conversa.id);
+        break;
+      }
 
       case "mensagem": {
         resposta = this.textoDoPasso(passo, contexto);
@@ -774,12 +924,19 @@ class ChatbotEngine {
     }
 
     if (resposta) {
-      await this.enviarBot(conversa.id, telefone, resposta, instanceName);
+      const opcoesMenu = this.opcoesDoPasso(passo);
+      // Menu (esperando escolha) -> tenta botoes/lista interativos, com o texto
+      // do passo como corpo (fallback visivel). Demais mensagens -> texto normal.
+      if (opcoesMenu.length && aguardando === AGUARDANDO.OPCAO) {
+        await this.enviarBotComOpcoes(conversa.id, telefone, resposta, opcoesMenu, instanceName);
+      } else {
+        await this.enviarBot(conversa.id, telefone, resposta, instanceName);
+      }
     }
 
     await this.registrarLog(instanciaId, fluxo.id, passo, conversa.id, resposta, true, inicio);
 
-    return { proximo, aguardando };
+    return { proximo, aguardando, contextoSessao };
   }
 
   // Percorre os passos com dois freios: um teto de passos e um conjunto de
@@ -820,14 +977,15 @@ class ChatbotEngine {
 
       if (aguardando) {
         // Fica parado no passo que pediu a informacao; a resposta do cliente
-        // e que faz avancar.
-        return { passoAtual, aguardando };
+        // e que faz avancar. `contextoSessao` carrega o que esse passo precisa
+        // guardar (ex.: a config da pesquisa de satisfacao).
+        return { passoAtual, aguardando, contextoSessao: resultado.contextoSessao || null };
       }
 
       passoAtual = resultado.proximo;
     }
 
-    return { passoAtual: null, aguardando: null };
+    return { passoAtual: null, aguardando: null, contextoSessao: null };
   }
 
   async executarFluxo(fluxo, conversa, telefone, instanciaId, instanceName, contextoExtra = {}) {
@@ -841,14 +999,14 @@ class ChatbotEngine {
       ...contextoExtra,
     };
 
-    const { passoAtual, aguardando } = await this.percorrer(passos[0] || null, contexto);
+    const { passoAtual, aguardando, contextoSessao } = await this.percorrer(passos[0] || null, contexto);
 
     await this.deps.sessaoRepository.upsert(instanciaId, conversa.id, telefone, {
       fluxoAtualId: fluxo.id,
       passoAtualId: passoAtual?.id || null,
       aguardando,
       ativo: !!aguardando,
-      contexto: { tentativasCnpj: 0, tentativasOpcao: 0 },
+      contexto: contextoSessao || { tentativasCnpj: 0, tentativasOpcao: 0 },
     });
 
     return { fluxoId: fluxo.id, aguardando, concluido: !aguardando };
@@ -900,7 +1058,7 @@ class ChatbotEngine {
       passoAtualId: resultado.passoAtual?.id || null,
       aguardando: resultado.aguardando,
       ativo: !!resultado.aguardando,
-      contexto: { ...(sessao.contexto || {}), tentativasOpcao: 0, tentativasCnpj: 0 },
+      contexto: resultado.contextoSessao || { ...(sessao.contexto || {}), tentativasOpcao: 0, tentativasCnpj: 0 },
     });
 
     return {
@@ -1000,7 +1158,7 @@ class ChatbotEngine {
       passoAtualId: resultado.passoAtual?.id || null,
       aguardando: resultado.aguardando,
       ativo: !!resultado.aguardando,
-      contexto: { ...(sessao.contexto || {}), tentativasCnpj: 0, tentativasOpcao: 0 },
+      contexto: resultado.contextoSessao || { ...(sessao.contexto || {}), tentativasCnpj: 0, tentativasOpcao: 0 },
     });
 
     return {
@@ -1068,6 +1226,15 @@ class ChatbotEngine {
         metadata,
         waMessageId
       );
+      // Se a conversa ficou so com o numero (ex.: iniciada pelo atendente) ou com
+      // o placeholder "Cliente", adota o nome do perfil do WhatsApp quando o
+      // cliente responde. Nao sobrescreve um nome ja definido manualmente.
+      const nomeAtual = String(conversa.cliente || "").trim();
+      const ehPlaceholder = !nomeAtual || nomeAtual === telefone || nomeAtual === "Cliente";
+      const nomeReal = String(nomeCliente || "").trim();
+      if (ehPlaceholder && nomeReal && nomeReal !== "Cliente" && nomeReal !== telefone) {
+        await this.deps.conversaRepository.update(conversa.id, { cliente: nomeReal });
+      }
       conversa = await this.deps.conversaRepository.findById(conversa.id);
     }
 

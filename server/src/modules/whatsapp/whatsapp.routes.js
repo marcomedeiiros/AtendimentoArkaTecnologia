@@ -4,6 +4,13 @@ const webhookAuth = require("../../shared/middlewares/webhook.middleware");
 const { webhookLimiter } = require("../../shared/middlewares/rateLimit.middleware");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
 const { exigirModulo } = require("../permissoes/modulo.middleware");
+const validate = require("../../shared/middlewares/validate.middleware");
+const {
+  instanceOnlySchema,
+  enviarSchema,
+  instanciaConfigSchema,
+  responderSchema,
+} = require("./whatsapp.dto");
 
 const webhookRouter = require("express").Router();
 
@@ -42,7 +49,7 @@ webhookRouter.get("/", (req, res, next) =>
  *       registrando a mensagem na conversa. Autenticado pelo mesmo
  *       webhook secret usado no recebimento, para o n8n chamar sem JWT.
  */
-webhookRouter.post("/responder", (req, res, next) =>
+webhookRouter.post("/responder", validate(responderSchema), (req, res, next) =>
   whatsappController.responder(req, res).catch(next)
 );
 
@@ -75,15 +82,15 @@ adminRouter.get("/status", (req, res, next) =>
  *     security: [{ bearerAuth: [] }]
  *     summary: Envia uma mensagem de texto a um numero (usado pelo Envio em Massa)
  */
-adminRouter.post("/enviar", exigirModulo("massa"), (req, res, next) =>
+adminRouter.post("/enviar", exigirModulo("massa"), validate(enviarSchema), (req, res, next) =>
   whatsappController.enviar(req, res).catch(next)
 );
 
-adminRouter.post("/conectar", somenteAdmin, (req, res, next) =>
+adminRouter.post("/conectar", somenteAdmin, validate(instanceOnlySchema), (req, res, next) =>
   whatsappController.conectar(req, res).catch(next)
 );
 
-adminRouter.post("/desconectar", somenteAdmin, (req, res, next) =>
+adminRouter.post("/desconectar", somenteAdmin, validate(instanceOnlySchema), (req, res, next) =>
   whatsappController.desconectar(req, res).catch(next)
 );
 
@@ -103,19 +110,19 @@ adminRouter.get("/detalhes", somenteAdmin, (req, res, next) =>
   whatsappController.detalhes(req, res).catch(next)
 );
 
-adminRouter.post("/instancia", somenteAdmin, (req, res, next) =>
+adminRouter.post("/instancia", somenteAdmin, validate(instanciaConfigSchema), (req, res, next) =>
   whatsappController.criarInstancia(req, res).catch(next)
 );
 
-adminRouter.post("/webhook", somenteAdmin, (req, res, next) =>
+adminRouter.post("/webhook", somenteAdmin, validate(instanciaConfigSchema), (req, res, next) =>
   whatsappController.configurarWebhook(req, res).catch(next)
 );
 
-adminRouter.post("/reiniciar", somenteAdmin, (req, res, next) =>
+adminRouter.post("/reiniciar", somenteAdmin, validate(instanceOnlySchema), (req, res, next) =>
   whatsappController.reiniciar(req, res).catch(next)
 );
 
-adminRouter.delete("/instancia", somenteAdmin, (req, res, next) =>
+adminRouter.delete("/instancia", somenteAdmin, validate(instanceOnlySchema), (req, res, next) =>
   whatsappController.excluir(req, res).catch(next)
 );
 

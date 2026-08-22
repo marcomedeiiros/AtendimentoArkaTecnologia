@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const AppError = require("../../shared/errors/AppError");
 const usuarioRepository = require("../../infrastructure/repositories/usuario.repository");
+const { CARGOS_VALIDOS } = require("./equipe.dto");
 
 // Alguem conta como online se o servidor viu uma requisicao autenticada dessa
 // pessoa nos ultimos minutos. Com o painel aberto o front consulta a API a cada
@@ -51,6 +52,13 @@ class EquipeService {
   async alterarStatus(id, ativo, solicitanteId) {
     await this._exigirAdmin(solicitanteId);
 
+    // Autoridade: os guards abaixo usam `!ativo`, entao `ativo` tem de ser
+    // booleano de verdade. Se este metodo for chamado fora da rota (sem o Zod da
+    // borda), um valor ambiguo (ex.: "false", truthy) nao passa daqui.
+    if (typeof ativo !== "boolean") {
+      throw new AppError("Status inválido (ativo deve ser booleano).", 400, "STATUS_INVALIDO");
+    }
+
     // Nao pode desativar a propria conta (auto-lockout) nem o ultimo Admin ativo.
     if (id === solicitanteId && !ativo) {
       throw new AppError("Você não pode desativar a sua própria conta.", 400, "AUTO_DESATIVACAO");
@@ -71,8 +79,14 @@ class EquipeService {
   async alterarCargo(id, cargo, solicitanteId) {
     await this._exigirAdmin(solicitanteId);
 
-    const cargosValidos = ["Administrador", "Financeiro", "Técnico", "Comercial"];
-    if (!cargosValidos.includes(cargo)) {
+    // Um Administrador nao altera o proprio cargo -- so o de outros. Evita que
+    // ele se rebaixe por engano (e perca o acesso) ou burle o travamento do
+    // ultimo admin trocando o proprio cargo.
+    if (id === solicitanteId) {
+      throw new AppError("Você não pode alterar o seu próprio cargo.", 400, "AUTO_CARGO");
+    }
+
+    if (!CARGOS_VALIDOS.includes(cargo)) {
       throw new AppError("Cargo inválido", 400, "CARGO_INVALIDO");
     }
 
@@ -105,7 +119,7 @@ class EquipeService {
       );
     }
 
-    if (!novaSenha || String(novaSenha).length < 6) {
+    if (typeof novaSenha !== "string" || novaSenha.length < 6) {
       throw new AppError(
         "A senha precisa de pelo menos 6 caracteres.",
         400,

@@ -20,11 +20,12 @@ import { Clock, X } from 'lucide-react';
 
 // Circulo com um arco colorido girando. Feito com borda em vez de icone para o
 // arco herdar a cor de cada estado sem precisar de duas versoes do desenho.
+// Cores FIXAS (nao variaveis de tema): esta tela e sempre escura.
 function Girando({ cor }) {
   return (
     <span
       aria-hidden="true"
-      className={`block h-9 w-9 animate-spin rounded-full border-[3px] border-grafite-600 ${cor}`}
+      className={`block h-9 w-9 animate-spin rounded-full border-[3px] border-white/15 ${cor}`}
     />
   );
 }
@@ -58,11 +59,16 @@ export default function AvisoSessao({ aviso, onFechar }) {
   const entrando = aviso.tipo === 'entrada';
 
   return (
-    // Clicar em qualquer lugar fecha. O aviso ja sai sozinho, mas quem esta com
-    // pressa nao deveria precisar esperar uma animacao terminar.
+    // Tela de TRANSICAO: sempre ESCURA e fixa, como as telas de acesso. Cores
+    // fixas (nao variaveis de tema) porque ela pode aparecer sobreposta ao painel
+    // no exato momento em que o tema claro do usuario e aplicado -- e ai o fundo
+    // por variavel de tema (grafite-900) virava branco.
+    // Clicar em qualquer lugar fecha: o aviso ja sai sozinho, mas quem esta com
+    // pressa nao deveria precisar esperar a animacao terminar.
     <div
       onClick={onFechar}
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-grafite-900 px-4"
+      style={{ backgroundColor: '#0b141a' }}
+      className="fixed inset-0 z-[80] flex items-center justify-center px-4"
     >
       <div
         role="status"
@@ -71,10 +77,12 @@ export default function AvisoSessao({ aviso, onFechar }) {
         <img
           src="/arka_tecnologia_logo-removebg-preview.png"
           alt="Arka Tecnologia"
-          className="arka-logo h-9 w-auto object-contain"
+          // Logo sempre BRANCA aqui (fundo escuro fixo), sem depender do tema.
+          style={{ filter: 'brightness(0) invert(1)' }}
+          className="h-9 w-auto object-contain"
         />
-        <Girando cor={entrando ? 'border-t-acao' : 'border-t-texto-suave'} />
-        <p className={`text-sm font-bold leading-snug ${entrando ? 'text-acao-200' : 'text-texto'}`}>
+        <Girando cor={entrando ? 'border-t-[#06cf9c]' : 'border-t-slate-400'} />
+        <p className={`text-sm font-bold leading-snug ${entrando ? 'text-[#06cf9c]' : 'text-slate-200'}`}>
           {aviso.texto}
         </p>
       </div>

@@ -93,6 +93,44 @@ function inspecionarMedia(media) {
   return { mimeDeclarado, bytes };
 }
 
+// Extrai apenas o payload base64 (sem o cabecalho do data URL, se houver).
+function extrairBase64(media) {
+  const s = String(media || "");
+  if (s.startsWith("data:")) {
+    const virgula = s.indexOf(",");
+    return virgula === -1 ? "" : s.slice(virgula + 1);
+  }
+  return s;
+}
+
+// Defesa em profundidade: nao basta o mimetype declarado estar na allowlist -- o
+// conteudo real precisa ser mesmo daquele tipo. Confere os "magic bytes" do
+// cabecalho do arquivo para imagens (bloqueia um .exe/.html disfarcado de PNG).
+function assinaturaImagemConfere(media, mime) {
+  let buf;
+  try {
+    const b64 = extrairBase64(media).replace(/\s/g, "").slice(0, 32);
+    buf = Buffer.from(b64, "base64");
+  } catch {
+    return false;
+  }
+  if (buf.length < 12) return false;
+  switch (mime) {
+    case "image/jpeg":
+      return buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
+    case "image/png":
+      return buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
+    case "image/gif":
+      // "GIF87a" / "GIF89a"
+      return buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38;
+    case "image/webp":
+      // "RIFF" .... "WEBP"
+      return buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP";
+    default:
+      return false;
+  }
+}
+
 // Nome de arquivo seguro: sem separadores de caminho (evita path traversal) e
 // sem caracteres de controle (evita cabecalhos quebrados ao repassar a midia).
 function nomeArquivoSeguro(nome) {
@@ -152,8 +190,44 @@ const enviarMidiaSchema = z
         message: `Tipo de arquivo nao permitido para ${d.tipo}: ${mime}`,
         path: ["mimetype"],
       });
+    } else if (d.tipo === "imagem" && !info.url && !assinaturaImagemConfere(d.media, mime)) {
+      // Mime declarado esta na allowlist, mas os bytes reais nao sao de imagem.
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "O conteudo enviado nao corresponde a uma imagem valida",
+        path: ["media"],
+      });
     }
   });
+
+// Encaminhar uma mensagem para outra conversa: dois ids obrigatorios.
+const encaminharMensagemSchema = z.object({
+  mensagemId: z.string().min(1, "Informe a mensagem"),
+  conversaDestinoId: z.string().min(1, "Informe a conversa de destino"),
+});
+
+// Editar o texto de uma mensagem ja enviada.
+const editarMensagemSchema = z.object({
+  texto: z.string().min(1, "Informe o novo texto"),
+});
+
+// Mover a conversa de setor: so setores conhecidos.
+const atualizarSetorSchema = z.object({
+  setor: z.enum(SETORES),
+});
+
+// Definir/limpar o atendente responsavel. String (id) para definir; null ou
+// "" para liberar. Bloqueia objetos/arrays no lugar do id.
+const definirAtendenteSchema = z.object({
+  atendenteId: z.string().nullable().optional(),
+});
+
+// Avaliacao do atendimento: nota 1-5 e feedback opcional. `coerce` aceita a nota
+// como numero ou string numerica; o service ainda normaliza (Number/trim).
+const avaliarAtendimentoSchema = z.object({
+  avaliacao: z.coerce.number().int().min(1).max(5).nullable().optional(),
+  feedback: z.string().max(4096).nullable().optional(),
+});
 
 module.exports = {
   enviarMensagemSchema,
@@ -162,4 +236,9 @@ module.exports = {
   validarCnpjSchema,
   enviarMidiaSchema,
   atualizarFlagsSchema,
+  encaminharMensagemSchema,
+  editarMensagemSchema,
+  atualizarSetorSchema,
+  definirAtendenteSchema,
+  avaliarAtendimentoSchema,
 };

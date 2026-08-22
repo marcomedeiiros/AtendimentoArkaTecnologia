@@ -5,9 +5,10 @@ const { validarImagemDataUrl } = require("../../shared/helpers/imagemSegura.help
 const AppError = require("../../shared/errors/AppError");
 const logger = require("../../config/logger");
 
-// Anexo de mensagem rapida ate 5 MB (imagem raster). O envio ao WhatsApp
-// revalida de novo pelo pipeline de midia (conversa.dto).
-const MAX_ANEXO_BYTES = 5 * 1024 * 1024;
+// Anexo de mensagem rapida ate 20 MB (imagem raster, ex.: GIF animado). Cabe no
+// teto de 30 MB do corpo (express.json) mesmo com a inflacao ~33% do base64. O
+// envio ao WhatsApp revalida de novo pelo pipeline de midia (conversa.dto).
+const MAX_ANEXO_BYTES = 20 * 1024 * 1024;
 
 // Flag que marca que os padroes ja foram semeados UMA vez. Apagar as mensagens
 // nao faz elas "voltarem" -- so semeamos enquanto esta flag nao existir.

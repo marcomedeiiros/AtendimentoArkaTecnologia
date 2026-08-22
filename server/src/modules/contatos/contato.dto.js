@@ -12,4 +12,9 @@ const criarContatoSchema = z.object({
 
 const atualizarContatoSchema = criarContatoSchema.partial();
 
-module.exports = { criarContatoSchema, atualizarContatoSchema };
+// Sincronizar a agenda do WhatsApp: instancia opcional (cai para a query/padrao).
+const sincronizarContatosSchema = z.object({
+  instance: z.string().min(1).max(120).optional(),
+});
+
+module.exports = { criarContatoSchema, atualizarContatoSchema, sincronizarContatosSchema };

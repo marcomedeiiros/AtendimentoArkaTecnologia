@@ -10,7 +10,7 @@
 // passa por normalizacao antes de subir - caso contrario o POST volta 400 sem
 // explicacao nenhuma para o usuario.
 
-export const TIPOS_PASSO = ['gatilho', 'mensagem', 'condicao', 'delay', 'acao', 'comentario'];
+export const TIPOS_PASSO = ['gatilho', 'mensagem', 'condicao', 'delay', 'acao', 'comentario', 'avaliacao'];
 
 // Gatilho curinga: o fluxo abre em qualquer mensagem em vez de esperar uma
 // palavra-chave. Espelha o GATILHO_CURINGA do server/src/modules/chatbot.
@@ -28,6 +28,7 @@ const ROTULO_TIPO = {
   delay: 'Delay',
   acao: 'Ação ERP',
   comentario: 'Anotação',
+  avaliacao: 'Pesquisa de Satisfação',
 };
 
 export function sanitizarPassosImportados(passos) {

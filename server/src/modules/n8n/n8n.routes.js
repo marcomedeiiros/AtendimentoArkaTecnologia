@@ -3,6 +3,13 @@ const n8nService = require("./n8n.service");
 const { success } = require("../../shared/helpers/response.helper");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
 const { exigirModulo } = require("../permissoes/modulo.middleware");
+const validate = require("../../shared/middlewares/validate.middleware");
+const {
+  criarWorkflowSchema,
+  renomearWorkflowSchema,
+  alternarAtivoSchema,
+  executarWorkflowSchema,
+} = require("./n8n.dto");
 
 // n8n faz parte de "Fluxo de Automacoes" -> modulo "fluxos". O gate no router
 // inteiro cobre leitura E escrita/execucao.
@@ -39,21 +46,25 @@ router.get("/workflows", rota(async (req, res) => success(res, await n8nService.
 
 router.post(
   "/workflows",
+  validate(criarWorkflowSchema),
   rota(async (req, res) => success(res, await n8nService.criar(req.body?.nome || "Novo fluxo"), 201))
 );
 
 router.put(
   "/workflows/:id",
+  validate(renomearWorkflowSchema),
   rota(async (req, res) => success(res, await n8nService.renomear(req.params.id, req.body?.nome)))
 );
 
 router.patch(
   "/workflows/:id/ativo",
+  validate(alternarAtivoSchema),
   rota(async (req, res) => success(res, await n8nService.alternarAtivo(req.params.id, !!req.body?.ativo)))
 );
 
 router.post(
   "/workflows/:id/executar",
+  validate(executarWorkflowSchema),
   rota(async (req, res) => success(res, await n8nService.executar(req.params.id, req.body?.payload || {})))
 );
 

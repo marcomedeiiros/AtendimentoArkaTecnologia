@@ -17,4 +17,9 @@ const simularSchema = z.object({
   respeitarHorario: z.boolean().optional(),
 });
 
-module.exports = { processarSchema, simularSchema };
+// Disparar um fluxo manualmente numa conversa existente.
+const executarFluxoSchema = z.object({
+  conversaId: z.string().min(1, "Informe a conversa"),
+});
+
+module.exports = { processarSchema, simularSchema, executarFluxoSchema };

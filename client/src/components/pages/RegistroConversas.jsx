@@ -13,7 +13,7 @@ function fmtData(iso) {
   if (!iso) return '-';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '-';
-  return d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+  return d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' });
 }
 
 // Mesmo "protocolo" curto que a Central mostra (#408619D2): tira os hifens,

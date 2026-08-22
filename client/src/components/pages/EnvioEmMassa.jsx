@@ -9,7 +9,7 @@ import { WhatsAppAPI } from '../../services/api';
 function sleep(ms) { return new Promise(res => setTimeout(res, ms)); }
 
 function horaAgora() {
-  return new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'America/Sao_Paulo' });
 }
 
 // Persistencia da campanha. Antes esses helpers existiam mas nunca eram
@@ -132,7 +132,7 @@ function ItemLog({ entry }) {
 function exportarLog(logs, campanha) {
   const csv = [
     ['Campanha', campanha],
-    ['Exportado em', new Date().toLocaleString('pt-BR')],
+    ['Exportado em', new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })],
     [''],
     ['Nome','Telefone','Status','Horário'],
     ...logs.map(l => [l.nome, l.telefone || '', l.status, l.hora]),

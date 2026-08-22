@@ -2,6 +2,8 @@ const router = require("express").Router();
 const prisma = require("../../infrastructure/database/prisma.client");
 const { success } = require("../../shared/helpers/response.helper");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
+const validate = require("../../shared/middlewares/validate.middleware");
+const { salvarPreferenciaSchema } = require("./preferencia.dto");
 
 router.use(authMiddleware);
 
@@ -39,6 +41,7 @@ router.get(
 
 router.put(
   "/:chave",
+  validate(salvarPreferenciaSchema),
   rota(async (req, res) => {
     const usuarioId = usuarioDe(req);
     if (!usuarioId) {

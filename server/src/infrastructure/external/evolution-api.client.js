@@ -176,6 +176,36 @@ class EvolutionApiClient {
     });
   }
 
+  // Menu com BOTOES de resposta (max. 3). Formato Evolution v2. Cada botao:
+  // { type:"reply", displayText, id }. O `id` volta no webhook como
+  // buttonsResponseMessage.selectedButtonId. IMPORTANTE: em instancias Baileys o
+  // WhatsApp pode NAO renderizar botoes; por isso quem chama deve ter fallback
+  // para texto (ver enviarBotComOpcoes no chatbot.engine).
+  async sendButtons(number, { title, description, footer, buttons }, instance = this.defaultInstance) {
+    return this.request("POST", `/message/sendButtons/${instance}`, {
+      number,
+      ...(title ? { title } : {}),
+      description: description || "",
+      ...(footer ? { footer } : {}),
+      buttons,
+    });
+  }
+
+  // Menu em LISTA (ate 10 itens). Formato Evolution v2. Cada linha:
+  // { title, description?, rowId }. O `rowId` volta como
+  // listResponseMessage.singleSelectReply.selectedRowId. Mesma ressalva de
+  // renderizacao do Baileys se aplica.
+  async sendList(number, { title, description, buttonText, footerText, sections }, instance = this.defaultInstance) {
+    return this.request("POST", `/message/sendList/${instance}`, {
+      number,
+      ...(title ? { title } : {}),
+      description: description || "",
+      buttonText: buttonText || "Ver opções",
+      ...(footerText ? { footerText } : {}),
+      sections,
+    });
+  }
+
   // Edicao de mensagem ja enviada (WhatsApp permite ate ~15 min).
   async editarMensagem({ number, key, texto }, instance = this.defaultInstance) {
     return this.request("POST", `/chat/updateMessage/${instance}`, {

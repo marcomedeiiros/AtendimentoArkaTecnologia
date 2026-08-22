@@ -51,7 +51,7 @@ export async function exportarRelatorioPdf({ elemento, metricas = [], filtros = 
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(9);
   pdf.setTextColor(...CINZA);
-  pdf.text(`Gerado em ${new Date().toLocaleString('pt-BR')}`, logo ? margem + 32 : margem, y + 11);
+  pdf.text(`Gerado em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`, logo ? margem + 32 : margem, y + 11);
 
   y += 18;
   pdf.setDrawColor(...LARANJA);
@@ -185,7 +185,7 @@ export async function exportarRelatorioPdf({ elemento, metricas = [], filtros = 
 function fmtDataHora(iso) {
   if (!iso) return '-';
   const d = new Date(iso);
-  return isNaN(d.getTime()) ? '-' : d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+  return isNaN(d.getTime()) ? '-' : d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' });
 }
 
 /**
@@ -219,7 +219,7 @@ export async function exportarTranscricaoPdf(conversa, { atendente = '-', status
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(9);
   pdf.setTextColor(...CINZA);
-  pdf.text(`Gerado em ${new Date().toLocaleString('pt-BR')}`, logo ? margem + 32 : margem, y + 11);
+  pdf.text(`Gerado em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`, logo ? margem + 32 : margem, y + 11);
 
   y += 18;
   pdf.setDrawColor(...LARANJA);

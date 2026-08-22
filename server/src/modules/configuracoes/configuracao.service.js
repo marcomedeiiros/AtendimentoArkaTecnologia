@@ -145,7 +145,7 @@ class ConfiguracaoService {
       pedirComentario: p.pedirComentario !== false,
       mensagemNota: txt(
         p.mensagemNota,
-        "Antes de encerrar: de 1 a 5, que nota voce da para este atendimento? (1 = pessimo, 5 = otimo)"
+        "Antes de encerrar: de 1 a 5, que nota você dá para este atendimento? (1 = péssimo, 5 = ótimo)"
       ),
       mensagemComentario: txt(
         p.mensagemComentario,
@@ -153,11 +153,11 @@ class ConfiguracaoService {
       ),
       mensagemAgradecimento: txt(
         p.mensagemAgradecimento,
-        "Sua avaliacao foi registrada. Obrigado pelo seu feedback!"
+        "Sua avaliação foi registrada. Obrigado pelo seu feedback!"
       ),
       mensagemNotaInvalida: txt(
         p.mensagemNotaInvalida,
-        "Por favor, responda apenas com um numero de 1 a 5."
+        "Por favor, responda apenas com um número de 1 a 5."
       ),
     };
   }

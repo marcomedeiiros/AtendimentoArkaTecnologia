@@ -2,7 +2,7 @@ const router = require("express").Router();
 const chatbotController = require("./chatbot.controller");
 const validate = require("../../shared/middlewares/validate.middleware");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
-const { processarSchema, simularSchema } = require("./chatbot.dto");
+const { processarSchema, simularSchema, executarFluxoSchema } = require("./chatbot.dto");
 
 router.use(authMiddleware);
 
@@ -26,7 +26,7 @@ router.post("/processar", validate(processarSchema), (req, res, next) =>
  *     security: [{ bearerAuth: [] }]
  *     summary: Dispara fluxo manualmente em uma conversa
  */
-router.post("/fluxos/:id/executar", (req, res, next) =>
+router.post("/fluxos/:id/executar", validate(executarFluxoSchema), (req, res, next) =>
   chatbotController.executarFluxo(req, res).catch(next)
 );
 

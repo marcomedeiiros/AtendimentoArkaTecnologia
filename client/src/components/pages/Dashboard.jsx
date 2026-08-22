@@ -78,7 +78,7 @@ function MetricCard({ label, valor, icon: Icon, color, sublabel, onClick }) {
 function exportarRelatorio(metricas) {
   const linhas = [
     ['Relatório Arka Tecnologia',''],
-    ['Gerado em', new Date().toLocaleString('pt-BR')],
+    ['Gerado em', new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })],
     ['',''],
     ['Métrica','Valor'],
     ['Total de Atendimentos', metricas.totalAtendimentos],

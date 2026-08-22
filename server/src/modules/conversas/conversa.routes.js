@@ -11,6 +11,11 @@ const {
   validarCnpjSchema,
   enviarMidiaSchema,
   atualizarFlagsSchema,
+  encaminharMensagemSchema,
+  editarMensagemSchema,
+  atualizarSetorSchema,
+  definirAtendenteSchema,
+  avaliarAtendimentoSchema,
 } = require("./conversa.dto");
 
 // SSE: autenticado pelo ticket na query (o EventSource nao manda header).
@@ -36,10 +41,10 @@ router.post("/:id/mensagens", validate(enviarMensagemSchema), (req, res, next) =
 router.post("/:id/midia", validate(enviarMidiaSchema), (req, res, next) =>
   conversaController.enviarMidia(req, res).catch(next)
 );
-router.post("/mensagens/encaminhar", (req, res, next) =>
+router.post("/mensagens/encaminhar", validate(encaminharMensagemSchema), (req, res, next) =>
   conversaController.encaminharMensagem(req, res).catch(next)
 );
-router.patch("/mensagens/:mensagemId", (req, res, next) =>
+router.patch("/mensagens/:mensagemId", validate(editarMensagemSchema), (req, res, next) =>
   conversaController.editarMensagem(req, res).catch(next)
 );
 router.post("/mensagens/:mensagemId/transcrever", (req, res, next) =>
@@ -57,13 +62,13 @@ router.post("/:id/validar-cnpj", validate(validarCnpjSchema), (req, res, next) =
 router.patch("/:id/status", validate(atualizarStatusSchema), (req, res, next) =>
   conversaController.atualizarStatus(req, res).catch(next)
 );
-router.patch("/:id/setor", (req, res, next) =>
+router.patch("/:id/setor", validate(atualizarSetorSchema), (req, res, next) =>
   conversaController.atualizarSetor(req, res).catch(next)
 );
-router.patch("/:id/atendente", (req, res, next) =>
+router.patch("/:id/atendente", validate(definirAtendenteSchema), (req, res, next) =>
   conversaController.definirAtendente(req, res).catch(next)
 );
-router.post("/:id/avaliacao", (req, res, next) =>
+router.post("/:id/avaliacao", validate(avaliarAtendimentoSchema), (req, res, next) =>
   conversaController.avaliarAtendimento(req, res).catch(next)
 );
 router.patch("/:id/flags", validate(atualizarFlagsSchema), (req, res, next) =>

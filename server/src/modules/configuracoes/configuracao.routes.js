@@ -6,6 +6,8 @@ const prisma = require("../../infrastructure/database/prisma.client");
 const { success } = require("../../shared/helpers/response.helper");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
 const { exigirModulo } = require("../permissoes/modulo.middleware");
+const validate = require("../../shared/middlewares/validate.middleware");
+const { salvarConfiguracoesSchema } = require("./configuracao.dto");
 const env = require("../../config/env");
 
 // Configuracoes (integracoes/segredos): controlado pela matriz (modulo
@@ -59,6 +61,7 @@ router.get(
 // transcricao). Ja restrito ao Grupo A pelo router.use acima.
 router.put(
   "/",
+  validate(salvarConfiguracoesSchema),
   rota(async (req, res) => success(res, await configuracaoService.salvar(req.body || {})))
 );
 

@@ -26,7 +26,8 @@ const BLOCK_META = {
   condicao:   { emoji: '🔍', label: 'Validar CNPJ',   desc: 'Checar parceiro',    color: 'border-purple-500/60 bg-purple-500/5',  badge: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
   delay:      { emoji: '⏳', label: 'Delay',          desc: 'Simula digitação',   color: 'border-linha bg-slate-500/5',    badge: 'bg-slate-500/20 text-slate-300 border-linha-forte' },
   acao:       { emoji: '🚀', label: 'Ação ERP',        desc: 'Desconto / Boleto',  color: 'border-ativo/60 bg-ativo/5',badge: 'bg-ativo/20 text-ativo-400 border-ativo/30' },
-  comentario: { emoji: '📝', label: 'Anotação',       desc: 'Post-it de equipe',  color: 'border-espera/60 bg-espera/10',   badge: 'bg-espera/20 text-espera-400 border-espera/30' }
+  comentario: { emoji: '📝', label: 'Anotação',       desc: 'Post-it de equipe',  color: 'border-espera/60 bg-espera/10',   badge: 'bg-espera/20 text-espera-400 border-espera/30' },
+  avaliacao:  { emoji: '⭐', label: 'Pesquisa de Satisfação', desc: 'Nota + comentário',  color: 'border-yellow-500/60 bg-yellow-500/5', badge: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' }
 };
 
 
@@ -594,7 +595,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
     // "solto" na tela e sumiria no primeiro reload. Bloqueamos aqui.
     if (!flow) return;
     const newId = 'p_' + Date.now();
-    const titleMap = { gatilho: 'Novo Gatilho', mensagem: 'Nova Mensagem', condicao: 'Validar CNPJ', delay: 'Aguardar...', acao: 'Ação Automática', comentario: 'Anotação' };
+    const titleMap = { gatilho: 'Novo Gatilho', mensagem: 'Nova Mensagem', condicao: 'Validar CNPJ', delay: 'Aguardar...', acao: 'Ação Automática', comentario: 'Anotação', avaliacao: 'Pesquisa de Satisfação' };
     const newNode = {
       id: newId, tipo,
       titulo: titleMap[tipo] || 'Nova Etapa',

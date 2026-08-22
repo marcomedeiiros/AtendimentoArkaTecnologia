@@ -93,6 +93,8 @@ function criarAmbiente({ fluxo, nomeCliente, horario, filas, agora, pesquisaAtiv
     // Nada sai para o WhatsApp.
     evolutionApi: {
       sendText: async () => ({ key: { id: "sim" } }),
+      sendButtons: async () => ({ key: { id: "sim" } }),
+      sendList: async () => ({ key: { id: "sim" } }),
       fetchProfilePictureUrl: async () => null,
     },
     n8nClient: { encaminharMensagem: async () => ({ encaminhado: false }) },

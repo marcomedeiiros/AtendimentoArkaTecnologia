@@ -182,7 +182,7 @@ export default function HelpDeskPainel() {
           </div>
 
           <p className="text-[10px] text-slate-500">
-            Atualizado em {new Date(dados.geradoEm).toLocaleString('pt-BR')}.
+            Atualizado em {new Date(dados.geradoEm).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}.
           </p>
         </>
       ) : null}

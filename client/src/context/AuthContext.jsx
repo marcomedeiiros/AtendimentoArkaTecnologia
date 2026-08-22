@@ -8,12 +8,15 @@
  */
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { AuthAPI, PreferenciasAPI, getToken } from '../services/api';
+import { aplicarTemaAcesso } from '../utils/tema';
 import AvisoSessao from '../components/AvisoSessao';
 
 const AuthContext = createContext(null);
 
 // Preferencia (por usuario, no servidor) com o nome usado ao assinar mensagens.
 const CHAVE_ASSINATURA = 'central.assinatura.nome';
+// Preferencia (por usuario, no servidor) com o tema escolhido (claro/escuro).
+const CHAVE_TEMA = 'interface.tema';
 const primeiroNomeDe = (nome) => String(nome || '').trim().split(/\s+/)[0] || '';
 
 // Entrada e saida cobrem a tela inteira, entao saem rapido: tempo de ler a
@@ -32,6 +35,8 @@ export function AuthProvider({ children }) {
   const timerAviso = useRef(null);
   // Nome de assinatura personalizado (null = ainda nao carregado / usa o padrao).
   const [assinaturaCustom, setAssinaturaCustom] = useState(null);
+  // Tema efetivo APOS o login (claro/escuro). Antes do login e sempre escuro.
+  const [tema, setTema] = useState('dark');
 
   const avisar = useCallback((texto, tipo = 'entrada') => {
     clearTimeout(timerAviso.current);
@@ -66,6 +71,9 @@ export function AuthProvider({ children }) {
         if (atual) avisar('Sua sessão expirou. Entre novamente para continuar.', 'expirou');
         return null;
       });
+      // Volta ao tema fixo de acesso: a tela de login nao herda o tema pessoal.
+      setTema('dark');
+      aplicarTemaAcesso();
     };
     window.addEventListener(AuthAPI.EVENTO_SEM_SESSAO, aoPerderSessao);
     return () => window.removeEventListener(AuthAPI.EVENTO_SEM_SESSAO, aoPerderSessao);
@@ -81,6 +89,31 @@ export function AuthProvider({ children }) {
       .catch(() => { if (vivo) setAssinaturaCustom(''); });
     return () => { vivo = false; };
   }, [usuario?.id]);
+
+  // Carrega o tema pessoal (preferencia por usuario) quando ha alguem logado.
+  // IMPORTANTE: aqui so guardamos o valor em estado -- quem APLICA no DOM e o
+  // AppLayout, e so DEPOIS que o painel termina de carregar. Assim a tela de
+  // carregamento ("Inicializando...") e a de "Verificando sessao" ficam sempre
+  // no escuro fixo do boot; o claro/escuro escolhido so entra com o painel
+  // pronto. Sem preferencia salva: escuro (padrao).
+  useEffect(() => {
+    if (!usuario?.id) return;
+    let vivo = true;
+    PreferenciasAPI.obter(CHAVE_TEMA)
+      .then((r) => { if (vivo) setTema(r?.valor === 'light' ? 'light' : 'dark'); })
+      .catch(() => { if (vivo) setTema('dark'); });
+    return () => { vivo = false; };
+  }, [usuario?.id]);
+
+  // Alterna e SALVA o tema no backend (preferencia por usuario). Nao aplica no
+  // DOM aqui: o AppLayout reage a mudanca de `tema` e aplica (painel ja pronto).
+  const alternarTema = useCallback(() => {
+    setTema((atual) => {
+      const novo = atual === 'light' ? 'dark' : 'light';
+      PreferenciasAPI.salvar(CHAVE_TEMA, novo).catch(() => {});
+      return novo;
+    });
+  }, []);
 
   // Salva o nome de assinatura (preferencia por usuario). Reativo: como fica no
   // AuthContext, a Central e o menu de perfil enxergam o mesmo valor na hora.
@@ -114,6 +147,9 @@ export function AuthProvider({ children }) {
   const sair = useCallback(() => {
     AuthAPI.sair();
     setUsuario(null);
+    // Ao sair, a interface volta ao tema escuro fixo das telas de acesso.
+    setTema('dark');
+    aplicarTemaAcesso();
     avisar('Você saiu da plataforma.', 'saida');
   }, [avisar]);
 
@@ -125,6 +161,7 @@ export function AuthProvider({ children }) {
       usuario, verificando, entrar, cadastrar, sair, avisar,
       atualizarUsuario,
       assinaturaNome, assinaturaCustom, salvarAssinatura,
+      tema, alternarTema,
     }}>
       {children}
       <AvisoSessao aviso={aviso} onFechar={() => setAviso(null)} />

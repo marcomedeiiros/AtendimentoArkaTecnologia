@@ -3,6 +3,12 @@ const equipeController = require("./equipe.controller");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
 const { adminMiddleware } = require("../../shared/middlewares/admin.middleware");
 const { exigirModulo } = require("../permissoes/modulo.middleware");
+const validate = require("../../shared/middlewares/validate.middleware");
+const {
+  alterarStatusSchema,
+  alterarCargoSchema,
+  redefinirSenhaSchema,
+} = require("./equipe.dto");
 
 router.use(authMiddleware);
 
@@ -22,9 +28,9 @@ router.get("/", exigirModulo("equipe"), (req, res, next) => equipeController.lis
 // auto-promocao a Administrador (escalonamento de privilegio). Defesa em
 // profundidade: adminMiddleware barra pelo cargo do token e cada metodo do
 // service reconfere o cargo no BANCO.
-router.patch("/:id/status", adminMiddleware, (req, res, next) => equipeController.alterarStatus(req, res).catch(next));
-router.patch("/:id/cargo", adminMiddleware, (req, res, next) => equipeController.alterarCargo(req, res).catch(next));
-router.patch("/:id/senha", adminMiddleware, (req, res, next) => equipeController.redefinirSenha(req, res).catch(next));
+router.patch("/:id/status", adminMiddleware, validate(alterarStatusSchema), (req, res, next) => equipeController.alterarStatus(req, res).catch(next));
+router.patch("/:id/cargo", adminMiddleware, validate(alterarCargoSchema), (req, res, next) => equipeController.alterarCargo(req, res).catch(next));
+router.patch("/:id/senha", adminMiddleware, validate(redefinirSenhaSchema), (req, res, next) => equipeController.redefinirSenha(req, res).catch(next));
 router.delete("/:id", adminMiddleware, (req, res, next) => equipeController.remover(req, res).catch(next));
 
 module.exports = router;

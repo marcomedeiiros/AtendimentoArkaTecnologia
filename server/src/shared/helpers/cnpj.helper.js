@@ -63,8 +63,16 @@ function normalizarTelefoneBr(valor) {
   return null;
 }
 
+// Sempre no fuso de Brasilia: o servidor costuma rodar em UTC (nuvem/Docker), e
+// sem fixar o timeZone a hora saia adiantada (ex.: 3h a frente). Aceita Date ou
+// string ISO.
 function formatarHora(date = new Date()) {
-  return date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const d = date instanceof Date ? date : new Date(date);
+  return d.toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "America/Sao_Paulo",
+  });
 }
 
 function sleep(ms) {

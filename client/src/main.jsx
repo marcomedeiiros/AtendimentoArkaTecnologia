@@ -2,10 +2,12 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './index.css';
-import { initTema } from './utils/tema';
+import { aplicarTemaAcesso } from './utils/tema';
 
-// Aplica o tema salvo o quanto antes (antes do React montar), para não piscar.
-initTema();
+// Boot sempre no tema ESCURO fixo: login, cadastro e carregamento não mudam de
+// tema. A preferência pessoal (claro/escuro) só é aplicada após o login, pelo
+// AuthContext.
+aplicarTemaAcesso();
 
 // Remove chaves orfas apos migracoes para o backend:
 //  - 'arka:mensagens_rapidas': defaults antigos das mensagens rapidas

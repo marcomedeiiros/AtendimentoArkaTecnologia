@@ -2,6 +2,28 @@ import { useEffect, useRef, useState } from 'react';
 import { MessageSquare, Send, X, RotateCcw, Loader2, CheckCircle2, UserRound, AlertCircle } from 'lucide-react';
 import { ChatbotAPI } from '../../services/api';
 
+// Rotulo amigavel do botao de uma opcao. As opcoes guardam palavras-chave
+// (ex.: ["1","tecnico",...]) e nao um titulo limpo; entao tentamos extrair o
+// texto da linha correspondente do menu (ex.: "1️⃣- Setor Técnico" -> "Setor
+// Técnico"). Sem achar, cai numa palavra-chave legivel ou no proprio numero.
+function rotuloBotao(op, texto) {
+  const num = (op.palavrasChave || []).find((k) => /^\d+$/.test(k));
+  if (num && texto) {
+    const re = new RegExp(`(?:^|\\n)\\s*${num}[^-\\n]*[-–—]\\s*(.+)`, 'u');
+    const m = texto.match(re);
+    if (m && m[1].trim()) return m[1].trim();
+  }
+  const kw = (op.palavrasChave || []).find((k) => !/^\d+$/.test(k));
+  return kw || num || String(op.rotulo || '').split(',')[0] || 'Opção';
+}
+
+// O que o clique "digita" para o motor: o numero (que casa com a palavra-chave)
+// ou a primeira palavra-chave/rotulo disponivel.
+function valorBotao(op) {
+  const num = (op.palavrasChave || []).find((k) => /^\d+$/.test(k));
+  return num || (op.palavrasChave || [])[0] || String(op.rotulo || '').split(',')[0] || '';
+}
+
 // Painel de teste do fluxo: conversa de verdade contra o motor do chatbot.
 //
 // Diferente do botao "Simular", que so percorre os blocos na tela em sequencia,
@@ -178,6 +200,28 @@ export function FlowTestChat({ fluxo, onClose, onPassoAtivo }) {
             </div>
           </div>
         ))}
+
+        {/* Botoes da etapa atual: quando o passo espera uma escolha de menu,
+            mostramos uma opcao por botao. Clicar "digita" a opcao pelo cliente,
+            para testar como se fosse pressionar um botao no WhatsApp. */}
+        {!carregando && !finalizado && ultimo?.aguardando === 'opcao' && (() => {
+          const passo = (fluxo?.passos || []).find((p) => p.id === ultimo.passoAtualId);
+          const opcoes = (passo?.config?.opcoes || []).filter((o) => o && typeof o === 'object');
+          if (!opcoes.length) return null;
+          return (
+            <div className="flex flex-col gap-1.5 pt-1">
+              {opcoes.map((op, k) => (
+                <button
+                  key={op.id || k}
+                  onClick={() => enviar(valorBotao(op))}
+                  className="self-start max-w-[90%] text-left px-3 py-1.5 rounded-xl bg-acao/10 border border-acao/40 text-[11px] font-semibold text-acao-200 hover:bg-acao/20 hover:border-acao/60 transition-all"
+                >
+                  {rotuloBotao(op, passo?.texto)}
+                </button>
+              ))}
+            </div>
+          );
+        })()}
 
         {carregando && (
           <div className="flex items-center gap-1.5 text-[10px] text-slate-400 px-1">

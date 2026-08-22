@@ -2,7 +2,7 @@ const { z } = require("zod");
 
 const passoSchema = z.object({
   id: z.string().optional(),
-  tipo: z.enum(["gatilho", "mensagem", "condicao", "delay", "acao", "comentario"]),
+  tipo: z.enum(["gatilho", "mensagem", "condicao", "delay", "acao", "comentario", "avaliacao"]),
   titulo: z.string().min(1),
   desc: z.string().optional(),
   descricao: z.string().optional(),

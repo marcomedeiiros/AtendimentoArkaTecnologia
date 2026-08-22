@@ -5,8 +5,9 @@
  * e um <Outlet onde cada página é inserida pelo React Router
  * Substitui o sistema de aba/useState que estava em Home.jsx
  */
-import React, { useState } from 'react';
+import React, { useState, useLayoutEffect } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { aplicarTema } from '../../utils/tema';
 import {
   LayoutGrid, Users, Zap, MessageSquare, ShieldCheck,
   GitFork, MessageCircle, CalendarDays, Send, Loader2, Menu, X, WifiOff, Settings, LogOut, Bug
@@ -215,8 +216,17 @@ function Sidebar({ aberto, onClose }) {
 
 export default function AppLayout() {
   const { carregando, apiOffline } = useAppContext();
+  const { tema } = useAuth();
   const location = useLocation();
   const [menuAberto, setMenuAberto] = useState(false);
+
+  // O tema pessoal (claro/escuro) so entra DEPOIS do carregamento. Enquanto
+  // `carregando`, a tela "Inicializando..." fica no escuro fixo do boot; quando
+  // o painel esta pronto, aplicamos o tema escolhido -- antes do paint
+  // (useLayoutEffect), para nao piscar.
+  useLayoutEffect(() => {
+    if (!carregando) aplicarTema(tema);
+  }, [carregando, tema]);
 
   const isFluxos = location.pathname === '/fluxos';
 

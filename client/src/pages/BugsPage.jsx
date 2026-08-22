@@ -13,8 +13,8 @@ import { BugsAPI } from '../services/api';
 function quando(iso) {
   if (!iso) return '';
   const d = new Date(iso);
-  const data = d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
-  const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const data = d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', timeZone: 'America/Sao_Paulo' });
+  const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
   return `${data} · ${hora}`;
 }
 

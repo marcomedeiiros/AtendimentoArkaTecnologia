@@ -7,7 +7,8 @@ const BLOCK_META = {
   condicao:   { emoji: '🔍', label: 'Validar CNPJ'},
   delay:      { emoji: '⏳', label: 'Delay'       },
   acao:       { emoji: '🚀', label: 'Ação ERP'    },
-  comentario: { emoji: '📝', label: 'Anotação'    }
+  comentario: { emoji: '📝', label: 'Anotação'    },
+  avaliacao:  { emoji: '⭐', label: 'Pesquisa de Satisfação' }
 };
 
 const VARS = [
@@ -25,7 +26,8 @@ const typeHelpText = {
   condicao:   'Valida se o CNPJ possui contrato de parceiro ativo no banco Arka.',
   delay:      'Pausa estratégica em segundos, simulando digitação humana.',
   acao:       'Executa ação automática: desconto, geração de boleto/Pix, etc.',
-  comentario: 'Anotação interna visual para organização da equipe.'
+  comentario: 'Anotação interna visual para organização da equipe.',
+  avaliacao:  'Pergunta a nota (1–5) e um comentário ao cliente, salva a avaliação e encerra o atendimento. Só funciona no modo "local".'
 };
 
 function RichTextEditor({ value, onChange, rows = 4, placeholder }) {
@@ -148,6 +150,9 @@ export function FlowPropertyPanel({
           />
         </div>
 
+        {/* Avaliacao nao usa o texto generico: suas mensagens ficam no bloco de
+            config abaixo (config.mensagem*). */}
+        {node.tipo !== 'avaliacao' && (
         <div>
           <label className="text-xs font-semibold text-slate-300 block mb-1.5">
             {isComment ? 'Conteúdo da Anotação' : 'Texto / Mensagem'}
@@ -170,6 +175,7 @@ export function FlowPropertyPanel({
             />
           )}
         </div>
+        )}
 
         {!isComment && (
           <>
@@ -207,6 +213,62 @@ export function FlowPropertyPanel({
               </div>
             )}
 
+            {node.tipo === 'avaliacao' && (
+              <div className="p-3.5 rounded-xl bg-yellow-500/10 border border-yellow-500/30 space-y-3">
+                <label className="text-xs font-bold text-yellow-400 flex items-center gap-1.5">⭐ Pesquisa de Satisfação</label>
+                <p className="text-[10px] text-slate-400 leading-relaxed">
+                  Ao chegar aqui, o bot pergunta a nota (1–5), salva a avaliação e encerra o
+                  atendimento. Deixe um campo em branco para usar o texto padrão das Configurações.
+                </p>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Pergunta da nota</label>
+                  <textarea
+                    rows={2}
+                    value={node.config?.mensagemNota || ''}
+                    onChange={e => onChangeNode({ ...node, config: { ...(node.config || {}), mensagemNota: e.target.value } })}
+                    className="w-full bg-grafite-700 border border-linha rounded-lg p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-yellow-500/50 resize-none"
+                    placeholder="Padrão: Antes de encerrar: de 1 a 5, que nota você dá para este atendimento? (1 = péssimo, 5 = ótimo)"
+                  />
+                </div>
+
+                <label className="flex items-center gap-2 text-[11px] font-semibold text-slate-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={node.config?.pedirComentario !== false}
+                    onChange={e => onChangeNode({ ...node, config: { ...(node.config || {}), pedirComentario: e.target.checked } })}
+                    className="accent-yellow-500"
+                  />
+                  Pedir um comentário depois da nota
+                </label>
+
+                {node.config?.pedirComentario !== false && (
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Pergunta do comentário</label>
+                    <textarea
+                      rows={2}
+                      value={node.config?.mensagemComentario || ''}
+                      onChange={e => onChangeNode({ ...node, config: { ...(node.config || {}), mensagemComentario: e.target.value } })}
+                      className="w-full bg-grafite-700 border border-linha rounded-lg p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-yellow-500/50 resize-none"
+                      placeholder='Padrão: Obrigado! Em poucas palavras, o que foi bom ou o que podemos melhorar? (ou responda "pular")'
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Mensagem de agradecimento</label>
+                  <textarea
+                    rows={2}
+                    value={node.config?.mensagemAgradecimento || ''}
+                    onChange={e => onChangeNode({ ...node, config: { ...(node.config || {}), mensagemAgradecimento: e.target.value } })}
+                    className="w-full bg-grafite-700 border border-linha rounded-lg p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-yellow-500/50 resize-none"
+                    placeholder="Padrão: Sua avaliação foi registrada. Obrigado pelo seu feedback!"
+                  />
+                </div>
+              </div>
+            )}
+
+            {node.tipo !== 'avaliacao' && (
             <div className="space-y-2">
               <div className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                 <Variable size={13} className="text-acao-200" /> Inserir Variável
@@ -226,6 +288,7 @@ export function FlowPropertyPanel({
               </div>
               <p className="text-[10px] text-slate-500">Clique na variável para inserir no cursor do texto.</p>
             </div>
+            )}
 
             {/* Ramificacoes importadas. Somente leitura de proposito: editar
                 aqui daria a entender que o motor local ja segue todas elas. */}

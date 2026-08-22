@@ -12,7 +12,7 @@ import { MensagensRapidasAPI } from '../../services/api';
 // carregar script). O servidor revalida tudo de novo (whitelist de MIME, magic
 // bytes, tamanho) e e a autoridade -- esta checagem do cliente e so conveniencia.
 const TIPOS_IMG = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
-const MAX_ANEXO_BYTES = 5 * 1024 * 1024; // 5 MB (mesmo teto do servidor)
+const MAX_ANEXO_BYTES = 20 * 1024 * 1024; // 20 MB (mesmo teto do servidor)
 
 function lerImagemAnexo(file) {
   return new Promise((resolve, reject) => {
@@ -21,7 +21,7 @@ function lerImagemAnexo(file) {
       return reject(new Error('Só são aceitas imagens PNG, JPEG, WebP ou GIF.'));
     }
     if (file.size > MAX_ANEXO_BYTES) {
-      return reject(new Error('Imagem muito grande (máx. 5 MB).'));
+      return reject(new Error('Imagem muito grande (máx. 20 MB).'));
     }
     const reader = new FileReader();
     reader.onload = () => resolve({ media: reader.result, mimetype: file.type, fileName: file.name });

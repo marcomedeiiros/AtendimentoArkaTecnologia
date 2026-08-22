@@ -519,11 +519,10 @@ class ConversaService {
     const recarregada = await conversaRepository.findById(id);
     const dto = this._emitir(recarregada);
 
-    // Ao FECHAR manualmente (atendimento humano), dispara a mesma pesquisa de
-    // satisfacao do bot: pergunta a nota de 1 a 5 e o comentario. Best-effort e
-    // nao-bloqueante - um erro na pesquisa nunca deve impedir o fechamento
-    // pedido pelo atendente. O proprio motor respeita o modo "local", o toggle
-    // de configuracao e nao repergunta se a conversa ja tem nota.
+    // Ao FECHAR (atendimento humano), dispara a pesquisa de satisfacao: pergunta
+    // a nota de 1 a 5 e o comentario. Best-effort e nao-bloqueante - um erro na
+    // pesquisa nunca deve impedir o fechamento pedido pelo atendente. O motor
+    // respeita o modo "local", o toggle e nao repergunta se ja tem nota.
     if (status === "fechada" && mudouStatus) {
       this._dispararPesquisaSatisfacao(recarregada).catch((e) =>
         logger.warn("Falha ao iniciar pesquisa de satisfacao", { id, message: e.message })

@@ -249,7 +249,7 @@ export default function EquipePage() {
               <ShieldCheck size={13} className={estaInativo ? 'text-texto-fraco' : 'text-acao-200'} />
               {estaInativo ? (
                 <span className="italic text-texto-fraco">Cargo definido após aprovação</span>
-              ) : ehAdmin ? (
+              ) : ehAdmin && !ehVoce ? (
                 <select
                   value={m.cargo}
                   disabled={loadingId === m.id}
