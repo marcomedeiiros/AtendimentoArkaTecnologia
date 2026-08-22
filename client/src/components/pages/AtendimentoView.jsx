@@ -1167,13 +1167,15 @@ function MensagemMidia({ m, escuro, onAbrirImagem }) {
   if (m.tipo === 'video') {
     return (
       <div className="space-y-1.5">
+        {/* Largura maior para caber a barra de controles COMPLETA (volume +
+            tela cheia visiveis). Em ~260px o Chrome colapsava tudo no menu "⋮". */}
         <video
           src={md.url}
           controls
           preload="metadata"
           playsInline
           controlsList="nodownload"
-          className="rounded-lg w-full max-w-[260px] max-h-80 bg-black object-contain"
+          className="rounded-lg w-full max-w-[420px] max-h-96 bg-black object-contain"
         />
         {md.caption && (
           <div className={`text-[11px] leading-relaxed whitespace-pre-wrap break-words ${escuro ? 'text-slate-200' : 'text-slate-900'}`}>
@@ -1387,6 +1389,18 @@ function tipoDoArquivo(file) {
   return 'documento';
 }
 
+// Le um File como data URL (base64). Usado no ENVIO de video/documento: assim
+// nao lemos o arquivo grande na hora de selecionar (selecao fica instantanea).
+function lerArquivoComoDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) return reject(new Error('Arquivo indisponível.'));
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => reject(new Error('Falha ao ler o arquivo.'));
+    r.readAsDataURL(file);
+  });
+}
+
 // Espelha a allowlist do servidor (conversa.dto.js). E so a primeira barreira:
 // o backend revalida e nunca confia no que o front manda. Serve para dar retorno
 // imediato e barrar tipos perigosos (SVG/HTML/executaveis) antes do upload.
@@ -1453,7 +1467,10 @@ function PainelChat({
   const meta = STATUS_META[conversa.statusAtendimento] || STATUS_META.pendente;
   const encerrada = conversa.statusAtendimento === 'fechada';
 
-  // Le o arquivo como data URL (base64) para preview e envio.
+  // Prepara o anexo. Imagem: le como data URL na hora (arquivo pequeno, o preview
+  // mostra a miniatura). Video/documento: guarda so o File e converte para base64
+  // no ENVIO -- assim selecionar um video grande e instantaneo (nao trava lendo
+  // o arquivo inteiro na hora).
   const selecionarArquivo = useCallback((file) => {
     if (!file) return;
     const MAX = 20 * 1024 * 1024; // 20MB (alinhado ao teto do servidor)
@@ -1462,15 +1479,15 @@ function PainelChat({
       window.alert('Tipo de arquivo não permitido. Envie imagem (JPG, PNG, WEBP, GIF), vídeo, áudio ou documento.');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => setAnexo({
-      dataUrl: reader.result,
-      tipo: tipoDoArquivo(file),
-      mimetype: file.type || 'application/octet-stream',
-      fileName: file.name,
-      progresso: 0
-    });
-    reader.readAsDataURL(file);
+    const tipo = tipoDoArquivo(file);
+    const base = { tipo, mimetype: file.type || 'application/octet-stream', fileName: file.name, progresso: 0 };
+    if (tipo === 'imagem') {
+      const reader = new FileReader();
+      reader.onload = () => setAnexo({ ...base, dataUrl: reader.result });
+      reader.readAsDataURL(file);
+    } else {
+      setAnexo({ ...base, file });
+    }
   }, []);
 
   // Cola imagem/arquivo direto da area de transferencia (Ctrl+V), ex: print de tela.
@@ -1499,6 +1516,15 @@ function PainelChat({
   const enviarAnexo = useCallback(async () => {
     if (!anexo || enviandoMidia) return;
     setEnviandoMidia(true);
+    // Converte para base64 agora (video/documento so guardaram o File na selecao).
+    let media;
+    try {
+      media = anexo.dataUrl || await lerArquivoComoDataUrl(anexo.file);
+    } catch (e) {
+      window.alert('Falha ao ler o arquivo: ' + e.message);
+      setEnviandoMidia(false);
+      return;
+    }
     // Assinatura tambem na midia (igual ao texto): com a assinatura ligada, a
     // legenda leva "*Nome*" na 1a linha -- mesmo sem texto digitado. (Audio nao
     // tem legenda no WhatsApp, entao so vale para imagem/video/documento/gif.)
@@ -1509,7 +1535,7 @@ function PainelChat({
       : legenda;
     const payload = {
       tipo: anexo.tipo,
-      media: anexo.dataUrl,
+      media,
       mimetype: anexo.mimetype,
       fileName: anexo.fileName,
       ...(legendaFinal ? { caption: legendaFinal } : {})
