@@ -3,7 +3,7 @@ const authController = require("./auth.controller");
 const validate = require("../../shared/middlewares/validate.middleware");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
 const { authLimiter } = require("../../shared/middlewares/rateLimit.middleware");
-const { loginSchema, cadastroSchema, atualizarPerfilSchema, trocarSenhaSchema } = require("./auth.dto");
+const { loginSchema, cadastroSchema, atualizarPerfilSchema, trocarSenhaSchema, refreshSchema, sairSchema } = require("./auth.dto");
 
 /**
  * @openapi
@@ -27,6 +27,45 @@ const { loginSchema, cadastroSchema, atualizarPerfilSchema, trocarSenhaSchema } 
  */
 router.post("/login", authLimiter, validate(loginSchema), (req, res, next) =>
   authController.login(req, res).catch(next)
+);
+
+/**
+ * @openapi
+ * /api/auth/renovar:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Renova a sessao (troca o refresh token por um par novo)
+ *     description: >
+ *       Rotacao obrigatoria: o token enviado e queimado e sai um novo no lugar.
+ *       Reenviar um token ja usado revoga a sessao inteira (deteccao de roubo).
+ *       Nao exige o token de acesso -- e justamente para quando ele venceu.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [refreshToken]
+ *             properties:
+ *               refreshToken: { type: string }
+ *     responses:
+ *       200: { description: "Novo par: token de acesso + refreshToken" }
+ *       401: { description: Sessao invalida, expirada, revogada ou reusada }
+ */
+router.post("/renovar", authLimiter, validate(refreshSchema), (req, res, next) =>
+  authController.renovar(req, res).catch(next)
+);
+
+/**
+ * @openapi
+ * /api/auth/sair:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Encerra a sessao no servidor (revoga a familia do refresh token)
+ *     description: Idempotente -- token desconhecido tambem responde 200.
+ */
+router.post("/sair", validate(sairSchema), (req, res, next) =>
+  authController.sair(req, res).catch(next)
 );
 
 /**

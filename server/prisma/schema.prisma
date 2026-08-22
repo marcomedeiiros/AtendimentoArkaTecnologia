@@ -80,6 +80,39 @@ model Usuario {
   @@map("usuarios")
 }
 
+/// Sessao renovavel (refresh token) do operador.
+///
+/// Por que existe: o token de acesso e um JWT curto e sem estado -- otimo para
+/// autenticar cada requisicao, ruim para ENCERRAR uma sessao (nao da para
+/// revogar o que nao esta guardado em lugar nenhum) e ruim para o turno de 8h,
+/// porque quando ele vence o operador cai no login no meio do atendimento.
+///
+/// Cada linha aqui e UM token de renovacao, guardado apenas como hash SHA-256
+/// (o valor em claro so existe no navegador de quem o recebeu -- um vazamento
+/// desta tabela nao entrega sessao a ninguem).
+///
+/// ROTACAO: cada uso marca `usadoEm` e emite uma linha nova na MESMA `familia`.
+/// Se um token ja usado voltar a aparecer, e sinal de copia roubada: a familia
+/// inteira e revogada e as duas pontas caem no login. Sem rotacao, um refresh
+/// token copiado valeria pelo prazo inteiro sem ninguem notar.
+model SessaoRefresh {
+  id         String    @id @default(uuid())
+  /// Mesma sessao atraves de todas as rotacoes -- e o que se revoga no logout.
+  familia    String
+  /// SHA-256 do token; nunca o token em claro.
+  tokenHash  String    @unique @map("token_hash")
+  usuarioId  String    @map("usuario_id")
+  /// Prazo desta linha. Renovado a cada rotacao (sessao deslizante).
+  expiraEm   DateTime  @map("expira_em")
+  usadoEm    DateTime? @map("usado_em")
+  revogadoEm DateTime? @map("revogado_em")
+  criadoEm   DateTime  @default(now()) @map("criado_em")
+
+  @@index([familia])
+  @@index([usuarioId])
+  @@map("sessoes_refresh")
+}
+
 // NAO existe mais um model Equipe aqui.
 //
 // Ele era uma lista paralela, digitada a mao, sem ligacao nenhuma com quem

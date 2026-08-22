@@ -7,7 +7,7 @@
  * de 401 antes mesmo de a pessoa digitar o e-mail.
  */
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { AuthAPI, PreferenciasAPI, getToken } from '../services/api';
+import { AuthAPI, PreferenciasAPI, registrarAtividade } from '../services/api';
 import { aplicarTemaAcesso } from '../utils/tema';
 import AvisoSessao from '../components/AvisoSessao';
 
@@ -49,18 +49,38 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let vivo = true;
     (async () => {
-      if (!getToken()) { setVerificando(false); return; }
+      // Basta ter sessao guardada: se o token de acesso venceu (turno de 8h,
+      // navegador reaberto dias depois), o proprio /auth/me renova sozinho por
+      // dentro -- e por isso que o F5 nao joga mais ninguem no login.
+      if (!AuthAPI.temSessaoGuardada()) { setVerificando(false); return; }
       try {
         const eu = await AuthAPI.eu();
         if (vivo) setUsuario(eu);
       } catch {
-        // Token vencido ou revogado: segue para o login sem alarde.
+        // Nao deu nem para renovar (sessao revogada, expirada ou reusada):
+        // segue para o login sem alarde.
         AuthAPI.sair();
       } finally {
         if (vivo) setVerificando(false);
       }
     })();
     return () => { vivo = false; };
+  }, []);
+
+  // Sinal de "tem alguem aqui", que sustenta a sessao deslizante. A renovacao
+  // consulta este relogio: passado o limite de inatividade sem nenhum destes
+  // eventos, ela para e a sessao cai no login. Passivo e capturante para nao
+  // competir com nenhum handler da aplicacao.
+  useEffect(() => {
+    const eventos = ['pointerdown', 'keydown', 'wheel', 'touchstart'];
+    const aoInteragir = () => registrarAtividade();
+    const aoVoltar = () => { if (document.visibilityState === 'visible') registrarAtividade(); };
+    eventos.forEach(e => window.addEventListener(e, aoInteragir, { passive: true, capture: true }));
+    document.addEventListener('visibilitychange', aoVoltar);
+    return () => {
+      eventos.forEach(e => window.removeEventListener(e, aoInteragir, { capture: true }));
+      document.removeEventListener('visibilitychange', aoVoltar);
+    };
   }, []);
 
   // Qualquer 401 vindo de qualquer chamada derruba a sessao aqui. Antes isso
@@ -145,6 +165,8 @@ export function AuthProvider({ children }) {
   const cadastrar = useCallback((dados) => AuthAPI.cadastrar(dados), []);
 
   const sair = useCallback(() => {
+    // Sem await: a tela sai NA HORA. O AuthAPI.sair cuida de avisar o servidor
+    // (revogando a sessao) e de limpar o navegador mesmo se a rede falhar.
     AuthAPI.sair();
     setUsuario(null);
     // Ao sair, a interface volta ao tema escuro fixo das telas de acesso.

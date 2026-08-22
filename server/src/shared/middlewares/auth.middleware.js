@@ -2,6 +2,7 @@ const jwt = require("jsonwebtoken");
 const env = require("../../config/env");
 const AppError = require("../errors/AppError");
 const usuarioRepository = require("../../infrastructure/repositories/usuario.repository");
+const sessaoRefreshRepository = require("../../infrastructure/repositories/sessaoRefresh.repository");
 
 // Presenca do operador, sem uma tabela de sessao.
 //
@@ -44,6 +45,16 @@ async function authMiddleware(req, res, next) {
   // hora, sem esperar o token expirar (ate 8h). Toda checagem de permissao
   // adiante (admin, setor) passa a se basear no estado real, nao no congelado.
   try {
+    // Sessao revogada (logout, ou familia queimada por reuso de refresh token)
+    // invalida o token de acesso NA HORA. Sem esta checagem, sair do painel nao
+    // derrubaria um JWT copiado: ele valeria pelo prazo inteiro, porque token
+    // sem estado nao se revoga. `sid` so existe nos tokens emitidos a partir da
+    // versao com sessao renovavel -- token antigo segue valido ate vencer, para
+    // o deploy nao derrubar quem estava logado.
+    if (payload.sid && !(await sessaoRefreshRepository.familiaAtiva(payload.sid))) {
+      return next(new AppError("Sessao encerrada", 401, "SESSAO_REVOGADA"));
+    }
+
     const usuario = await usuarioRepository.findById(payload.sub);
     if (!usuario) {
       return next(new AppError("Conta nao encontrada", 401, "CONTA_INEXISTENTE"));

@@ -7,6 +7,16 @@ class AuthController {
     return success(res, data);
   }
 
+  async renovar(req, res) {
+    const data = await authService.renovar(req.body.refreshToken);
+    return success(res, data);
+  }
+
+  async sair(req, res) {
+    const data = await authService.sair(req.body.refreshToken);
+    return success(res, data);
+  }
+
   async cadastrar(req, res) {
     const data = await authService.cadastrar(req.body);
     return success(res, data, 201);

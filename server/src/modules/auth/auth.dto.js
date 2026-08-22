@@ -39,4 +39,17 @@ const trocarSenhaSchema = z.object({
   novaSenha: z.string().min(6, "A nova senha precisa de pelo menos 6 caracteres"),
 });
 
-module.exports = { loginSchema, cadastroSchema, atualizarPerfilSchema, trocarSenhaSchema };
+// Renovacao e logout recebem SO o refresh token. Sem `min(1)` um corpo vazio
+// chegaria como string vazia ao service; sem `max` um corpo gigante viraria um
+// hash SHA-256 inutil por requisicao.
+const refreshSchema = z.object({
+  refreshToken: z.string().min(1, "Sessao invalida").max(500),
+});
+
+// No logout o token e opcional: a tela precisa conseguir sair mesmo quando ja
+// nao tem sessao guardada (ai so limpa o navegador).
+const sairSchema = z.object({
+  refreshToken: z.string().max(500).optional(),
+});
+
+module.exports = { loginSchema, cadastroSchema, atualizarPerfilSchema, trocarSenhaSchema, refreshSchema, sairSchema };

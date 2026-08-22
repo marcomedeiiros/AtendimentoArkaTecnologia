@@ -17,6 +17,20 @@ function segredo(nome, valor, fallbackDev) {
   return fallbackDev;
 }
 
+// "30d", "12h", "90m", "45s" -> milissegundos. Numero puro e lido como
+// milissegundos. Valor invalido cai no padrao recebido, para uma variavel
+// digitada errada no .env nao virar sessao de NaN (que expiraria sempre).
+function duracaoMs(valor, padraoMs) {
+  const bruto = String(valor ?? "").trim();
+  if (!bruto) return padraoMs;
+  const m = /^(\d+)\s*(s|m|h|d)?$/i.exec(bruto);
+  if (!m) return padraoMs;
+  const n = Number(m[1]);
+  const unidade = (m[2] || "").toLowerCase();
+  const fator = unidade === "s" ? 1_000 : unidade === "m" ? 60_000 : unidade === "h" ? 3_600_000 : unidade === "d" ? 86_400_000 : 1;
+  return n * fator;
+}
+
 const env = {
   nodeEnv: process.env.NODE_ENV || "development",
   port: Number(process.env.PORT) || 3000,
@@ -24,6 +38,21 @@ const env = {
   jwt: {
     secret: segredo("JWT_SECRET", process.env.JWT_SECRET, "dev-secret-change-me"),
     expiresIn: process.env.JWT_EXPIRES_IN || "8h",
+  },
+  // Sessao renovavel. O token de acesso (JWT acima) continua curto e sem
+  // estado; quem sustenta a sessao longa e o refresh token da tabela
+  // SessaoRefresh. NAO aumente JWT_EXPIRES_IN para "resolver" queda de sessao:
+  // token longo e token que nao da para revogar. A correcao e renovar.
+  sessao: {
+    // Prazo de cada refresh token, renovado a cada rotacao (deslizante).
+    // E o que faz a sessao sobreviver a fechar e reabrir o navegador.
+    refreshMs: duracaoMs(process.env.REFRESH_EXPIRES_IN, 30 * 86_400_000), // 30d
+    // Janela de INATIVIDADE do operador. Quem passa deste tempo sem interagir
+    // volta para o login, mesmo com refresh token valido -- e o que impede que
+    // uma aba esquecida aberta por dias siga renovando sozinha. Vai para o
+    // cliente na resposta do login/renovacao: so o navegador sabe se ha alguem
+    // ali. A AUTORIDADE da sessao continua aqui (rotacao, revogacao, reuso).
+    inatividadeMs: duracaoMs(process.env.SESSAO_INATIVIDADE, 12 * 3_600_000), // 12h
   },
   corsOrigin: process.env.CORS_ORIGIN || "http://localhost:5173",
   evolutionApi: {

@@ -4,6 +4,7 @@ const env = require("./config/env");
 const logger = require("./config/logger");
 const prisma = require("./infrastructure/database/prisma.client");
 const inatividade = require("./modules/chatbot/chatbot.inatividade");
+const sessaoRefreshRepository = require("./infrastructure/repositories/sessaoRefresh.repository");
 
 const app = createApp();
 
@@ -25,6 +26,13 @@ async function start() {
     // Campanha que ficou "enviando" num restart vira "pausada": retomar e
     // decisao humana, nao um disparo surpresa ao subir o servidor.
     campanhaService.recuperarAposReinicio();
+    // Faxina das sessoes: a tabela ganha uma linha por renovacao, e linha
+    // vencida ou revogada nao serve para nada. Best-effort -- se falhar, o
+    // servidor sobe igual (a validacao de sessao nao depende desta limpeza).
+    sessaoRefreshRepository
+      .limparVencidas()
+      .then(({ count }) => { if (count) logger.info("Sessoes expiradas removidas", { count }); })
+      .catch((e) => logger.warn("Nao foi possivel limpar sessoes expiradas", { message: e.message }));
   });
 }
 

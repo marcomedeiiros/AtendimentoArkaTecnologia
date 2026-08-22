@@ -1,6 +1,12 @@
 const API_BASE = '/api';
 
 const TOKEN_KEY = 'arka_token';
+// Token de renovacao: mora junto com o de acesso, e sob a mesma regra do
+// "Lembrar-me". Ele e que faz a sessao atravessar o vencimento do JWT sem
+// jogar o operador no login no meio do atendimento.
+const REFRESH_KEY = 'arka_refresh';
+// Janela de inatividade informada pelo servidor no login/renovacao.
+const INATIVIDADE_KEY = 'arka_sessao_inatividade';
 
 // "Lembrar-me" decide ONDE o token mora. Marcado: localStorage, sobrevive a
 // fechar o navegador. Desmarcado: sessionStorage, evapora quando a aba fecha --
@@ -9,12 +15,53 @@ const TOKEN_KEY = 'arka_token';
 export const getToken = () =>
   localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
 
-function setToken(token, lembrar = true) {
+export const getRefreshToken = () =>
+  localStorage.getItem(REFRESH_KEY) || sessionStorage.getItem(REFRESH_KEY);
+
+// O "onde" e decidido uma vez, no login, e todo o resto o respeita: numa
+// renovacao nao sabemos mais se a pessoa marcou "Lembrar-me", entao deduzimos
+// pelo lugar em que o token estava. Sem isso, uma renovacao promoveria uma
+// sessao "so nesta aba" para uma que sobrevive ao navegador fechado.
+const lembrarAtual = () => localStorage.getItem(TOKEN_KEY) !== null || localStorage.getItem(REFRESH_KEY) !== null;
+
+function setToken(token, lembrar = true, refreshToken = null) {
   // Limpa os dois antes de gravar: sem isso, um login "nao lembrar" deixaria um
   // token antigo no localStorage e a sessao voltaria sozinha no proximo F5.
   localStorage.removeItem(TOKEN_KEY);
   sessionStorage.removeItem(TOKEN_KEY);
-  if (token) (lembrar ? localStorage : sessionStorage).setItem(TOKEN_KEY, token);
+  localStorage.removeItem(REFRESH_KEY);
+  sessionStorage.removeItem(REFRESH_KEY);
+  const onde = lembrar ? localStorage : sessionStorage;
+  if (token) onde.setItem(TOKEN_KEY, token);
+  if (refreshToken) onde.setItem(REFRESH_KEY, refreshToken);
+}
+
+// ── Janela de inatividade ──────────────────────────────────────────────────
+//
+// A sessao renova sozinha enquanto ALGUEM esta usando o painel. Essa condicao
+// ("alguem esta ali") so o navegador consegue observar -- o servidor ve
+// requisicao, e o painel faz polling e mantem SSE aberto mesmo com a sala
+// vazia. Por isso a checagem de inatividade vive aqui: passado o limite sem
+// interacao nenhuma, paramos de renovar e a sessao cai no login.
+//
+// Isso NAO e autorizacao: quem valida, rotaciona e revoga sessao e o servidor.
+// E politica de tela, e falha fechado -- no maximo mantem uma sessao que o
+// servidor ja considera valida.
+let ultimaInteracao = Date.now();
+export function registrarAtividade() {
+  ultimaInteracao = Date.now();
+}
+const limiteInatividadeMs = () => Number(sessionStorage.getItem(INATIVIDADE_KEY) || localStorage.getItem(INATIVIDADE_KEY)) || 0;
+function guardarSessao(sessao, lembrar) {
+  const ms = Number(sessao?.inatividadeMs) || 0;
+  localStorage.removeItem(INATIVIDADE_KEY);
+  sessionStorage.removeItem(INATIVIDADE_KEY);
+  if (ms > 0) (lembrar ? localStorage : sessionStorage).setItem(INATIVIDADE_KEY, String(ms));
+  registrarAtividade();
+}
+function inativoDemais() {
+  const limite = limiteInatividadeMs();
+  return limite > 0 && Date.now() - ultimaInteracao > limite;
 }
 
 // "Lembrar-me" tambem guarda o ULTIMO e-mail para pre-preencher o formulario na
@@ -36,8 +83,13 @@ function lembrarEmail(email, lembrar) {
 // este evento; quem decide o que fazer e o AuthProvider, que manda a pessoa
 // para /login.
 const SEM_SESSAO = 'arka:sem-sessao';
-function encerrarSessao() {
+function limparSessaoLocal() {
   setToken(null);
+  localStorage.removeItem(INATIVIDADE_KEY);
+  sessionStorage.removeItem(INATIVIDADE_KEY);
+}
+function encerrarSessao() {
+  limparSessaoLocal();
   window.dispatchEvent(new CustomEvent(SEM_SESSAO));
 }
 
@@ -71,7 +123,46 @@ async function publico(endpoint, body) {
   return data.data !== undefined ? data.data : data;
 }
 
-async function request(endpoint, options = {}) {
+// Renovacao da sessao, em VOO UNICO.
+//
+// O painel dispara varias chamadas ao mesmo tempo (conversas, status do
+// WhatsApp, preferencias). Quando o token vence, todas levam 401 juntas -- se
+// cada uma renovasse por conta propria, a segunda usaria um refresh token que a
+// primeira acabou de queimar e o servidor leria isso como REUSO, derrubando a
+// sessao justamente na hora de salva-la. Por isso a promessa e compartilhada:
+// quem chega durante uma renovacao em curso espera a mesma.
+let renovacaoEmCurso = null;
+
+async function renovarSessao() {
+  if (renovacaoEmCurso) return renovacaoEmCurso;
+
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return null;
+  // Ninguem na frente da tela pelo tempo do limite: nao renova. A aba esquecida
+  // aberta por dias cai no login. (Um F5 zera esse relogio de proposito --
+  // recarregar e alguem ali, e voltar depois de fechar o navegador continua
+  // valendo enquanto o "Lembrar-me" estiver marcado.)
+  if (inativoDemais()) return null;
+
+  const lembrar = lembrarAtual();
+  renovacaoEmCurso = (async () => {
+    try {
+      const data = await publico('/auth/renovar', { refreshToken });
+      setToken(data.token, lembrar, data.refreshToken);
+      guardarSessao(data.sessao, lembrar);
+      return data.token;
+    } catch {
+      // Sessao invalida, expirada, revogada ou reusada: nao ha o que renovar.
+      return null;
+    } finally {
+      renovacaoEmCurso = null;
+    }
+  })();
+
+  return renovacaoEmCurso;
+}
+
+async function request(endpoint, options = {}, jaRenovou = false) {
   const token = getToken();
 
   const config = {
@@ -86,6 +177,13 @@ async function request(endpoint, options = {}) {
   const response = await fetch(`${API_BASE}${endpoint}`, config);
 
   if (response.status === 401) {
+    // Token vencido nao e fim de sessao: tenta renovar UMA vez e repete a
+    // requisicao. `jaRenovou` e o que impede o laco -- se o 401 voltar depois
+    // da renovacao, a sessao acabou de verdade.
+    if (!jaRenovou) {
+      const novo = await renovarSessao();
+      if (novo) return request(endpoint, options, true);
+    }
     encerrarSessao();
     throw await lerErro(response);
   }
@@ -99,7 +197,8 @@ async function request(endpoint, options = {}) {
 export const AuthAPI = {
   entrar: async (email, senha, lembrar = true) => {
     const data = await publico('/auth/login', { email, senha });
-    setToken(data.token, lembrar);
+    setToken(data.token, lembrar, data.refreshToken);
+    guardarSessao(data.sessao, lembrar);
     lembrarEmail(email, lembrar);
     return data.usuario;
   },
@@ -121,7 +220,22 @@ export const AuthAPI = {
     if (!r.ok) return { exigeCodigo: false };
     return (await r.json()).data;
   },
-  sair: () => setToken(null),
+  // Sair de verdade: avisa o servidor para revogar a sessao (a familia inteira
+  // do refresh token) e SO DEPOIS limpa o navegador. Antes, "sair" apagava o
+  // token daqui e pronto -- quem tivesse uma copia seguia com a sessao viva.
+  //
+  // O await do servidor nao decide nada: se a rede falhar, a sessao local vai
+  // embora de qualquer forma. Sair da tela nunca pode depender do back-end.
+  sair: async () => {
+    const refreshToken = getRefreshToken();
+    try {
+      if (refreshToken) await publico('/auth/sair', { refreshToken });
+    } catch { /* offline ou sessao ja morta: limpa localmente do mesmo jeito */ }
+    limparSessaoLocal();
+  },
+  // Ha sessao guardada neste navegador? Basta o refresh token: o token de acesso
+  // pode ter vencido, e nesse caso a primeira chamada o renova sozinha.
+  temSessaoGuardada: () => !!getToken() || !!getRefreshToken(),
   EVENTO_SEM_SESSAO: SEM_SESSAO,
 };
 
@@ -302,9 +416,17 @@ export const ConversasAPI = {
   streamTicket: () => request('/conversas/stream-ticket', { method: 'POST' }),
   // Envio de midia via XHR: expoe progresso de upload e permite cancelar.
   // Retorna { promise, cancel }.
+  // Este caminho e XHR (e nao `request`) porque precisa de progresso de upload
+  // e de cancelamento -- entao a renovacao de sessao tambem tem que existir
+  // aqui. Um video de 20MB pode atravessar o vencimento do token: sem isto, o
+  // envio morria com 401 e a tela parecia dizer que midia nao funciona.
   enviarMidia: (id, payload, onProgress) => {
-    const xhr = new XMLHttpRequest();
-    const promise = new Promise((resolve, reject) => {
+    let xhrAtual = null;
+    let cancelado = false;
+
+    const disparar = (jaRenovou) => new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhrAtual = xhr;
       xhr.open('POST', `${API_BASE}/conversas/${id}/midia`);
       xhr.setRequestHeader('Content-Type', 'application/json');
       const token = getToken();
@@ -316,16 +438,30 @@ export const ConversasAPI = {
         let data = null;
         try { data = JSON.parse(xhr.responseText); } catch { /* resposta vazia */ }
         if (xhr.status >= 200 && xhr.status < 300) {
-          resolve(data && data.data !== undefined ? data.data : data);
-        } else {
-          reject(new Error(data?.error?.message || `Erro ${xhr.status} ao enviar mídia`));
+          return resolve(data && data.data !== undefined ? data.data : data);
         }
+        // Mesma regra do `request`: renova UMA vez e reenvia. O upload comeca do
+        // zero -- nao ha envio parcial para retomar -- e por isso a barra de
+        // progresso volta ao inicio.
+        if (xhr.status === 401 && !jaRenovou && !cancelado) {
+          return renovarSessao().then(
+            (novo) => (novo ? disparar(true).then(resolve, reject) : reject(new Error('Sua sessão expirou. Entre novamente para enviar.'))),
+            () => reject(new Error('Sua sessão expirou. Entre novamente para enviar.'))
+          );
+        }
+        reject(new Error(data?.error?.message || `Erro ${xhr.status} ao enviar mídia`));
       };
       xhr.onerror = () => reject(new Error('Falha de rede ao enviar mídia'));
       xhr.onabort = () => reject(new Error('cancelado'));
       xhr.send(JSON.stringify(payload));
     });
-    return { promise, cancel: () => xhr.abort() };
+
+    return {
+      promise: disparar(false),
+      // `cancelado` trava a retentativa: cancelar durante a renovacao nao pode
+      // fazer o upload reaparecer depois.
+      cancel: () => { cancelado = true; if (xhrAtual) xhrAtual.abort(); },
+    };
   },
 };
 
