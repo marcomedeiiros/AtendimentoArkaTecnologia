@@ -152,7 +152,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
       if (filtroSetor && (c.setor || 'Geral') !== filtroSetor) return false;
       if (termo) {
         // Inclui o atendente: permite filtrar as avaliacoes de uma pessoa.
-        const alvo = `${c.cliente || ''} ${c.telefone || ''} ${c.feedback || ''} ${c.atendenteNome || ''}`.toLowerCase();
+        const alvo = `${c.cliente || ''} ${c.telefone || ''} ${c.feedback || ''} ${c.atendenteNome || c.ultimoAtendenteNome || ''}`.toLowerCase();
         if (!alvo.includes(termo)) return false;
       }
       return true;
@@ -194,7 +194,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
         c.cliente || '',
         c.telefone || '',
         c.avaliacao,
-        c.atendenteNome || '',
+        c.atendenteNome || c.ultimoAtendenteNome || '',
         c.setor || 'Geral',
         (c.feedback || '').replace(/[\r\n;]+/g, ' '),
       ]),
@@ -649,10 +649,10 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                         {/* Quem atendeu: e o dado que liga a nota a uma pessoa.
                             Conversa sem responsavel (bot/fila) fica com "-". */}
                         <td className="py-2.5 px-3">
-                          {c.atendenteNome ? (
+                          {(c.atendenteNome || c.ultimoAtendenteNome) ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/15 text-purple-300 border border-purple-500/30"
-                              title={c.atendenteCargo ? `${c.atendenteNome} · ${c.atendenteCargo}` : c.atendenteNome}>
-                              <UserCheck size={10} /> {c.atendenteNome}
+                              title={c.atendenteCargo ? `${c.atendenteNome} · ${c.atendenteCargo}` : (c.atendenteNome || c.ultimoAtendenteNome)}>
+                              <UserCheck size={10} /> {c.atendenteNome || c.ultimoAtendenteNome}
                             </span>
                           ) : (
                             <span className="text-slate-500">-</span>

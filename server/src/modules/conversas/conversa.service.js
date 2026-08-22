@@ -59,11 +59,21 @@ class ConversaService {
       if (foto) await conversaRepository.update(id, { fotoUrl: foto });
     }
 
+    // Nome de quem assumiu, guardado como historico (ver ultimoAtendenteNome no
+    // schema): sobrevive a conversa voltar para a fila e alimenta a coluna
+    // "Atendente" das Avaliacoes, que so existem depois do fechamento.
+    let nomeAtendente = null;
+    if (atendenteId) {
+      const usuario = await usuarioRepository.findById(atendenteId).catch(() => null);
+      nomeAtendente = usuario?.nome || null;
+    }
+
     const atualizada = await conversaRepository.update(id, {
       statusAtendimento: "aberta",
       lido: true,
       naoLidas: 0,
       atendenteId,
+      ...(nomeAtendente ? { ultimoAtendenteNome: nomeAtendente } : {}),
       // So marca o inicio do atendimento na primeira vez (nao sobrescreve em reabertura).
       atendidoEm: conversa.atendidoEm || new Date(),
     });
@@ -641,7 +651,12 @@ class ConversaService {
       nome = usuario.nome;
     }
 
-    await conversaRepository.update(id, { atendenteId: novoId });
+    // Guarda tambem o nome como historico (ver ultimoAtendenteNome no schema):
+    // ao remover a atribuicao, o relatorio continua sabendo quem atendeu.
+    await conversaRepository.update(id, {
+      atendenteId: novoId,
+      ...(nome ? { ultimoAtendenteNome: nome } : {}),
+    });
 
     // Aviso de sistema no chat quando ha um novo responsavel (mudou de fato).
     // Fica so no historico interno -- nao vai para o WhatsApp do cliente.

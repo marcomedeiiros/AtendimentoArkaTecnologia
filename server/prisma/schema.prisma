@@ -209,6 +209,12 @@ model Conversa {
   numeroTicket      Int?              @unique @map("numero_ticket")
   numeroOS          Int?              @unique @map("numero_os")
   atendenteId       String?           @map("atendente_id")
+  // Nome de quem atendeu, gravado como HISTORICO. `atendenteId` e o responsavel
+  // ATUAL: ele e limpo quando a conversa volta para a fila, e some do relatorio.
+  // Como a avaliacao (CSAT) chega no fechamento, sem este campo a coluna
+  // "Atendente" ficava vazia na maioria das conversas. Guardamos o nome (e nao
+  // so o id) para o historico sobreviver ate a exclusao da conta.
+  ultimoAtendenteNome String?         @map("ultimo_atendente_nome")
   atendidoEm        DateTime?         @map("atendido_em")
   fechadoEm         DateTime?         @map("fechado_em")
   criadoEm          DateTime          @default(now()) @map("criado_em")

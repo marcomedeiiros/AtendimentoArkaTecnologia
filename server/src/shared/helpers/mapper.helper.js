@@ -67,6 +67,9 @@ function mapConversa(c) {
     // toda a equipe. Antes esse "quem atende" vivia so no localStorage.
     atendenteNome: c.atendente?.nome || null,
     atendenteCargo: c.atendente?.cargo || null,
+    // Historico: quem atendeu, mesmo que a conversa nao tenha mais responsavel
+    // (voltou para a fila / foi fechada). Alimenta a coluna das Avaliacoes.
+    ultimoAtendenteNome: c.ultimoAtendenteNome || c.atendente?.nome || null,
     // Identificador unico e sequencial da conversa, exibido como OS00001.
     numeroTicket: c.numeroTicket ?? null,
     ticket: c.numeroTicket != null ? "OS" + String(c.numeroTicket).padStart(5, "0") : null,
