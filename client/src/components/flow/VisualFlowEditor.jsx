@@ -3,7 +3,8 @@ import {
   Zap, CheckCircle2, Plus, Trash2,
   Play, RotateCcw, ZoomIn, ZoomOut, Maximize2, LayoutGrid,
   Sparkles, Layers, RefreshCw, X, ChevronUp, ChevronDown,
-  Settings, AlertCircle, Pencil, Flame, Download, Upload, MessageSquare
+  Settings, AlertCircle, Pencil, Flame, Download, Upload, MessageSquare,
+  Power, PowerOff
 } from 'lucide-react';
 import { FluxosAPI } from '../../services/api';
 import { usePreferencia } from '../../hooks/usePreferencia';
@@ -153,6 +154,10 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
   const [historyIndex, setHistoryIndex] = useState(-1);
 
   const [isRunningSim, setIsRunningSim] = useState(false);
+  // Run corrente da simulacao + passo agendado. Existe para dar como CANCELAR
+  // um laco de setTimeout: sem ele nao havia como interromper a animacao nem ao
+  // sair da tela (o timer seguia rodando fora do componente).
+  const simRun = useRef({ id: 0, timer: null });
   // Fluxos marcados como "simulando". Fica no servidor (por operador), entao o
   // indicador verde continua piscando mesmo depois de atualizar a pagina.
   const [simAtiva, setSimAtiva] = usePreferencia('fluxos.simulacaoAtiva', {});
@@ -307,6 +312,9 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
   };
 
   useEffect(() => () => clearTimeout(avisoTimerRef.current), []);
+  // Sair da tela tambem para a simulacao: antes o laco seguia agendando passos
+  // para um componente que nao existia mais.
+  useEffect(() => () => clearTimeout(simRun.current.timer), []);
 
   const handleExportJson = () => {
     if (!flow) return;
@@ -679,6 +687,18 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
   const simulacaoMarcada = !!(fluxoSimId && simAtiva?.[fluxoSimId]);
 
   const pararSimulacao = () => {
+    // Invalida o run em andamento e cancela o passo agendado. Sem isto, "parar"
+    // so apagava o indicador: o setTimeout continuava disparando, relistando
+    // etapa por etapa no console e reacendendo os blocos ate o fim do fluxo --
+    // exatamente a sensacao de que a simulacao nao para.
+    simRun.current.id += 1;
+    clearTimeout(simRun.current.timer);
+    simRun.current.timer = null;
+    if (isRunningSim) {
+      setSimLogs(prev => [...prev, {
+        type: 'info', title: 'Simulação interrompida', message: 'Parada por você.', timeMs: 0,
+      }]);
+    }
     setIsRunningSim(false);
     setActiveSimNodeId(null);
     // Limpa os blocos executados: sem isto, os checks e as conexoes verdes de um
@@ -691,9 +711,41 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
     });
   };
 
+  /**
+   * Liga/pausa o fluxo NO SERVIDOR. É o único interruptor que muda o que o
+   * cliente recebe: o motor só usa fluxo com `ativo: true`
+   * (fluxo.repository.findAtivos/findByGatilho). O back-end já obedecia esse
+   * campo desde sempre -- faltava a tela deixar mexer nele, e a única forma de
+   * calar um fluxo era apagá-lo ou estragar o gatilho.
+   *
+   * Otimista, mas desfaz se o servidor recusar: um interruptor que mente sobre o
+   * estado do bot é pior que um interruptor que falha na cara do operador.
+   */
+  const [alternandoAtivo, setAlternandoAtivo] = useState(false);
+  const alternarAtivoFluxo = async () => {
+    if (!flow || alternandoAtivo) return;
+    const novo = !(flow.ativo !== false);
+    setAlternandoAtivo(true);
+    setFluxos(prev => prev.map(f => (f.id === flow.id ? { ...f, ativo: novo } : f)));
+    try {
+      await FluxosAPI.atualizar(flow.id, { ativo: novo });
+      mostrarAvisoJson('ok', novo
+        ? `Fluxo “${flow.nome}” ativado: o bot volta a responder por ele.`
+        : `Fluxo “${flow.nome}” pausado: o bot para de responder por ele. Nada foi apagado.`);
+    } catch (e) {
+      setFluxos(prev => prev.map(f => (f.id === flow.id ? { ...f, ativo: !novo } : f)));
+      mostrarAvisoJson('erro', `Não foi possível ${novo ? 'ativar' : 'pausar'}: ${e.message}`);
+    } finally {
+      setAlternandoAtivo(false);
+    }
+  };
+
   const handleRunSimulation = () => {
-    // Segundo clique enquanto esta verde: desliga o indicador.
-    if (simulacaoMarcada && !isRunningSim) {
+    // O botao e um interruptor: clique com a simulacao RODANDO tambem para.
+    // Antes, so parava quando ela ja tinha terminado (indicador verde aceso);
+    // clicar no meio do run caia adiante e comecava OUTRA simulacao em cima da
+    // primeira -- duas voltas intercalando etapas, e nenhuma forma de parar.
+    if (isRunningSim || simulacaoMarcada) {
       pararSimulacao();
       return;
     }
@@ -708,8 +760,13 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
     setShowLogsConsole(true);
     setExecutedNodeIds([]);
     setSimLogs([{ type: 'info', title: 'Iniciando Simulação de Fluxo', message: `Fluxo: "${flow?.nome}"`, timeMs: 0 }]);
+    // Cada execucao ganha um numero. O passo agendado confere se ainda e o run
+    // corrente antes de mexer na tela: e o que faz "parar" parar de verdade.
+    clearTimeout(simRun.current.timer);
+    const runId = ++simRun.current.id;
     let index = 0;
     const runStep = () => {
+      if (simRun.current.id !== runId) return; // simulacao parada ou reiniciada
       if (index >= simNodes.length) {
         setIsRunningSim(false);
         setActiveSimNodeId(null);
@@ -726,7 +783,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
         timeMs: Math.floor(120 + Math.random() * 200)
       }]);
       index++;
-      setTimeout(runStep, curr.tipo === 'delay' ? 1800 : 900);
+      simRun.current.timer = setTimeout(runStep, curr.tipo === 'delay' ? 1800 : 900);
     };
     runStep();
   };
@@ -769,7 +826,14 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                     onChange={e => setSelectedFlowId(e.target.value)}
                     className="bg-grafite-700 border border-linha rounded-lg px-2 py-1 text-xs font-bold text-white focus:outline-none focus:border-acao w-[120px] sm:w-[170px] lg:w-[200px] truncate"
                   >
-                    {fluxos.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
+                    {/* O estado entra no rótulo porque a lista é o único lugar
+                        onde se vê TODOS os fluxos de uma vez: sem isso, um fluxo
+                        pausado é indistinguível de um ativo até ser aberto. */}
+                    {fluxos.map(f => (
+                      <option key={f.id} value={f.id}>
+                        {f.nome}{f.ativo === false ? '  ·  pausado' : ''}
+                      </option>
+                    ))}
                   </select>
                   {flow && (
                     <>
@@ -789,6 +853,26 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                         <Zap size={10} className="text-acao-200 shrink-0" />
                         {flow.gatilho === '*' ? 'qualquer mensagem' : flow.gatilho}
                       </span>
+                      {/* O ÚNICO interruptor que muda o que o cliente recebe.
+                          Fica ao lado do gatilho de propósito: os dois juntos
+                          respondem "por que o bot respondeu (ou não) isso?".
+                          Não confundir com "Simular", que é só desenho na tela. */}
+                      <button
+                        onClick={alternarAtivoFluxo}
+                        disabled={alternandoAtivo}
+                        aria-pressed={flow.ativo !== false}
+                        title={flow.ativo !== false
+                          ? 'Fluxo ATIVO: o bot responde por ele. Clique para pausar — nada é apagado.'
+                          : 'Fluxo PAUSADO: o bot não responde por ele. Clique para ativar.'}
+                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold border transition-all shrink-0 whitespace-nowrap disabled:opacity-50 ${
+                          flow.ativo !== false
+                            ? 'bg-ativo/15 border-ativo/40 text-ativo-400 hover:bg-ativo/25'
+                            : 'bg-espera/15 border-espera/40 text-espera-400 hover:bg-espera/25'
+                        }`}
+                      >
+                        {flow.ativo !== false ? <Power size={11} /> : <PowerOff size={11} />}
+                        <span className="hidden lg:inline">{flow.ativo !== false ? 'Ativo' : 'Pausado'}</span>
+                      </button>
                     </>
                   )}
                 </>
@@ -962,7 +1046,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
           </button>
           <button
             onClick={handleRunSimulation}
-            title={simulacaoMarcada && !isRunningSim ? 'Clique para parar a simulação' : 'Executar simulação do fluxo'}
+            title={isRunningSim ? 'Clique para interromper a simulação' : simulacaoMarcada ? 'Clique para parar a simulação' : 'Executar simulação do fluxo'}
             className={`px-2.5 sm:px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md transition-all shrink-0 whitespace-nowrap ${
               simulacaoMarcada
                 ? 'bg-gradient-to-r from-ativo to-green-500 text-slate-950 shadow-ativo/30 animate-pulse'
@@ -971,7 +1055,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
           >
             <Play size={14} fill="currentColor" />
             <span className="hidden sm:inline">
-              {isRunningSim ? 'Simulando...' : simulacaoMarcada ? 'Simulação ativa' : 'Simular'}
+              {isRunningSim ? 'Parar simulação' : simulacaoMarcada ? 'Simulação ativa' : 'Simular'}
             </span>
           </button>
         </div>
