@@ -110,10 +110,24 @@ export function AppProvider({ children }) {
     }
     if (evt.type === 'conversa:update' && evt.conversa?.id) {
       setConversas(prev => {
-        const existe = prev.some(c => c.id === evt.conversa.id);
-        const lista = existe
-          ? prev.map(c => (c.id === evt.conversa.id ? evt.conversa : c))
-          : [evt.conversa, ...prev];
+        const atual = prev.find(c => c.id === evt.conversa.id);
+        // Exclusao e MONOTONICA: se uma mensagem ja esta apagada no cliente, um
+        // evento SSE mais antigo (sem a exclusao) NAO pode "des-apagar" -- senao
+        // a mensagem apagada "volta" na tela (flicker). O soft-delete e permanente
+        // no banco, entao manter deletada=true e sempre correto.
+        let incoming = evt.conversa;
+        if (atual && Array.isArray(atual.mensagens) && Array.isArray(incoming.mensagens)) {
+          const apagadas = new Set(atual.mensagens.filter(m => m.deletada).map(m => m.id));
+          if (apagadas.size) {
+            incoming = {
+              ...incoming,
+              mensagens: incoming.mensagens.map(m => (apagadas.has(m.id) ? { ...m, deletada: true } : m)),
+            };
+          }
+        }
+        const lista = atual
+          ? prev.map(c => (c.id === incoming.id ? incoming : c))
+          : [incoming, ...prev];
         return ordenarConversas(lista);
       });
     }
