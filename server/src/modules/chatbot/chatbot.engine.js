@@ -1253,7 +1253,16 @@ class ChatbotEngine {
         return { conversaId: conversa.id, aguardando: AGUARDANDO.CNPJ_CONFIRMA };
       }
 
-      // "nao" (ou sugestao invalida): volta a pedir o CNPJ digitado.
+      // "nao" (ou sugestao invalida): o CNPJ oferecido nao serve.
+      // Desvincula o que estiver na conversa -- ela volta para "CNPJ pendente"
+      // na Central -- e pede o correto.
+      if (conversa.cnpj || conversa.cnpjVerificado) {
+        await this.deps.conversaRepository.update(conversa.id, {
+          cnpj: null,
+          cnpjVerificado: false,
+        });
+        await this._emitirConversa(conversa.id);
+      }
       await this.enviarBot(
         conversa.id,
         telefone,

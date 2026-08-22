@@ -64,6 +64,11 @@ router.delete("/mensagens/:mensagemId", (req, res, next) =>
 router.post("/:id/solicitar-cnpj", (req, res, next) =>
   conversaController.solicitarCnpj(req, res).catch(next)
 );
+// Desvincula o CNPJ (volta para "CNPJ pendente"). Sem body: o alvo e a propria
+// conversa. Mesmo gate das demais (auth + modulo + setor no service).
+router.delete("/:id/cnpj", (req, res, next) =>
+  conversaController.desvincularCnpj(req, res).catch(next)
+);
 router.post("/:id/validar-cnpj", validate(validarCnpjSchema), (req, res, next) =>
   conversaController.validarCnpj(req, res).catch(next)
 );

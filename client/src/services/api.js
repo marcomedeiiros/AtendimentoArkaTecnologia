@@ -276,6 +276,8 @@ export const ConversasAPI = {
   encaminharMensagem: (mensagemId, conversaDestinoId) => request('/conversas/mensagens/encaminhar', { method: 'POST', body: JSON.stringify({ mensagemId, conversaDestinoId }) }),
   solicitarCnpj: (id) => request(`/conversas/${id}/solicitar-cnpj`, { method: 'POST' }),
   validarCnpj: (id, cnpj) => request(`/conversas/${id}/validar-cnpj`, { method: 'POST', body: JSON.stringify({ cnpj }) }),
+  // Desvincula o CNPJ: a conversa volta para "CNPJ pendente".
+  desvincularCnpj: (id) => request(`/conversas/${id}/cnpj`, { method: 'DELETE' }),
   atualizarStatus: (id, status) => request(`/conversas/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   atualizarSetor: (id, setor) => request(`/conversas/${id}/setor`, { method: 'PATCH', body: JSON.stringify({ setor }) }),
   // Define/limpa o responsavel (compartilhado). atendenteId null = remover.

@@ -536,6 +536,31 @@ class ConversaService {
     return dto;
   }
 
+  // Desvincula o CNPJ da conversa: ela volta para "CNPJ pendente" e o bot pode
+  // perguntar de novo. Usado quando o CNPJ veio errado (cliente informou outro,
+  // ou o atendente identificou a troca). Fica no historico quem desfez.
+  async desvincularCnpj(id, userCargo = null, nomeUsuario = null) {
+    const conversa = await conversaRepository.findById(id);
+    if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
+    exigirAcessoSetor(userCargo, conversa.setor);
+
+    if (!conversa.cnpj && !conversa.cnpjVerificado) {
+      // Nada a fazer: evita poluir o historico com aviso sem efeito.
+      return this._emitir(conversa);
+    }
+
+    const anterior = conversa.cnpj ? mascararCnpj(conversa.cnpj) : "-";
+    await conversaRepository.update(id, { cnpj: null, cnpjVerificado: false });
+    await conversaRepository.addMensagem(
+      id,
+      "sistema",
+      `${nomeUsuario || "Atendente"} removeu o CNPJ ${anterior} da conversa`
+    );
+
+    logger.info("CNPJ desvinculado da conversa", { id, anterior });
+    return this._emitir(await conversaRepository.findById(id));
+  }
+
   async solicitarCnpj(id, userCargo = null) {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");

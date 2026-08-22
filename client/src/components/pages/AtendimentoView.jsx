@@ -171,16 +171,22 @@ function chipDoCnpj(c, parceiros = []) {
       titulo: 'CNPJ pendente de validação',
     };
   }
+  // Com o CNPJ confirmado, a badge mostra o PROPRIO numero: e o dado que o
+  // atendente precisa ver (antes so aparecia no hover). O rotulo
+  // parceiro/avulso vira a cor + o titulo.
+  const numero = mascararCnpj(c.cnpj);
   return ehParceiro
     ? {
-        label: 'PARCEIRO',
+        label: numero,
         classe: 'bg-ativo/15 border-ativo/30 text-ativo-400',
-        titulo: `Parceiro ${mascararCnpj(c.cnpj)}`,
+        titulo: `Parceiro com contrato ativo · ${numero}`,
+        removivel: true,
       }
     : {
-        label: 'AVULSO',
+        label: numero,
         classe: 'bg-espera/15 border-espera/30 text-espera-400',
-        titulo: `Avulso (sem contrato) ${mascararCnpj(c.cnpj)}`,
+        titulo: `Sem contrato de parceiro · ${numero}`,
+        removivel: true,
       };
 }
 
@@ -1480,7 +1486,7 @@ function PainelChat({
   onMarcarLido, onSolicitarCnpj, onValidarCnpjModal,
   onExecutarFluxo, fluxoSugerido, onVoltar, atendente, onTransferir,
   onEditar, onEncaminharPara, conversas, onAtender,
-  assinar, onToggleAssinar, assinaturaNome, onApagarMensagem
+  assinar, onToggleAssinar, assinaturaNome, onApagarMensagem, onDesvincularCnpj
 }) {
   const [showMsgRapidas, setShowMsgRapidas] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
@@ -1691,9 +1697,23 @@ function PainelChat({
           <div className="mt-1 flex items-center gap-2 flex-wrap">
             {!conversa.cnpjVerificado
               ? <EmojiIcon name="question" label="CNPJ Pendente" size="sm" />
-              : ehParceiro
-                ? <EmojiIcon name="shield" label={`${parceiroCadastrado?.razaoSocial} (${mascararCnpj(conversa.cnpj)})`} size="sm" />
-                : <EmojiIcon name="warning" label={`CNPJ ${mascararCnpj(conversa.cnpj)} (Sem Contrato)`} size="sm" />
+              : (
+                <span className="inline-flex items-center gap-1">
+                  {ehParceiro
+                    ? <EmojiIcon name="shield" label={`${parceiroCadastrado?.razaoSocial} (${mascararCnpj(conversa.cnpj)})`} size="sm" />
+                    : <EmojiIcon name="warning" label={`CNPJ ${mascararCnpj(conversa.cnpj)} (Sem Contrato)`} size="sm" />}
+                  {/* Desvincular: quando o CNPJ veio errado, devolve a conversa
+                      para "CNPJ pendente" e o bot pode perguntar de novo. */}
+                  <button
+                    onClick={() => onDesvincularCnpj?.(conversa)}
+                    title="Remover este CNPJ da conversa"
+                    aria-label="Remover CNPJ da conversa"
+                    className="p-0.5 rounded-md text-slate-500 hover:text-falha-400 hover:bg-falha/10 transition-colors"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              )
             }
             {/* Mesma badge de setor do cartao: com o chat aberto ela continua
                 sendo o motivo pelo qual o cliente chamou. */}
@@ -2502,6 +2522,22 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     }
   }, [aplicarConversa]);
 
+  // Desvincula o CNPJ da conversa (volta para "CNPJ pendente"). Pede confirmacao
+  // porque desfaz uma identificacao que o cliente ja informou.
+  const desvincularCnpj = useCallback(async (conv) => {
+    if (!conv?.id) return;
+    const ok = window.confirm(
+      `Remover o CNPJ ${conv.cnpj ? mascararCnpj(conv.cnpj) : ''} desta conversa?\n\n` +
+      'Ela volta para "CNPJ pendente" e o bot poderá perguntar novamente.'
+    );
+    if (!ok) return;
+    try {
+      aplicarConversa(await ConversasAPI.desvincularCnpj(conv.id));
+    } catch (e) {
+      window.alert('Não foi possível remover o CNPJ: ' + e.message);
+    }
+  }, [aplicarConversa]);
+
   const apagarMensagem = useCallback(async (mensagem) => {
     // Sem pop-up de confirmacao: "Apagar para todos" some da hora para o cliente
     // no WhatsApp (so alcanca o aparelho dele nas mensagens que NOS enviamos). O
@@ -2897,6 +2933,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               onToggleAssinar={() => setAssinar(v => !v)}
               assinaturaNome={assinaturaNome}
               onApagarMensagem={apagarMensagem}
+              onDesvincularCnpj={desvincularCnpj}
             />
           )}
         </div>

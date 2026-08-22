@@ -95,6 +95,13 @@ class ConversaController {
     return res.end(midia.buffer);
   }
 
+  // DELETE /conversas/:id/cnpj -- desvincula o CNPJ da conversa.
+  desvincularCnpj(req, res) {
+    return conversaService
+      .desvincularCnpj(req.params.id, req.user?.cargo, req.user?.nome)
+      .then((data) => success(res, data));
+  }
+
   apagarMensagem(req, res) {
     return conversaService
       .apagarMensagem(req.params.mensagemId, req.user?.cargo)
