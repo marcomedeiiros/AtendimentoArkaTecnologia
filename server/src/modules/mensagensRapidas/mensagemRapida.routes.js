@@ -8,6 +8,10 @@ const {
   atualizarMensagemRapidaSchema,
 } = require("./mensagemRapida.dto");
 
+// Anexo servido por URL (o <img> nao manda header Authorization): autenticado
+// pelo token assinado em ?t=. Precisa vir ANTES do authMiddleware global.
+router.get("/:id/anexo", (req, res, next) => controller.servirAnexo(req, res).catch(next));
+
 router.use(authMiddleware);
 
 // LER: qualquer pessoa logada precisa das mensagens rapidas no atendimento.

@@ -8,6 +8,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { EquipeAPI, FluxosAPI, ParceirosAPI, ConversasAPI, WhatsAppAPI } from '../services/api';
 import { playPing } from '../utils/sound';
+import { mesclarConversa } from '../utils/mesclarConversa';
 
 // NAO existe mais SEED aqui de proposito.
 //
@@ -115,27 +116,10 @@ export function AppProvider({ children }) {
         // evento SSE mais antigo (sem a exclusao) NAO pode "des-apagar" -- senao
         // a mensagem apagada "volta" na tela (flicker). O soft-delete e permanente
         // no banco, entao manter deletada=true e sempre correto.
-        let incoming = evt.conversa;
-        if (atual && Array.isArray(atual.mensagens) && Array.isArray(incoming.mensagens)) {
-          const apagadas = new Set(atual.mensagens.filter(m => m.deletada).map(m => m.id));
-          if (apagadas.size) {
-            incoming = {
-              ...incoming,
-              mensagens: incoming.mensagens.map(m => (apagadas.has(m.id) ? { ...m, deletada: true } : m)),
-            };
-          }
-          // Mensagens OTIMISTAS (sem id: acabaram de ser enviadas e o servidor
-          // ainda nao confirmou) sobrevivem ao patch do SSE. Sem isto elas somem
-          // da tela e reaparecem quando o servidor responde -- o "pisca" no envio.
-          const otimistas = atual.mensagens.filter(m => !m.id);
-          if (otimistas.length) {
-            const jaTem = new Set(incoming.mensagens.map(m => `${m.de}|${m.texto}`));
-            const pendentes = otimistas.filter(m => !jaTem.has(`${m.de}|${m.texto}`));
-            if (pendentes.length) {
-              incoming = { ...incoming, mensagens: [...incoming.mensagens, ...pendentes] };
-            }
-          }
-        }
+        // Regra unica de merge (ver utils/mesclarConversa): exclusao monotonica
+        // + mensagens otimistas preservadas. Vale tanto para o SSE quanto para
+        // as respostas HTTP, senao um caminho desfaz o que o outro fez.
+        const incoming = mesclarConversa(atual, evt.conversa);
         const lista = atual
           ? prev.map(c => (c.id === incoming.id ? incoming : c))
           : [incoming, ...prev];

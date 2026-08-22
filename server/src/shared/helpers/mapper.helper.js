@@ -165,9 +165,17 @@ function mapMensagemRapida(r) {
     texto: r.texto || "",
     categoria: r.categoria || "geral",
     icon: r.icon || "default",
-    // Reconstroi o `anexo` no formato que o front usa ({ media, mimetype, fileName }).
+    // Reconstroi o `anexo` no formato que o front usa. Mesma otimizacao da midia
+    // das conversas: o base64 (ate 20MB) NAO vai na listagem -- vai uma URL curta
+    // e assinada, que o navegador busca uma vez e cacheia.
     anexo: r.anexoMedia
-      ? { media: r.anexoMedia, mimetype: r.anexoMimetype || null, fileName: r.anexoNome || null }
+      ? {
+          media: String(r.anexoMedia).startsWith("data:")
+            ? `/api/mensagens-rapidas/${r.id}/anexo?t=${gerarTokenMidia(r.id)}`
+            : r.anexoMedia,
+          mimetype: r.anexoMimetype || null,
+          fileName: r.anexoNome || null,
+        }
       : null,
     criadoEm: r.criadoEm ? r.criadoEm.toISOString?.() || r.criadoEm : null,
   };

@@ -21,6 +21,7 @@ import { useAppContext } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { ConversasAPI } from '../../services/api';
 import { usePreferencia } from '../../hooks/usePreferencia';
+import { mesclarConversa } from '../../utils/mesclarConversa';
 
 // O responsavel pelo atendimento agora vem do banco (conversa.atendenteNome /
 // atendenteId), compartilhado por toda a equipe. Antes vivia no localStorage e
@@ -1415,6 +1416,24 @@ function tipoDoArquivo(file) {
   return 'documento';
 }
 
+// Baixa uma URL (ex.: anexo de mensagem rapida, que agora vem como link e nao
+// mais como base64 no payload) e converte para data URL, formato que o envio de
+// midia espera. O navegador cacheia, entao usar a mesma mensagem rapida de novo
+// nao baixa outra vez.
+function urlParaDataUrl(url) {
+  return fetch(url)
+    .then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.blob();
+    })
+    .then((blob) => new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(fr.result);
+      fr.onerror = () => reject(new Error('Falha ao ler o anexo.'));
+      fr.readAsDataURL(blob);
+    }));
+}
+
 // Le um File como data URL (base64). Usado no ENVIO de video/documento: assim
 // nao lemos o arquivo grande na hora de selecionar (selecao fica instantanea).
 function lerArquivoComoDataUrl(file) {
@@ -1547,10 +1566,12 @@ function PainelChat({
   const enviarAnexo = useCallback(async () => {
     if (!anexo || enviandoMidia) return;
     setEnviandoMidia(true);
-    // Converte para base64 agora (video/documento so guardaram o File na selecao).
+    // Converte para base64 agora: video/documento guardaram so o File na selecao,
+    // e o anexo de mensagem rapida chega como URL.
     let media;
     try {
-      media = anexo.dataUrl || await lerArquivoComoDataUrl(anexo.file);
+      media = anexo.dataUrl
+        || (anexo.file ? await lerArquivoComoDataUrl(anexo.file) : await urlParaDataUrl(anexo.urlRemota));
     } catch (e) {
       window.alert('Falha ao ler o arquivo: ' + e.message);
       setEnviandoMidia(false);
@@ -1936,7 +1957,7 @@ function PainelChat({
       {anexo && (
         <div className="mx-3 mb-2 p-2.5 rounded-xl bg-grafite-700 border border-linha flex items-center gap-3">
           {anexo.tipo === 'imagem' ? (
-            <img src={anexo.dataUrl} alt="preview" className="w-12 h-12 rounded-lg object-cover shrink-0" />
+            <img src={anexo.dataUrl || anexo.urlRemota} alt="preview" className="w-12 h-12 rounded-lg object-cover shrink-0" />
           ) : (
             <div className="w-12 h-12 rounded-lg bg-grafite-600 border border-linha flex items-center justify-center shrink-0 text-acao-200">
               {anexo.tipo === 'video' ? <Play size={18} /> : anexo.tipo === 'audio' ? <Zap size={18} /> : <FileText size={18} />}
@@ -1977,13 +1998,25 @@ function PainelChat({
               if (m.anexo?.media) {
                 const mime = m.anexo.mimetype || 'image/png';
                 const ehVideo = mime.startsWith('video/');
-                setAnexo({
-                  dataUrl: m.anexo.media,
+                // O anexo agora chega como URL (o base64 nao trafega mais na
+                // listagem). Mostramos pela URL e baixamos os bytes em 2o plano,
+                // para o envio ja ter o base64 pronto.
+                const ehDataUrl = String(m.anexo.media).startsWith('data:');
+                const base = {
                   tipo: ehVideo ? 'video' : 'imagem',
                   mimetype: mime,
                   fileName: m.anexo.fileName || (ehVideo ? 'anexo.mp4' : 'anexo.png'),
                   progresso: 0,
-                });
+                };
+                if (ehDataUrl) {
+                  setAnexo({ ...base, dataUrl: m.anexo.media });
+                } else {
+                  const remota = m.anexo.media;
+                  setAnexo({ ...base, urlRemota: remota });
+                  urlParaDataUrl(remota)
+                    .then((dataUrl) => setAnexo((a) => (a && a.urlRemota === remota ? { ...a, dataUrl } : a)))
+                    .catch(() => {});
+                }
               }
               setShowMsgRapidas(false);
             }}
@@ -2346,7 +2379,12 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   // Atualiza uma conversa no estado global a partir da resposta do back-end.
   const aplicarConversa = useCallback((atualizada) => {
     if (!atualizada?.id) return;
-    setConversas(prev => prev.map(c => c.id === atualizada.id ? atualizada : c));
+    // Mesma regra do SSE (ver utils/mesclarConversa): a resposta pode ter sido
+    // montada ANTES da ultima mudanca (ex.: apagar e enviar em seguida) e uma
+    // substituicao crua ressuscitava a mensagem apagada / sumia com a recem-enviada.
+    setConversas(prev => prev.map(c =>
+      c.id === atualizada.id ? mesclarConversa(c, atualizada) : c
+    ));
   }, [setConversas]);
 
   // Define o responsavel pela conversa no banco (compartilhado com a equipe).

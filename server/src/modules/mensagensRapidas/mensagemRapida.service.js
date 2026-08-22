@@ -125,6 +125,24 @@ class MensagemRapidaService {
     return itens.map(mapMensagemRapida);
   }
 
+  // Bytes do anexo, para a rota que serve /anexo (o base64 nao vai mais na
+  // listagem). Devolve { buffer, mimetype } ou null.
+  async obterAnexoBruto(id) {
+    const item = await repo.findById(id);
+    const media = item?.anexoMedia;
+    if (!media || !String(media).startsWith("data:")) return null;
+    const virgula = media.indexOf(",");
+    if (virgula === -1) return null;
+    const cabecalho = media.slice(5, virgula);
+    const mimetype =
+      item.anexoMimetype || (cabecalho.split(";")[0] || "application/octet-stream").trim();
+    try {
+      return { buffer: Buffer.from(media.slice(virgula + 1), "base64"), mimetype };
+    } catch {
+      return null;
+    }
+  }
+
   async criar({ titulo, texto, categoria, icon, anexo }) {
     const dados = {
       titulo: titulo.trim(),
