@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useCallback } from 'react';
 import {
   Users, ShieldCheck, Clock, TrendingUp,
   Download, ArrowRight, Activity, CheckCircle2, Inbox,
-  BarChart3, FileText, Loader2, Star, MessageCircle, X, LifeBuoy, ClipboardList
+  BarChart3, FileText, Loader2, Star, MessageCircle, X, LifeBuoy, ClipboardList, UserCheck
 } from 'lucide-react';
 // So o Doughnut sobrou nesta tela: ele precisa de ArcElement. Escalas e
 // elementos de linha/barra ficaram registrados sem grafico que os usasse.
@@ -151,7 +151,8 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
       if (filtroNota && c.avaliacao !== filtroNota) return false;
       if (filtroSetor && (c.setor || 'Geral') !== filtroSetor) return false;
       if (termo) {
-        const alvo = `${c.cliente || ''} ${c.telefone || ''} ${c.feedback || ''}`.toLowerCase();
+        // Inclui o atendente: permite filtrar as avaliacoes de uma pessoa.
+        const alvo = `${c.cliente || ''} ${c.telefone || ''} ${c.feedback || ''} ${c.atendenteNome || ''}`.toLowerCase();
         if (!alvo.includes(termo)) return false;
       }
       return true;
@@ -188,11 +189,12 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
 
   const exportarAvaliacoesCsv = useCallback(() => {
     const linhas = [
-      ['Cliente', 'Telefone', 'Nota', 'Setor', 'Comentário'],
+      ['Cliente', 'Telefone', 'Nota', 'Atendente', 'Setor', 'Comentário'],
       ...feedbacksFiltrados.map(c => [
         c.cliente || '',
         c.telefone || '',
         c.avaliacao,
+        c.atendenteNome || '',
         c.setor || 'Geral',
         (c.feedback || '').replace(/[\r\n;]+/g, ' '),
       ]),
@@ -627,6 +629,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                       <th className="text-left py-2.5 px-3 font-semibold">Cliente</th>
                       <th className="text-left py-2.5 px-3 font-semibold">Telefone</th>
                       <th className="text-center py-2.5 px-3 font-semibold">Nota</th>
+                      <th className="text-left py-2.5 px-3 font-semibold">Atendente</th>
                       <th className="text-left py-2.5 px-3 font-semibold">Setor</th>
                       <th className="text-left py-2.5 px-3 font-semibold">Comentário</th>
                     </tr>
@@ -642,6 +645,18 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                           <div className="flex items-center justify-center gap-0.5">
                             {renderEstrelas(c.avaliacao)}
                           </div>
+                        </td>
+                        {/* Quem atendeu: e o dado que liga a nota a uma pessoa.
+                            Conversa sem responsavel (bot/fila) fica com "-". */}
+                        <td className="py-2.5 px-3">
+                          {c.atendenteNome ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/15 text-purple-300 border border-purple-500/30"
+                              title={c.atendenteCargo ? `${c.atendenteNome} · ${c.atendenteCargo}` : c.atendenteNome}>
+                              <UserCheck size={10} /> {c.atendenteNome}
+                            </span>
+                          ) : (
+                            <span className="text-slate-500">-</span>
+                          )}
                         </td>
                         <td className="py-2.5 px-3">
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/15 text-blue-400 border border-blue-500/30">
