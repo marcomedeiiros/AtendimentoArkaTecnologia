@@ -1132,6 +1132,50 @@ function BolhaAudio({ m, escuro }) {
   );
 }
 
+// Player de video da bolha. Largura fixa para a barra de controles nativa caber
+// (volume + tela cheia), e um botao proprio de TELA CHEIA que funciona em
+// qualquer proporcao -- inclusive video retrato, onde o Chrome escondia os
+// controles no menu "3 pontinhos". Em tela cheia os controles aparecem por
+// completo.
+function BolhaVideo({ src, caption, escuro }) {
+  const ref = useRef(null);
+  const telaCheia = () => {
+    const v = ref.current;
+    if (!v) return;
+    if (v.requestFullscreen) v.requestFullscreen();
+    else if (v.webkitEnterFullscreen) v.webkitEnterFullscreen(); // iOS Safari
+    else if (v.webkitRequestFullscreen) v.webkitRequestFullscreen();
+  };
+  return (
+    <div className="space-y-1.5">
+      <div className="relative w-[300px] max-w-full">
+        <video
+          ref={ref}
+          src={src}
+          controls
+          preload="metadata"
+          playsInline
+          controlsList="nodownload"
+          className="rounded-lg w-full max-h-[70vh] bg-black object-contain"
+        />
+        <button
+          onClick={telaCheia}
+          title="Tela cheia"
+          aria-label="Tela cheia"
+          className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-black/60 text-white hover:bg-black/80 transition-colors"
+        >
+          <Maximize2 size={15} />
+        </button>
+      </div>
+      {caption && (
+        <div className={`text-[11px] leading-relaxed whitespace-pre-wrap break-words ${escuro ? 'text-slate-200' : 'text-slate-900'}`}>
+          {caption}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Renderiza a bolha de acordo com o tipo de mídia. `escuro` = bolha do cliente
 // (fundo escuro); senão é a bolha da equipe (fundo laranja).
 function MensagemMidia({ m, escuro, onAbrirImagem }) {
@@ -1165,25 +1209,7 @@ function MensagemMidia({ m, escuro, onAbrirImagem }) {
     );
   }
   if (m.tipo === 'video') {
-    return (
-      <div className="space-y-1.5">
-        {/* Largura maior para caber a barra de controles COMPLETA (volume +
-            tela cheia visiveis). Em ~260px o Chrome colapsava tudo no menu "⋮". */}
-        <video
-          src={md.url}
-          controls
-          preload="metadata"
-          playsInline
-          controlsList="nodownload"
-          className="rounded-lg w-full max-w-[420px] max-h-96 bg-black object-contain"
-        />
-        {md.caption && (
-          <div className={`text-[11px] leading-relaxed whitespace-pre-wrap break-words ${escuro ? 'text-slate-200' : 'text-slate-900'}`}>
-            {md.caption}
-          </div>
-        )}
-      </div>
-    );
+    return <BolhaVideo src={md.url} caption={md.caption} escuro={escuro} />;
   }
   if (m.tipo === 'audio') {
     return <BolhaAudio m={m} escuro={escuro} />;
@@ -1486,7 +1512,12 @@ function PainelChat({
       reader.onload = () => setAnexo({ ...base, dataUrl: reader.result });
       reader.readAsDataURL(file);
     } else {
+      // Mostra o anexo NA HORA (selecao instantanea) e le o base64 em segundo
+      // plano, para ja estar pronto quando o operador clicar em enviar.
       setAnexo({ ...base, file });
+      lerArquivoComoDataUrl(file)
+        .then((dataUrl) => setAnexo((a) => (a && a.file === file ? { ...a, dataUrl } : a)))
+        .catch(() => {});
     }
   }, []);
 
