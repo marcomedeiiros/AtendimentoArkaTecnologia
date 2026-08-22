@@ -46,7 +46,11 @@ function encerrarSessao() {
 async function lerErro(response) {
   let corpo = null;
   try { corpo = await response.json(); } catch { /* resposta sem JSON */ }
-  const erro = new Error(corpo?.error?.message || 'Não foi possível concluir a operação.');
+  // Sem JSON no corpo (erro do proxy/nginx, 500 seco, timeout) a mensagem
+  // generica nao dizia nada -- incluir o status ajuda a diagnosticar.
+  const erro = new Error(
+    corpo?.error?.message || `Não foi possível concluir a operação. (HTTP ${response.status})`
+  );
   erro.codigo = corpo?.error?.code || null;
   erro.status = response.status;
   erro.campos = {};

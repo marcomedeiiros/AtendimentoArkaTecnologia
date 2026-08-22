@@ -124,6 +124,17 @@ export function AppProvider({ children }) {
               mensagens: incoming.mensagens.map(m => (apagadas.has(m.id) ? { ...m, deletada: true } : m)),
             };
           }
+          // Mensagens OTIMISTAS (sem id: acabaram de ser enviadas e o servidor
+          // ainda nao confirmou) sobrevivem ao patch do SSE. Sem isto elas somem
+          // da tela e reaparecem quando o servidor responde -- o "pisca" no envio.
+          const otimistas = atual.mensagens.filter(m => !m.id);
+          if (otimistas.length) {
+            const jaTem = new Set(incoming.mensagens.map(m => `${m.de}|${m.texto}`));
+            const pendentes = otimistas.filter(m => !jaTem.has(`${m.de}|${m.texto}`));
+            if (pendentes.length) {
+              incoming = { ...incoming, mensagens: [...incoming.mensagens, ...pendentes] };
+            }
+          }
         }
         const lista = atual
           ? prev.map(c => (c.id === incoming.id ? incoming : c))
