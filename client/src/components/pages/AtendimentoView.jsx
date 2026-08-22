@@ -1148,7 +1148,7 @@ function BolhaVideo({ src, caption, escuro }) {
   };
   return (
     <div className="space-y-1.5">
-      <div className="relative w-[300px] max-w-full">
+      <div className="relative w-[260px] max-w-full">
         <video
           ref={ref}
           src={src}
@@ -1156,7 +1156,7 @@ function BolhaVideo({ src, caption, escuro }) {
           preload="metadata"
           playsInline
           controlsList="nodownload"
-          className="rounded-lg w-full max-h-[70vh] bg-black object-contain"
+          className="rounded-lg w-full max-h-[340px] bg-black object-contain"
         />
         <button
           onClick={telaCheia}

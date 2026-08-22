@@ -467,11 +467,13 @@ class ConversaService {
           env.evolutionApi.instance
         );
       } catch (err) {
-        throw new AppError(
-          `Nao foi possivel apagar no WhatsApp: ${err.message}`,
-          502,
-          "APAGAR_FALHOU"
-        );
+        // NAO bloqueia o apagar: se o WhatsApp recusar (mensagem antiga >15min,
+        // midia, ou Evolution indisponivel), ainda removemos do painel. Antes
+        // isto estourava 502 e o operador nao conseguia apagar nada.
+        logger.warn("Nao foi possivel apagar no WhatsApp; apagando so no painel", {
+          mensagemId,
+          message: err.message,
+        });
       }
     }
 
