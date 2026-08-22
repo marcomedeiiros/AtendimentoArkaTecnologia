@@ -20,4 +20,15 @@ const atualizarStatusSchema = z.object({
   status: z.enum(["aberto", "resolvido"]),
 });
 
-module.exports = { criarBugSchema, atualizarStatusSchema };
+// Edicao do relato (o lapis na lista). ALLOWLIST UNICA: so descricao e
+// prioridade mudam. Autoria, pagina, prints e data ficam de fora de proposito
+// -- eles sao o registro de onde e de quem veio o problema, nao campo editavel.
+// A mesma lista e reconferida no service (defesa em profundidade).
+const atualizarBugSchema = z
+  .object({
+    descricao: z.string().min(5, "Descreva o problema com pelo menos 5 caracteres").max(4000).optional(),
+    prioridade: z.enum(["baixa", "media", "alta", "critica"]).optional(),
+  })
+  .refine((d) => Object.keys(d).length > 0, { message: "Informe a descricao ou a prioridade" });
+
+module.exports = { criarBugSchema, atualizarStatusSchema, atualizarBugSchema };

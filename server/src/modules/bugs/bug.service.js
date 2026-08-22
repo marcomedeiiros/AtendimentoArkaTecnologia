@@ -3,6 +3,8 @@ const { mapRelatoBug } = require("../../shared/helpers/mapper.helper");
 const { validarImagensBug } = require("./bug.imagens");
 const AppError = require("../../shared/errors/AppError");
 
+const PRIORIDADES = ["baixa", "media", "alta", "critica"];
+
 class BugService {
   // Cria o relato. O autor NAO vem do corpo: e derivado do token (quem esta
   // logado), para ninguem forjar autoria de outra pessoa. As imagens passam
@@ -31,6 +33,46 @@ class BugService {
     const relato = await relatoBugRepository.findById(id);
     if (!relato) throw new AppError("Relato nao encontrado", 404, "NOT_FOUND");
     const atualizado = await relatoBugRepository.updateStatus(id, status);
+    return mapRelatoBug(atualizado);
+  }
+
+  /**
+   * Edicao do relato na triagem: corrigir o texto e reajustar a prioridade.
+   *
+   * A allowlist e reconferida AQUI, e nao apenas no DTO: assim esta rota nunca
+   * vira um caminho de escrita livre na tabela, mesmo se um dia alguem chamar o
+   * service de outro lugar sem passar pelo zod. Autoria, pagina, prints e data
+   * ficam intocados de proposito -- eles registram de onde e de quem veio o
+   * problema, e reescrever isso apagaria a rastreabilidade do relato.
+   */
+  async atualizar(id, dados) {
+    const relato = await relatoBugRepository.findById(id);
+    if (!relato) throw new AppError("Relato nao encontrado", 404, "NOT_FOUND");
+
+    const data = {};
+
+    if (dados.descricao !== undefined) {
+      const descricao = String(dados.descricao).trim();
+      if (descricao.length < 5) {
+        throw new AppError("Descreva o problema com pelo menos 5 caracteres", 400, "INVALID_DESCRIPTION");
+      }
+      if (descricao.length > 4000) {
+        throw new AppError("Descricao muito longa", 400, "INVALID_DESCRIPTION");
+      }
+      data.descricao = descricao;
+    }
+
+    if (dados.prioridade !== undefined) {
+      if (!PRIORIDADES.includes(dados.prioridade)) {
+        throw new AppError("Prioridade invalida", 400, "INVALID_PRIORITY");
+      }
+      data.prioridade = dados.prioridade;
+    }
+
+    // Nada mudou: devolve o relato como esta em vez de gravar por gravar.
+    if (Object.keys(data).length === 0) return mapRelatoBug(relato);
+
+    const atualizado = await relatoBugRepository.update(id, data);
     return mapRelatoBug(atualizado);
   }
 

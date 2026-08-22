@@ -18,6 +18,12 @@ class RelatoBugRepository {
     return prisma.relatoBug.update({ where: { id }, data: { status } });
   }
 
+  // Edicao do relato. Quem decide QUAIS campos entram aqui e o service (a
+  // allowlist descricao/prioridade) -- este metodo so grava o que recebe.
+  update(id, data) {
+    return prisma.relatoBug.update({ where: { id }, data });
+  }
+
   delete(id) {
     return prisma.relatoBug.delete({ where: { id } });
   }

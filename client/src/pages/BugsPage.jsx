@@ -6,9 +6,10 @@
  * esconder aqui e so cortesia de interface, nao a barreira de fato.
  */
 import { useState, useEffect } from 'react';
-import { Bug, Loader2, CheckCircle2, RotateCcw, Trash2, X, ShieldAlert, MapPin, User, Flag } from 'lucide-react';
+import { Bug, Loader2, CheckCircle2, RotateCcw, Trash2, X, ShieldAlert, MapPin, User, Flag, Pencil, Save } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { BugsAPI } from '../services/api';
+import Portal from '../components/Portal';
 
 function quando(iso) {
   if (!iso) return '';
@@ -44,6 +45,119 @@ const FILTROS_PRIORIDADE = [
   { valor: 'baixa', label: 'Baixa' },
 ];
 
+/**
+ * Edicao de um relato na triagem: corrigir o texto e reajustar a prioridade.
+ *
+ * Por que so estes dois campos: autoria, pagina e prints sao o registro de onde
+ * e de quem veio o problema -- reescrever isso apagaria a rastreabilidade. O
+ * servidor recusa qualquer outro campo, entao a tela nem os oferece.
+ *
+ * Vai num Portal porque o container da pagina tem `.fade-in`, que termina com
+ * `transform` aplicado: dentro dele, `position: fixed` passa a se medir pela
+ * caixa da pagina em vez da janela, e o modal aparece cortado.
+ */
+function ModalEditarRelato({ relato, onSalvar, onFechar, salvando, erro }) {
+  const [descricao, setDescricao] = useState(relato.descricao || '');
+  const [prioridade, setPrioridade] = useState(relato.prioridade || 'media');
+
+  // Esc fecha, como nos outros modais do painel.
+  useEffect(() => {
+    const onTecla = (e) => { if (e.key === 'Escape' && !salvando) onFechar(); };
+    window.addEventListener('keydown', onTecla);
+    return () => window.removeEventListener('keydown', onTecla);
+  }, [onFechar, salvando]);
+
+  const texto = descricao.trim();
+  // Mesma regra do servidor (DTO + service): 5 a 4000 caracteres.
+  const podeSalvar = texto.length >= 5 && texto.length <= 4000 && !salvando;
+  const semMudanca = texto === (relato.descricao || '').trim() && prioridade === (relato.prioridade || 'media');
+
+  return (
+    <Portal>
+      <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/80 p-3 backdrop-blur-sm sm:items-center sm:p-4">
+        <div className="glass-panel my-auto flex max-h-[calc(100dvh-1.5rem)] w-full max-w-lg flex-col rounded-2xl border border-linha shadow-2xl sm:max-h-[90vh]">
+          <div className="flex shrink-0 items-center justify-between gap-2 rounded-t-2xl border-b border-linha bg-grafite-600 p-4">
+            <div className="flex min-w-0 items-center gap-2 text-sm font-bold text-white">
+              <Pencil size={15} className="shrink-0 text-acao-200" />
+              <span className="truncate">Editar relato</span>
+            </div>
+            <button
+              onClick={onFechar}
+              disabled={salvando}
+              className="shrink-0 text-texto-suave hover:text-white disabled:opacity-50"
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+            <div>
+              <label className="mb-1.5 block text-[11px] font-semibold text-texto">Descrição do problema</label>
+              <textarea
+                value={descricao}
+                onChange={e => setDescricao(e.target.value)}
+                rows={6}
+                autoFocus
+                className="w-full resize-none rounded-xl border border-linha bg-grafite-700 px-3.5 py-2.5 text-xs text-white placeholder-texto-fraco focus:border-acao/50 focus:outline-none"
+              />
+              <p className="mt-1 text-[10px] text-texto-fraco">{texto.length}/4000 · mínimo de 5 caracteres</p>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-[11px] font-semibold text-texto">Prioridade</label>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(PRIORIDADES).map(([valor, meta]) => {
+                  const ativo = prioridade === valor;
+                  return (
+                    <button
+                      key={valor}
+                      type="button"
+                      onClick={() => setPrioridade(valor)}
+                      aria-pressed={ativo}
+                      className={`flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-bold transition-all ${
+                        ativo ? meta.classe : 'border-linha text-texto-suave hover:text-white'
+                      }`}
+                    >
+                      <Flag size={11} /> {meta.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {erro && (
+              <p className="rounded-lg border border-falha/30 bg-falha/10 p-2.5 text-[11px] text-falha-400">{erro}</p>
+            )}
+          </div>
+
+          <div className="flex shrink-0 flex-col-reverse gap-2 rounded-b-2xl border-t border-linha bg-grafite-600 p-4 sm:flex-row sm:justify-end">
+            <button
+              onClick={onFechar}
+              disabled={salvando}
+              className="rounded-lg bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-300 transition-colors hover:bg-slate-700 disabled:opacity-50 sm:py-1.5"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={() => onSalvar({ descricao: texto, prioridade })}
+              disabled={!podeSalvar || semMudanca}
+              title={
+                texto.length < 5 ? 'Descreva o problema com pelo menos 5 caracteres'
+                  : semMudanca ? 'Nada foi alterado'
+                  : 'Salvar alterações'
+              }
+              className="flex items-center justify-center gap-1.5 rounded-lg bg-acao px-4 py-2 text-xs font-bold text-slate-950 shadow-md shadow-acao/20 transition-all hover:bg-acao-200 disabled:cursor-not-allowed disabled:opacity-50 sm:py-1.5"
+            >
+              {salvando ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+              {salvando ? 'Salvando...' : 'Salvar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Portal>
+  );
+}
+
 export default function BugsPage() {
   const { usuario } = useAuth();
   const ehAdmin = usuario?.cargo === 'Administrador';
@@ -55,6 +169,10 @@ export default function BugsPage() {
   const [loadingId, setLoadingId] = useState(null);
   const [erro, setErro] = useState('');
   const [ampliada, setAmpliada] = useState(null); // data URL do print aberto
+  // Relato aberto no modal de edicao (o lapis da lista).
+  const [editando, setEditando] = useState(null);
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+  const [erroEdicao, setErroEdicao] = useState('');
 
   // `silencioso`: reconcilia com o servidor SEM o spinner de tela cheia. Usado
   // depois de uma acao otimista (resolver/reabrir/excluir), que ja atualizou a
@@ -92,6 +210,24 @@ export default function BugsPage() {
       await carregar(true); // desfaz o otimismo, tambem sem flash
     } finally {
       setLoadingId(null);
+    }
+  }
+
+  // Edicao: ao contrario de resolver/excluir, aqui NAO ha otimismo. O texto e o
+  // que o admin acabou de digitar -- se o servidor recusar (validacao, sessao
+  // expirada), o modal fica aberto com o erro e o rascunho intacto, em vez de a
+  // lista mostrar uma versao que nunca foi gravada.
+  async function salvarEdicao({ descricao, prioridade }) {
+    setSalvandoEdicao(true);
+    setErroEdicao('');
+    try {
+      const atualizado = await BugsAPI.atualizar(editando.id, { descricao, prioridade });
+      setRelatos(prev => prev.map(r => (r.id === atualizado.id ? atualizado : r)));
+      setEditando(null);
+    } catch (e) {
+      setErroEdicao(e.message);
+    } finally {
+      setSalvandoEdicao(false);
     }
   }
 
@@ -275,7 +411,16 @@ export default function BugsPage() {
                   )}
                   <span className="text-texto-fraco">{quando(r.criadoEm)}</span>
 
-                  <div className="ml-auto flex items-center gap-2">
+                  <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+                    <button
+                      disabled={loadingId === r.id}
+                      onClick={() => { setErroEdicao(''); setEditando(r); }}
+                      title="Editar descrição e prioridade"
+                      aria-label="Editar relato"
+                      className="flex items-center gap-1 rounded-lg border border-linha px-2.5 py-1 font-semibold text-texto-suave transition-all hover:border-acao/40 hover:text-acao-200 disabled:opacity-50"
+                    >
+                      <Pencil size={12} />
+                    </button>
                     {resolvido ? (
                       <button
                         disabled={loadingId === r.id}
@@ -307,6 +452,19 @@ export default function BugsPage() {
             );
           })}
         </div>
+      )}
+
+      {editando && (
+        <ModalEditarRelato
+          // key: o modal le o relato no estado inicial dos campos, entao trocar
+          // de relato precisa remontar.
+          key={editando.id}
+          relato={editando}
+          onSalvar={salvarEdicao}
+          onFechar={() => { if (!salvandoEdicao) { setEditando(null); setErroEdicao(''); } }}
+          salvando={salvandoEdicao}
+          erro={erroEdicao}
+        />
       )}
 
       {ampliada && (

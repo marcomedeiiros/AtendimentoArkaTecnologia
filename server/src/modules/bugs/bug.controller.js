@@ -14,6 +14,10 @@ class BugController {
     return bugService.atualizarStatus(req.params.id, req.body.status).then((data) => success(res, data));
   }
 
+  atualizar(req, res) {
+    return bugService.atualizar(req.params.id, req.body).then((data) => success(res, data));
+  }
+
   remover(req, res) {
     return bugService.remover(req.params.id).then((data) => success(res, data));
   }
