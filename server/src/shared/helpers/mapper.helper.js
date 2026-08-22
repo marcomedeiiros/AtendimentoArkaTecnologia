@@ -7,10 +7,16 @@ const { gerarTokenMidia } = require("./midiaToken.helper");
 // lento. Aqui trocamos o base64 por uma URL curta e assinada; o navegador busca
 // os bytes uma vez e cacheia. URLs http(s) ja salvas passam direto.
 function urlDaMidia(mensagemId, meta) {
+  const rota = mensagemId
+    ? `/api/conversas/mensagens/${mensagemId}/midia?t=${gerarTokenMidia(mensagemId)}`
+    : null;
+  // Novo: bytes no disco (metadata.arquivo) -- sempre pela rota.
+  if (meta?.arquivo) return rota;
+  // Legado: data URL base64 no banco. Tambem vai pela rota (nao trafega o
+  // base64); so fica inline se nao houver id para montar a rota.
   const url = meta?.url;
   if (typeof url !== "string" || !url.startsWith("data:")) return url || null;
-  if (!mensagemId) return url; // sem id (caso raro) nao ha rota: mantem inline
-  return `/api/conversas/mensagens/${mensagemId}/midia?t=${gerarTokenMidia(mensagemId)}`;
+  return rota || url;
 }
 
 function mapMensagem(m) {
@@ -170,7 +176,9 @@ function mapMensagemRapida(r) {
     // e assinada, que o navegador busca uma vez e cacheia.
     anexo: r.anexoMedia
       ? {
-          media: String(r.anexoMedia).startsWith("data:")
+          // "arquivo:" (novo, bytes em disco) ou "data:" (legado): os dois vao
+          // pela rota. URL externa (http) passa direto.
+          media: /^(arquivo:|data:)/.test(String(r.anexoMedia))
             ? `/api/mensagens-rapidas/${r.id}/anexo?t=${gerarTokenMidia(r.id)}`
             : r.anexoMedia,
           mimetype: r.anexoMimetype || null,

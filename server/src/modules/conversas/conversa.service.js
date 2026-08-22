@@ -2,6 +2,7 @@ const conversaRepository = require("../../infrastructure/repositories/conversa.r
 const instanciaRepository = require("../../infrastructure/repositories/instancia.repository");
 const evolutionApi = require("../../infrastructure/external/evolution-api.client");
 const transcricaoClient = require("../../infrastructure/external/transcricao.client");
+const midiaStorage = require("../../infrastructure/storage/midia.storage");
 const { mapConversa } = require("../../shared/helpers/mapper.helper");
 const { limparCnpj, cnpjValido, mascararCnpj, normalizarTelefoneBr } = require("../../shared/helpers/cnpj.helper");
 const { normalizarSetor, podeAcessarSetor } = require("../../shared/helpers/setor.helper");
@@ -278,9 +279,30 @@ class ConversaService {
       ? media
       : `data:${mimetype || "application/octet-stream"};base64,${media}`;
 
+    // Os BYTES vao para o disco; o banco guarda so o caminho. Antes o data URL
+    // base64 inteiro ficava no metadata -- o que inchava o banco e pesava em
+    // toda leitura. Se a gravacao falhar, cai no comportamento antigo (inline),
+    // para nunca perder a mensagem.
+    let arquivoSalvo = null;
+    if (tipo !== "localizacao" && ehDataUrl) {
+      try {
+        arquivoSalvo = await midiaStorage.salvarDataUrl(media, mimetype);
+      } catch (e) {
+        logger.warn("Falha ao gravar midia em disco; mantendo inline", { message: e.message });
+      }
+    }
+
     const metadata = tipo === "localizacao"
       ? { tipo, latitude, longitude, name, address }
-      : { tipo, url: urlBolha, mimetype: mimetype || null, fileName: fileName || null, caption: caption || null };
+      : {
+          tipo,
+          // `arquivo` (novo) ou `url` (legado/URL externa) -- o mapper e a rota
+          // de midia entendem os dois.
+          ...(arquivoSalvo ? { arquivo: arquivoSalvo.arquivo } : { url: urlBolha }),
+          mimetype: mimetype || null,
+          fileName: fileName || null,
+          caption: caption || null,
+        };
 
     // Cria a bolha ANTES de enviar (status "enviando"), para o ACK de
     // entrega/leitura (messages.update) casar depois pelo waMessageId -- igual ao
@@ -353,9 +375,9 @@ class ConversaService {
     // Ja transcrito antes: devolve o cache, sem chamar a API de novo.
     if (meta.transcricao) return { transcricao: meta.transcricao, cache: true };
 
-    // A midia recebida/enviada guarda a data URL em `url`. Se por acaso for um
-    // link http (raro), baixa os bytes antes de mandar transcrever.
-    let media = meta.url;
+    // Os bytes vem do disco (metadata.arquivo) ou do formato legado (url).
+    // Se for um link http (raro), baixa antes de mandar transcrever.
+    let media = await this._midiaComoDataUrl(meta);
     if (typeof media === "string" && media.startsWith("http")) {
       const resp = await fetch(media);
       const buf = Buffer.from(await resp.arrayBuffer());
@@ -389,14 +411,18 @@ class ConversaService {
     exigirAcessoSetor(userCargo, destino.setor);
 
     const meta = original.metadata || null;
-    if (meta?.tipo && meta.tipo !== "texto" && meta.url) {
-      return this.enviarMidia(conversaDestinoId, {
-        tipo: meta.tipo,
-        media: meta.url,
-        mimetype: meta.mimetype,
-        fileName: meta.fileName,
-        caption: meta.caption,
-      });
+    if (meta?.tipo && meta.tipo !== "texto" && (meta.arquivo || meta.url)) {
+      // Le do disco (ou do legado) para reenviar os bytes pela Evolution.
+      const media = await this._midiaComoDataUrl(meta);
+      if (media) {
+        return this.enviarMidia(conversaDestinoId, {
+          tipo: meta.tipo,
+          media,
+          mimetype: meta.mimetype,
+          fileName: meta.fileName,
+          caption: meta.caption,
+        });
+      }
     }
 
     return this.enviarMensagem(conversaDestinoId, original.texto, "equipe");
@@ -688,11 +714,44 @@ class ConversaService {
   // Bytes da midia de uma mensagem, para a rota que serve /midia. Devolve
   // { buffer, mimetype, fileName } ou null quando a mensagem nao tem midia
   // embutida (ex.: ja e uma URL http externa).
+  // Data URL da midia de uma mensagem, venha ela do disco (metadata.arquivo) ou
+  // do formato legado (metadata.url base64). Usado por quem precisa dos BYTES em
+  // base64: encaminhar (reenvia pela Evolution) e transcrever audio.
+  async _midiaComoDataUrl(meta) {
+    if (!meta) return null;
+    if (meta.arquivo) {
+      const aberto = await midiaStorage.abrirParaLeitura(meta.arquivo);
+      if (!aberto) return null;
+      const partes = [];
+      for await (const p of aberto.stream) partes.push(p);
+      const buf = Buffer.concat(partes);
+      return `data:${meta.mimetype || "application/octet-stream"};base64,${buf.toString("base64")}`;
+    }
+    return meta.url || null;
+  }
+
   async obterMidiaBruta(mensagemId) {
     const msg = await conversaRepository.findMensagem(mensagemId);
-    const url = msg?.metadata?.url;
-    if (!msg || typeof url !== "string" || !url.startsWith("data:")) return null;
+    const meta = msg?.metadata;
+    if (!meta) return null;
 
+    // Novo: arquivo no disco -> devolve um STREAM (nao carrega na memoria).
+    if (meta.arquivo) {
+      const aberto = await midiaStorage.abrirParaLeitura(meta.arquivo);
+      if (aberto) {
+        return {
+          stream: aberto.stream,
+          tamanho: aberto.tamanho,
+          mimetype: meta.mimetype || "application/octet-stream",
+          fileName: meta.fileName || null,
+        };
+      }
+      return null;
+    }
+
+    // Legado: data URL base64 guardada no banco.
+    const url = meta.url;
+    if (typeof url !== "string" || !url.startsWith("data:")) return null;
     const virgula = url.indexOf(",");
     if (virgula === -1) return null;
     const cabecalho = url.slice(5, virgula); // "image/png;base64"
@@ -703,7 +762,7 @@ class ConversaService {
     } catch {
       return null;
     }
-    return { buffer, mimetype, fileName: msg.metadata?.fileName || null };
+    return { buffer, mimetype, fileName: meta.fileName || null };
   }
 
   _emitir(conversa) {

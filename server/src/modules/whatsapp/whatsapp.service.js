@@ -3,6 +3,7 @@ const evolutionApi = require("../../infrastructure/external/evolution-api.client
 const instanciaRepository = require("../../infrastructure/repositories/instancia.repository");
 const conversaRepository = require("../../infrastructure/repositories/conversa.repository");
 const contatoService = require("../contatos/contato.service");
+const midiaStorage = require("../../infrastructure/storage/midia.storage");
 const { mapConversa } = require("../../shared/helpers/mapper.helper");
 const bus = require("../../shared/events/event-bus");
 const logger = require("../../config/logger");
@@ -207,7 +208,19 @@ class WhatsAppService {
       }
       if (base64) {
         const url = base64.startsWith("data:") ? base64 : `data:${mimetype};base64,${base64}`;
-        midia = { ...midia, url, mimetype };
+        // Grava os bytes em disco e guarda so o caminho (o base64 no banco era o
+        // que inchava tudo). Se falhar, mantem inline para nao perder a midia.
+        let salvo = null;
+        try {
+          salvo = await midiaStorage.salvarDataUrl(url, mimetype);
+        } catch (e) {
+          logger.warn("Falha ao gravar midia recebida em disco; mantendo inline", {
+            message: e.message,
+          });
+        }
+        midia = salvo
+          ? { ...midia, arquivo: salvo.arquivo, mimetype }
+          : { ...midia, url, mimetype };
       } else {
         // Sem bytes o audio vira "[Mídia indisponível]" na Central. Deixamos o
         // rastro no log para diagnosticar: quase sempre e o "Webhook Base64"

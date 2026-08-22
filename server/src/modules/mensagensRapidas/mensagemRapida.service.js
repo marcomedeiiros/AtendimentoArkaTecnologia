@@ -2,6 +2,7 @@ const repo = require("../../infrastructure/repositories/mensagemRapida.repositor
 const prisma = require("../../infrastructure/database/prisma.client");
 const { mapMensagemRapida } = require("../../shared/helpers/mapper.helper");
 const { validarImagemDataUrl, validarVideoDataUrl } = require("../../shared/helpers/imagemSegura.helper");
+const midiaStorage = require("../../infrastructure/storage/midia.storage");
 const AppError = require("../../shared/errors/AppError");
 const logger = require("../../config/logger");
 
@@ -91,10 +92,25 @@ function processarAnexo(anexo) {
     ? validarVideoDataUrl(anexo.media, { maxBytes: MAX_ANEXO_BYTES })
     : validarImagemDataUrl(anexo.media, { maxBytes: MAX_ANEXO_BYTES });
   return {
-    anexoMedia: media,
+    anexoMedia: media, // gravado em disco por quem chama (ver _persistirAnexo)
     anexoMimetype: mimetype, // usa o mime conferido pela assinatura, nao o declarado
     anexoNome: nomeSeguro(anexo.fileName),
   };
+}
+
+// Depois de VALIDADO, grava os bytes em disco e guarda so o caminho na coluna
+// (o base64 no banco era o que pesava). Se falhar, mantem inline.
+async function persistirAnexoEmDisco(campos) {
+  if (!campos.anexoMedia || !String(campos.anexoMedia).startsWith("data:")) return campos;
+  try {
+    const salvo = await midiaStorage.salvarDataUrl(campos.anexoMedia, campos.anexoMimetype);
+    if (salvo) return { ...campos, anexoMedia: `arquivo:${salvo.arquivo}` };
+  } catch (e) {
+    logger.warn("Falha ao gravar anexo de mensagem rapida em disco; mantendo inline", {
+      message: e.message,
+    });
+  }
+  return campos;
 }
 
 class MensagemRapidaService {
@@ -130,7 +146,21 @@ class MensagemRapidaService {
   async obterAnexoBruto(id) {
     const item = await repo.findById(id);
     const media = item?.anexoMedia;
-    if (!media || !String(media).startsWith("data:")) return null;
+    if (!media) return null;
+
+    // Novo: bytes no disco -> stream (nao carrega na memoria).
+    if (String(media).startsWith("arquivo:")) {
+      const aberto = await midiaStorage.abrirParaLeitura(String(media).slice("arquivo:".length));
+      if (!aberto) return null;
+      return {
+        stream: aberto.stream,
+        tamanho: aberto.tamanho,
+        mimetype: item.anexoMimetype || "application/octet-stream",
+      };
+    }
+
+    // Legado: data URL base64 na coluna.
+    if (!String(media).startsWith("data:")) return null;
     const virgula = media.indexOf(",");
     if (virgula === -1) return null;
     const cabecalho = media.slice(5, virgula);
@@ -149,7 +179,7 @@ class MensagemRapidaService {
       texto: (texto || "").trim(),
       categoria,
       icon,
-      ...processarAnexo(anexo),
+      ...(await persistirAnexoEmDisco(processarAnexo(anexo))),
     };
     const criada = await repo.create(dados);
     return mapMensagemRapida(criada);
@@ -163,7 +193,7 @@ class MensagemRapidaService {
       texto: (texto || "").trim(),
       categoria,
       icon,
-      ...processarAnexo(anexo),
+      ...(await persistirAnexoEmDisco(processarAnexo(anexo))),
     };
     const atualizada = await repo.update(id, dados);
     return mapMensagemRapida(atualizada);

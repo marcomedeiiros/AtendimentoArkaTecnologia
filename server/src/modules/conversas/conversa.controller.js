@@ -79,12 +79,17 @@ class ConversaController {
       });
     }
     res.setHeader("Content-Type", midia.mimetype);
-    res.setHeader("Content-Length", midia.buffer.length);
+    res.setHeader("Content-Length", midia.tamanho ?? midia.buffer.length);
     // O conteudo de uma mensagem nunca muda: cache longo (o token ja limita o
     // acesso). `private` para nao ficar em cache compartilhado de proxy.
     res.setHeader("Cache-Control", "private, max-age=604800, immutable");
     // Evita que um arquivo seja interpretado como outra coisa pelo navegador.
     res.setHeader("X-Content-Type-Options", "nosniff");
+    // Arquivo em disco vai por STREAM (nao carrega o video inteiro na memoria).
+    if (midia.stream) {
+      midia.stream.on("error", () => res.destroy());
+      return midia.stream.pipe(res);
+    }
     return res.end(midia.buffer);
   }
 

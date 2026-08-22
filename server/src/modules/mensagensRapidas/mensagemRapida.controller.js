@@ -26,9 +26,13 @@ class MensagemRapidaController {
       });
     }
     res.setHeader("Content-Type", anexo.mimetype);
-    res.setHeader("Content-Length", anexo.buffer.length);
+    res.setHeader("Content-Length", anexo.tamanho ?? anexo.buffer.length);
     res.setHeader("Cache-Control", "private, max-age=604800, immutable");
     res.setHeader("X-Content-Type-Options", "nosniff");
+    if (anexo.stream) {
+      anexo.stream.on("error", () => res.destroy());
+      return anexo.stream.pipe(res);
+    }
     return res.end(anexo.buffer);
   }
 
