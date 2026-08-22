@@ -218,9 +218,15 @@ export default function EquipePage() {
     const ehVoce = m.id === usuario?.id;
     const estaInativo = m.ativo === false;
     return (
+      // `flex flex-col gap-3` sem `justify-between`: o cartao passa a ter a
+      // altura do proprio conteudo. Antes era o grid que mandava -- os cartoes
+      // de outras pessoas tem a fileira de botoes (Bloquear/Senha/Excluir) e
+      // esticavam a linha inteira, entao o cartao de quem estava vendo (sem
+      // botao nenhum, porque ninguem se bloqueia) ficava uma caixa alta com um
+      // vazio embaixo. Quem segura isso agora e o `items-start` do grid.
       <div
         key={m.id}
-        className={`glass-panel space-y-3 rounded-2xl p-4 flex flex-col justify-between border ${
+        className={`glass-panel flex flex-col gap-3 rounded-2xl p-3.5 sm:p-4 border ${
           estaInativo
             ? 'border-espera/50 bg-espera/5'
             : m.status === 'online'
@@ -244,8 +250,11 @@ export default function EquipePage() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-2 border-t border-linha pt-3">
-            <div className="flex items-center gap-1.5 text-[11px]">
+          {/* `flex-wrap`: em cartao estreito (celular, ou 4 colunas no monitor
+              grande) o cargo e o status descem em duas linhas em vez de se
+              esmagarem um contra o outro. */}
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 border-t border-linha pt-3">
+            <div className="flex min-w-0 items-center gap-1.5 text-[11px]">
               <ShieldCheck size={13} className={estaInativo ? 'text-texto-fraco' : 'text-acao-200'} />
               {estaInativo ? (
                 <span className="italic text-texto-fraco">Cargo definido após aprovação</span>
@@ -281,7 +290,7 @@ export default function EquipePage() {
         </div>
 
         {ehAdmin && !ehVoce && (
-          <div className="pt-3 border-t border-linha flex items-center justify-end gap-2">
+          <div className="pt-3 border-t border-linha flex flex-wrap items-center justify-end gap-2">
             {estaInativo ? (
               <>
                 <button
@@ -477,13 +486,13 @@ export default function EquipePage() {
           <p className="text-[11px] text-texto-suave">
             Estas pessoas se cadastraram e aguardam liberação para entrar na plataforma.
           </p>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {pendentesLista.map((m) => renderCard(m))}
           </div>
         </section>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {ativos.map((m) => renderCard(m))}
 
         {equipe.length === 0 && (
