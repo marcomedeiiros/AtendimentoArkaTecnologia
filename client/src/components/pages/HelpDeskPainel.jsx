@@ -75,7 +75,7 @@ function ConfigIndicadores({ sla, onSalvo }) {
       </div>
       <p className="text-[11px] text-slate-400 leading-relaxed">
         Metas usadas para calcular o <strong className="text-slate-300">SLA</strong> dos indicadores acima.
-        Ao salvar, os números são recalculados na hora — vale para toda a equipe.
+        Ao salvar, os números são recalculados na hora vale para toda a equipe.
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

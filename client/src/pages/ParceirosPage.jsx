@@ -367,7 +367,7 @@ export default function ParceirosPage() {
                     {p.contatos.slice(0, 4).map(ct => (
                       <span
                         key={ct.telefone}
-                        title={`${ct.nome || 'Contato'} · ${ct.telefone} — informou este CNPJ no atendimento`}
+                        title={`${ct.nome || 'Contato'} · ${ct.telefone} informou este CNPJ no atendimento`}
                         className="inline-flex items-center gap-1 rounded-md border border-blue-500/30 bg-blue-500/10 pl-2 pr-1 py-0.5 text-[10px] font-bold text-blue-300"
                       >
                         <MessageCircle size={10} />
