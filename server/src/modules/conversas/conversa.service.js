@@ -450,36 +450,43 @@ class ConversaService {
   // painel. Em ambos os casos removemos a linha aqui, entao some da Central.
   async apagarMensagem(mensagemId, userCargo = null) {
     const msg = await conversaRepository.findMensagem(mensagemId);
-    if (!msg) throw new AppError("Mensagem nao encontrada", 404, "NOT_FOUND");
+    if (!msg) {
+      // Ajuda a diagnosticar o "Mensagem nao encontrada": mostra o id recebido
+      // (ex.: undefined = mensagem otimista ainda nao sincronizada).
+      logger.warn("Apagar: mensagem nao encontrada no banco", { mensagemId });
+      throw new AppError("Mensagem nao encontrada", 404, "NOT_FOUND");
+    }
 
     const conversa = await conversaRepository.findById(msg.conversaId);
     exigirAcessoSetor(userCargo, conversa?.setor);
     const nossa = msg.origem !== "cliente";
 
+    // Apaga do painel PRIMEIRO (rapido) e ja responde. O "apagar para todos" no
+    // WhatsApp roda em SEGUNDO PLANO: nao trava o operador nem faz o apagar do
+    // painel falhar se a Evolution demorar/recusar. Soft-delete: a linha continua
+    // no banco marcada como apagada (Registro/Visao Geral mantem o log completo).
+    await conversaRepository.marcarMensagemApagada(mensagemId);
+    const dto = this._emitir(await conversaRepository.findById(msg.conversaId));
+
     if (msg.waMessageId && nossa && conversa) {
-      try {
-        const respApagar = await evolutionApi.apagarMensagem(
-          {
-            id: msg.waMessageId,
-            remoteJid: `${conversa.telefone}@s.whatsapp.net`,
-            fromMe: true,
-          },
+      evolutionApi
+        .apagarMensagem(
+          { id: msg.waMessageId, remoteJid: `${conversa.telefone}@s.whatsapp.net`, fromMe: true },
           env.evolutionApi.instance
+        )
+        .then((r) =>
+          logger.info("Apagar para todos enviado a Evolution", {
+            mensagemId,
+            waMessageId: msg.waMessageId,
+            resposta: r ? JSON.stringify(r).slice(0, 300) : "vazio",
+          })
+        )
+        .catch((err) =>
+          logger.warn("Nao foi possivel apagar no WhatsApp (apagado so no painel)", {
+            mensagemId,
+            message: err.message,
+          })
         );
-        logger.info("Apagar para todos enviado a Evolution", {
-          mensagemId,
-          waMessageId: msg.waMessageId,
-          resposta: respApagar ? JSON.stringify(respApagar).slice(0, 300) : "vazio",
-        });
-      } catch (err) {
-        // NAO bloqueia o apagar: se o WhatsApp recusar (mensagem antiga >15min,
-        // midia, ou Evolution indisponivel), ainda removemos do painel. Antes
-        // isto estourava 502 e o operador nao conseguia apagar nada.
-        logger.warn("Nao foi possivel apagar no WhatsApp; apagando so no painel", {
-          mensagemId,
-          message: err.message,
-        });
-      }
     } else {
       logger.info("Apagar so no painel (sem waMessageId ou nao e nossa)", {
         mensagemId,
@@ -488,11 +495,7 @@ class ConversaService {
       });
     }
 
-    // Soft-delete: some do WhatsApp do cliente (acima), mas a mensagem continua
-    // no banco marcada como apagada, para o Registro/Visao Geral manter o log
-    // completo. Sem isto, "Apagar para todos" tambem apagava do historico.
-    await conversaRepository.marcarMensagemApagada(mensagemId);
-    return this._emitir(await conversaRepository.findById(msg.conversaId));
+    return dto;
   }
 
   async solicitarCnpj(id, userCargo = null) {

@@ -2466,6 +2466,12 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     // no WhatsApp (so alcanca o aparelho dele nas mensagens que NOS enviamos). O
     // texto NAO e apagado do banco -- continua no Registro (Visao Geral) como log
     // permanente, e o chat ao vivo passa a mostrar "Mensagem apagada".
+    // Sem id do banco = mensagem otimista ainda nao sincronizada (o envio nao
+    // terminou). Apagar agora daria "Mensagem nao encontrada" no servidor.
+    if (!mensagem?.id) {
+      window.alert('Aguarde a mensagem terminar de enviar para apagá-la.');
+      return;
+    }
     try {
       aplicarConversa(await ConversasAPI.apagarMensagem(mensagem.id));
     } catch (e) {
