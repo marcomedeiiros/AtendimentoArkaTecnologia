@@ -458,7 +458,7 @@ class ConversaService {
 
     if (msg.waMessageId && nossa && conversa) {
       try {
-        await evolutionApi.apagarMensagem(
+        const respApagar = await evolutionApi.apagarMensagem(
           {
             id: msg.waMessageId,
             remoteJid: `${conversa.telefone}@s.whatsapp.net`,
@@ -466,6 +466,11 @@ class ConversaService {
           },
           env.evolutionApi.instance
         );
+        logger.info("Apagar para todos enviado a Evolution", {
+          mensagemId,
+          waMessageId: msg.waMessageId,
+          resposta: respApagar ? JSON.stringify(respApagar).slice(0, 300) : "vazio",
+        });
       } catch (err) {
         // NAO bloqueia o apagar: se o WhatsApp recusar (mensagem antiga >15min,
         // midia, ou Evolution indisponivel), ainda removemos do painel. Antes
@@ -475,6 +480,12 @@ class ConversaService {
           message: err.message,
         });
       }
+    } else {
+      logger.info("Apagar so no painel (sem waMessageId ou nao e nossa)", {
+        mensagemId,
+        temWaId: !!msg.waMessageId,
+        nossa,
+      });
     }
 
     // Soft-delete: some do WhatsApp do cliente (acima), mas a mensagem continua
