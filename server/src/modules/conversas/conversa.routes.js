@@ -22,6 +22,13 @@ const {
 // Precisa vir ANTES do authMiddleware global e antes de "/:id".
 router.get("/stream", (req, res) => conversaStream.stream(req, res));
 
+// Midia de uma mensagem, servida por URL (o <img>/<video> nao manda header
+// Authorization): autenticada pelo token assinado em ?t=. Tambem precisa vir
+// antes do authMiddleware global. Ver midiaToken.helper.
+router.get("/mensagens/:mensagemId/midia", (req, res, next) =>
+  conversaController.servirMidia(req, res).catch(next)
+);
+
 router.use(authMiddleware);
 // Central de Atendimento -> modulo "atendimento" na matriz de permissoes.
 router.use(exigirModulo("atendimento"));

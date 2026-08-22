@@ -1,4 +1,17 @@
 const { formatarHora } = require("../helpers/cnpj.helper");
+const { gerarTokenMidia } = require("./midiaToken.helper");
+
+// A midia fica no banco como data URL base64. Mandar isso dentro do JSON da
+// conversa era o gargalo: um anexo de 20MB vira ~27MB de string, recarregado e
+// retransmitido (SSE) a CADA acao -- o que travava a API (502) e deixava tudo
+// lento. Aqui trocamos o base64 por uma URL curta e assinada; o navegador busca
+// os bytes uma vez e cacheia. URLs http(s) ja salvas passam direto.
+function urlDaMidia(mensagemId, meta) {
+  const url = meta?.url;
+  if (typeof url !== "string" || !url.startsWith("data:")) return url || null;
+  if (!mensagemId) return url; // sem id (caso raro) nao ha rota: mantem inline
+  return `/api/conversas/mensagens/${mensagemId}/midia?t=${gerarTokenMidia(mensagemId)}`;
+}
 
 function mapMensagem(m) {
   const meta = m.metadata || {};
@@ -16,9 +29,10 @@ function mapMensagem(m) {
     // no chat ao vivo, mas segue no Registro (o texto original continua aqui).
     deletada: !!meta.deletada,
     tipo,
-    // Dados da midia (url/base64, mimetype, nome, legenda, coords, contato)
-    // quando a mensagem nao for de texto puro.
-    midia: tipo !== "texto" ? meta : null,
+    // Dados da midia (url, mimetype, nome, legenda, coords, contato) quando a
+    // mensagem nao for de texto puro. `url` vai como link curto (ver urlDaMidia),
+    // nunca mais como base64 gigante dentro do payload.
+    midia: tipo !== "texto" ? { ...meta, url: urlDaMidia(m.id, meta) } : null,
   };
 }
 

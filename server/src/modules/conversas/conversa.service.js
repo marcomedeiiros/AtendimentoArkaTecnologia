@@ -685,6 +685,27 @@ class ConversaService {
 
   // Mapeia, publica no barramento (SSE) e devolve o DTO. Fonte unica de emissao
   // para as operacoes administrativas desta tela.
+  // Bytes da midia de uma mensagem, para a rota que serve /midia. Devolve
+  // { buffer, mimetype, fileName } ou null quando a mensagem nao tem midia
+  // embutida (ex.: ja e uma URL http externa).
+  async obterMidiaBruta(mensagemId) {
+    const msg = await conversaRepository.findMensagem(mensagemId);
+    const url = msg?.metadata?.url;
+    if (!msg || typeof url !== "string" || !url.startsWith("data:")) return null;
+
+    const virgula = url.indexOf(",");
+    if (virgula === -1) return null;
+    const cabecalho = url.slice(5, virgula); // "image/png;base64"
+    const mimetype = (cabecalho.split(";")[0] || "application/octet-stream").trim();
+    let buffer;
+    try {
+      buffer = Buffer.from(url.slice(virgula + 1), "base64");
+    } catch {
+      return null;
+    }
+    return { buffer, mimetype, fileName: msg.metadata?.fileName || null };
+  }
+
   _emitir(conversa) {
     const dto = mapConversa(conversa);
     bus.emitConversa(dto);
