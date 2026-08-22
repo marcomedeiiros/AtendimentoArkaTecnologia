@@ -4,11 +4,18 @@ class ContatoRepository {
   findAll(filtros = {}) {
     const where = {};
     if (filtros.tag) where.tag = filtros.tag;
-    if (filtros.busca) {
+    // A tela manda `?q=`; `busca` fica aceito para nao quebrar chamadas antigas.
+    const termo = String(filtros.q || filtros.busca || "").trim();
+    if (termo) {
+      const digitos = termo.replace(/\D/g, "");
+      // Sem o DDI: a agenda importada do WhatsApp grava 5527999990000 e ninguem
+      // digita o 55 na busca.
+      const telefone = digitos.length > 11 && digitos.startsWith("55") ? digitos.slice(2) : digitos;
       where.OR = [
-        { nome: { contains: filtros.busca } },
-        { telefone: { contains: filtros.busca } },
-        { empresa: { contains: filtros.busca } },
+        { nome: { contains: termo } },
+        { empresa: { contains: termo } },
+        { email: { contains: termo } },
+        ...(telefone ? [{ telefone: { contains: telefone } }] : []),
       ];
     }
 

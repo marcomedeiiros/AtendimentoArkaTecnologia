@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { ContatosAPI } from '../../services/api';
 import Portal from '../Portal';
+import { contatoCombina } from '../../utils/busca';
 
 function limparTel(v) { return String(v || '').replace(/\D/g, ''); }
 function mascararTel(v) {
@@ -300,13 +301,12 @@ export default function Contatos({ setAba }) {
     if (tagFiltro !== 'todas') lista = lista.filter(c => c.tag === tagFiltro);
 
     if (busca.trim()) {
-      const q = busca.toLowerCase();
-      lista = lista.filter(c =>
-        (c.nome || '').toLowerCase().includes(q) ||
-        (c.telefone || '').includes(limparTel(busca)) ||
-        (c.empresa || '').toLowerCase().includes(q) ||
-        (c.email || '').toLowerCase().includes(q)
-      );
+      // Antes, o teste do telefone era `telefone.includes(limparTel(busca))`:
+      // buscando por texto, limparTel devolve '' e `includes('')` e SEMPRE
+      // true -- ou seja, a lista voltava inteira e a busca por nome/empresa/
+      // e-mail nao filtrava nada. Agora a regra vive em utils/busca.js, a
+      // mesma que a Central de Atendimento usa.
+      lista = lista.filter(c => contatoCombina(c, busca));
     }
 
     return [...lista].sort((a, b) => {

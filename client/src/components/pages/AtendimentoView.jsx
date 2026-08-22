@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   MessageSquare, Send, Eye, Trash2, UserCheck, Check, X,
   CheckCircle2, Clock, Inbox, Play, Search, Zap,
@@ -19,8 +19,9 @@ import AudioPlayer from '../AudioPlayer';
 import AudioRecorder from '../AudioRecorder';
 import { useAppContext } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
-import { ConversasAPI } from '../../services/api';
+import { ConversasAPI, ContatosAPI } from '../../services/api';
 import { usePreferencia } from '../../hooks/usePreferencia';
+import { contatoCombina, normalizarBusca, telefoneComparavel } from '../../utils/busca';
 import { mesclarConversa, registrarApagada, desfazerApagada } from '../../utils/mesclarConversa';
 
 // O responsavel pelo atendimento agora vem do banco (conversa.atendenteNome /
@@ -446,9 +447,11 @@ function PainelFiltros({ extras, setExtras, visib, setVisib, onLimpar, totalAtiv
 // responder quem escreveu primeiro. Quem precisava chamar um cliente ia ao
 // Envio em Massa (que dispara mas nao registra a conversa) ou abria o WhatsApp
 // no celular, fora do sistema, sem historico nem setor.
-function ModalNovaConversa({ onFechar, onEnviar, enviando, erro }) {
-  const [telefone, setTelefone] = useState('');
-  const [nome,     setNome]     = useState('');
+function ModalNovaConversa({ onFechar, onEnviar, enviando, erro, inicial }) {
+  // `inicial` vem do contato escolhido na busca da lista: numero e nome ja
+  // preenchidos, so falta escrever a mensagem.
+  const [telefone, setTelefone] = useState(() => mascararTelefone(inicial?.telefone || ''));
+  const [nome,     setNome]     = useState(inicial?.nome || '');
   const [setor,    setSetor]    = useState('Geral');
   const [texto,    setTexto]    = useState('');
 
@@ -494,7 +497,9 @@ function ModalNovaConversa({ onFechar, onEnviar, enviando, erro }) {
               onChange={e => setTelefone(mascararTelefone(e.target.value))}
               placeholder="(27) 99999-0000"
               inputMode="tel"
-              autoFocus
+              // Vindo de um contato, o numero ja esta certo: o cursor vai
+              // direto para a mensagem (foco no textarea, abaixo).
+              autoFocus={!inicial?.telefone}
               className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder-slate-500 focus:outline-none focus:border-acao/50"
             />
             <p className="text-[10px] text-slate-500 mt-1">
@@ -560,6 +565,7 @@ function ModalNovaConversa({ onFechar, onEnviar, enviando, erro }) {
                 if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); enviar(); }
               }}
               rows={4}
+              autoFocus={!!inicial?.telefone}
               placeholder="Escreva a mensagem que abre a conversa..."
               className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 resize-none"
             />
@@ -2186,6 +2192,36 @@ function PainelChat({
   );
 }
 
+// Linha de contato da agenda dentro da busca da lista.
+//
+// Visualmente mais discreta que o CardConversa de proposito: ela nao e um
+// atendimento, e um atalho para comecar um. Clicar abre a conversa existente
+// (se houver) ou o modal de conversa nova ja preenchido.
+const ItemContatoAgenda = React.memo(function ItemContatoAgenda({ contato, onAbrir }) {
+  const detalhe = contato.empresa || contato.email || '';
+  return (
+    <button
+      onClick={() => onAbrir(contato)}
+      title={`Iniciar atendimento com ${contato.nome}`}
+      className="w-full text-left p-2.5 rounded-xl bg-grafite-700/50 hover:bg-grafite-600 border border-linha hover:border-acao/40 transition-all flex items-center gap-2.5 group"
+    >
+      <Avatar nome={contato.nome} size="sm" />
+      <div className="min-w-0 flex-1">
+        <div className="text-xs font-semibold text-slate-200 group-hover:text-acao-200 transition-colors truncate">
+          {contato.nome}
+        </div>
+        <div className="text-[10px] text-slate-500 truncate font-mono">
+          {mascararTelefone(contato.telefone)}
+          {detalhe && <span className="font-sans"> · {detalhe}</span>}
+        </div>
+      </div>
+      <span className="shrink-0 text-[10px] font-bold text-acao-200 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+        <Send size={11} /> Conversar
+      </span>
+    </button>
+  );
+});
+
 export default function AtendimentoView({ conversas, setConversas, fluxos, parceiros, equipe = [] }) {
   const { whatsAppConectado, carregando, historico = [], marcarNotificacoesLidas, limparHistorico } = useAppContext();
   const { usuario, assinaturaNome, tema, alternarTema } = useAuth();
@@ -2205,10 +2241,18 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   const [modalNova,     setModalNova]    = useState(false);
   const [enviandoNova,  setEnviandoNova] = useState(false);
   const [erroNova,      setErroNova]     = useState('');
+  // Preenche o modal de conversa nova a partir de um contato da agenda.
+  const [novaInicial,   setNovaInicial]  = useState(null);
   // Semente vinda de "Iniciar chat" nos Contatos (/atendimento?busca=5511...).
   const [busca,         setBusca]        = useState(
     () => new URLSearchParams(window.location.search).get('busca') || ''
   );
+  // Agenda de Contatos (a mesma de /contatos), usada SO na busca. Sem ela, a
+  // busca da Central so via o que estava na conversa: procurar pelo nome da
+  // pessoa, pela empresa ou pelo e-mail nao achava nada, porque a conversa
+  // costuma entrar com o numero cru como "cliente" -- e quem nunca escreveu
+  // simplesmente nao existia aqui.
+  const [contatos,      setContatos]     = useState([]);
   // Persistidos por operador: sobrevivem ao F5 e acompanham a reconexao.
   const [filtrosExtra,  setFiltrosExtra] = usePreferencia('central.filtrosExtra', []);
   const [visibilidade,  setVisibilidade] = usePreferencia('central.visibilidade', VISIBILIDADE_PADRAO);
@@ -2332,6 +2376,28 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     if (aba && !aba.statusMatch(conv)) setSelecionada(null);
   }, [abaAtual, conversas]);
 
+  // Le a agenda uma vez ao abrir a Central. Best-effort de proposito: operador
+  // sem o modulo "contatos" recebe 403 e a busca continua funcionando com as
+  // conversas -- nao vale travar a tela de atendimento por causa da agenda.
+  useEffect(() => {
+    let vivo = true;
+    ContatosAPI.listar()
+      .then(lista => { if (vivo && Array.isArray(lista)) setContatos(lista); })
+      .catch(() => { /* sem permissao ou back-end fora: segue sem a agenda */ });
+    return () => { vivo = false; };
+  }, []);
+
+  // Telefone (sem DDI) -> contato da agenda. Serve para a conversa "herdar" o
+  // nome, a empresa e o e-mail cadastrados na hora de comparar com a busca.
+  const contatoPorTelefone = useMemo(() => {
+    const m = new Map();
+    contatos.forEach(ct => {
+      const tel = telefoneComparavel(ct.telefone);
+      if (tel) m.set(tel, ct);
+    });
+    return m;
+  }, [contatos]);
+
   // Tudo que filtra a lista MENOS a aba: visibilidade, filtros extras e busca.
   // Separado de proposito -- os contadores das abas reusam exatamente este
   // criterio, so trocando o status. Enquanto contador e lista usavam regras
@@ -2351,13 +2417,19 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     }
 
     if (!busca.trim()) return true;
-    const q = busca.toLowerCase();
+    const q = normalizarBusca(busca);
     const qDigitos = q.replace(/\D/g, '');
-    return c.cliente.toLowerCase().includes(q) ||
-           (c.telefone || '').includes(q) ||
+    // Telefone comparado por digitos: antes era `telefone.includes(q)` com o
+    // texto cru, entao digitar "(27) 99999-0000" nao achava 5527999990000.
+    const qTel = telefoneComparavel(busca);
+    // Nome/empresa/e-mail cadastrados em /contatos para este numero.
+    const contato = contatoPorTelefone.get(telefoneComparavel(c.telefone));
+    return normalizarBusca(c.cliente).includes(q) ||
+           (!!qTel && telefoneComparavel(c.telefone).includes(qTel)) ||
            (qDigitos && limparCnpj(c.cnpj).includes(qDigitos)) ||
            (c.cnpj && mascararCnpj(c.cnpj).toLowerCase().includes(q)) ||
-           c.mensagens.some(m => m.texto.toLowerCase().includes(q));
+           (!!contato && contatoCombina(contato, busca)) ||
+           c.mensagens.some(m => normalizarBusca(m.texto).includes(q));
   };
 
   const visiveis = conversas.filter(passaFiltros);
@@ -2365,6 +2437,17 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   const conversasFiltradas = visiveis
     .filter(c => ABAS.find(a => a.id === abaAtual)?.statusMatch(c))
     .sort((a, b) => (b.fixada ? 1 : 0) - (a.fixada ? 1 : 0));
+
+  // Contatos da agenda que batem com a busca e nao estao ja na lista acima.
+  // Aparecem numa secao separada, abaixo das conversas: e por eles que se abre
+  // o atendimento de quem ainda nao escreveu (ou de quem escreveu em outra aba).
+  const telefonesNaLista = new Set(conversasFiltradas.map(c => telefoneComparavel(c.telefone)));
+  const contatosEncontrados = busca.trim()
+    ? contatos
+        .filter(ct => contatoCombina(ct, busca) && !telefonesNaLista.has(telefoneComparavel(ct.telefone)))
+        // Teto para a busca curta ("a") nao virar uma lista de mil linhas.
+        .slice(0, 20)
+    : [];
 
   // Abas realmente exibidas: o checkbox esconde "Fechadas".
   const abasVisiveis = ABAS.filter(a => {
@@ -2398,6 +2481,19 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     if (aba) setAbaAtual(aba.id);
     setSelecionada(id);
   }, [conversas, setAbaAtual]);
+
+  // Clique num contato achado pela busca. Se ja existe conversa com aquele
+  // numero (em qualquer aba), pula para ela; se nao existe, abre o modal de
+  // conversa nova ja com numero e nome preenchidos. Nada e inventado na tela:
+  // a conversa passa a existir quando o servidor confirma o envio.
+  const abrirContatoDaAgenda = useCallback((contato) => {
+    const tel = telefoneComparavel(contato.telefone);
+    const existente = conversas.find(c => telefoneComparavel(c.telefone) === tel);
+    if (existente) { irParaConversa(existente.id); return; }
+    setErroNova('');
+    setNovaInicial({ telefone: contato.telefone, nome: contato.nome });
+    setModalNova(true);
+  }, [conversas, irParaConversa]);
 
   // Atualiza uma conversa no estado global a partir da resposta do back-end.
   const aplicarConversa = useCallback((atualizada) => {
@@ -2456,6 +2552,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       setAbaAtual('abertas');
       setSelecionada(nova.id);
       setModalNova(false);
+      setNovaInicial(null);
     } catch (e) {
       setErroNova(e.message || 'Não foi possível iniciar a conversa.');
     } finally {
@@ -2672,7 +2769,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
           {/* Iniciar conversa: o unico caminho da Central que nao depende de o
               cliente escrever primeiro. */}
           <button
-            onClick={() => { setErroNova(''); setModalNova(true); }}
+            onClick={() => { setErroNova(''); setNovaInicial(null); setModalNova(true); }}
             title="Iniciar conversa com um número"
             aria-label="Iniciar conversa com um número"
             className="flex items-center justify-center w-9 h-9 rounded-full border bg-acao/15 border-acao/40 text-acao-200 hover:bg-acao/25 transition-colors"
@@ -2888,7 +2985,25 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                   atendente={atendenteDaConversa(c)}
                 />
               ))}
-            {!carregando && conversasFiltradas.length === 0 && (
+
+            {/* Achados na agenda de Contatos: nome, WhatsApp, empresa ou
+                e-mail. Ficam depois das conversas porque atendimento em
+                andamento vem primeiro -- mas antes eles nao apareciam de jeito
+                nenhum, e procurar um cliente aqui pelo nome dava lista vazia. */}
+            {contatosEncontrados.length > 0 && (
+              <div className="pt-2 space-y-1">
+                <div className="flex items-center gap-1.5 px-1 pb-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                  <Contact size={11} className="text-acao-200" />
+                  Contatos ({contatosEncontrados.length})
+                  <span className="font-normal normal-case tracking-normal text-slate-600">· sem conversa nesta lista</span>
+                </div>
+                {contatosEncontrados.map(ct => (
+                  <ItemContatoAgenda key={ct.id} contato={ct} onAbrir={abrirContatoDaAgenda} />
+                ))}
+              </div>
+            )}
+
+            {!carregando && conversasFiltradas.length === 0 && contatosEncontrados.length === 0 && (
               <div className="flex flex-col items-center justify-center text-center py-14 px-6 text-slate-400">
                 <div className="inline-flex p-4 rounded-2xl bg-grafite-600 border border-linha mb-3 text-slate-500">
                   <Inbox size={30} />
@@ -2993,7 +3108,12 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
 
       {modalNova && (
         <ModalNovaConversa
-          onFechar={() => setModalNova(false)}
+          // key: o modal le `inicial` apenas no estado inicial dos campos,
+          // entao trocar de contato precisa remontar -- sem isso o segundo
+          // contato abriria com o numero do primeiro.
+          key={novaInicial?.telefone || 'avulso'}
+          inicial={novaInicial}
+          onFechar={() => { setModalNova(false); setNovaInicial(null); }}
           onEnviar={iniciarConversaNova}
           enviando={enviandoNova}
           erro={erroNova}
