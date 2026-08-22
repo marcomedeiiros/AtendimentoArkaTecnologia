@@ -321,7 +321,9 @@ function PainelMensagensRapidas({ onSelecionar, onFechar }) {
             className="w-full text-left p-2.5 rounded-xl hover:bg-grafite-600 border border-transparent hover:border-acao/30 transition-all group flex items-center gap-2.5"
           >
             {m.anexo?.media && (
-              <img src={m.anexo.media} alt="" className="w-9 h-9 rounded-lg object-cover border border-linha shrink-0 bg-grafite-800" />
+              (m.anexo.mimetype || '').startsWith('video/')
+                ? <video src={m.anexo.media} muted className="w-9 h-9 rounded-lg object-cover border border-linha shrink-0 bg-grafite-800" />
+                : <img src={m.anexo.media} alt="" className="w-9 h-9 rounded-lg object-cover border border-linha shrink-0 bg-grafite-800" />
             )}
             <div className="min-w-0 flex-1">
               <div className="font-semibold text-xs text-white group-hover:text-acao-200 transition-colors flex items-center gap-1">
@@ -1912,15 +1914,17 @@ function PainelChat({
           <PainelMensagensRapidas
             onSelecionar={m => {
               setTexto(m.texto || '');
-              // Mensagem com imagem (ex.: QR Code do PIX): prepara a imagem na
-              // area de anexo e usa o texto como legenda. O operador confere e
+              // Mensagem com anexo (imagem ex.: QR Code, ou video MP4): prepara
+              // na area de anexo e usa o texto como legenda. O operador confere e
               // clica em enviar -- o servidor revalida a midia antes de sair.
               if (m.anexo?.media) {
+                const mime = m.anexo.mimetype || 'image/png';
+                const ehVideo = mime.startsWith('video/');
                 setAnexo({
                   dataUrl: m.anexo.media,
-                  tipo: 'imagem',
-                  mimetype: m.anexo.mimetype || 'image/png',
-                  fileName: m.anexo.fileName || 'anexo.png',
+                  tipo: ehVideo ? 'video' : 'imagem',
+                  mimetype: mime,
+                  fileName: m.anexo.fileName || (ehVideo ? 'anexo.mp4' : 'anexo.png'),
                   progresso: 0,
                 });
               }

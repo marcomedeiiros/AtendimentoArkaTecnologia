@@ -1,7 +1,7 @@
 const repo = require("../../infrastructure/repositories/mensagemRapida.repository");
 const prisma = require("../../infrastructure/database/prisma.client");
 const { mapMensagemRapida } = require("../../shared/helpers/mapper.helper");
-const { validarImagemDataUrl } = require("../../shared/helpers/imagemSegura.helper");
+const { validarImagemDataUrl, validarVideoDataUrl } = require("../../shared/helpers/imagemSegura.helper");
 const AppError = require("../../shared/errors/AppError");
 const logger = require("../../config/logger");
 
@@ -77,16 +77,22 @@ function nomeSeguro(nome) {
   return limpo || null;
 }
 
-// Traduz o `anexo` cru do cliente em colunas do banco, validando a imagem.
+// Traduz o `anexo` cru do cliente em colunas do banco, validando imagem OU video.
 // Devolve sempre os tres campos (media/mimetype/nome), com null quando nao ha.
 function processarAnexo(anexo) {
   if (!anexo || !anexo.media) {
     return { anexoMedia: null, anexoMimetype: null, anexoNome: null };
   }
-  const { media, mimetype } = validarImagemDataUrl(anexo.media, { maxBytes: MAX_ANEXO_BYTES });
+  // Detecta video pelo prefixo da data URL (nao confia so no mimetype declarado).
+  const ehVideo =
+    /^data:video\//i.test(String(anexo.media)) ||
+    String(anexo.mimetype || "").toLowerCase().startsWith("video/");
+  const { media, mimetype } = ehVideo
+    ? validarVideoDataUrl(anexo.media, { maxBytes: MAX_ANEXO_BYTES })
+    : validarImagemDataUrl(anexo.media, { maxBytes: MAX_ANEXO_BYTES });
   return {
     anexoMedia: media,
-    anexoMimetype: mimetype, // usa o mime conferido pelos magic bytes, nao o declarado
+    anexoMimetype: mimetype, // usa o mime conferido pela assinatura, nao o declarado
     anexoNome: nomeSeguro(anexo.fileName),
   };
 }

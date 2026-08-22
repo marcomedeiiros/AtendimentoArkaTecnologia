@@ -12,20 +12,24 @@ import { MensagensRapidasAPI } from '../../services/api';
 // carregar script). O servidor revalida tudo de novo (whitelist de MIME, magic
 // bytes, tamanho) e e a autoridade -- esta checagem do cliente e so conveniencia.
 const TIPOS_IMG = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+const TIPOS_VIDEO = ['video/mp4', 'video/webm', 'video/quicktime', 'video/3gpp'];
+const TIPOS_ANEXO = [...TIPOS_IMG, ...TIPOS_VIDEO];
 const MAX_ANEXO_BYTES = 20 * 1024 * 1024; // 20 MB (mesmo teto do servidor)
 
-function lerImagemAnexo(file) {
+const ehVideoMime = (m) => String(m || '').startsWith('video/');
+
+function lerAnexo(file) {
   return new Promise((resolve, reject) => {
     if (!file) return reject(new Error('Nenhum arquivo.'));
-    if (!TIPOS_IMG.includes(file.type)) {
-      return reject(new Error('Só são aceitas imagens PNG, JPEG, WebP ou GIF.'));
+    if (!TIPOS_ANEXO.includes(file.type)) {
+      return reject(new Error('Aceitos: imagem (PNG, JPEG, WebP, GIF) ou vídeo (MP4).'));
     }
     if (file.size > MAX_ANEXO_BYTES) {
-      return reject(new Error('Imagem muito grande (máx. 20 MB).'));
+      return reject(new Error('Arquivo muito grande (máx. 20 MB).'));
     }
     const reader = new FileReader();
     reader.onload = () => resolve({ media: reader.result, mimetype: file.type, fileName: file.name });
-    reader.onerror = () => reject(new Error('Não foi possível ler a imagem.'));
+    reader.onerror = () => reject(new Error('Não foi possível ler o arquivo.'));
     reader.readAsDataURL(file);
   });
 }
@@ -70,7 +74,7 @@ function ModalEdicao({ msg, onSalvar, onFechar, salvando }) {
     if (!file) return;
     setErroAnexo('');
     try {
-      setAnexo(await lerImagemAnexo(file));
+      setAnexo(await lerAnexo(file));
     } catch (e) {
       setErroAnexo(e.message);
     }
@@ -148,21 +152,29 @@ function ModalEdicao({ msg, onSalvar, onFechar, salvando }) {
               quando a mensagem for usada no atendimento. */}
           <div>
             <label className="text-xs text-slate-400 font-medium block mb-1.5">
-              Anexo de imagem <span className="text-slate-500">(opcional)</span>
+              Anexo (imagem ou vídeo) <span className="text-slate-500">(opcional)</span>
             </label>
 
             {anexo ? (
               <div className="flex items-center gap-3 bg-grafite-700 border border-linha rounded-xl p-2.5">
-                <img
-                  src={anexo.media}
-                  alt="Anexo"
-                  className="w-14 h-14 rounded-lg object-cover border border-linha shrink-0 bg-grafite-800"
-                />
+                {ehVideoMime(anexo.mimetype) ? (
+                  <video
+                    src={anexo.media}
+                    muted
+                    className="w-14 h-14 rounded-lg object-cover border border-linha shrink-0 bg-grafite-800"
+                  />
+                ) : (
+                  <img
+                    src={anexo.media}
+                    alt="Anexo"
+                    className="w-14 h-14 rounded-lg object-cover border border-linha shrink-0 bg-grafite-800"
+                  />
+                )}
                 <div className="min-w-0 flex-1">
                   <div className="text-[11px] font-semibold text-white truncate flex items-center gap-1">
-                    <Paperclip size={11} className="text-acao-200 shrink-0" /> {anexo.fileName || 'imagem'}
+                    <Paperclip size={11} className="text-acao-200 shrink-0" /> {anexo.fileName || 'anexo'}
                   </div>
-                  <div className="text-[10px] text-slate-500 uppercase">{(anexo.mimetype || '').replace('image/', '') || 'imagem'}</div>
+                  <div className="text-[10px] text-slate-500 uppercase">{(anexo.mimetype || '').replace(/^(image|video)\//, '') || 'anexo'}</div>
                 </div>
                 <button
                   type="button"
@@ -179,19 +191,19 @@ function ModalEdicao({ msg, onSalvar, onFechar, salvando }) {
                 onClick={() => fileRef.current?.click()}
                 className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-linha px-3 py-2.5 text-xs font-semibold text-slate-400 transition-colors hover:border-acao/50 hover:text-white"
               >
-                <ImagePlus size={15} /> Anexar imagem
+                <ImagePlus size={15} /> Anexar imagem ou vídeo
               </button>
             )}
 
             <input
               ref={fileRef}
               type="file"
-              accept={TIPOS_IMG.join(',')}
+              accept={TIPOS_ANEXO.join(',')}
               className="hidden"
               onChange={e => { escolherAnexo(e.target.files?.[0]); e.target.value = ''; }}
             />
             {erroAnexo && <p className="mt-1.5 text-[11px] font-semibold text-falha-400">{erroAnexo}</p>}
-            <p className="mt-1 text-[10px] text-slate-500">PNG, JPEG, WebP ou GIF · máx. 2 MB</p>
+            <p className="mt-1 text-[10px] text-slate-500">Imagem (PNG, JPEG, WebP, GIF) ou vídeo (MP4) · máx. 20 MB</p>
           </div>
         </div>
 
@@ -263,15 +275,24 @@ function CardMensagem({ msg, onEditar, onRemover, onCopiar, copiado }) {
 
       <div className="bg-grafite-700 rounded-xl p-3 border border-linha flex gap-3">
         {msg.anexo?.media && (
-          <img
-            src={msg.anexo.media}
-            alt="Anexo"
-            className="w-12 h-12 rounded-lg object-cover border border-linha shrink-0 bg-grafite-800"
-            title="Imagem anexada"
-          />
+          ehVideoMime(msg.anexo.mimetype) ? (
+            <video
+              src={msg.anexo.media}
+              muted
+              className="w-12 h-12 rounded-lg object-cover border border-linha shrink-0 bg-grafite-800"
+              title="Vídeo anexado"
+            />
+          ) : (
+            <img
+              src={msg.anexo.media}
+              alt="Anexo"
+              className="w-12 h-12 rounded-lg object-cover border border-linha shrink-0 bg-grafite-800"
+              title="Imagem anexada"
+            />
+          )
         )}
         <p className="text-[11px] text-slate-300 leading-relaxed line-clamp-3 whitespace-pre-line flex-1 min-w-0">
-          {msg.texto || (msg.anexo ? '(somente imagem)' : '')}
+          {msg.texto || (msg.anexo ? (ehVideoMime(msg.anexo.mimetype) ? '(somente vídeo)' : '(somente imagem)') : '')}
         </p>
       </div>
     </div>

@@ -80,4 +80,48 @@ function validarImagemDataUrl(dataUrl, { maxBytes = 3 * 1024 * 1024 } = {}) {
   return { media: `data:${mime};base64,${bytes.toString("base64")}`, mimetype: mime };
 }
 
-module.exports = { validarImagemDataUrl };
+// data:<mime>;base64,<dados> para video (mp4/webm/mov/3gp).
+const RE_DATA_URL_VIDEO = /^data:(video\/(?:mp4|webm|quicktime|3gpp));base64,([A-Za-z0-9+/]+={0,2})$/;
+
+/**
+ * Valida UM video em data URL. Devolve { media, mimetype } saneados, ou lanca
+ * AppError(400). Mesma defesa da imagem: teto de tamanho antes de decodificar,
+ * alfabeto base64 e uma checagem leve de assinatura (mp4/mov tem "ftyp";
+ * webm tem o cabecalho EBML). Nao reserializa (video e grande).
+ */
+function validarVideoDataUrl(dataUrl, { maxBytes = 20 * 1024 * 1024 } = {}) {
+  if (typeof dataUrl !== "string") falhar("Vídeo inválido.");
+  const maxChars = Math.ceil((maxBytes * 4) / 3) + 64;
+  if (dataUrl.length > maxChars) falhar("Vídeo grande demais.");
+
+  const m = RE_DATA_URL_VIDEO.exec(dataUrl);
+  if (!m) falhar("Só aceitamos vídeo MP4, WebM, MOV ou 3GP.");
+
+  const mime = m[1];
+  const base64 = m[2];
+  if (!RE_BASE64.test(base64)) falhar("Conteúdo do vídeo corrompido.");
+
+  // So os primeiros bytes bastam para conferir a assinatura (nao decodifica tudo).
+  let cabecalho;
+  try {
+    cabecalho = Buffer.from(base64.slice(0, 64), "base64");
+  } catch {
+    falhar("Conteúdo do vídeo corrompido.");
+  }
+  const bytesEstimados = Math.floor((base64.replace(/=+$/, "").length * 3) / 4);
+  if (bytesEstimados === 0) falhar("Vídeo vazio.");
+  if (bytesEstimados > maxBytes) falhar("Vídeo grande demais.");
+
+  const ehFtyp = cabecalho.length >= 12 && cabecalho.toString("ascii", 4, 8) === "ftyp"; // mp4/mov/3gp
+  const ehWebm =
+    cabecalho.length >= 4 &&
+    cabecalho[0] === 0x1a && cabecalho[1] === 0x45 && cabecalho[2] === 0xdf && cabecalho[3] === 0xa3;
+  if (!ehFtyp && !ehWebm) {
+    falhar("O arquivo não parece ser um vídeo válido.");
+  }
+
+  // Devolve a data URL como veio (bytes preservados), com o mime canonico.
+  return { media: dataUrl, mimetype: mime };
+}
+
+module.exports = { validarImagemDataUrl, validarVideoDataUrl };
