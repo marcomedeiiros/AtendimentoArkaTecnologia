@@ -38,7 +38,8 @@ class AuthController {
   }
 
   async trocarSenha(req, res) {
-    const data = await authService.trocarSenha(req.user.sub, req.body.senhaAtual, req.body.novaSenha);
+    // `sid` (a sessao de quem esta trocando) sobrevive; as outras caem.
+    const data = await authService.trocarSenha(req.user.sub, req.body.senhaAtual, req.body.novaSenha, req.user.sid);
     return success(res, data);
   }
 }

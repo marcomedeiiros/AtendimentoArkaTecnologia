@@ -67,6 +67,9 @@ async function authMiddleware(req, res, next) {
       email: usuario.email,
       nome: usuario.nome,
       cargo: usuario.cargo, // autoritativo (do banco), sobrepoe o do token
+      // Sessao desta requisicao. Serve para poupar a propria sessao quando a
+      // acao derruba as outras (troca de senha).
+      sid: payload.sid || null,
     };
     registrarPresenca(usuario.id);
     return next();

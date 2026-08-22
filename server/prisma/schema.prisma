@@ -99,6 +99,16 @@ model SessaoRefresh {
   id         String    @id @default(uuid())
   /// Mesma sessao atraves de todas as rotacoes -- e o que se revoga no logout.
   familia    String
+  /// Nascimento da SESSAO (o login), copiado em cada rotacao. Sustenta o teto
+  /// absoluto (SESSAO_MAX): sem ele, "deslizante" viraria eterna. E uma coluna,
+  /// e nao a data da linha mais antiga, porque a faxina apaga linha gasta -- a
+  /// familia pareceria mais nova a cada limpeza e o teto nunca chegaria.
+  ///
+  /// O @default existe pelo DEPLOY: se a tabela ja tiver sido criada sem esta
+  /// coluna, `prisma db push` a adiciona sem exigir --accept-data-loss (linha
+  /// existente herda o instante da migracao). O valor real e sempre gravado
+  /// explicitamente pelo servico.
+  familiaCriadaEm DateTime @default(now()) @map("familia_criada_em")
   /// SHA-256 do token; nunca o token em claro.
   tokenHash  String    @unique @map("token_hash")
   usuarioId  String    @map("usuario_id")

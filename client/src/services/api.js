@@ -52,12 +52,17 @@ export function registrarAtividade() {
   ultimaInteracao = Date.now();
 }
 const limiteInatividadeMs = () => Number(sessionStorage.getItem(INATIVIDADE_KEY) || localStorage.getItem(INATIVIDADE_KEY)) || 0;
+// ATENCAO: NAO chamar registrarAtividade() aqui. Renovar nao e sinal de que ha
+// alguem na frente da tela -- e justamente o contrario, e o automatico do
+// painel. Marcar atividade a cada renovacao zerava o relogio de inatividade e
+// tornava a sessao imortal: com token de 1h e janela de 12h, a aba renovava a
+// cada hora e a janela nunca fechava. So interacao humana (AuthContext) e o
+// login contam como atividade.
 function guardarSessao(sessao, lembrar) {
   const ms = Number(sessao?.inatividadeMs) || 0;
   localStorage.removeItem(INATIVIDADE_KEY);
   sessionStorage.removeItem(INATIVIDADE_KEY);
   if (ms > 0) (lembrar ? localStorage : sessionStorage).setItem(INATIVIDADE_KEY, String(ms));
-  registrarAtividade();
 }
 function inativoDemais() {
   const limite = limiteInatividadeMs();
@@ -133,27 +138,56 @@ async function publico(endpoint, body) {
 // quem chega durante uma renovacao em curso espera a mesma.
 let renovacaoEmCurso = null;
 
-async function renovarSessao() {
+// Serializa a renovacao ENTRE ABAS.
+//
+// O voo unico acima resolve a corrida dentro de uma aba, mas o operador tem a
+// Central numa aba e Fluxos em outra, e as duas compartilham o mesmo
+// localStorage. Vencendo o token, as duas mandariam o MESMO refresh token, e a
+// segunda seria lida pelo servidor como REUSO -- derrubando as duas sessoes.
+// Web Locks resolve de verdade; onde nao existe, a checagem de "outra aba ja
+// renovou" (abaixo) cobre a maior parte dos casos, e o servidor ainda tem uma
+// janela de tolerancia para o duplicado honesto.
+function comTrava(fn) {
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : null;
+  if (!locks || typeof locks.request !== 'function') return fn();
+  return locks.request('arka-renovar-sessao', fn);
+}
+
+/**
+ * Renova a sessao. `tokenQueFalhou` e o token de acesso que levou 401: se, ao
+ * chegar a nossa vez, o que esta guardado JA e outro, quem renovou foi outra
+ * aba -- aproveitamos o token dela em vez de queimar o refresh de novo.
+ */
+async function renovarSessao(tokenQueFalhou = null) {
   if (renovacaoEmCurso) return renovacaoEmCurso;
 
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) return null;
-  // Ninguem na frente da tela pelo tempo do limite: nao renova. A aba esquecida
-  // aberta por dias cai no login. (Um F5 zera esse relogio de proposito --
-  // recarregar e alguem ali, e voltar depois de fechar o navegador continua
-  // valendo enquanto o "Lembrar-me" estiver marcado.)
-  if (inativoDemais()) return null;
-
-  const lembrar = lembrarAtual();
   renovacaoEmCurso = (async () => {
     try {
-      const data = await publico('/auth/renovar', { refreshToken });
-      setToken(data.token, lembrar, data.refreshToken);
-      guardarSessao(data.sessao, lembrar);
-      return data.token;
-    } catch {
-      // Sessao invalida, expirada, revogada ou reusada: nao ha o que renovar.
-      return null;
+      return await comTrava(async () => {
+        const atual = getToken();
+        if (tokenQueFalhou && atual && atual !== tokenQueFalhou) return atual;
+
+        const refreshToken = getRefreshToken();
+        if (!refreshToken) return null;
+        // Ninguem na frente da tela pelo tempo do limite: nao renova. A aba
+        // esquecida aberta por dias cai no login. (Um F5 zera esse relogio de
+        // proposito -- recarregar e alguem ali; e voltar depois de fechar o
+        // navegador continua valendo enquanto "Lembrar-me" estiver marcado.)
+        if (inativoDemais()) return null;
+
+        const lembrar = lembrarAtual();
+        try {
+          const data = await publico('/auth/renovar', { refreshToken });
+          setToken(data.token, lembrar, data.refreshToken);
+          guardarSessao(data.sessao, lembrar);
+          return data.token;
+        } catch {
+          // Falhou: se outra aba renovou no meio disso, a sessao esta viva e o
+          // token dela serve. Senao, nao ha o que renovar.
+          const depois = getToken();
+          return depois && depois !== tokenQueFalhou && depois !== atual ? depois : null;
+        }
+      });
     } finally {
       renovacaoEmCurso = null;
     }
@@ -181,7 +215,7 @@ async function request(endpoint, options = {}, jaRenovou = false) {
     // requisicao. `jaRenovou` e o que impede o laco -- se o 401 voltar depois
     // da renovacao, a sessao acabou de verdade.
     if (!jaRenovou) {
-      const novo = await renovarSessao();
+      const novo = await renovarSessao(token);
       if (novo) return request(endpoint, options, true);
     }
     encerrarSessao();
@@ -199,6 +233,9 @@ export const AuthAPI = {
     const data = await publico('/auth/login', { email, senha });
     setToken(data.token, lembrar, data.refreshToken);
     guardarSessao(data.sessao, lembrar);
+    // Digitar e-mail e senha e, por definicao, alguem ali: e o unico ponto
+    // automatico que pode zerar o relogio de inatividade.
+    registrarAtividade();
     lembrarEmail(email, lembrar);
     return data.usuario;
   },
@@ -444,7 +481,7 @@ export const ConversasAPI = {
         // zero -- nao ha envio parcial para retomar -- e por isso a barra de
         // progresso volta ao inicio.
         if (xhr.status === 401 && !jaRenovou && !cancelado) {
-          return renovarSessao().then(
+          return renovarSessao(token).then(
             (novo) => (novo ? disparar(true).then(resolve, reject) : reject(new Error('Sua sessão expirou. Entre novamente para enviar.'))),
             () => reject(new Error('Sua sessão expirou. Entre novamente para enviar.'))
           );

@@ -37,7 +37,11 @@ const env = {
   databaseUrl: process.env.DATABASE_URL,
   jwt: {
     secret: segredo("JWT_SECRET", process.env.JWT_SECRET, "dev-secret-change-me"),
-    expiresIn: process.env.JWT_EXPIRES_IN || "8h",
+    // Padrao curto porque a sessao agora se renova sozinha: token de acesso e
+    // credencial em circulacao, e quanto menos tempo ele vale, menor a janela
+    // de um vazamento. Aumentar isto nao "melhora" a sessao -- so aumenta o
+    // estrago de um token copiado.
+    expiresIn: process.env.JWT_EXPIRES_IN || "1h",
   },
   // Sessao renovavel. O token de acesso (JWT acima) continua curto e sem
   // estado; quem sustenta a sessao longa e o refresh token da tabela
@@ -47,6 +51,20 @@ const env = {
     // Prazo de cada refresh token, renovado a cada rotacao (deslizante).
     // E o que faz a sessao sobreviver a fechar e reabrir o navegador.
     refreshMs: duracaoMs(process.env.REFRESH_EXPIRES_IN, 30 * 86_400_000), // 30d
+    // TETO ABSOLUTO da sessao, contado do login. Sem ele, "deslizante" quer
+    // dizer eterna: um refresh token roubado e usado de vez em quando se
+    // renovaria para sempre. Passado este prazo, nem quem esta usando escapa --
+    // pede senha de novo.
+    maxMs: duracaoMs(process.env.SESSAO_MAX, 60 * 86_400_000), // 60d
+    // Tolerancia para o DUPLICADO HONESTO: duas abas do mesmo operador podem
+    // mandar o mesmo refresh token quase junto. Dentro desta janela, o segundo
+    // pedido e tratado como repeticao (rotaciona de novo) em vez de roubo. Fora
+    // dela, e reuso e a familia inteira cai. Curta de proposito.
+    reusoToleranciaMs: duracaoMs(process.env.SESSAO_REUSO_TOLERANCIA, 15_000), // 15s
+    // Teto de sessoes simultaneas por conta. Login novo alem disso derruba a
+    // mais antiga: limita quantos refresh tokens vivos existem por pessoa e
+    // impede que alguem acumule sessoes silenciosamente.
+    maxPorUsuario: Math.max(1, Number(process.env.SESSAO_MAX_POR_USUARIO) || 10),
     // Janela de INATIVIDADE do operador. Quem passa deste tempo sem interagir
     // volta para o login, mesmo com refresh token valido -- e o que impede que
     // uma aba esquecida aberta por dias siga renovando sozinha. Vai para o

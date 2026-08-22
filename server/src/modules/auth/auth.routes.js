@@ -64,7 +64,7 @@ router.post("/renovar", authLimiter, validate(refreshSchema), (req, res, next) =
  *     summary: Encerra a sessao no servidor (revoga a familia do refresh token)
  *     description: Idempotente -- token desconhecido tambem responde 200.
  */
-router.post("/sair", validate(sairSchema), (req, res, next) =>
+router.post("/sair", authLimiter, validate(sairSchema), (req, res, next) =>
   authController.sair(req, res).catch(next)
 );
 

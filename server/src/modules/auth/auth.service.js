@@ -38,16 +38,37 @@ class AuthService {
 
   // Emite um refresh token novo. `familia` ausente = sessao nova (login);
   // informada = rotacao da sessao que ja existia.
-  async _emitirRefresh(usuarioId, familia = null) {
+  async _emitirRefresh(usuarioId, familia = null, familiaCriadaEm = null) {
     const token = gerarRefresh();
     const familiaEfetiva = familia || crypto.randomUUID();
     await sessaoRefreshRepository.criar({
       familia: familiaEfetiva,
+      // Rotacao herda o nascimento da sessao; login novo nasce agora.
+      familiaCriadaEm: familiaCriadaEm || new Date(),
       tokenHash: hashDe(token),
       usuarioId,
       expiraEm: new Date(Date.now() + env.sessao.refreshMs),
     });
     return { token, familia: familiaEfetiva };
+  }
+
+  /**
+   * Teto de sessoes simultaneas por conta: login novo alem do limite derruba a
+   * mais ANTIGA (nunca a que acabou de nascer).
+   *
+   * Sem isto, cada login deixa mais um refresh token vivo para tras -- quem
+   * entra de varios lugares acumula credenciais de longa duracao sem que nada
+   * na tela mostre isso. Com o teto, o estrago de uma senha vazada tambem para
+   * de crescer: no maximo N sessoes existem ao mesmo tempo.
+   */
+  async _limitarSessoes(usuarioId) {
+    const familias = await sessaoRefreshRepository.familiasVivasDoUsuario(usuarioId);
+    const excedentes = familias.length - env.sessao.maxPorUsuario;
+    if (excedentes <= 0) return;
+    for (const familia of familias.slice(0, excedentes)) {
+      await sessaoRefreshRepository.revogarFamilia(familia);
+    }
+    logger.info("Sessoes antigas revogadas pelo limite por conta", { usuarioId, revogadas: excedentes });
   }
 
   // Contrato de sessao devolvido ao cliente no login e na renovacao. O
@@ -127,6 +148,7 @@ class AuthService {
     // O refresh sai primeiro porque o token de acesso precisa carregar o id da
     // sessao (familia) para poder ser revogado no logout.
     const refresh = await this._emitirRefresh(usuario.id);
+    await this._limitarSessoes(usuario.id);
     const assinado = this._assinar(usuario, refresh.familia);
     // Modulos que este perfil pode ver -- o cliente usa so para montar o menu.
     // O servidor continua sendo a autoridade a cada requisicao.
@@ -161,17 +183,43 @@ class AuthService {
     }
 
     if (registro.usadoEm) {
-      // Token gasto voltando: trata como copia roubada e queima a familia.
-      await sessaoRefreshRepository.revogarFamilia(registro.familia);
-      logger.warn("Reuso de refresh token: familia revogada", {
-        familia: registro.familia,
-        usuarioId: registro.usuarioId,
-      });
-      throw new AppError("Sessao encerrada por seguranca. Entre novamente.", 401, "SESSAO_REUSO");
+      // Token gasto voltando. Duas leituras possiveis:
+      //
+      //  1. DUPLICADO HONESTO: o operador tem duas abas abertas; as duas viram o
+      //     token vencer no mesmo instante e mandaram o mesmo refresh. Dentro de
+      //     uma janela curta, e isso -- e derrubar a sessao aqui puniria o uso
+      //     normal do painel. Exigimos tambem que ele seja o antecessor direto
+      //     da linha mais nova: token de rotacoes atras nao se disfarca de aba.
+      //  2. REPLAY: copia roubada sendo usada depois. Ai a familia inteira cai,
+      //     e as duas pontas voltam para o login.
+      const dentroDaJanela = Date.now() - registro.usadoEm.getTime() <= env.sessao.reusoToleranciaMs;
+      // Penultima linha da familia: exatamente UMA sucessora. Com duas ou mais,
+      // o token e de rotacoes atras -- copia antiga voltando, nao aba paralela.
+      const sucessoras = await sessaoRefreshRepository.contarPosteriores(registro.familia, registro.criadoEm);
+
+      if (!(dentroDaJanela && sucessoras === 1)) {
+        await sessaoRefreshRepository.revogarFamilia(registro.familia);
+        logger.warn("Reuso de refresh token: familia revogada", {
+          familia: registro.familia,
+          usuarioId: registro.usuarioId,
+          usadoHaMs: Date.now() - registro.usadoEm.getTime(),
+          sucessoras,
+        });
+        throw new AppError("Sessao encerrada por seguranca. Entre novamente.", 401, "SESSAO_REUSO");
+      }
+      logger.info("Renovacao duplicada tolerada (abas simultaneas)", { familia: registro.familia });
     }
 
     if (registro.expiraEm.getTime() <= Date.now()) {
       throw new AppError("Sessao expirada", 401, "SESSAO_EXPIRADA");
+    }
+
+    // Teto absoluto: contado do login, nao da ultima rotacao. E o que impede
+    // que uma sessao (ou um refresh token roubado que va sendo usado) se
+    // renove para sempre. Passado o prazo, pede senha de novo.
+    if (Date.now() - registro.familiaCriadaEm.getTime() > env.sessao.maxMs) {
+      await sessaoRefreshRepository.revogarFamilia(registro.familia);
+      throw new AppError("Sessao expirada. Entre novamente.", 401, "SESSAO_MAX");
     }
 
     // Estado da conta vale AGORA, nao no momento em que a sessao nasceu: conta
@@ -188,7 +236,7 @@ class AuthService {
 
     await sessaoRefreshRepository.marcarUsado(registro.id);
 
-    const refresh = await this._emitirRefresh(usuario.id, registro.familia);
+    const refresh = await this._emitirRefresh(usuario.id, registro.familia, registro.familiaCriadaEm);
     const assinado = this._assinar(usuario, refresh.familia);
     assinado.usuario.permissoes = await permissaoService.modulosDe(usuario.cargo);
     assinado.refreshToken = refresh.token;
@@ -229,7 +277,14 @@ class AuthService {
   }
 
   // Troca a propria senha conferindo a atual. `userId` do token.
-  async trocarSenha(userId, senhaAtual, novaSenha) {
+  //
+  // `sidAtual` e a sessao de quem esta trocando: ela SOBREVIVE e todas as outras
+  // caem. Trocar a senha e o que a pessoa faz quando desconfia que alguem
+  // entrou na conta -- se as outras sessoes continuassem valendo, a troca nao
+  // expulsaria ninguem, porque um refresh token roubado nao precisa da senha
+  // para se renovar. Derrubar tambem a sessao atual so obrigaria a fazer login
+  // de novo sem ganho de seguranca.
+  async trocarSenha(userId, senhaAtual, novaSenha, sidAtual = null) {
     const atual = await usuarioRepository.senhaHashDe(userId);
     if (!atual) throw new AppError("Usuario nao encontrado", 404, "NOT_FOUND");
 
@@ -240,7 +295,9 @@ class AuthService {
 
     const senhaHash = await bcrypt.hash(String(novaSenha), 10);
     await usuarioRepository.atualizarSenha(userId, senhaHash);
-    return { trocada: true };
+    const { count } = await sessaoRefreshRepository.revogarDoUsuario(userId, sidAtual);
+    if (count) logger.info("Sessoes derrubadas por troca de senha", { usuarioId: userId, linhas: count });
+    return { trocada: true, outrasSessoesEncerradas: count > 0 };
   }
 }
 

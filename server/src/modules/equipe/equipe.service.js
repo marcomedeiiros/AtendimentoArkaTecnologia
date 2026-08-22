@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const AppError = require("../../shared/errors/AppError");
 const usuarioRepository = require("../../infrastructure/repositories/usuario.repository");
+const sessaoRefreshRepository = require("../../infrastructure/repositories/sessaoRefresh.repository");
 const { CARGOS_VALIDOS } = require("./equipe.dto");
 
 // Alguem conta como online se o servidor viu uma requisicao autenticada dessa
@@ -73,7 +74,12 @@ class EquipeService {
       }
     }
 
-    return usuarioRepository.atualizarStatus(id, ativo);
+    const atualizado = await usuarioRepository.atualizarStatus(id, ativo);
+    // Bloquear alguem precisa TIRAR a pessoa de dentro, nao so impedir o proximo
+    // login: sem revogar, o refresh token dela continuaria existindo e voltaria
+    // a valer no instante em que a conta fosse reativada.
+    if (!ativo) await sessaoRefreshRepository.revogarDoUsuario(id);
+    return atualizado;
   }
 
   async alterarCargo(id, cargo, solicitanteId) {
@@ -134,6 +140,11 @@ class EquipeService {
 
     const senhaHash = await bcrypt.hash(String(novaSenha), 10);
     await usuarioRepository.atualizarSenha(idAlvo, senhaHash);
+    // Redefinir senha por um admin acontece quando a conta esta perdida ou
+    // suspeita. Sem revogar, quem estivesse dentro continuaria dentro: um
+    // refresh token nao precisa da senha para se renovar. Aqui caem TODAS as
+    // sessoes do alvo (nenhuma delas e a do admin que esta agindo).
+    await sessaoRefreshRepository.revogarDoUsuario(idAlvo);
     return { id: alvo.id, nome: alvo.nome };
   }
 
@@ -162,6 +173,10 @@ class EquipeService {
       }
     }
 
+    // Revoga ANTES de apagar: se a exclusao falhar no meio, o pior cenario e
+    // uma conta que existe com as sessoes derrubadas (recuperavel), e nao uma
+    // conta apagada com refresh tokens orfaos ainda de pe.
+    await sessaoRefreshRepository.revogarDoUsuario(idAlvo);
     await usuarioRepository.remover(idAlvo);
     return { removido: true, id: idAlvo, nome: alvo.nome };
   }
