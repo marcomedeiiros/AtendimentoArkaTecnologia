@@ -1,4 +1,6 @@
 const parceiroRepository = require("../../infrastructure/repositories/parceiro.repository");
+const conversaRepository = require("../../infrastructure/repositories/conversa.repository");
+const logger = require("../../config/logger");
 const { mapParceiro } = require("../../shared/helpers/mapper.helper");
 const { limparCnpj, cnpjValido } = require("../../shared/helpers/cnpj.helper");
 const { TIPOS_CONTRATO } = require("./parceiro.dto");
@@ -15,7 +17,21 @@ function normalizarContratos(contratos) {
 class ParceiroService {
   async listar(busca) {
     const itens = await parceiroRepository.findAll(busca);
-    return itens.map(mapParceiro);
+    // Contatos do WhatsApp que ja informaram cada CNPJ: e o que liga a empresa
+    // cadastrada as pessoas que falam por ela. Uma consulta so para a lista
+    // inteira (sem N+1); se falhar, a lista sai sem os contatos.
+    let porCnpj = new Map();
+    try {
+      porCnpj = await conversaRepository.contatosPorCnpj();
+    } catch (e) {
+      logger.warn("Falha ao carregar contatos por CNPJ", { message: e.message });
+    }
+    return itens.map((p) => ({
+      ...mapParceiro(p),
+      contatos: [...(porCnpj.get(limparCnpj(p.cnpj))?.values() || [])]
+        .sort((a, b) => new Date(b.em) - new Date(a.em))
+        .map(({ nome, telefone }) => ({ nome, telefone })),
+    }));
   }
 
   async criar({ cnpj, razaoSocial, email, telefones, cidades, contratos, status = "ativo" }) {

@@ -67,6 +67,33 @@ class ConversaRepository {
     });
   }
 
+  // Contatos do WhatsApp que informaram CNPJ (agrupados por CNPJ). Alimenta a
+  // tela Clientes (CNPJ): mostra QUEM daquela empresa ja falou com a gente.
+  // Consulta leve (so os campos exibidos) e sem N+1: uma unica ida ao banco.
+  async contatosPorCnpj() {
+    const linhas = await prisma.conversa.findMany({
+      where: { cnpj: { not: null }, cnpjVerificado: true },
+      orderBy: { atualizadoEm: "desc" },
+      select: { cnpj: true, cliente: true, telefone: true, atualizadoEm: true },
+    });
+
+    // Um mesmo telefone costuma ter varias conversas: fica a mais recente.
+    const porCnpj = new Map();
+    for (const l of linhas) {
+      if (!l.cnpj) continue;
+      if (!porCnpj.has(l.cnpj)) porCnpj.set(l.cnpj, new Map());
+      const contatos = porCnpj.get(l.cnpj);
+      if (!contatos.has(l.telefone)) {
+        contatos.set(l.telefone, {
+          nome: l.cliente || null,
+          telefone: l.telefone,
+          em: l.atualizadoEm,
+        });
+      }
+    }
+    return porCnpj;
+  }
+
   // Versao LEVE: so os campos escalares (sem carregar todas as mensagens). Para
   // checagens rapidas (setor/telefone) sem o custo de puxar o historico inteiro.
   findByIdBasico(id) {

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash2, Search, Building2, Mail, Phone, MapPin, Pencil, X, Loader2, FileText } from 'lucide-react';
+import { Plus, Trash2, Search, Building2, Mail, Phone, MapPin, Pencil, X, Loader2, FileText, MessageCircle } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { ParceirosAPI } from '../services/api';
 
@@ -332,6 +332,26 @@ export default function ParceirosPage() {
                         <FileText size={10} /> {LABEL_CONTRATO[c] || c}
                       </span>
                     ))}
+                  </div>
+                )}
+                {/* Quem fala por esta empresa no WhatsApp: contatos que ja
+                    informaram este CNPJ num atendimento. Vem do backend
+                    (conversas com o CNPJ confirmado). */}
+                {Array.isArray(p.contatos) && p.contatos.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1.5">
+                    {p.contatos.slice(0, 4).map(ct => (
+                      <span
+                        key={ct.telefone}
+                        title={`${ct.nome || 'Contato'} · ${ct.telefone} — informou este CNPJ no atendimento`}
+                        className="inline-flex items-center gap-1 rounded-md border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[10px] font-bold text-blue-300"
+                      >
+                        <MessageCircle size={10} />
+                        {ct.nome && ct.nome !== ct.telefone ? ct.nome : ct.telefone}
+                      </span>
+                    ))}
+                    {p.contatos.length > 4 && (
+                      <span className="text-[10px] text-slate-500">+{p.contatos.length - 4}</span>
+                    )}
                   </div>
                 )}
               </div>
