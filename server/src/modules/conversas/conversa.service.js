@@ -303,15 +303,24 @@ class ConversaService {
       } else if (tipo === "localizacao") {
         r = await evolutionApi.sendLocation(conversa.telefone, { latitude, longitude, name, address }, env.evolutionApi.instance);
       } else {
-        // GIF animado: o WhatsApp NAO entrega como "image" -- tem que ir como
-        // "video" com gifPlayback. Por isso detectamos pelo mimetype.
+        // GIF animado no Baileys nao e entregue de forma confiavel nem como
+        // "image" (estatico, some) nem como "video" (bytes de .gif viram video
+        // invalido e o WhatsApp nao entrega). Enviamos como DOCUMENTO (.gif):
+        // chega garantido e anima ao abrir. (Animacao inline exigiria converter
+        // para MP4 com ffmpeg no servidor.)
         const ehGif = String(mimetype || "").toLowerCase() === "image/gif";
         const mediatype = ehGif
-          ? "video"
+          ? "document"
           : tipo === "imagem" ? "image" : tipo === "video" ? "video" : "document";
         r = await evolutionApi.sendMedia(
           conversa.telefone,
-          { mediatype, media: paraEvolution, mimetype, fileName, caption, ...(ehGif ? { gifPlayback: true } : {}) },
+          {
+            mediatype,
+            media: paraEvolution,
+            mimetype,
+            fileName: ehGif ? (fileName || "animacao.gif") : fileName,
+            caption,
+          },
           env.evolutionApi.instance
         );
       }
