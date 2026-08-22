@@ -85,7 +85,16 @@ export function AppProvider({ children }) {
   const recarregarConversas = useCallback(async () => {
     try {
       const co = await ConversasAPI.listar();
-      if (Array.isArray(co)) setConversas(ordenarConversas(co));
+      if (Array.isArray(co)) {
+        // Passa pela MESMA regra de merge dos outros caminhos. Sem isto, esta
+        // releitura (que roda a cada 30s) substituia tudo e desfazia o que ainda
+        // nao tinha sido confirmado -- era ela que fazia a mensagem apagada
+        // "voltar" alguns segundos depois, e a recem-enviada sumir.
+        setConversas(prev => {
+          const porId = new Map(prev.map(c => [c.id, c]));
+          return ordenarConversas(co.map(c => mesclarConversa(porId.get(c.id), c)));
+        });
+      }
       setApiOffline(false);
     } catch { /* back-end offline: mantem estado atual */ }
   }, []);

@@ -25,6 +25,13 @@ const env = require("../../config/env");
 // bastante para um link vazado nao servir para sempre.
 const TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+// A expiracao e arredondada para o inicio do DIA. Sem isso, cada render gerava
+// um token diferente (Date.now() muda sempre) -> a URL da midia mudava -> o
+// navegador considerava outro arquivo e o <video>/<img> RECARREGAVA sozinho a
+// cada atualizacao da conversa, alem de nunca aproveitar o cache. Com o
+// arredondamento, a URL da mesma midia e identica durante o dia inteiro.
+const JANELA_MS = 24 * 60 * 60 * 1000;
+
 function assinar(mensagemId, exp) {
   return crypto
     .createHmac("sha256", env.jwt.secret)
@@ -32,9 +39,11 @@ function assinar(mensagemId, exp) {
     .digest("base64url");
 }
 
-// Devolve "<exp>.<assinatura>" para usar em ?t=
+// Devolve "<exp>.<assinatura>" para usar em ?t=. A expiracao e ancorada no
+// inicio do dia (ver JANELA_MS) para o token -- e portanto a URL -- ser ESTAVEL
+// entre renders. Validade efetiva: entre ttlMs e ttlMs + 1 dia.
 function gerarTokenMidia(mensagemId, ttlMs = TTL_MS) {
-  const exp = Date.now() + ttlMs;
+  const exp = (Math.floor(Date.now() / JANELA_MS) + 1) * JANELA_MS + ttlMs;
   return `${exp}.${assinar(mensagemId, exp)}`;
 }
 
