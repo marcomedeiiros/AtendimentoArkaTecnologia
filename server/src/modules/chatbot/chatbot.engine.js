@@ -528,8 +528,13 @@ class ChatbotEngine {
   //
   // Devolve { aguardando, resposta } para o passo usar. Sem memoria, cai no
   // comportamento antigo (pedir o CNPJ digitado).
-  async _pedirOuConfirmarCnpj(conversa, textoDoPasso) {
+  // Configuravel PELO FLUXO (passo.config), portanto guardado no banco:
+  //   memoriaCnpj: false            -> desliga a memoria neste passo
+  //   mensagemConfirmarCnpj: "..."  -> texto proprio; aceita {{cnpj}} e {{empresa}}
+  async _pedirOuConfirmarCnpj(conversa, textoDoPasso, passo = null) {
     const pedirNormal = { aguardando: AGUARDANDO.CNPJ, resposta: textoDoPasso };
+    const cfg = passo?.config || {};
+    if (cfg.memoriaCnpj === false) return pedirNormal;
     try {
       const anterior = await this.deps.conversaRepository.ultimoCnpjDoTelefone(
         conversa.telefone,
@@ -538,13 +543,23 @@ class ChatbotEngine {
       if (!anterior?.cnpj) return pedirNormal;
 
       const parceiro = await this.deps.parceiroRepository.findAtivoByCnpj(anterior.cnpj);
-      const empresa = parceiro?.razaoSocial ? `\n🏢 ${parceiro.razaoSocial}` : "";
+      const cnpjFmt = mascararCnpj(anterior.cnpj);
+      const empresaNome = parceiro?.razaoSocial || "";
+
+      const padrao =
+        `Vi que você já foi atendido por aqui. O CNPJ continua sendo este?\n\n` +
+        `📄 {{cnpj}}{{empresa}}\n\n` +
+        `Responda *SIM* para confirmar ou *NÃO* para informar outro.`;
+      const modelo =
+        typeof cfg.mensagemConfirmarCnpj === "string" && cfg.mensagemConfirmarCnpj.trim()
+          ? cfg.mensagemConfirmarCnpj
+          : padrao;
+
       return {
         aguardando: AGUARDANDO.CNPJ_CONFIRMA,
-        resposta:
-          `Vi que você já foi atendido por aqui. O CNPJ continua sendo este?\n\n` +
-          `📄 ${mascararCnpj(anterior.cnpj)}${empresa}\n\n` +
-          `Responda *SIM* para confirmar ou *NÃO* para informar outro.`,
+        resposta: modelo
+          .replace(/\{\{\s*cnpj\s*\}\}/g, cnpjFmt)
+          .replace(/\{\{\s*empresa\s*\}\}/g, empresaNome ? `\n🏢 ${empresaNome}` : ""),
         cnpjSugerido: anterior.cnpj,
       };
     } catch (e) {
@@ -921,7 +936,7 @@ class ChatbotEngine {
           aguardando = AGUARDANDO.OPCAO;
         } else if (this.passoAguardaCnpj(passo) && !contexto.cnpjValidacao?.valido) {
           // Contato recorrente: oferece o CNPJ ja usado antes (ver memoria).
-          const pedido = await this._pedirOuConfirmarCnpj(conversa, resposta);
+          const pedido = await this._pedirOuConfirmarCnpj(conversa, resposta, passo);
           aguardando = pedido.aguardando;
           resposta = pedido.resposta;
           if (pedido.cnpjSugerido) contextoSessao = { cnpjSugerido: pedido.cnpjSugerido };
@@ -942,7 +957,7 @@ class ChatbotEngine {
           // as respostas automaticas estao ligadas.
           const textoPasso = this.textoDoPasso(passo, contexto) || "";
           // Contato recorrente: oferece o CNPJ ja usado antes (ver memoria).
-          const pedido = await this._pedirOuConfirmarCnpj(conversa, textoPasso);
+          const pedido = await this._pedirOuConfirmarCnpj(conversa, textoPasso, passo);
           aguardando = pedido.aguardando;
           resposta = pedido.resposta;
           if (pedido.cnpjSugerido) contextoSessao = { cnpjSugerido: pedido.cnpjSugerido };

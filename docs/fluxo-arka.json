@@ -214,7 +214,9 @@
       "texto": "🤖 Certo! Para confirmar seu contrato, me informe o *CNPJ da empresa contratante* (pode enviar com ou sem pontuação).\n\nExemplo: 12.345.678/0001-90",
       "config": {
         "aguardar": "cnpj",
-        "variavel": "cnpj_contrato"
+        "variavel": "cnpj_contrato",
+        "memoriaCnpj": true,
+        "mensagemConfirmarCnpj": "🤖 Vi que você já foi atendido por aqui. O CNPJ continua sendo este?\n\n📄 {{cnpj}}{{empresa}}\n\nResponda *SIM* para confirmar ou *NÃO* para informar outro."
       },
       "x": 640,
       "y": 220,
