@@ -23,6 +23,13 @@ class ParceiroController {
     return parceiroService.alternarStatus(req.params.cnpj).then((data) => success(res, data));
   }
 
+  // DELETE /parceiros/:cnpj/contatos/:telefone -- desmarca o contato da empresa.
+  desvincularContato(req, res) {
+    return parceiroService
+      .desvincularContato(req.params.cnpj, req.params.telefone)
+      .then((data) => success(res, data));
+  }
+
   remover(req, res) {
     return parceiroService.remover(req.params.cnpj).then((data) => success(res, data));
   }

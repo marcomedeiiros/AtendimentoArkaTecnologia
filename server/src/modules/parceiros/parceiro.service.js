@@ -34,6 +34,20 @@ class ParceiroService {
     }));
   }
 
+  // Desmarca um contato desta empresa: limpa o CNPJ das conversas daquele
+  // telefone (o vinculo vem justamente dali). As conversas voltam para "CNPJ
+  // pendente" -- util quando a pessoa informou o CNPJ errado.
+  async desvincularContato(cnpj, telefone) {
+    const cnpjLimpo = limparCnpj(cnpj);
+    const tel = String(telefone || "").replace(/\D/g, "");
+    if (!cnpjValido(cnpjLimpo)) throw new AppError("CNPJ invalido", 400, "INVALID_CNPJ");
+    if (!tel) throw new AppError("Telefone invalido", 400, "TELEFONE_INVALIDO");
+
+    const afetadas = await conversaRepository.limparCnpjDoContato(tel, cnpjLimpo);
+    logger.info("Contato desvinculado do CNPJ", { cnpj: cnpjLimpo, telefone: tel, afetadas });
+    return { desvinculado: true, conversasAfetadas: afetadas };
+  }
+
   async criar({ cnpj, razaoSocial, email, telefones, cidades, contratos, status = "ativo" }) {
     const cnpjLimpo = limparCnpj(cnpj);
     if (!cnpjValido(cnpjLimpo)) {

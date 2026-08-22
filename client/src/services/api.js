@@ -143,6 +143,10 @@ export const ParceirosAPI = {
   atualizar: (cnpj, dados) => request(`/parceiros/${cnpj}`, { method: 'PUT', body: JSON.stringify(dados) }),
   alternarStatus: (cnpj) => request(`/parceiros/${cnpj}/status`, { method: 'PATCH' }),
   remover: (cnpj) => request(`/parceiros/${cnpj}`, { method: 'DELETE' }),
+  // Desmarca um contato do WhatsApp desta empresa (limpa o CNPJ das conversas
+  // daquele telefone).
+  desvincularContato: (cnpj, telefone) =>
+    request(`/parceiros/${cnpj}/contatos/${telefone}`, { method: 'DELETE' }),
 };
 
 // ── Fluxos API ──

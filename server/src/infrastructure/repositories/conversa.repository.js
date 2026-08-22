@@ -94,6 +94,17 @@ class ConversaRepository {
     return porCnpj;
   }
 
+  // Desfaz o vinculo entre um telefone e um CNPJ: limpa o CNPJ das conversas
+  // daquele contato. Usado ao "desmarcar" um contato na tela Clientes (CNPJ) --
+  // ex.: a pessoa informou o CNPJ errado. Devolve quantas conversas mudaram.
+  async limparCnpjDoContato(telefone, cnpj) {
+    const r = await prisma.conversa.updateMany({
+      where: { telefone, cnpj },
+      data: { cnpj: null, cnpjVerificado: false },
+    });
+    return r.count;
+  }
+
   // Versao LEVE: so os campos escalares (sem carregar todas as mensagens). Para
   // checagens rapidas (setor/telefone) sem o custo de puxar o historico inteiro.
   findByIdBasico(id) {
