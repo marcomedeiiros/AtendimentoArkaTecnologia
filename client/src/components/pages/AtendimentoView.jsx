@@ -2472,12 +2472,22 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       window.alert('Aguarde a mensagem terminar de enviar para apagá-la.');
       return;
     }
+    const convId = conversa?.id;
+    // Otimista: marca "apagada" na tela NA HORA. O servidor confirma por baixo
+    // (e pode demorar em conversa grande) -- o operador nao espera mais.
+    const marcar = (deletada) => setConversas(prev => prev.map(c =>
+      c.id === convId
+        ? { ...c, mensagens: c.mensagens.map(m => m.id === mensagem.id ? { ...m, deletada } : m) }
+        : c
+    ));
+    marcar(true);
     try {
       aplicarConversa(await ConversasAPI.apagarMensagem(mensagem.id));
     } catch (e) {
+      marcar(false); // desfaz a marcacao se o servidor recusar
       window.alert('Não foi possível apagar: ' + e.message);
     }
-  }, [aplicarConversa]);
+  }, [aplicarConversa, conversa, setConversas]);
 
   const enviarResposta = useCallback(async (txt, respondendoAId = null) => {
     if (!txt.trim() || !conversa) return;

@@ -457,7 +457,9 @@ class ConversaService {
       throw new AppError("Mensagem nao encontrada", 404, "NOT_FOUND");
     }
 
-    const conversa = await conversaRepository.findById(msg.conversaId);
+    // Consulta LEVE (so setor/telefone) para o check de acesso -- nao carrega o
+    // historico inteiro da conversa so para apagar uma mensagem.
+    const conversa = await conversaRepository.findByIdBasico(msg.conversaId);
     exigirAcessoSetor(userCargo, conversa?.setor);
     const nossa = msg.origem !== "cliente";
 

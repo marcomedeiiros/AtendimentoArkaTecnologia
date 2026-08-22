@@ -50,6 +50,15 @@ class ConversaRepository {
     });
   }
 
+  // Versao LEVE: so os campos escalares (sem carregar todas as mensagens). Para
+  // checagens rapidas (setor/telefone) sem o custo de puxar o historico inteiro.
+  findByIdBasico(id) {
+    return prisma.conversa.findUnique({
+      where: { id },
+      select: { id: true, setor: true, telefone: true, statusAtendimento: true },
+    });
+  }
+
   findByTelefone(instanciaId, telefone) {
     return prisma.conversa.findFirst({
       where: {
