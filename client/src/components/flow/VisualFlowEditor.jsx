@@ -1102,7 +1102,15 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
               {/* Ramificacoes de fluxos importados. O passo desenha a saida
                   principal acima (targetId); as demais saidas vivem em
                   config.opcoes e aparecem aqui em azul tracejado, com o rotulo
-                  das palavras-chave que levam a cada destino. */}
+                  das palavras-chave que levam a cada destino.
+
+                  Este bloco nao recebia NADA da simulacao: enquanto as ligacoes
+                  principais ficavam verdes e pulsando, os fios das ramificacoes
+                  seguiam iguais, apagados, como se nao fizessem parte do fluxo.
+                  Agora eles usam o mesmo `active` das outras (bloco de origem em
+                  execucao ou ja executado) e ganham a mesma pulsacao -- so
+                  mantem o azul, que e o que distingue ramificacao de saida
+                  principal. */}
               {nodes.map(node => {
                 const opcoes = node.config?.opcoes;
                 if (!Array.isArray(opcoes) || opcoes.length === 0) return null;
@@ -1115,11 +1123,22 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                   const dx = Math.abs(ex - sx) * 0.5;
                   const d = `M ${sx} ${sy} C ${sx + dx} ${sy}, ${ex - dx} ${ey}, ${ex} ${ey}`;
                   const rotulo = String(op.rotulo || '').slice(0, 22);
+                  const active = activeSimNodeId === node.id || executedNodeIdsEff.includes(node.id);
                   return (
                     <g key={`${node.id}-op${i}->${target.id}`} style={{ pointerEvents: 'none' }}>
-                      <path d={d} fill="none" stroke="#3B82F6" strokeWidth={2} strokeDasharray="5 4" opacity={0.7} />
+                      <path d={d} fill="none"
+                        stroke={active ? '#60A5FA' : '#3B82F6'}
+                        strokeWidth={active ? 3 : 2}
+                        strokeDasharray="5 4"
+                        opacity={active ? 1 : 0.7}
+                        className="transition-all duration-300" />
+                      {/* Mesma sobreposicao laranja pulsante das ligacoes
+                          principais: e ela que faz o fio "piscar". */}
+                      {active && (
+                        <path d={d} fill="none" stroke="#FF7A29" strokeWidth="3" strokeDasharray="6 6" className="animate-pulse" />
+                      )}
                       {rotulo && (
-                        <text x={(sx + ex) / 2} y={(sy + ey) / 2 - 5} fill="#93C5FD" fontSize="9" textAnchor="middle">
+                        <text x={(sx + ex) / 2} y={(sy + ey) / 2 - 5} fill={active ? '#DBEAFE' : '#93C5FD'} fontSize="9" textAnchor="middle">
                           {rotulo}
                         </text>
                       )}
