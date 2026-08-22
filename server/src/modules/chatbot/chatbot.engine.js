@@ -443,22 +443,36 @@ class ChatbotEngine {
     try {
       let r;
       if (itens.length <= 3) {
+        // Evolution v2 exige title/description/footer nao-vazios.
         r = await this.deps.evolutionApi.sendButtons(
           telefone,
           {
+            title: "Atendimento",
             description: corpo,
+            footer: "Selecione uma opção",
             buttons: itens.map((i) => ({ type: "reply", displayText: i.titulo.slice(0, 20), id: i.id })),
           },
           inst
         );
       } else {
+        // Evolution v2 exige title + footerText, e a `description` de CADA linha
+        // nao pode ser vazia (validado pela API).
         r = await this.deps.evolutionApi.sendList(
           telefone,
           {
+            title: "Atendimento",
             description: corpo,
             buttonText: "Ver opções",
+            footerText: "Selecione uma opção",
             sections: [
-              { title: "Opções", rows: itens.map((i) => ({ title: i.titulo.slice(0, 24), description: "", rowId: i.id })) },
+              {
+                title: "Opções",
+                rows: itens.map((i) => ({
+                  title: i.titulo.slice(0, 24),
+                  description: "Toque para selecionar",
+                  rowId: i.id,
+                })),
+              },
             ],
           },
           inst
