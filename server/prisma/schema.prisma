@@ -348,3 +348,53 @@ model LogExecucaoFluxo {
   @@index([fluxoId, criadoEm])
   @@map("logs_execucao_fluxo")
 }
+
+// ── Envio em Massa ──────────────────────────────────────────────────────────
+// A campanha roda no SERVIDOR. Antes o laco de disparo vivia no navegador:
+// fechar a aba parava a campanha no meio, e o intervalo anti-bloqueio era so
+// uma regra de tela (a API aceitava rajada e podia queimar o numero). Agora o
+// estado e o ritmo sao do backend, e a tela apenas acompanha o progresso.
+model Campanha {
+  id            String   @id @default(uuid())
+  nome          String
+  mensagem      String
+  // Intervalo (segundos) sorteado entre cada envio. O servidor impoe o minimo.
+  intervaloDe   Int      @default(2) @map("intervalo_de")
+  intervaloAte  Int      @default(5) @map("intervalo_ate")
+  // rascunho | enviando | pausada | concluida | cancelada
+  status        String   @default("rascunho")
+  total         Int      @default(0)
+  enviados      Int      @default(0)
+  falhas        Int      @default(0)
+  // Quem criou (auditoria) e ultimo erro geral, quando houver.
+  criadoPorId   String?  @map("criado_por_id")
+  criadoPorNome String?  @map("criado_por_nome")
+  erro          String?
+  iniciadoEm    DateTime? @map("iniciado_em")
+  concluidoEm   DateTime? @map("concluido_em")
+  criadoEm      DateTime @default(now()) @map("criado_em")
+  atualizadoEm  DateTime @updatedAt @map("atualizado_em")
+
+  destinatarios CampanhaDestinatario[]
+
+  @@index([status, criadoEm])
+  @@map("campanhas")
+}
+
+model CampanhaDestinatario {
+  id         String   @id @default(uuid())
+  campanhaId String   @map("campanha_id")
+  nome       String?
+  telefone   String
+  // pendente | enviado | erro
+  status     String   @default("pendente")
+  erro       String?
+  enviadoEm  DateTime? @map("enviado_em")
+  ordem      Int      @default(0)
+
+  campanha Campanha @relation(fields: [campanhaId], references: [id], onDelete: Cascade)
+
+  @@index([campanhaId, status])
+  @@index([campanhaId, ordem])
+  @@map("campanha_destinatarios")
+}

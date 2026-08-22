@@ -1,3 +1,4 @@
+const campanhaService = require("./modules/campanhas/campanha.service");
 const createApp = require("./app");
 const env = require("./config/env");
 const logger = require("./config/logger");
@@ -21,6 +22,9 @@ async function start() {
     // Encerramento por inatividade depende de alguem olhando o relogio: o motor
     // do chatbot so e acionado por mensagem recebida.
     inatividade.iniciar();
+    // Campanha que ficou "enviando" num restart vira "pausada": retomar e
+    // decisao humana, nao um disparo surpresa ao subir o servidor.
+    campanhaService.recuperarAposReinicio();
   });
 }
 

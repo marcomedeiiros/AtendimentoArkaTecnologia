@@ -2725,7 +2725,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               <div className="absolute right-0 top-full mt-2 w-[min(88vw,340px)] glass-panel border border-linha rounded-2xl shadow-2xl shadow-black/50 z-50 overflow-hidden fade-in">
                 <div className="p-3 bg-grafite-600 border-b border-linha flex items-center justify-between">
                   <div className="flex items-center gap-2 text-xs font-bold text-white">
-                    <Bell size={13} className="text-acao-200" /> Notificacoes
+                    <Bell size={13} className="text-acao-200" /> Notificações
                   </div>
                   {historico.length > 0 && (
                     <button onClick={() => limparHistorico && limparHistorico()}
