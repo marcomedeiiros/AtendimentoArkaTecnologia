@@ -1771,8 +1771,11 @@ function PainelChat({
             </div>
           </div>
         )}
+        {/* Chave pelo ID da mensagem (nao pelo indice): com indice, ao trocar a
+            mensagem otimista pela confirmada o React reaproveitava o mesmo no do
+            DOM e a bolha "piscava"/remontava. Otimista (sem id) cai no indice. */}
         {conversa.mensagens.map((m, i) => (
-          <div key={i} className={`group flex items-center gap-1 ${m.de === 'cliente' ? 'justify-start' : m.de === 'sistema' ? 'justify-center' : 'justify-end'}`}>
+          <div key={m.id || `tmp-${i}`} className={`group flex items-center gap-1 ${m.de === 'cliente' ? 'justify-start' : m.de === 'sistema' ? 'justify-center' : 'justify-end'}`}>
             {m.deletada ? (
               /* "Apagar para todos": some para o cliente no WhatsApp e vira este
                  aviso no chat ao vivo. O texto original continua no Registro
