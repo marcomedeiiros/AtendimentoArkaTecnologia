@@ -4,7 +4,7 @@ import {
   Play, RotateCcw, ZoomIn, ZoomOut, Maximize2, LayoutGrid,
   Sparkles, Layers, RefreshCw, X, ChevronUp, ChevronDown,
   Settings, AlertCircle, Pencil, Flame, Download, Upload, MessageSquare,
-  Power, PowerOff
+  Power, PowerOff, MoreHorizontal
 } from 'lucide-react';
 import { FluxosAPI } from '../../services/api';
 import { usePreferencia } from '../../hooks/usePreferencia';
@@ -722,6 +722,31 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
    * estado do bot é pior que um interruptor que falha na cara do operador.
    */
   const [alternandoAtivo, setAlternandoAtivo] = useState(false);
+  const [showFlowMenu, setShowFlowMenu] = useState(false);
+  const menuFluxoRef = useRef(null);
+
+  // Fechar o menu clicando fora e com Esc. Sem isto ele fica aberto por cima do
+  // canvas e o operador acha que travou.
+  useEffect(() => {
+    if (!showFlowMenu) return;
+    const foraDoMenu = (e) => {
+      if (menuFluxoRef.current && !menuFluxoRef.current.contains(e.target)) fecharMenuFluxo();
+    };
+    const aoTeclar = (e) => { if (e.key === 'Escape') fecharMenuFluxo(); };
+    const fecharMenuFluxo = () => {
+      setShowFlowMenu(false);
+      // As confirmacoes moram dentro do menu: se ficarem armadas, reabrir cai
+      // direto no "Excluir" sem a pessoa ter pedido isso de novo.
+      setShowDeleteConfirm(false);
+      setShowDeleteAllConfirm(false);
+    };
+    document.addEventListener('mousedown', foraDoMenu);
+    document.addEventListener('keydown', aoTeclar);
+    return () => {
+      document.removeEventListener('mousedown', foraDoMenu);
+      document.removeEventListener('keydown', aoTeclar);
+    };
+  }, [showFlowMenu, setShowDeleteConfirm, setShowDeleteAllConfirm]);
   const alternarAtivoFluxo = async () => {
     if (!flow || alternandoAtivo) return;
     const novo = !(flow.ativo !== false);
@@ -862,7 +887,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                         disabled={alternandoAtivo}
                         aria-pressed={flow.ativo !== false}
                         title={flow.ativo !== false
-                          ? 'Fluxo ATIVO: o bot responde por ele. Clique para pausar — nada é apagado.'
+                          ? 'Fluxo ATIVO: o bot responde por ele Clique para pausar nada é apagado.'
                           : 'Fluxo PAUSADO: o bot não responde por ele. Clique para ativar.'}
                         className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold border transition-all shrink-0 whitespace-nowrap disabled:opacity-50 ${
                           flow.ativo !== false
@@ -937,76 +962,135 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
             <Plus size={14} /> <span className="hidden md:inline">Novo Fluxo</span>
           </button>
 
-          {/* Importar/exportar so fazem sentido com um fluxo na tela: sem fluxo
-              nao ha o que exportar, e o import precisa de um alvo (ou do botao
-              "Novo Fluxo" antes) para nao criar registro solto. */}
+          {/* Ações que não são do dia a dia saem da barra e viram menu.
+              Importar, exportar e apagar competiam em tamanho e cor com o que se
+              usa toda hora -- e a barra estourava para DUAS linhas mesmo em tela
+              de 1400px, com "Apagar Todos" em vermelho como o item mais chamativo
+              do editor. Guardadas aqui, elas continuam a um clique de distância e
+              param de disputar espaço com o fluxo, o gatilho e o Simular. */}
           {fluxos.length > 0 && (
-            <>
+            <div className="relative shrink-0" ref={menuFluxoRef}>
               <button
-                onClick={() => jsonInputRef.current?.click()}
-                disabled={isImportando}
-                title="Importar fluxo de um arquivo .json"
-                aria-label="Importar fluxo de um arquivo JSON"
-                className="p-1 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 transition-all disabled:opacity-50 shrink-0"
+                onClick={() => setShowFlowMenu(v => !v)}
+                aria-haspopup="menu"
+                aria-expanded={showFlowMenu}
+                title="Mais ações deste fluxo"
+                aria-label="Mais ações deste fluxo"
+                className={`p-1.5 rounded-lg border transition-all ${
+                  showFlowMenu
+                    ? 'bg-grafite-600 border-acao/40 text-white'
+                    : 'bg-grafite-700 border-linha text-slate-400 hover:text-white'
+                }`}
               >
-                <Upload size={14} className={isImportando ? 'animate-pulse' : ''} />
+                <MoreHorizontal size={14} />
               </button>
-              <button
-                onClick={handleExportJson}
-                disabled={!flow}
-                title={flow ? 'Exportar este fluxo como .json' : 'Selecione um fluxo para exportar'}
-                aria-label="Exportar este fluxo como JSON"
-                className="p-1 rounded-lg bg-ativo/10 hover:bg-ativo/20 text-ativo-400 border border-ativo/30 transition-all disabled:opacity-50 shrink-0"
-              >
-                <Download size={14} />
-              </button>
-              <input
-                ref={jsonInputRef}
-                type="file"
-                accept="application/json,.json"
-                className="hidden"
-                onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; handleImportJson(f); }}
-              />
-            </>
-          )}
 
-          {fluxos.length > 0 && !showDeleteConfirm && !showDeleteAllConfirm && (
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              title="Deletar este fluxo"
-              className="px-2 py-1 rounded-lg bg-falha/10 hover:bg-falha/20 text-falha-400 text-xs font-semibold border border-falha/30 flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap"
-            >
-              <Trash2 size={14} /> <span className="hidden lg:inline">Deletar Fluxo</span>
-            </button>
-          )}
-          {showDeleteConfirm && (
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-falha/15 border border-falha/40 text-xs shrink-0 whitespace-nowrap">
-              <AlertCircle size={13} className="text-falha-400 shrink-0" />
-              <span className="text-falha-400 font-semibold hidden sm:inline">Excluir este fluxo?</span>
-              <span className="text-falha-400 font-semibold sm:hidden">Excluir?</span>
-              <button onClick={handleDeleteFlow} className="px-2 py-0.5 rounded-lg bg-falha hover:bg-falha-400 text-white font-bold transition-colors">Sim</button>
-              <button onClick={() => setShowDeleteConfirm(false)} className="px-2 py-0.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold transition-colors">Não</button>
+              {showFlowMenu && (
+                <div
+                  role="menu"
+                  className="absolute left-0 top-full mt-1 z-30 w-60 glass-panel border border-linha rounded-xl shadow-2xl p-1 flex flex-col gap-0.5"
+                >
+                  <button
+                    role="menuitem"
+                    onClick={() => { setShowFlowMenu(false); jsonInputRef.current?.click(); }}
+                    disabled={isImportando}
+                    className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold text-slate-200 hover:bg-grafite-600 disabled:opacity-50 transition-colors text-left"
+                  >
+                    <Upload size={13} className={`text-blue-400 shrink-0 ${isImportando ? 'animate-pulse' : ''}`} />
+                    Importar fluxo (.json)
+                  </button>
+                  <button
+                    role="menuitem"
+                    onClick={() => { setShowFlowMenu(false); handleExportJson(); }}
+                    disabled={!flow}
+                    className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold text-slate-200 hover:bg-grafite-600 disabled:opacity-50 transition-colors text-left"
+                  >
+                    <Download size={13} className="text-ativo-400 shrink-0" />
+                    Exportar este fluxo (.json)
+                  </button>
+
+                  <div className="h-px bg-linha my-1" />
+
+                  {/* Destrutivo confirma DENTRO do menu, com o nome do fluxo na
+                      pergunta: "Excluir este fluxo?" sem dizer qual é pedir para
+                      o operador apagar o errado. */}
+                  {!showDeleteConfirm ? (
+                    <button
+                      role="menuitem"
+                      onClick={() => { setShowDeleteAllConfirm(false); setShowDeleteConfirm(true); }}
+                      disabled={!flow}
+                      className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold text-falha-400 hover:bg-falha/15 disabled:opacity-50 transition-colors text-left"
+                    >
+                      <Trash2 size={13} className="shrink-0" /> Deletar este fluxo
+                    </button>
+                  ) : (
+                    <div className="rounded-lg bg-falha/10 border border-falha/30 p-2.5 flex flex-col gap-2">
+                      <p className="text-[11px] text-falha-400 font-semibold leading-snug">
+                        Excluir “{flow?.nome}”? Os blocos vão com ele, e não tem desfazer.
+                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => { setShowFlowMenu(false); handleDeleteFlow(); }}
+                          className="flex-1 px-2 py-1 rounded-lg bg-falha hover:bg-falha-400 text-white text-[11px] font-bold transition-colors"
+                        >
+                          Excluir
+                        </button>
+                        <button
+                          onClick={() => setShowDeleteConfirm(false)}
+                          className="flex-1 px-2 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-[11px] font-bold transition-colors"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-texto-fraco leading-snug">
+                        Para só calar o bot sem perder nada, use <strong>Pausado</strong> na barra.
+                      </p>
+                    </div>
+                  )}
+
+                  {!showDeleteAllConfirm ? (
+                    <button
+                      role="menuitem"
+                      onClick={() => { setShowDeleteConfirm(false); setShowDeleteAllConfirm(true); }}
+                      className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold text-falha-400 hover:bg-falha/15 transition-colors text-left"
+                    >
+                      <Flame size={13} className="shrink-0" /> Apagar todos os fluxos
+                    </button>
+                  ) : (
+                    <div className="rounded-lg bg-falha/15 border border-falha/50 p-2.5 flex flex-col gap-2">
+                      <p className="text-[11px] text-falha-400 font-bold leading-snug">
+                        Apagar TODOS os {fluxos.length} fluxos? O bot fica sem nenhuma automação.
+                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => { setShowFlowMenu(false); handleDeleteAllFlows(); }}
+                          className="flex-1 px-2 py-1 rounded-lg bg-falha hover:bg-falha-400 text-white text-[11px] font-extrabold transition-colors"
+                        >
+                          Apagar tudo
+                        </button>
+                        <button
+                          onClick={() => setShowDeleteAllConfirm(false)}
+                          className="flex-1 px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold transition-colors"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
-          {fluxos.length > 0 && !showDeleteAllConfirm && !showDeleteConfirm && (
-            <button
-              onClick={() => setShowDeleteAllConfirm(true)}
-              className="px-2 py-1 rounded-lg bg-falha-600/60 hover:bg-falha-600/80 text-falha-400 text-xs font-semibold border border-falha/50 flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap"
-              title="Apagar todos os fluxos cadastrados"
-            >
-              <Flame size={14} className="text-falha-400" /> <span className="hidden xl:inline">Apagar Todos</span>
-            </button>
-          )}
-          {showDeleteAllConfirm && (
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-falha-600 border border-falha-600 text-xs shrink-0 whitespace-nowrap">
-              <AlertCircle size={13} className="text-falha-400 shrink-0" />
-              <span className="text-falha-400 font-bold hidden sm:inline">Apagar TODOS os fluxos?</span>
-              <span className="text-falha-400 font-bold sm:hidden">Apagar tudo?</span>
-              <button onClick={handleDeleteAllFlows} className="px-2.5 py-0.5 rounded-lg bg-falha-600 hover:bg-falha text-white font-extrabold transition-colors">Apagar</button>
-              <button onClick={() => setShowDeleteAllConfirm(false)} className="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition-colors">Cancelar</button>
-            </div>
-          )}
+          {/* Fica FORA do menu de propósito: o input precisa existir no instante
+              do clique, e o menu se fecha antes de disparar o seletor. */}
+          <input
+            ref={jsonInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; handleImportJson(f); }}
+          />
         </div>
 
         {/* Espacador elastico: separa os dois grupos como um justify-between nas
@@ -1026,13 +1110,13 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
             <button onClick={handleRedo} disabled={historyIndex >= history.length - 1} className="p-1 text-slate-400 hover:text-white disabled:opacity-30" title="Refazer"><RefreshCw size={13} /></button>
           </div>
           <button onClick={handleAutoOrganize} title="Organizar blocos automaticamente" className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 border border-linha transition-colors shrink-0 whitespace-nowrap">
-            <LayoutGrid size={14} /> <span className="hidden lg:inline">Organizar</span>
+            <LayoutGrid size={14} /> <span className="hidden xl:inline">Organizar</span>
           </button>
           <button onClick={() => setShowSequencePanel(s => !s)} title="Painel de sequência" className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-all shrink-0 whitespace-nowrap ${showSequencePanel ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'bg-slate-800 text-slate-300 border-linha'}`}>
-            <Settings size={14} /> <span className="hidden lg:inline">Sequência</span>
+            <Settings size={14} /> <span className="hidden xl:inline">Sequência</span>
           </button>
           <button onClick={() => setShowLogsConsole(s => !s)} title="Console de execução" className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-all shrink-0 whitespace-nowrap ${showLogsConsole ? 'bg-acao/20 text-acao-200 border-acao/40' : 'bg-slate-800 text-slate-300 border-linha'}`}>
-            <Sparkles size={14} /> <span className="hidden lg:inline">Console</span> ({simLogs.length})
+            <Sparkles size={14} /> <span className="hidden xl:inline">Console</span> ({simLogs.length})
           </button>
           {/* "Testar" conversa com o motor real; "Simular" (ao lado) so percorre
               os blocos na tela. São coisas diferentes de proposito. */}
@@ -1042,7 +1126,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
             title="Conversar com o bot para testar este fluxo (não envia WhatsApp)"
             className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-all shrink-0 whitespace-nowrap disabled:opacity-50 ${showTestChat ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'bg-slate-800 text-slate-300 border-linha'}`}
           >
-            <MessageSquare size={14} /> <span className="hidden lg:inline">Testar</span>
+            <MessageSquare size={14} /> <span className="hidden xl:inline">Testar</span>
           </button>
           <button
             onClick={handleRunSimulation}
