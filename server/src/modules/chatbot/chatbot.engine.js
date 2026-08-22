@@ -38,6 +38,8 @@ const DEPENDENCIAS_PADRAO = {
 
 // Estados possiveis de `sessao.aguardando`:
 //   cnpj   -> proxima mensagem do cliente e tratada como CNPJ
+//   cnpj_confirma -> cliente recorrente: proxima mensagem e "sim"/"nao" para o
+//             CNPJ que ele ja usou em atendimentos anteriores
 //   menu   -> proxima mensagem e tratada como escolha numerica do menu de FLUXOS
 //   opcao  -> proxima mensagem e casada com as opcoes do passo atual
 //             (`config.opcoes`, vindo de fluxos importados)
@@ -46,6 +48,9 @@ const DEPENDENCIAS_PADRAO = {
 //   avaliacao_comentario -> proxima mensagem e o comentario livre da pesquisa
 const AGUARDANDO = {
   CNPJ: "cnpj",
+  // Cliente recorrente: em vez de pedir o CNPJ de novo, o bot mostra o que ele
+  // ja usou antes e espera "sim"/"nao" (ver memoria de contato em pedirCnpj).
+  CNPJ_CONFIRMA: "cnpj_confirma",
   MENU: "menu",
   OPCAO: "opcao",
   HUMANO: "humano",
@@ -515,6 +520,40 @@ class ChatbotEngine {
     }
   }
 
+  // MEMORIA DO CONTATO RECORRENTE.
+  //
+  // Quando o fluxo pede o CNPJ, primeiro olhamos se ESTE telefone ja confirmou
+  // um CNPJ em atendimento anterior. Se sim, em vez de mandar o cliente digitar
+  // tudo de novo, o bot mostra o que ele ja usou e pede so "sim"/"nao".
+  //
+  // Devolve { aguardando, resposta } para o passo usar. Sem memoria, cai no
+  // comportamento antigo (pedir o CNPJ digitado).
+  async _pedirOuConfirmarCnpj(conversa, textoDoPasso) {
+    const pedirNormal = { aguardando: AGUARDANDO.CNPJ, resposta: textoDoPasso };
+    try {
+      const anterior = await this.deps.conversaRepository.ultimoCnpjDoTelefone(
+        conversa.telefone,
+        conversa.id
+      );
+      if (!anterior?.cnpj) return pedirNormal;
+
+      const parceiro = await this.deps.parceiroRepository.findAtivoByCnpj(anterior.cnpj);
+      const empresa = parceiro?.razaoSocial ? `\n🏢 ${parceiro.razaoSocial}` : "";
+      return {
+        aguardando: AGUARDANDO.CNPJ_CONFIRMA,
+        resposta:
+          `Vi que você já foi atendido por aqui. O CNPJ continua sendo este?\n\n` +
+          `📄 ${mascararCnpj(anterior.cnpj)}${empresa}\n\n` +
+          `Responda *SIM* para confirmar ou *NÃO* para informar outro.`,
+        cnpjSugerido: anterior.cnpj,
+      };
+    } catch (e) {
+      // Memoria e conveniencia: se a consulta falhar, o atendimento nao para.
+      logger.warn("Falha ao consultar CNPJ anterior do contato", { message: e.message });
+      return pedirNormal;
+    }
+  }
+
   async validarCnpjRecebido(conversa, texto) {
     const cnpjLimpo = limparCnpj(texto);
     if (cnpjLimpo.length !== 14 || !cnpjValido(cnpjLimpo)) {
@@ -881,7 +920,11 @@ class ChatbotEngine {
         if (this.opcoesDoPasso(passo).length) {
           aguardando = AGUARDANDO.OPCAO;
         } else if (this.passoAguardaCnpj(passo) && !contexto.cnpjValidacao?.valido) {
-          aguardando = AGUARDANDO.CNPJ;
+          // Contato recorrente: oferece o CNPJ ja usado antes (ver memoria).
+          const pedido = await this._pedirOuConfirmarCnpj(conversa, resposta);
+          aguardando = pedido.aguardando;
+          resposta = pedido.resposta;
+          if (pedido.cnpjSugerido) contextoSessao = { cnpjSugerido: pedido.cnpjSugerido };
         } else {
           proximo = this.proximoPasso(fluxo.passos, passo);
         }
@@ -895,10 +938,14 @@ class ChatbotEngine {
           // validacao. Repetir aqui mandava a mesma mensagem duas vezes.
           proximo = this.proximoPasso(fluxo.passos, passo);
         } else {
-          aguardando = AGUARDANDO.CNPJ;
           // O texto tem que vir do passo. So caimos no padrao do motor quando
           // as respostas automaticas estao ligadas.
-          resposta = this.textoDoPasso(passo, contexto) || "";
+          const textoPasso = this.textoDoPasso(passo, contexto) || "";
+          // Contato recorrente: oferece o CNPJ ja usado antes (ver memoria).
+          const pedido = await this._pedirOuConfirmarCnpj(conversa, textoPasso);
+          aguardando = pedido.aguardando;
+          resposta = pedido.resposta;
+          if (pedido.cnpjSugerido) contextoSessao = { cnpjSugerido: pedido.cnpjSugerido };
         }
         break;
       }
@@ -1147,6 +1194,65 @@ class ChatbotEngine {
       return this.aplicarOpcao(escolha, contexto, sessao);
     }
 
+    // Cliente recorrente confirmando o CNPJ que ja usou antes.
+    if (sessao.aguardando === AGUARDANDO.CNPJ_CONFIRMA) {
+      const resp = this.normalizarTexto(textoEntrada);
+      const sim = ["sim", "s", "isso", "confirmo", "correto", "positivo", "ok", "sim!", "1"];
+      const nao = ["nao", "n", "outro", "errado", "negativo", "2"];
+
+      if (sim.includes(resp)) {
+        // Reaproveita o caminho normal de validacao: consulta parceiro, grava na
+        // conversa e devolve a mensagem de confirmacao.
+        const cnpjValidacao = await this.validarCnpjRecebido(
+          conversa,
+          sessao.contexto?.cnpjSugerido || ""
+        );
+        if (cnpjValidacao.valido) {
+          await this.enviarBot(conversa.id, telefone, cnpjValidacao.mensagem, instanceName);
+          contexto.cnpjValidacao = cnpjValidacao;
+          contexto.conversa = await this.deps.conversaRepository.findById(conversa.id);
+          // O passo que pediu o CNPJ cumpriu seu papel; segue para o proximo.
+          const seguinte = passoAtual ? this.proximoPasso(passos, passoAtual) : null;
+          const resultado = await this.percorrer(seguinte, contexto);
+          await this.deps.sessaoRepository.update(sessao.id, {
+            passoAtualId: resultado.passoAtual?.id || null,
+            aguardando: resultado.aguardando,
+            ativo: !!resultado.aguardando,
+            contexto: resultado.contextoSessao || { tentativasCnpj: 0, tentativasOpcao: 0 },
+          });
+          return {
+            fluxoId: fluxo.id,
+            aguardando: resultado.aguardando,
+            concluido: !resultado.aguardando,
+          };
+        }
+        // CNPJ guardado nao vale mais (ex.: base mudou): pede digitado.
+      } else if (!nao.includes(resp)) {
+        // Resposta que nao e sim nem nao: reforca a pergunta uma vez.
+        await this.enviarBot(
+          conversa.id,
+          telefone,
+          "Por favor, responda *SIM* para usar o mesmo CNPJ ou *NÃO* para informar outro.",
+          instanceName
+        );
+        return { conversaId: conversa.id, aguardando: AGUARDANDO.CNPJ_CONFIRMA };
+      }
+
+      // "nao" (ou sugestao invalida): volta a pedir o CNPJ digitado.
+      await this.enviarBot(
+        conversa.id,
+        telefone,
+        "Sem problema. Por favor, informe o *CNPJ* (pode enviar com ou sem pontuação).",
+        instanceName
+      );
+      await this.deps.sessaoRepository.update(sessao.id, {
+        aguardando: AGUARDANDO.CNPJ,
+        ativo: true,
+        contexto: { ...(sessao.contexto || {}), cnpjSugerido: null, tentativasCnpj: 0 },
+      });
+      return { conversaId: conversa.id, aguardando: AGUARDANDO.CNPJ };
+    }
+
     if (sessao.aguardando === AGUARDANDO.CNPJ) {
       const cnpjValidacao = await this.validarCnpjRecebido(conversa, textoEntrada);
 
@@ -1317,6 +1423,8 @@ class ChatbotEngine {
         sessaoEmCurso?.ativo &&
         [
           AGUARDANDO.OPCAO,
+          AGUARDANDO.CNPJ,
+          AGUARDANDO.CNPJ_CONFIRMA,
           AGUARDANDO.AVALIACAO_NOTA,
           AGUARDANDO.AVALIACAO_COMENTARIO,
         ].includes(sessaoEmCurso.aguardando);

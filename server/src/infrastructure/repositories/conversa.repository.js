@@ -50,6 +50,23 @@ class ConversaRepository {
     });
   }
 
+  // MEMORIA DO CONTATO: ultimo CNPJ confirmado por este telefone em atendimentos
+  // anteriores. Cada atendimento novo nasce sem CNPJ, entao sem isto o cliente
+  // recorrente precisa digitar tudo de novo. Busca leve (so os campos usados).
+  async ultimoCnpjDoTelefone(telefone, ignorarConversaId = null) {
+    if (!telefone) return null;
+    return prisma.conversa.findFirst({
+      where: {
+        telefone,
+        cnpj: { not: null },
+        cnpjVerificado: true,
+        ...(ignorarConversaId ? { id: { not: ignorarConversaId } } : {}),
+      },
+      orderBy: { atualizadoEm: "desc" },
+      select: { cnpj: true, cliente: true, atualizadoEm: true },
+    });
+  }
+
   // Versao LEVE: so os campos escalares (sem carregar todas as mensagens). Para
   // checagens rapidas (setor/telefone) sem o custo de puxar o historico inteiro.
   findByIdBasico(id) {

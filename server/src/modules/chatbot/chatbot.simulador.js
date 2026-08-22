@@ -16,7 +16,7 @@ const AppError = require("../../shared/errors/AppError");
 const TELEFONE_TESTE = "0000000000";
 const MAX_MENSAGENS = 40;
 
-function criarAmbiente({ fluxo, nomeCliente, horario, filas, agora, pesquisaAtiva = true }) {
+function criarAmbiente({ fluxo, nomeCliente, horario, filas, agora, pesquisaAtiva = true, cnpjAnterior = null }) {
   const respostas = [];
   const estado = {
     conversa: {
@@ -56,6 +56,9 @@ function criarAmbiente({ fluxo, nomeCliente, horario, filas, agora, pesquisaAtiv
       },
       vincularWaMessageId: async () => {},
       update: async (_id, dados) => Object.assign(estado.conversa, dados),
+      // Memoria de contato recorrente: no teste nao ha atendimento anterior
+      // (a nao ser que o operador passe `cnpjAnterior` nas opcoes).
+      ultimoCnpjDoTelefone: async () => (cnpjAnterior ? { cnpj: cnpjAnterior } : null),
     },
     sessaoRepository: {
       findByTelefone: async () => estado.sessao,
@@ -157,6 +160,9 @@ class ChatbotSimulador {
       horario: opcoes.respeitarHorario ? opcoes.horario : { ativo: false },
       filas: opcoes.filas || {},
       pesquisaAtiva: opcoes.pesquisaSatisfacao !== false,
+      // Permite testar o contato recorrente: `cnpjAnterior` simula um CNPJ ja
+      // confirmado por este telefone em atendimento anterior.
+      cnpjAnterior: opcoes.cnpjAnterior || null,
     });
 
     const turnos = [];
