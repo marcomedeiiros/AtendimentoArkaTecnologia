@@ -46,4 +46,20 @@ const authLimiter = rateLimit({
   },
 });
 
-module.exports = { webhookLimiter, apiLimiter, authLimiter };
+// Rotas de MIDIA (/midia e /anexo): ficam antes do authMiddleware porque o
+// <img>/<video> nao manda header -- quem autentica e o token assinado na URL.
+// Sem JWT na frente, um limite proprio evita que alguem com um link valido
+// martele o servidor puxando o mesmo video sem parar. Folgado para uso real:
+// uma conversa carrega varias midias de uma vez, e o navegador cacheia depois.
+const midiaLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: { code: "RATE_LIMIT", message: "Muitas requisicoes de midia" },
+  },
+});
+
+module.exports = { webhookLimiter, apiLimiter, authLimiter, midiaLimiter };

@@ -4,6 +4,7 @@ const conversaStream = require("./conversa.stream");
 const validate = require("../../shared/middlewares/validate.middleware");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
 const { exigirModulo } = require("../permissoes/modulo.middleware");
+const { midiaLimiter } = require("../../shared/middlewares/rateLimit.middleware");
 const {
   enviarMensagemSchema,
   iniciarConversaSchema,
@@ -25,7 +26,7 @@ router.get("/stream", (req, res) => conversaStream.stream(req, res));
 // Midia de uma mensagem, servida por URL (o <img>/<video> nao manda header
 // Authorization): autenticada pelo token assinado em ?t=. Tambem precisa vir
 // antes do authMiddleware global. Ver midiaToken.helper.
-router.get("/mensagens/:mensagemId/midia", (req, res, next) =>
+router.get("/mensagens/:mensagemId/midia", midiaLimiter, (req, res, next) =>
   conversaController.servirMidia(req, res).catch(next)
 );
 

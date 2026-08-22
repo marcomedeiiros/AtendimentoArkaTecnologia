@@ -1,6 +1,7 @@
 const conversaService = require("./conversa.service");
 const { success } = require("../../shared/helpers/response.helper");
 const { validarTokenMidia } = require("../../shared/helpers/midiaToken.helper");
+const { prepararRespostaMidia } = require("../../shared/helpers/midiaResposta.helper");
 
 class ConversaController {
   listar(req, res) {
@@ -78,13 +79,14 @@ class ConversaController {
         error: { code: "NOT_FOUND", message: "Mídia não encontrada" },
       });
     }
-    res.setHeader("Content-Type", midia.mimetype);
-    res.setHeader("Content-Length", midia.tamanho ?? midia.buffer.length);
-    // O conteudo de uma mensagem nunca muda: cache longo (o token ja limita o
-    // acesso). `private` para nao ficar em cache compartilhado de proxy.
-    res.setHeader("Cache-Control", "private, max-age=604800, immutable");
-    // Evita que um arquivo seja interpretado como outra coisa pelo navegador.
-    res.setHeader("X-Content-Type-Options", "nosniff");
+    // Cabecalhos seguros (allowlist de Content-Type, inline so para
+    // imagem/video/audio, nosniff, CSP sandbox, no-referrer) -- ver
+    // midiaResposta.helper.
+    prepararRespostaMidia(res, {
+      mimetype: midia.mimetype,
+      fileName: midia.fileName,
+      tamanho: midia.tamanho ?? midia.buffer?.length,
+    });
     // Arquivo em disco vai por STREAM (nao carrega o video inteiro na memoria).
     if (midia.stream) {
       midia.stream.on("error", () => res.destroy());

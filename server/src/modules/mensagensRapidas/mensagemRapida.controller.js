@@ -1,6 +1,7 @@
 const service = require("./mensagemRapida.service");
 const { success } = require("../../shared/helpers/response.helper");
 const { validarTokenMidia } = require("../../shared/helpers/midiaToken.helper");
+const { prepararRespostaMidia } = require("../../shared/helpers/midiaResposta.helper");
 
 class MensagemRapidaController {
   listar(req, res) {
@@ -25,10 +26,12 @@ class MensagemRapidaController {
         error: { code: "NOT_FOUND", message: "Anexo não encontrado" },
       });
     }
-    res.setHeader("Content-Type", anexo.mimetype);
-    res.setHeader("Content-Length", anexo.tamanho ?? anexo.buffer.length);
-    res.setHeader("Cache-Control", "private, max-age=604800, immutable");
-    res.setHeader("X-Content-Type-Options", "nosniff");
+    // Mesmos cabecalhos seguros da midia das conversas (ver midiaResposta.helper).
+    prepararRespostaMidia(res, {
+      mimetype: anexo.mimetype,
+      fileName: anexo.fileName,
+      tamanho: anexo.tamanho ?? anexo.buffer?.length,
+    });
     if (anexo.stream) {
       anexo.stream.on("error", () => res.destroy());
       return anexo.stream.pipe(res);

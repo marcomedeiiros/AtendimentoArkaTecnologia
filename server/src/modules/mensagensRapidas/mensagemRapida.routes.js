@@ -3,6 +3,7 @@ const controller = require("./mensagemRapida.controller");
 const validate = require("../../shared/middlewares/validate.middleware");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
 const { exigirModulo } = require("../permissoes/modulo.middleware");
+const { midiaLimiter } = require("../../shared/middlewares/rateLimit.middleware");
 const {
   criarMensagemRapidaSchema,
   atualizarMensagemRapidaSchema,
@@ -10,7 +11,7 @@ const {
 
 // Anexo servido por URL (o <img> nao manda header Authorization): autenticado
 // pelo token assinado em ?t=. Precisa vir ANTES do authMiddleware global.
-router.get("/:id/anexo", (req, res, next) => controller.servirAnexo(req, res).catch(next));
+router.get("/:id/anexo", midiaLimiter, (req, res, next) => controller.servirAnexo(req, res).catch(next));
 
 router.use(authMiddleware);
 

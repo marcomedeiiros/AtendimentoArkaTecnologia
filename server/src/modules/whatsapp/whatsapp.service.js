@@ -11,6 +11,11 @@ const env = require("../../config/env");
 const AppError = require("../../shared/errors/AppError");
 const { limparTelefone } = require("../../shared/helpers/cnpj.helper");
 
+// Teto da midia RECEBIDA do WhatsApp. O remetente e externo, entao este limite e
+// o que impede alguem de encher o disco mandando arquivos enormes. O proprio
+// WhatsApp ja limita perto disso.
+const MAX_MIDIA_RECEBIDA = 20 * 1024 * 1024;
+
 class WhatsAppService {
   constructor() {
     // instancia -> timestamp em que a vimos conectar (para "tempo online").
@@ -212,15 +217,28 @@ class WhatsAppService {
         // que inchava tudo). Se falhar, mantem inline para nao perder a midia.
         let salvo = null;
         try {
-          salvo = await midiaStorage.salvarDataUrl(url, mimetype);
+          // Teto explicito para midia RECEBIDA: o remetente e externo (qualquer
+          // um que tenha o numero), entao um arquivo enorme nao pode encher o
+          // disco. Acima disso a mensagem entra sem os bytes.
+          salvo = await midiaStorage.salvarDataUrl(url, mimetype, { maxBytes: MAX_MIDIA_RECEBIDA });
         } catch (e) {
           logger.warn("Falha ao gravar midia recebida em disco; mantendo inline", {
             message: e.message,
           });
         }
-        midia = salvo
-          ? { ...midia, arquivo: salvo.arquivo, mimetype }
-          : { ...midia, url, mimetype };
+        if (salvo) {
+          midia = { ...midia, arquivo: salvo.arquivo, mimetype };
+        } else {
+          // Nao gravou (grande demais ou falha): NAO guardamos o base64 no banco
+          // -- era justamente isso que inchava tudo. A mensagem entra sem os
+          // bytes e a Central mostra "[Midia indisponivel]".
+          logger.warn("Midia recebida nao armazenada (tamanho ou falha de escrita)", {
+            tipo: midia.tipo,
+            mimetype,
+            waMessageId: key?.id || null,
+          });
+          midia = { ...midia, mimetype };
+        }
       } else {
         // Sem bytes o audio vira "[Mídia indisponível]" na Central. Deixamos o
         // rastro no log para diagnosticar: quase sempre e o "Webhook Base64"

@@ -49,13 +49,26 @@ function caminhoAbsoluto(relativo) {
   return abs;
 }
 
+// Teto absoluto de um arquivo. É a última barreira: quem chama já valida o
+// tamanho, mas nada pode gravar em disco acima disto -- é o que impede um
+// arquivo gigante (ex.: vindo do WhatsApp, que ninguém controla) de encher o
+// disco do servidor.
+const MAX_BYTES_PADRAO = 25 * 1024 * 1024;
+
 /**
  * Grava os bytes de uma data URL (ou base64 cru) e devolve
  * { arquivo, mimetype, bytes } -- `arquivo` é o caminho RELATIVO para o banco.
- * Devolve null se não houver conteúdo utilizável.
+ * Devolve null se não houver conteúdo utilizável ou se exceder `maxBytes`.
  */
-async function salvarDataUrl(dataUrl, mimetypeSugerido = null) {
+async function salvarDataUrl(dataUrl, mimetypeSugerido = null, { maxBytes = MAX_BYTES_PADRAO } = {}) {
   if (typeof dataUrl !== "string" || !dataUrl) return null;
+
+  // Barra pelo tamanho da STRING antes de decodificar: não gasta CPU/memória
+  // montando um Buffer gigante só para descobrir que é grande demais.
+  if (dataUrl.length > Math.ceil((maxBytes * 4) / 3) + 1024) {
+    logger.warn("Midia recusada: acima do teto de bytes", { maxBytes });
+    return null;
+  }
 
   let base64 = dataUrl;
   let mimetype = mimetypeSugerido;
@@ -73,6 +86,10 @@ async function salvarDataUrl(dataUrl, mimetypeSugerido = null) {
     return null;
   }
   if (!buffer.length) return null;
+  if (buffer.length > maxBytes) {
+    logger.warn("Midia recusada apos decodificar: acima do teto", { bytes: buffer.length, maxBytes });
+    return null;
+  }
 
   // Subpasta por ano/mês: evita milhares de arquivos num diretório só.
   const agora = new Date();
