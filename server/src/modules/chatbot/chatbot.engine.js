@@ -427,6 +427,15 @@ class ChatbotEngine {
   // recusar/nao renderizar, cai para texto puro COM os numeros -- fallback que
   // nunca deixa o cliente sem menu.
   async enviarBotComOpcoes(conversaId, telefone, texto, opcoes, instanceName) {
+    // Botoes/listas interativos SO funcionam na API OFICIAL do WhatsApp. Na
+    // integracao atual (Baileys/Evolution) o WhatsApp nao renderiza e a Baileys
+    // chega a estourar ("this.isZero is not a function"). Por isso o padrao e
+    // mandar o menu em TEXTO (com as opcoes numeradas, que o cliente digita).
+    // Para ligar os botoes ao migrar para a API oficial: WHATSAPP_BOTOES_INTERATIVOS=true.
+    if (process.env.WHATSAPP_BOTOES_INTERATIVOS !== "true") {
+      return this.enviarBot(conversaId, telefone, texto, instanceName);
+    }
+
     const inst = instanceName || env.evolutionApi.instance;
     const corpo = this._corpoInterativo(texto);
     const msg = await this.deps.conversaRepository.addMensagem(conversaId, "bot", texto, null, null, {
