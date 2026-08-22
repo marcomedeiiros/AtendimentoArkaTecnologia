@@ -9,7 +9,7 @@ import { ChatbotAPI } from '../../services/api';
 function rotuloBotao(op, texto) {
   const num = (op.palavrasChave || []).find((k) => /^\d+$/.test(k));
   if (num && texto) {
-    const re = new RegExp(`(?:^|\\n)\\s*${num}[^-\\n]*[-–—]\\s*(.+)`, 'u');
+    const re = new RegExp(`(?:^|\\n)\\s*${num}[^-\\n]*[-–]\\s*(.+)`, 'u');
     const m = texto.match(re);
     if (m && m[1].trim()) return m[1].trim();
   }

@@ -43,6 +43,10 @@ const DEFINICOES = {
   //         "mensagemNotaInvalida": "..." }
   // Ligada por padrao; desligue com {"ativo": false}. So atua no modo "local".
   "chatbot.pesquisaSatisfacao": { padrao: () => process.env.CHATBOT_PESQUISA || "", segredo: false },
+  // Metas de SLA do Help Desk (painel de indicadores). JSON:
+  // { "respostaMin": 15, "resolucaoHoras": 24 }
+  // Antes eram constantes no codigo: mudar a meta exigia deploy.
+  "helpdesk.sla": { padrao: () => process.env.HELPDESK_SLA || "", segredo: false },
 };
 
 // Mascara em ASCII puro: caracteres como "•" se corrompem dependendo da
@@ -159,6 +163,21 @@ class ConfiguracaoService {
         p.mensagemNotaInvalida,
         "Por favor, responda apenas com um número de 1 a 5."
       ),
+    };
+  }
+
+  // Metas de SLA do Help Desk. Valores fora de faixa caem no padrao -- um SLA
+  // zerado ou absurdo faria o indicador mentir.
+  async slaHelpDesk() {
+    const c = await this._carregar();
+    const s = this._json(c["helpdesk.sla"], {});
+    const num = (valor, padrao, min, max) => {
+      const n = Number(valor);
+      return Number.isFinite(n) && n >= min && n <= max ? Math.round(n) : padrao;
+    };
+    return {
+      respostaMin: num(s.respostaMin, 15, 1, 24 * 60), // 1 min .. 24 h
+      resolucaoHoras: num(s.resolucaoHoras, 24, 1, 24 * 30), // 1 h .. 30 dias
     };
   }
 

@@ -403,7 +403,7 @@ class ChatbotEngine {
   _rotuloOpcao(op, texto) {
     const num = (op.palavrasChave || []).find((k) => /^\d+$/.test(k));
     if (num && texto) {
-      const re = new RegExp(`(?:^|\\n)\\s*${num}[^-\\n]*[-–—]\\s*(.+)`, "u");
+      const re = new RegExp(`(?:^|\\n)\\s*${num}[^-\\n]*[-–]\\s*(.+)`, "u");
       const m = texto.match(re);
       if (m && m[1].trim()) return m[1].trim();
     }
@@ -417,7 +417,7 @@ class ChatbotEngine {
   // os numeros, para o cliente nunca ficar sem opcao.)
   _corpoInterativo(texto) {
     const linhas = String(texto || "").split("\n");
-    const semOpcoes = linhas.filter((l) => !/^\s*\d+[^\p{L}\n]*[-–—]/u.test(l));
+    const semOpcoes = linhas.filter((l) => !/^\s*\d+[^\p{L}\n]*[-–]/u.test(l));
     const corpo = semOpcoes.join("\n").replace(/\n{3,}/g, "\n\n").trim();
     return corpo || "Escolha uma opção:";
   }

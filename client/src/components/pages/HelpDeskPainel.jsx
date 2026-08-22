@@ -7,9 +7,108 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Inbox, Timer, CheckCircle2, Gauge, Star, RefreshCw,
-  Loader2, AlertTriangle, Clock, TrendingUp
+  Loader2, AlertTriangle, Clock, TrendingUp, SlidersHorizontal, Save, Lock
 } from 'lucide-react';
-import { HelpDeskAPI } from '../../services/api';
+import { HelpDeskAPI, ConfiguracoesAPI } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
+
+/**
+ * Configuração das metas de SLA que alimentam os indicadores acima.
+ *
+ * As metas viviam como constantes no servidor: mudar de 15 min para 10 min
+ * exigia deploy. Agora ficam na tabela de Configuração (chave `helpdesk.sla`) e
+ * o painel recalcula na hora.
+ *
+ * Só quem tem o módulo "configuracoes" enxerga os campos -- e o servidor é a
+ * autoridade: a rota de salvar já exige esse módulo, então esconder aqui é
+ * apenas conveniência, não a proteção.
+ */
+function ConfigIndicadores({ sla, onSalvo }) {
+  const { usuario } = useAuth();
+  const permissoes = usuario?.permissoes;
+  const podeEditar = !Array.isArray(permissoes) || permissoes.includes('configuracoes');
+
+  const [respostaMin, setRespostaMin] = useState(sla?.respostaLimiteMin ?? 15);
+  const [resolucaoHoras, setResolucaoHoras] = useState(sla?.resolucaoLimiteHoras ?? 24);
+  const [salvando, setSalvando] = useState(false);
+  const [salvo, setSalvo] = useState(false);
+  const [erro, setErro] = useState('');
+
+  // Reflete o que veio do servidor quando as métricas são recarregadas.
+  useEffect(() => {
+    setRespostaMin(sla?.respostaLimiteMin ?? 15);
+    setResolucaoHoras(sla?.resolucaoLimiteHoras ?? 24);
+  }, [sla?.respostaLimiteMin, sla?.resolucaoLimiteHoras]);
+
+  async function salvar() {
+    setSalvando(true); setErro(''); setSalvo(false);
+    try {
+      await ConfiguracoesAPI.salvar({
+        'helpdesk.sla': JSON.stringify({
+          respostaMin: Number(respostaMin),
+          resolucaoHoras: Number(resolucaoHoras),
+        }),
+      });
+      setSalvo(true);
+      setTimeout(() => setSalvo(false), 3000);
+      onSalvo?.(); // recarrega os indicadores com a meta nova
+    } catch (e) {
+      setErro(e.message);
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  const campo = 'w-full bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-acao/50';
+
+  return (
+    <div className="glass-panel rounded-2xl p-5 border border-linha space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-bold text-white font-display flex items-center gap-2">
+          <SlidersHorizontal size={15} className="text-acao-200" /> Configurações de métricas e indicadores
+        </h3>
+        {!podeEditar && (
+          <span className="text-[10px] text-slate-500 flex items-center gap-1 shrink-0">
+            <Lock size={11} /> somente leitura
+          </span>
+        )}
+      </div>
+      <p className="text-[11px] text-slate-400 leading-relaxed">
+        Metas usadas para calcular o <strong className="text-slate-300">SLA</strong> dos indicadores acima.
+        Ao salvar, os números são recalculados na hora — vale para toda a equipe.
+      </p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="text-xs text-slate-400 block mb-1.5 font-medium">
+            Meta de 1ª resposta <span className="text-slate-500">(minutos)</span>
+          </label>
+          <input type="number" min="1" max="1440" className={campo} disabled={!podeEditar}
+            value={respostaMin} onChange={e => setRespostaMin(e.target.value)} />
+          <p className="mt-1 text-[10px] text-slate-500">Padrão: 15 min. Entre 1 min e 24 h.</p>
+        </div>
+        <div>
+          <label className="text-xs text-slate-400 block mb-1.5 font-medium">
+            Meta de resolução <span className="text-slate-500">(horas)</span>
+          </label>
+          <input type="number" min="1" max="720" className={campo} disabled={!podeEditar}
+            value={resolucaoHoras} onChange={e => setResolucaoHoras(e.target.value)} />
+          <p className="mt-1 text-[10px] text-slate-500">Padrão: 24 h. Entre 1 h e 30 dias.</p>
+        </div>
+      </div>
+
+      {erro && <p className="text-[11px] text-falha-400">{erro}</p>}
+
+      {podeEditar && (
+        <button onClick={salvar} disabled={salvando}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold transition-all disabled:opacity-60">
+          {salvando ? <Loader2 size={14} className="animate-spin" /> : salvo ? <CheckCircle2 size={14} /> : <Save size={14} />}
+          {salvando ? 'Salvando...' : salvo ? 'Salvo!' : 'Salvar metas'}
+        </button>
+      )}
+    </div>
+  );
+}
 
 function fmtDuracao(seg, amostra = 1) {
   if (!amostra) return '-';
@@ -180,6 +279,8 @@ export default function HelpDeskPainel() {
               </div>
             )}
           </div>
+
+          <ConfigIndicadores sla={dados.sla} onSalvo={carregar} />
 
           <p className="text-[10px] text-slate-500">
             Atualizado em {new Date(dados.geradoEm).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}.

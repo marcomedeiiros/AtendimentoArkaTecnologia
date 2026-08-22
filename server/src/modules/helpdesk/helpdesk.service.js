@@ -1,8 +1,5 @@
 const conversaRepository = require("../../infrastructure/repositories/conversa.repository");
-
-// Metas de SLA (poderiam virar configuraveis; por ora sao constantes claras).
-const SLA_RESPOSTA_MIN = 15; // 1a resposta em ate 15 min
-const SLA_RESOLUCAO_HORAS = 24; // fechar em ate 24 h
+const configuracaoService = require("../configuracoes/configuracao.service");
 
 const DIA = 86_400_000;
 const ms = (d) => (d ? new Date(d).getTime() : null);
@@ -12,6 +9,9 @@ class HelpDeskService {
   // Painel de suporte: tudo derivado das conversas/mensagens que ja existem no
   // banco -- nao ha tabela propria. So leitura.
   async obterMetricas() {
+    // Metas de SLA configuraveis (tela do Help Desk); caem no padrao 15min/24h.
+    const { respostaMin: SLA_RESPOSTA_MIN, resolucaoHoras: SLA_RESOLUCAO_HORAS } =
+      await configuracaoService.slaHelpDesk();
     const conversas = await conversaRepository.findAll();
     const agora = Date.now();
     const inicioHoje = new Date();

@@ -1,5 +1,5 @@
 /**
- * TESTE MANUAL (descartável) — botões e lista interativos via Evolution.
+ * TESTE MANUAL (descartável) botões e lista interativos via Evolution.
  *
  * Objetivo: descobrir se a sua instância (Evolution + WHATSAPP-BAILEYS) consegue
  * ENVIAR e RENDERIZAR botões/lista no celular do cliente, antes de a gente
@@ -15,7 +15,7 @@
  *   - Ou chegou só texto / mensagem vazia?
  *
  * O script imprime a resposta da API para cada tentativa. Se der erro de
- * formato, o payload varia conforme a versão da Evolution — me manda a saída que
+ * formato, o payload varia conforme a versão da Evolution me manda a saída que
  * eu ajusto. Pode apagar este arquivo depois do teste.
  */
 const evo = require("./src/infrastructure/external/evolution-api.client");
@@ -36,7 +36,7 @@ async function main() {
     console.log("Não consegui ler a versão:", e.message);
   }
 
-  // 1) BOTÕES DE RESPOSTA (máx. 3) — formato Evolution v2.
+  // 1) BOTÕES DE RESPOSTA (máx. 3) formato Evolution v2.
   const payloadBotoes = {
     number: numero,
     title: "Arka Tecnologia",
@@ -49,7 +49,7 @@ async function main() {
     ],
   };
 
-  // 2) LISTA (até 10 itens) — formato Evolution v2.
+  // 2) LISTA (até 10 itens) formato Evolution v2.
   const payloadLista = {
     number: numero,
     title: "Atendimento Arka",
