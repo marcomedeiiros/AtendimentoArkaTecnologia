@@ -1497,12 +1497,20 @@ function PainelChat({
   const enviarAnexo = useCallback(async () => {
     if (!anexo || enviandoMidia) return;
     setEnviandoMidia(true);
+    // Assinatura tambem na midia (igual ao texto): com a assinatura ligada, a
+    // legenda leva "*Nome*" na 1a linha -- mesmo sem texto digitado. (Audio nao
+    // tem legenda no WhatsApp, entao so vale para imagem/video/documento/gif.)
+    const legenda = texto.trim();
+    const assina = assinar && assinaturaNome && anexo.tipo !== 'audio';
+    const legendaFinal = assina
+      ? (legenda ? `*${assinaturaNome}*\n${legenda}` : `*${assinaturaNome}*`)
+      : legenda;
     const payload = {
       tipo: anexo.tipo,
       media: anexo.dataUrl,
       mimetype: anexo.mimetype,
       fileName: anexo.fileName,
-      ...(texto.trim() ? { caption: texto.trim() } : {})
+      ...(legendaFinal ? { caption: legendaFinal } : {})
     };
     const { promise, cancel } = onEnviarMidia(payload, (p) =>
       setAnexo((a) => (a ? { ...a, progresso: p } : a))
@@ -1520,7 +1528,7 @@ function PainelChat({
       cancelarRef.current = null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anexo, enviandoMidia, texto, onEnviarMidia, setTexto]);
+  }, [anexo, enviandoMidia, texto, onEnviarMidia, setTexto, assinar, assinaturaNome]);
 
   const aoRolar = useCallback(() => {
     const el = scrollRef.current;

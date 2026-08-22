@@ -278,28 +278,52 @@ class ConversaService {
       ? media
       : `data:${mimetype || "application/octet-stream"};base64,${media}`;
 
-    try {
-      if (tipo === "audio") {
-        await evolutionApi.sendWhatsAppAudio(conversa.telefone, paraEvolution, env.evolutionApi.instance);
-      } else if (tipo === "localizacao") {
-        await evolutionApi.sendLocation(conversa.telefone, { latitude, longitude, name, address }, env.evolutionApi.instance);
-      } else {
-        const mediatype = tipo === "imagem" ? "image" : tipo === "video" ? "video" : "document";
-        await evolutionApi.sendMedia(
-          conversa.telefone,
-          { mediatype, media: paraEvolution, mimetype, fileName, caption },
-          env.evolutionApi.instance
-        );
-      }
-    } catch (err) {
-      throw new AppError(`Falha ao enviar mídia pela Evolution: ${err.message}`, 502, "EVOLUTION_MEDIA_ERROR");
-    }
-
     const metadata = tipo === "localizacao"
       ? { tipo, latitude, longitude, name, address }
       : { tipo, url: urlBolha, mimetype: mimetype || null, fileName: fileName || null, caption: caption || null };
 
-    await conversaRepository.addMensagem(id, origem, caption || rotulos[tipo] || "[Mídia]", metadata);
+    // Cria a bolha ANTES de enviar (status "enviando"), para o ACK de
+    // entrega/leitura (messages.update) casar depois pelo waMessageId -- igual ao
+    // texto. Sem isso, a midia nunca ganhava os risquinhos.
+    const msgLocal = await conversaRepository.addMensagem(
+      id,
+      origem,
+      caption || rotulos[tipo] || "[Mídia]",
+      metadata,
+      null,
+      { status: "enviando" }
+    );
+
+    let waMessageId = null;
+    let envioOk = false;
+    try {
+      let r;
+      if (tipo === "audio") {
+        r = await evolutionApi.sendWhatsAppAudio(conversa.telefone, paraEvolution, env.evolutionApi.instance);
+      } else if (tipo === "localizacao") {
+        r = await evolutionApi.sendLocation(conversa.telefone, { latitude, longitude, name, address }, env.evolutionApi.instance);
+      } else {
+        // GIF animado: o WhatsApp NAO entrega como "image" -- tem que ir como
+        // "video" com gifPlayback. Por isso detectamos pelo mimetype.
+        const ehGif = String(mimetype || "").toLowerCase() === "image/gif";
+        const mediatype = ehGif
+          ? "video"
+          : tipo === "imagem" ? "image" : tipo === "video" ? "video" : "document";
+        r = await evolutionApi.sendMedia(
+          conversa.telefone,
+          { mediatype, media: paraEvolution, mimetype, fileName, caption, ...(ehGif ? { gifPlayback: true } : {}) },
+          env.evolutionApi.instance
+        );
+      }
+      waMessageId = r?.key?.id || null;
+      envioOk = true;
+    } catch (err) {
+      // Nao derruba a operacao: marca a bolha como "erro" (igual ao texto),
+      // em vez de estourar 502 e sumir com a mensagem.
+      logger.warn("Falha ao enviar mídia pela Evolution", { id, message: err.message });
+    }
+
+    await conversaRepository.vincularWaMessageId(msgLocal.id, waMessageId, envioOk ? "enviada" : "erro");
 
     const atualizada = await conversaRepository.findById(id);
     return this._emitir(atualizada);

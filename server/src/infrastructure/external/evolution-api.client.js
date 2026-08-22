@@ -224,8 +224,9 @@ class EvolutionApiClient {
   }
 
   // Envia imagem/video/documento. `media` aceita URL publica ou base64.
-  // mediatype: "image" | "video" | "document".
-  async sendMedia(number, { mediatype, media, mimetype, fileName, caption }, instance = this.defaultInstance) {
+  // mediatype: "image" | "video" | "document". `gifPlayback` faz um video curto
+  // tocar em loop como GIF (o WhatsApp nao entrega GIF animado como "image").
+  async sendMedia(number, { mediatype, media, mimetype, fileName, caption, gifPlayback }, instance = this.defaultInstance) {
     return this.request("POST", `/message/sendMedia/${instance}`, {
       number,
       mediatype,
@@ -233,6 +234,7 @@ class EvolutionApiClient {
       ...(mimetype ? { mimetype } : {}),
       ...(fileName ? { fileName } : {}),
       ...(caption ? { caption } : {}),
+      ...(gifPlayback ? { gifPlayback: true } : {}),
     });
   }
 
