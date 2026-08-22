@@ -21,7 +21,7 @@ import { useAppContext } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { ConversasAPI } from '../../services/api';
 import { usePreferencia } from '../../hooks/usePreferencia';
-import { mesclarConversa } from '../../utils/mesclarConversa';
+import { mesclarConversa, registrarApagada, desfazerApagada } from '../../utils/mesclarConversa';
 
 // O responsavel pelo atendimento agora vem do banco (conversa.atendenteNome /
 // atendenteId), compartilhado por toda a equipe. Antes vivia no localStorage e
@@ -2518,11 +2518,16 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
         ? { ...c, mensagens: c.mensagens.map(m => m.id === mensagem.id ? { ...m, deletada } : m) }
         : c
     ));
+    // Registra a exclusao num lugar que sobrevive a QUALQUER substituicao de
+    // estado (resposta HTTP, SSE, releitura de 30s). Sem isso, bastava um desses
+    // caminhos chegar com a versao antiga para a mensagem apagada voltar.
+    registrarApagada(mensagem.id);
     marcar(true);
     try {
       aplicarConversa(await ConversasAPI.apagarMensagem(mensagem.id));
     } catch (e) {
-      marcar(false); // desfaz a marcacao se o servidor recusar
+      desfazerApagada(mensagem.id); // servidor recusou: some com a marca
+      marcar(false);
       window.alert('Não foi possível apagar: ' + e.message);
     }
   }, [aplicarConversa, conversa, setConversas]);
