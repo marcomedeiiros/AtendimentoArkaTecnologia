@@ -44,13 +44,21 @@ export function mesclarConversa(atual, recebida) {
     mensagens = mensagens.map(m => (m.id && apagadas.has(m.id) ? { ...m, deletada: true } : m));
   }
 
-  // 2. Mantém as otimistas que o servidor ainda não devolveu.
   if (atual && Array.isArray(atual.mensagens)) {
-    const otimistas = atual.mensagens.filter(m => !m.id);
-    if (otimistas.length) {
-      const jaVeio = new Set(mensagens.map(m => `${m.de}|${m.texto}`));
-      const pendentes = otimistas.filter(m => !jaVeio.has(`${m.de}|${m.texto}`));
-      if (pendentes.length) mensagens = [...mensagens, ...pendentes];
+    // 2. Nenhuma mensagem já conhecida pode SUMIR. Uma atualização montada antes
+    //    da última mensagem (comum ao enviar vídeo: o upload demora e nesse meio
+    //    tempo chega um evento antigo) removia a recém-enviada, que só voltava
+    //    com F5. Mensagem nunca é removida no servidor (o apagar é soft-delete),
+    //    então manter o que já está na tela é sempre correto.
+    const idsRecebidos = new Set(mensagens.map(m => m.id).filter(Boolean));
+    const sumiram = atual.mensagens.filter(m => m.id && !idsRecebidos.has(m.id));
+
+    // 3. Mantém as otimistas (ainda sem id) que o servidor não devolveu.
+    const jaVeio = new Set(mensagens.map(m => `${m.de}|${m.texto}`));
+    const otimistas = atual.mensagens.filter(m => !m.id && !jaVeio.has(`${m.de}|${m.texto}`));
+
+    if (sumiram.length || otimistas.length) {
+      mensagens = [...mensagens, ...sumiram, ...otimistas];
     }
   }
 
