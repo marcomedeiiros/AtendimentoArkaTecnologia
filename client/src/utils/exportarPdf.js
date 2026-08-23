@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { hojeISO, FUSO_BR } from './data';
 
 const LOGO_URL = '/arka_tecnologia_logo-removebg-preview.png';
 const LARANJA = [249, 115, 22];
@@ -51,7 +52,7 @@ export async function exportarRelatorioPdf({ elemento, metricas = [], filtros = 
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(9);
   pdf.setTextColor(...CINZA);
-  pdf.text(`Gerado em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`, logo ? margem + 32 : margem, y + 11);
+  pdf.text(`Gerado em ${new Date().toLocaleString('pt-BR', { timeZone: FUSO_BR })}`, logo ? margem + 32 : margem, y + 11);
 
   y += 18;
   pdf.setDrawColor(...LARANJA);
@@ -178,14 +179,14 @@ export async function exportarRelatorioPdf({ elemento, metricas = [], filtros = 
     pdf.text(`Página ${i} de ${totalPgs}`, larguraPg - margem - 20, alturaPg - 8);
   }
 
-  pdf.save(`relatorio-arka-${new Date().toISOString().slice(0, 10)}.pdf`);
+  pdf.save(`relatorio-arka-${hojeISO()}.pdf`);
 }
 
 // Formata ISO -> data/hora pt-BR curta (ou '-').
 function fmtDataHora(iso) {
   if (!iso) return '-';
   const d = new Date(iso);
-  return isNaN(d.getTime()) ? '-' : d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' });
+  return isNaN(d.getTime()) ? '-' : d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: FUSO_BR });
 }
 
 /**
@@ -219,7 +220,7 @@ export async function exportarTranscricaoPdf(conversa, { atendente = '-', status
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(9);
   pdf.setTextColor(...CINZA);
-  pdf.text(`Gerado em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`, logo ? margem + 32 : margem, y + 11);
+  pdf.text(`Gerado em ${new Date().toLocaleString('pt-BR', { timeZone: FUSO_BR })}`, logo ? margem + 32 : margem, y + 11);
 
   y += 18;
   pdf.setDrawColor(...LARANJA);

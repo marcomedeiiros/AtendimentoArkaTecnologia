@@ -6,6 +6,7 @@ import {
 import { EmojiIcon } from '../components/pages/EmojiIcon';
 import { useAppContext } from '../context/AppContext';
 import { WhatsAppAPI } from '../services/api';
+import { FUSO_BR } from '../utils/data';
 
 // Enquanto a instancia nao pareia, o QR da Evolution expira em ~30s.
 const QR_REFRESH_MS = 25000;
@@ -33,7 +34,7 @@ function formatarDuracao(desde) {
 
 function formatarHora(iso) {
   if (!iso) return '-';
-  return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'America/Sao_Paulo' });
+  return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: FUSO_BR });
 }
 
 export default function WhatsAppPage() {

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { HelpDeskAPI, ConfiguracoesAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { FUSO_BR } from '../../utils/data';
 
 /**
  * Configuração das metas de SLA que alimentam os indicadores acima.
@@ -283,7 +284,7 @@ export default function HelpDeskPainel() {
           <ConfigIndicadores sla={dados.sla} onSalvo={carregar} />
 
           <p className="text-[10px] text-slate-500">
-            Atualizado em {new Date(dados.geradoEm).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}.
+            Atualizado em {new Date(dados.geradoEm).toLocaleString('pt-BR', { timeZone: FUSO_BR })}.
           </p>
         </>
       ) : null}

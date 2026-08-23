@@ -10,6 +10,7 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
 import { EmojiIcon } from './EmojiIcon';
 import { exportarRelatorioPdf } from '../../utils/exportarPdf';
+import { hojeISO, FUSO_BR } from '../../utils/data';
 import HelpDeskPainel from './HelpDeskPainel';
 import RegistroConversas from './RegistroConversas';
 
@@ -78,7 +79,7 @@ function MetricCard({ label, valor, icon: Icon, color, sublabel, onClick }) {
 function exportarRelatorio(metricas) {
   const linhas = [
     ['Relatório Arka Tecnologia',''],
-    ['Gerado em', new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })],
+    ['Gerado em', new Date().toLocaleString('pt-BR', { timeZone: FUSO_BR })],
     ['',''],
     ['Métrica','Valor'],
     ['Total de Atendimentos', metricas.totalAtendimentos],
@@ -93,7 +94,7 @@ function exportarRelatorio(metricas) {
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = `relatorio-arka-${new Date().toISOString().slice(0,10)}.csv`;
+  a.href = url; a.download = `relatorio-arka-${hojeISO()}.csv`;
   a.click(); URL.revokeObjectURL(url);
 }
 

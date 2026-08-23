@@ -8,12 +8,13 @@
 import { useState, useMemo } from 'react';
 import { Search, Download, FileText } from 'lucide-react';
 import { exportarTranscricaoPdf } from '../../utils/exportarPdf';
+import { FUSO_BR } from '../../utils/data';
 
 function fmtData(iso) {
   if (!iso) return '-';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '-';
-  return d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' });
+  return d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: FUSO_BR });
 }
 
 // Mesmo "protocolo" curto que a Central mostra (#408619D2): tira os hifens,

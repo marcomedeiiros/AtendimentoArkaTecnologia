@@ -10,12 +10,13 @@ import { Bug, Loader2, CheckCircle2, RotateCcw, Trash2, X, ShieldAlert, MapPin, 
 import { useAuth } from '../context/AuthContext';
 import { BugsAPI } from '../services/api';
 import Portal from '../components/Portal';
+import { FUSO_BR } from '../utils/data';
 
 function quando(iso) {
   if (!iso) return '';
   const d = new Date(iso);
-  const data = d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', timeZone: 'America/Sao_Paulo' });
-  const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+  const data = d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', timeZone: FUSO_BR });
+  const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: FUSO_BR });
   return `${data} · ${hora}`;
 }
 

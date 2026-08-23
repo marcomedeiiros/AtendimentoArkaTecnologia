@@ -10,6 +10,8 @@
 // passa por normalizacao antes de subir - caso contrario o POST volta 400 sem
 // explicacao nenhuma para o usuario.
 
+import { hojeISO } from '../../utils/data';
+
 export const TIPOS_PASSO = ['gatilho', 'mensagem', 'condicao', 'delay', 'acao', 'comentario', 'avaliacao'];
 
 // Gatilho curinga: o fluxo abre em qualquer mensagem em vez de esperar uma
@@ -283,5 +285,5 @@ export function nomeArquivoFluxo(nome) {
     .replace(/[^a-zA-Z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .toLowerCase() || 'fluxo';
-  return `fluxo-${slug}-${new Date().toISOString().slice(0, 10)}.json`;
+  return `fluxo-${slug}-${hojeISO()}.json`;
 }

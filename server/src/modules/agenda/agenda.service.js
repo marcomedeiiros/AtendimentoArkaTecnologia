@@ -1,9 +1,13 @@
 const repo = require("../../infrastructure/repositories/compromisso.repository");
 const { mapCompromisso } = require("../../shared/helpers/mapper.helper");
 const AppError = require("../../shared/errors/AppError");
+const { dataBrasilia } = require("../../shared/helpers/cnpj.helper");
 
+// Fuso de Brasilia, nao UTC. Com `toISOString()`, das 21h em diante o "hoje"
+// virava AMANHA -- e a limpeza abaixo passava a considerar o proprio dia como
+// passado, apagando compromisso concluido hoje mesmo.
 function hojeISO() {
-  return new Date().toISOString().slice(0, 10);
+  return dataBrasilia();
 }
 
 class AgendaService {

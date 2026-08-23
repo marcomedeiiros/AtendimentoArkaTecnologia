@@ -8,6 +8,7 @@ const {
   limparCnpj,
   cnpjValido,
   mascararCnpj,
+  partesBrasilia,
   sleep,
 } = require("../../shared/helpers/cnpj.helper");
 const { comLock } = require("../../shared/helpers/lock.helper");
@@ -106,7 +107,8 @@ class ChatbotEngine {
           ? "sem contrato de parceiro ativo"
           : "",
       "parceiro.razaoSocial": parceiro?.razaoSocial || "",
-      "data.hoje": new Date().toLocaleDateString("pt-BR"),
+      // Fuso de Brasilia: esta variavel vai no TEXTO que o cliente recebe.
+      "data.hoje": new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }),
       "atendente.nome": conversa.atendente?.nome || "",
       "empresa.nome": "",
     };
@@ -289,15 +291,19 @@ class ChatbotEngine {
     if (inicio === null || fim === null) return false;
 
     const dias = horario.dias?.length ? horario.dias : [1, 2, 3, 4, 5];
-    const minutos = agora.getHours() * 60 + agora.getMinutes();
+    // Hora e dia da semana no fuso de BRASILIA, nao do processo: o container roda
+    // em UTC, e com getHours() um expediente de 08:00-18:00 valia das 05:00 as
+    // 15:00 -- o bot calava no meio da tarde. Na sexta as 21h, getDay() ja dizia
+    // sabado e o expediente "acabava" um dia antes.
+    const { minutosDoDia: minutos, diaSemana } = partesBrasilia(agora);
 
     if (inicio <= fim) {
-      return !dias.includes(agora.getDay()) || minutos < inicio || minutos >= fim;
+      return !dias.includes(diaSemana) || minutos < inicio || minutos >= fim;
     }
     // Janela virando o dia: o "dia" vale para o trecho depois do inicio.
     const dentro =
-      (minutos >= inicio && dias.includes(agora.getDay())) ||
-      (minutos < fim && dias.includes((agora.getDay() + 6) % 7));
+      (minutos >= inicio && dias.includes(diaSemana)) ||
+      (minutos < fim && dias.includes((diaSemana + 6) % 7));
     return !dentro;
   }
 

@@ -5,12 +5,14 @@ import {
 } from 'lucide-react';
 import Portal from '../Portal';
 import { AgendaAPI } from '../../services/api';
+import { hojeISO, anoMesHoje } from '../../utils/data';
 
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
                'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const DIAS_SEMANA = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 
-function hojeISO() { return new Date().toISOString().slice(0,10); }
+// hojeISO vive em utils/data.js: era aqui que o "toISOString" (UTC) fazia a
+// Agenda virar o dia as 21h de Brasilia.
 
 function diasNoMes(ano, mes) { return new Date(ano, mes + 1, 0).getDate(); }
 
@@ -137,8 +139,8 @@ function ModalCompromisso({ compromisso, onSalvar, onFechar, salvando }) {
 }
 
 function MiniCalendario({ compromissos, dataFoco, setDataFoco }) {
-  const [ano, setAno]   = useState(() => new Date().getFullYear());
-  const [mes, setMes]   = useState(() => new Date().getMonth());
+  const [ano, setAno]   = useState(() => anoMesHoje().ano);
+  const [mes, setMes]   = useState(() => anoMesHoje().mes);
 
   const hoje = hojeISO();
   const totalDias = diasNoMes(ano, mes);

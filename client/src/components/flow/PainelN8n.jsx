@@ -4,12 +4,13 @@ import {
   CheckCircle2, XCircle, Clock, Pencil
 } from 'lucide-react';
 import { N8nAPI } from '../../services/api';
+import { FUSO_BR } from '../../utils/data';
 
 function formatarData(iso) {
   if (!iso) return '-';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '-';
-  return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+  return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: FUSO_BR });
 }
 
 function formatarDuracao(ms) {

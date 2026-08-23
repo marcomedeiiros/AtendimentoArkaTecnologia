@@ -75,6 +75,43 @@ function formatarHora(date = new Date()) {
   });
 }
 
+// Data (YYYY-MM-DD) no fuso de Brasilia. Mesmo motivo do formatarHora acima: o
+// servidor roda em UTC no Docker, e `toISOString().slice(0,10)` das 21h em
+// diante ja devolve o dia SEGUINTE -- o que fazia a agenda tratar hoje como
+// passado (e apagar concluido do proprio dia). "en-CA" da exatamente
+// YYYY-MM-DD.
+function dataBrasilia(date = new Date()) {
+  const d = date instanceof Date ? date : new Date(date);
+  return d.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+}
+
+// Hora/minuto e dia da semana EM BRASILIA, para regra de expediente.
+//
+// `date.getHours()` e `date.getDay()` usam o fuso do PROCESSO -- e o container
+// roda em UTC. Com isso, um expediente configurado como 08:00-18:00 valia, na
+// pratica, das 05:00 as 15:00 de Brasilia: o bot calava no meio da tarde e
+// respondia de madrugada. Na sexta as 21h o `getDay()` ja dizia sabado.
+const DIAS_SEMANA = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+const formatadorPartes = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/Sao_Paulo",
+  weekday: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+function partesBrasilia(date = new Date()) {
+  const d = date instanceof Date ? date : new Date(date);
+  const partes = {};
+  for (const p of formatadorPartes.formatToParts(d)) partes[p.type] = p.value;
+  // Meia-noite sai como "24" em alguns ICU: o % 24 normaliza.
+  const hora = Number(partes.hour) % 24;
+  return {
+    minutosDoDia: hora * 60 + Number(partes.minute),
+    diaSemana: DIAS_SEMANA[partes.weekday] ?? 0,
+  };
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -86,5 +123,7 @@ module.exports = {
   limparTelefone,
   normalizarTelefoneBr,
   formatarHora,
+  dataBrasilia,
+  partesBrasilia,
   sleep,
 };

@@ -4,7 +4,13 @@ const env = require("./env");
 const logger = winston.createLogger({
   level: env.nodeEnv === "production" ? "info" : "debug",
   format: winston.format.combine(
-    winston.format.timestamp(),
+    // Horario de BRASILIA no log. O timestamp padrao do winston e UTC: quem lia
+    // o log via "00:47" para um evento que aconteceu as 21:47, e comparar com o
+    // relato de um atendente exigia fazer a conta de cabeca.
+    winston.format.timestamp({
+      format: () =>
+        new Date().toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" }).replace(" ", "T"),
+    }),
     winston.format.errors({ stack: true }),
     winston.format.json()
   ),

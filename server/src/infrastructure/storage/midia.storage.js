@@ -22,6 +22,7 @@ const fsp = require("fs/promises");
 const path = require("path");
 const crypto = require("crypto");
 const logger = require("../../config/logger");
+const { dataBrasilia } = require("../../shared/helpers/cnpj.helper");
 
 const BASE_DIR = path.resolve(process.env.MEDIA_DIR || path.join(process.cwd(), "dados", "midia"));
 
@@ -93,7 +94,10 @@ async function salvarDataUrl(dataUrl, mimetypeSugerido = null, { maxBytes = MAX_
 
   // Subpasta por ano/mês: evita milhares de arquivos num diretório só.
   const agora = new Date();
-  const subpasta = path.join(String(agora.getFullYear()), String(agora.getMonth() + 1).padStart(2, "0"));
+  // Ano/mes de BRASILIA: no dia 1o as 21h, o processo em UTC criava a pasta do
+  // mes seguinte e a midia do mes ficava dividida em duas.
+  const [ano, mes] = dataBrasilia(agora).split("-");
+  const subpasta = path.join(ano, mes);
   const nome = `${crypto.randomUUID()}.${extensaoDe(mimetype)}`;
   const relativo = path.join(subpasta, nome);
 

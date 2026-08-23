@@ -5,6 +5,7 @@ import {
   AlertTriangle, FileText, X, RotateCcw, Download
 } from 'lucide-react';
 import { CampanhasAPI } from '../../services/api';
+import { FUSO_BR } from '../../utils/data';
 
 
 // A campanha vive no SERVIDOR (tabela `campanhas`), nao mais no localStorage.
@@ -120,7 +121,7 @@ function ItemLog({ entry }) {
 function exportarLog(logs, campanha) {
   const csv = [
     ['Campanha', campanha],
-    ['Exportado em', new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })],
+    ['Exportado em', new Date().toLocaleString('pt-BR', { timeZone: FUSO_BR })],
     [''],
     ['Nome','Telefone','Status','Horário'],
     ...logs.map(l => [l.nome, l.telefone || '', l.status, l.hora]),
@@ -170,7 +171,7 @@ export default function EnvioEmMassa({ conversas = [] }) {
             motivo: d.erro || null,
             hora: d.enviadoEm
               ? new Date(d.enviadoEm).toLocaleTimeString('pt-BR', {
-                  hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'America/Sao_Paulo',
+                  hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: FUSO_BR,
                 })
               : '',
           }))

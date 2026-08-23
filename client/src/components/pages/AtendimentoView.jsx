@@ -22,6 +22,7 @@ import { useAuth } from '../../context/AuthContext';
 import { ConversasAPI, ContatosAPI } from '../../services/api';
 import { usePreferencia } from '../../hooks/usePreferencia';
 import { contatoCombina, normalizarBusca, telefoneComparavel } from '../../utils/busca';
+import { FUSO_BR } from '../../utils/data';
 import { mesclarConversa, registrarApagada, desfazerApagada } from '../../utils/mesclarConversa';
 
 // O responsavel pelo atendimento agora vem do banco (conversa.atendenteNome /
@@ -45,9 +46,8 @@ function tempoRelativo(ts) {
   return `ha ${Math.floor(h / 24)}d`;
 }
 
-// Fuso fixo de Brasilia: horarios sempre batem com o de Brasilia,
-// independentemente do fuso da maquina do atendente.
-const FUSO_BR = 'America/Sao_Paulo';
+// O fuso de Brasilia vive em utils/data.js: UMA definicao para o projeto todo,
+// em vez de a string 'America/Sao_Paulo' repetida em cada tela.
 
 // "há 2 min / há 1 h / ontem / 12/03" a partir de um ISO (ultima mensagem).
 function tempoDesde(iso) {

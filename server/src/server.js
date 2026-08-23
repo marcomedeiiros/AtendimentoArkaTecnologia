@@ -1,3 +1,14 @@
+// FUSO DO PROCESSO, antes de qualquer require: o container roda em UTC, e tudo
+// que usa a hora local do processo (getHours, getDay, toLocaleString sem
+// timeZone, timestamp de log) sai 3 horas adiantado. Definir aqui alinha o
+// projeto INTEIRO de uma vez, inclusive codigo futuro que esqueca de fixar o
+// fuso. `TZ` no ambiente continua tendo prioridade -- isto e o padrao, nao uma
+// imposicao.
+//
+// Nao substitui os helpers explicitos (dataBrasilia/partesBrasilia): eles
+// continuam corretos mesmo se o processo subir com outro TZ. Duas camadas.
+process.env.TZ = process.env.TZ || "America/Sao_Paulo";
+
 const campanhaService = require("./modules/campanhas/campanha.service");
 const createApp = require("./app");
 const env = require("./config/env");
