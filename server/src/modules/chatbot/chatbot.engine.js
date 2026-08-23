@@ -792,6 +792,11 @@ class ChatbotEngine {
   // comentario. Ao final agradece e encerra a sessao da pesquisa.
   async continuarPesquisaSatisfacao(sessao, ctx, textoEntrada) {
     const { conversa, telefone, instanceName } = ctx;
+    // A nota pertence a conversa que FOI AVALIADA (a da sessao), nao a que
+    // trouxe a mensagem. Normalmente sao a mesma agora, mas manter o alvo
+    // explicito e o que garante que a nota nunca mais caia numa conversa que
+    // ninguem atendeu, mesmo se o desvio do webhook falhar.
+    const alvoId = sessao.conversaId || conversa.id;
     // Passo "avaliacao" do fluxo guarda a config dele no contexto da sessao;
     // fora isso, cai na config global (pesquisa automatica ao encerrar).
     const cfg = sessao.contexto?.pesquisaCfg || (await this.deps.configuracaoService.pesquisaSatisfacao());
@@ -812,8 +817,8 @@ class ChatbotEngine {
         return { processado: true, conversaId: conversa.id, aguardando: AGUARDANDO.AVALIACAO_NOTA };
       }
 
-      await this.deps.conversaRepository.update(conversa.id, { avaliacao: nota });
-      await this._emitirConversa(conversa.id);
+      await this.deps.conversaRepository.update(alvoId, { avaliacao: nota });
+      await this._emitirConversa(alvoId);
 
       // Pediu comentario? avanca; senao agradece e encerra.
       if (cfg.pedirComentario) {
@@ -839,10 +844,10 @@ class ChatbotEngine {
     const pular = ["pular", "nao", "nao quero", "-", "n"];
     const ehPular = !comentario || pular.includes(this.normalizarTexto(comentario));
     if (!ehPular) {
-      await this.deps.conversaRepository.update(conversa.id, {
+      await this.deps.conversaRepository.update(alvoId, {
         feedback: comentario.slice(0, 1000),
       });
-      await this._emitirConversa(conversa.id);
+      await this._emitirConversa(alvoId);
     }
     await this.enviarBot(conversa.id, telefone, cfg.mensagemAgradecimento, instanceName);
     return this.finalizarPesquisa(ctx, sessao);
@@ -1354,7 +1359,24 @@ class ChatbotEngine {
     const textoMsg = ehMidia ? (textoLimpo || rotulos[midia.tipo] || "[Mídia]") : textoLimpo;
     const metadata = ehMidia ? midia : null;
 
-    let conversa = await this.deps.conversaRepository.findByTelefone(instanciaId, telefone);
+    // RESPOSTA DA PESQUISA DE SATISFACAO: a conversa avaliada JA ESTA FECHADA, e
+    // findByTelefone (de proposito) so olha pendente/aberta. Sem este desvio, a
+    // nota do cliente criava uma conversa NOVA e era gravada nela -- uma conversa
+    // que ninguem atendeu e sem nome de cliente. Era isso que fazia a coluna
+    // "Atendente" das avaliacoes dizer "Bot" mesmo em atendimento humano, e ainda
+    // deixava uma conversa-fantasma na lista de Fechadas a cada avaliacao.
+    let conversa = null;
+    const sessaoAberta = await this.deps.sessaoRepository.findByTelefone(instanciaId, telefone);
+    const respondendoPesquisa =
+      sessaoAberta?.ativo &&
+      sessaoAberta.conversaId &&
+      !this.sessaoExpirada(sessaoAberta) &&
+      (sessaoAberta.aguardando === AGUARDANDO.AVALIACAO_NOTA ||
+        sessaoAberta.aguardando === AGUARDANDO.AVALIACAO_COMENTARIO);
+    if (respondendoPesquisa) {
+      conversa = await this.deps.conversaRepository.findById(sessaoAberta.conversaId);
+    }
+    if (!conversa) conversa = await this.deps.conversaRepository.findByTelefone(instanciaId, telefone);
     if (!conversa) {
       conversa = await this.deps.conversaRepository.create({
         instanciaId,
