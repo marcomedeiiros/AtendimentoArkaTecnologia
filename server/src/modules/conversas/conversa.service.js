@@ -200,11 +200,23 @@ class ConversaService {
     exigirAcessoSetor(userCargo, conversa?.setor);
   }
 
-  async enviarMensagem(id, texto, origem = "equipe", respondendoAId = null, userCargo = null) {
+  async enviarMensagem(id, texto, origem = "equipe", respondendoAId = null, userCargo = null, autor = null) {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
     exigirAcessoSetor(userCargo, conversa.setor);
     this._exigirAberta(conversa, origem);
+
+    // QUEM RESPONDE, ATENDE.
+    //
+    // Antes o responsavel so era gravado por quem clicava em "Atender". Quem
+    // abria a conversa e ja respondia -- o caminho mais natural, e o normal
+    // depois de reabrir uma conversa fechada -- atendia sem ficar registrado em
+    // lugar nenhum. Resultado: a coluna "Atendente" das Avaliacoes ficava com
+    // "-" mesmo em atendimento feito por pessoa, porque a nota chega no
+    // fechamento e ali nao havia responsavel nenhum.
+    //
+    // Nao rouba conversa de ninguem: so assume quando esta sem responsavel.
+    await this._registrarAtendente(conversa, origem, autor);
 
     // "Responder" do WhatsApp: cita a mensagem original na bolha do cliente.
     let quoted = null;
@@ -269,11 +281,13 @@ class ConversaService {
   // registra a mensagem. `media` aceita URL pública ou base64 (data URL). Para
   // a bolha do operador renderizar de volta, guardamos a própria mídia em
   // metadata.url.
-  async enviarMidia(id, payload, origem = "equipe", userCargo = null) {
+  async enviarMidia(id, payload, origem = "equipe", userCargo = null, autor = null) {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
     exigirAcessoSetor(userCargo, conversa.setor);
     this._exigirAberta(conversa, origem);
+    // Mandar foto/audio tambem e atender (mesma regra do texto).
+    await this._registrarAtendente(conversa, origem, autor);
 
     const { tipo, media, mimetype, fileName, caption, latitude, longitude, name, address } = payload;
     const rotulos = {
@@ -594,6 +608,33 @@ class ConversaService {
     return this._emitir(await conversaRepository.findById(id));
   }
 
+  /**
+   * Marca quem esta atendendo, quando a conversa esta sem responsavel.
+   *
+   * Grava as DUAS coisas de proposito: `atendenteId` (responsavel ATUAL, que e
+   * limpo se a conversa voltar para a fila) e `ultimoAtendenteNome` (historico,
+   * que sobrevive a isso e e o que alimenta a coluna "Atendente" das
+   * avaliacoes). Sem o segundo, o relatorio esquece quem atendeu.
+   *
+   * Silencioso por design: e efeito colateral de responder/reabrir, nao a acao
+   * pedida. Se falhar, a mensagem do operador nao pode deixar de sair.
+   */
+  async _registrarAtendente(conversa, origem, autor) {
+    if (origem !== "equipe" || !autor?.sub) return;
+    if (conversa.atendenteId) return; // ja tem responsavel: nao rouba
+    try {
+      const usuario = await usuarioRepository.findById(autor.sub);
+      if (!usuario) return;
+      await conversaRepository.update(conversa.id, {
+        atendenteId: usuario.id,
+        ultimoAtendenteNome: usuario.nome,
+        atendidoEm: conversa.atendidoEm || new Date(),
+      });
+    } catch (e) {
+      logger.warn("Nao foi possivel registrar o atendente", { id: conversa.id, message: e.message });
+    }
+  }
+
   async atualizarStatus(id, status, userCargo = null, autor = null) {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
@@ -609,6 +650,13 @@ class ConversaService {
       // Reabertura: limpa o fechamento e garante marca de atendimento.
       data.fechadoEm = null;
       data.atendidoEm = conversa.atendidoEm || new Date();
+      // Quem reabre assume, se ninguem assumiu. Antes a conversa voltava a
+      // ficar aberta SEM responsavel, e o atendimento inteiro corria anonimo --
+      // era um dos caminhos que deixava a coluna "Atendente" vazia na avaliacao.
+      if (!conversa.atendenteId && autor?.sub) {
+        data.atendenteId = autor.sub;
+        if (autor.nome) data.ultimoAtendenteNome = autor.nome;
+      }
     } else if (status === "pendente") {
       // Volta para a fila: perde o responsavel -- a badge some enquanto pendente.
       data.atendenteId = null;

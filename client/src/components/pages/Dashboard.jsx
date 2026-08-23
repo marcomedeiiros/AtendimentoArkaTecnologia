@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useCallback } from 'react';
 import {
   Users, ShieldCheck, Clock, TrendingUp,
   Download, ArrowRight, Activity, CheckCircle2, Inbox,
-  BarChart3, FileText, Loader2, Star, MessageCircle, X, LifeBuoy, ClipboardList, UserCheck
+  BarChart3, FileText, Loader2, Star, MessageCircle, X, LifeBuoy, ClipboardList, UserCheck, Bot
 } from 'lucide-react';
 // So o Doughnut sobrou nesta tela: ele precisa de ArcElement. Escalas e
 // elementos de linha/barra ficaram registrados sem grafico que os usasse.
@@ -647,15 +647,29 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                           </div>
                         </td>
                         {/* Quem atendeu: e o dado que liga a nota a uma pessoa.
-                            Conversa sem responsavel (bot/fila) fica com "-". */}
+                            Sem responsavel, o "-" nao dizia NADA -- podia ser
+                            atendimento do bot ou pessoa que respondeu sem
+                            assumir. Agora separamos os dois casos: sem ninguem
+                            ter aberto (`atendidoEm` vazio) foi o bot; com
+                            `atendidoEm` e sem nome, alguem atendeu antes do
+                            registro existir e isso fica dito como "nao
+                            registrado", em vez de virar um tracinho mudo. */}
                         <td className="py-2.5 px-3">
                           {(c.atendenteNome || c.ultimoAtendenteNome) ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/15 text-purple-300 border border-purple-500/30"
                               title={c.atendenteCargo ? `${c.atendenteNome} · ${c.atendenteCargo}` : (c.atendenteNome || c.ultimoAtendenteNome)}>
                               <UserCheck size={10} /> {c.atendenteNome || c.ultimoAtendenteNome}
                             </span>
+                          ) : c.atendidoEm ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-600/30 text-slate-400 border border-linha"
+                              title="Uma pessoa atendeu, mas o responsável não ficou registrado (atendimento anterior a este registro).">
+                              <UserCheck size={10} /> não registrado
+                            </span>
                           ) : (
-                            <span className="text-slate-500">-</span>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-acao/10 text-acao-200 border border-acao/30"
+                              title="Atendimento feito só pelo chatbot: ninguém da equipe assumiu esta conversa.">
+                              <Bot size={10} /> Bot
+                            </span>
                           )}
                         </td>
                         <td className="py-2.5 px-3">

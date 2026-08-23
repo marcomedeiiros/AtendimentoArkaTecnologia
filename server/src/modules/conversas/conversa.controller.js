@@ -18,7 +18,9 @@ class ConversaController {
 
   enviarMensagem(req, res) {
     return conversaService
-      .enviarMensagem(req.params.id, req.body.texto, "equipe", req.body.respondendoAId, req.user?.cargo)
+      // `req.user` vai junto para o service poder registrar QUEM respondeu como
+      // atendente quando a conversa ainda nao tem responsavel.
+      .enviarMensagem(req.params.id, req.body.texto, "equipe", req.body.respondendoAId, req.user?.cargo, req.user)
       .then((data) => success(res, data));
   }
 
@@ -50,7 +52,7 @@ class ConversaController {
   }
 
   enviarMidia(req, res) {
-    return conversaService.enviarMidia(req.params.id, req.body, "equipe", req.user?.cargo).then((data) => success(res, data));
+    return conversaService.enviarMidia(req.params.id, req.body, "equipe", req.user?.cargo, req.user).then((data) => success(res, data));
   }
 
   transcreverAudio(req, res) {
