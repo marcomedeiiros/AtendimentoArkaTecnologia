@@ -1,10 +1,10 @@
 /**
- * Utilitário para formatação segura de assinaturas de mensagens (texto e mídias).
+ * Utilitário para formatação segura de assinaturas de mensagens de texto.
  *
  * Defesa em profundidade:
- * 1. NUNCA duplica assinatura se o texto já possui o nome do operador no início ou no fim.
- * 2. NUNCA assina áudio (áudios no WhatsApp não possuem legenda/texto).
- * 3. Normaliza espaços e quebras de linha para evitar poluição visual.
+ * 1. NUNCA duplica assinatura se o texto já possui o nome do operador no início, no meio ou no fim.
+ * 2. Mídias (imagem, vídeo, áudio, documentos) NÃO levam assinatura automática.
+ * 3. Normaliza quebras de linha e higieniza espaços.
  */
 
 export function formatarComAssinatura(texto, assinar, nome) {
@@ -17,8 +17,7 @@ export function formatarComAssinatura(texto, assinar, nome) {
   // Escapar caracteres especiais para uso seguro em RegExp
   const nomeEscapado = nomeLimpo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-  // Caso 1: O texto é exatamente o nome (com ou sem asteriscos, espaços ou dois pontos)
-  // Ex: "Marco Medeiros" ou "*Marco Medeiros*" ou "*Marco Medeiros*:"
+  // Caso 1: O texto é exatamente o nome
   const regexExato = new RegExp(`^\\*?\\s*${nomeEscapado}\\s*\\*?:?$`, 'i');
   if (regexExato.test(limpo)) {
     return `*${nomeLimpo}*`;
@@ -26,28 +25,28 @@ export function formatarComAssinatura(texto, assinar, nome) {
 
   let corpo = limpo;
 
-  // Caso 2: O texto já começa com a assinatura no topo
-  // Ex: "*Marco Medeiros*\nOlá" ou "Marco Medeiros:\nOlá" ou "*Marco Medeiros*:\nOlá"
+  // Caso 2: Remove assinaturas existentes no início
   const regexInicio = new RegExp(`^\\*?\\s*${nomeEscapado}\\s*\\*?:?\\s*\\n+`, 'i');
-  if (regexInicio.test(corpo)) {
+  while (regexInicio.test(corpo)) {
     corpo = corpo.replace(regexInicio, '').trim();
   }
 
-  // Caso 3: O texto termina com a assinatura no rodapé (ex: mensagens rápidas com assinatura manual)
-  // Ex: "Olá\n\nMarco Medeiros" ou "Olá\n*Marco Medeiros*" ou "Olá\nAtt,\nMarco Medeiros"
+  // Caso 3: Remove assinaturas existentes no rodapé
   const regexFim = new RegExp(
     `(?:\\n+|^\\s*)(?:(?:atenciosamente|att\\.?|cordialmente|abraços?|grato|obrigado)\\s*,?\\s*\\n*)?\\*?\\s*${nomeEscapado}\\s*\\*?\\s*$`,
     'i'
   );
-  if (regexFim.test(corpo)) {
+  while (regexFim.test(corpo)) {
     corpo = corpo.replace(regexFim, '').trim();
   }
 
-  // Se após remover duplicatas o corpo ficou vazio
+  // Caso 4: Remove assinaturas isoladas em linhas intermediárias
+  const regexMeio = new RegExp(`\\n+\\*?\\s*${nomeEscapado}\\s*\\*?:?\\s*\\n+`, 'gi');
+  corpo = corpo.replace(regexMeio, '\n\n').trim();
+
   if (!corpo) {
     return `*${nomeLimpo}*`;
   }
 
-  // Retorna a assinatura padronizada única no topo
   return `*${nomeLimpo}*\n${corpo}`;
 }

@@ -1590,20 +1590,16 @@ function PainelChat({
       setEnviandoMidia(false);
       return;
     }
-    // Assinatura na midia: com a assinatura ligada, a legenda leva "*Nome*"
-    // na 1a linha de forma limpa e sem duplicatas.
-    // Audio NUNCA leva assinatura nem legenda (incompativel com WhatsApp e PTT).
+    // Mídias (imagem, vídeo, áudio, documento) não recebem assinatura automática.
+    // Áudio nunca possui legenda. Para imagens/vídeos/documentos, envia apenas a legenda digitada.
     const ehAudio = anexo.tipo === 'audio';
     const legenda = ehAudio ? '' : texto.trim();
-    const legendaFinal = ehAudio
-      ? undefined
-      : (formatarComAssinatura(legenda, assinar, assinaturaNome) || undefined);
     const payload = {
       tipo: anexo.tipo,
       media,
       mimetype: anexo.mimetype,
       fileName: anexo.fileName,
-      ...(legendaFinal ? { caption: legendaFinal } : {})
+      ...(legenda ? { caption: legenda } : {})
     };
     const { promise, cancel } = onEnviarMidia(payload, (p) =>
       setAnexo((a) => (a ? { ...a, progresso: p } : a))
