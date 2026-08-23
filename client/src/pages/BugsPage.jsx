@@ -31,7 +31,7 @@ function lerComoDataUrl(file) {
 
 /**
  * Converte uma lista de File em objetos { id, dataUrl }, validando tipo e
- * tamanho antes. Devolve { novas, erro } — erro é string ou ''.
+ * tamanho antes. Devolve { novas, erro } erro é string ou ''.
  * `qtdAtual` é quantas imagens já existem na lista atual do modal.
  */
 async function prepararImagens(files, qtdAtual) {

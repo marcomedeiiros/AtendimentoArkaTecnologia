@@ -3,7 +3,7 @@
  *
  * Quem barra de verdade é o back-end (`shared/helpers/imagemSegura.helper.js`:
  * whitelist raster, magic bytes após decodificar, teto de bytes, reserialização).
- * Isto aqui é conveniência de tela — recusar cedo e explicar o motivo, em vez de
+ * Isto aqui é conveniência de tela recusar cedo e explicar o motivo, em vez de
  * subir 8 MB para receber um 400.
  *
  * Existe como util compartilhado porque agora DOIS lugares anexam print (o botão
@@ -16,7 +16,7 @@ export const MAX_IMAGENS = 3;
 export const MAX_BYTES = 3 * 1024 * 1024;
 
 // SVG fica FORA de propósito: pode carregar <script> e virar XSS ao ser aberto.
-// O servidor recusa igual — isto só evita a viagem inútil.
+// O servidor recusa igual isto só evita a viagem inútil.
 export const TIPOS_ACEITOS = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 export const ACCEPT_ATTR = TIPOS_ACEITOS.join(',');
 
@@ -31,7 +31,7 @@ export function lerComoDataUrl(file) {
 
 /**
  * Valida uma lista de File contra tipo, tamanho e vagas restantes.
- * Devolve { novas: [{ id, dataUrl }], erro } — `erro` é a primeira recusa, para
+ * Devolve { novas: [{ id, dataUrl }], erro } `erro` é a primeira recusa, para
  * a tela poder dizer o motivo sem esconder as que passaram.
  */
 export async function prepararImagens(files, jaAnexadas = 0) {

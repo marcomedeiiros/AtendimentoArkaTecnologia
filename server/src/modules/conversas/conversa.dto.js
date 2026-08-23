@@ -225,7 +225,11 @@ const enviarMidiaSchema = z
     media: z.string().optional(), // base64 (data URL) ou URL publica
     mimetype: z.string().max(120).optional(),
     fileName: z.string().max(255).optional().transform((v) => (v ? nomeArquivoSeguro(v) : v)),
-    caption: z.string().max(4096).optional(),
+    caption: z
+      .string()
+      .max(4096)
+      .optional()
+      .transform((v) => (typeof v === "string" ? v.replace(/\0/g, "").trim() || undefined : undefined)),
     latitude: z.number().optional(),
     longitude: z.number().optional(),
     name: z.string().max(200).optional(),

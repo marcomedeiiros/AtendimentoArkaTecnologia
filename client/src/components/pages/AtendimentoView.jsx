@@ -24,6 +24,7 @@ import { usePreferencia } from '../../hooks/usePreferencia';
 import { contatoCombina, normalizarBusca, telefoneComparavel } from '../../utils/busca';
 import { FUSO_BR } from '../../utils/data';
 import { mesclarConversa, registrarApagada, desfazerApagada } from '../../utils/mesclarConversa';
+import { formatarComAssinatura } from '../../utils/assinatura';
 
 // O responsavel pelo atendimento agora vem do banco (conversa.atendenteNome /
 // atendenteId), compartilhado por toda a equipe. Antes vivia no localStorage e
@@ -1589,14 +1590,14 @@ function PainelChat({
       setEnviandoMidia(false);
       return;
     }
-    // Assinatura tambem na midia (igual ao texto): com a assinatura ligada, a
-    // legenda leva "*Nome*" na 1a linha -- mesmo sem texto digitado. (Audio nao
-    // tem legenda no WhatsApp, entao so vale para imagem/video/documento/gif.)
-    const legenda = texto.trim();
-    const assina = assinar && assinaturaNome && anexo.tipo !== 'audio';
-    const legendaFinal = assina
-      ? (legenda ? `*${assinaturaNome}*\n${legenda}` : `*${assinaturaNome}*`)
-      : legenda;
+    // Assinatura na midia: com a assinatura ligada, a legenda leva "*Nome*"
+    // na 1a linha de forma limpa e sem duplicatas.
+    // Audio NUNCA leva assinatura nem legenda (incompativel com WhatsApp e PTT).
+    const ehAudio = anexo.tipo === 'audio';
+    const legenda = ehAudio ? '' : texto.trim();
+    const legendaFinal = ehAudio
+      ? undefined
+      : (formatarComAssinatura(legenda, assinar, assinaturaNome) || undefined);
     const payload = {
       tipo: anexo.tipo,
       media,
@@ -2534,11 +2535,8 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     setErroNova('');
     try {
       // Assina a primeira mensagem igual ao envio normal (enviarResposta): com o
-      // toggle ligado e havendo nome, prefixa *Nome* numa linha acima. Sem isto,
-      // a mensagem de abertura de um numero avulso saia sem assinatura.
-      const texto = assinar && assinaturaNome && dados.texto
-        ? `*${assinaturaNome}*\n${dados.texto}`
-        : dados.texto;
+      // toggle ligado e havendo nome, prefixa *Nome* de forma limpa e sem duplicatas.
+      const texto = formatarComAssinatura(dados.texto, assinar, assinaturaNome);
       const nova = await ConversasAPI.iniciarConversa({ ...dados, texto });
       // Upsert, e nao `map`: numero novo nao esta na lista ainda. O SSE tambem
       // vai emitir esta conversa, e por isso a checagem de id -- sem ela a
@@ -2671,11 +2669,10 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   const enviarResposta = useCallback(async (txt, respondendoAId = null) => {
     if (!txt.trim() || !conversa) return;
     const id = conversa.id;
-    // Assinatura: prefixa o nome do operador em negrito (*Nome*), numa linha
-    // acima da mensagem -- assim o cliente ve quem falou. So quando o toggle
-    // esta ligado e ha nome. O negrito e a sintaxe do WhatsApp.
-    const corpo = txt.trim();
-    const final = assinar && assinaturaNome ? `*${assinaturaNome}*\n${corpo}` : corpo;
+    // Assinatura: prefixa o nome do operador em negrito (*Nome*), de forma
+    // limpa e sem duplicações.
+    const final = formatarComAssinatura(txt, assinar, assinaturaNome);
+    if (!final) return;
     // Otimista: mostra a mensagem da equipe na hora (ja assinada).
     setConversas(prev => prev.map(c =>
       c.id === id ? { ...c, mensagens: [...c.mensagens, { de: 'equipe', texto: final, hora: horaAgora() }] } : c

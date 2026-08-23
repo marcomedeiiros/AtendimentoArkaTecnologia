@@ -289,7 +289,14 @@ class ConversaService {
     // Mandar foto/audio tambem e atender (mesma regra do texto).
     await this._registrarAtendente(conversa, origem, autor);
 
-    const { tipo, media, mimetype, fileName, caption, latitude, longitude, name, address } = payload;
+    let { tipo, media, mimetype, fileName, caption, latitude, longitude, name, address } = payload;
+    // Defesa em profundidade: Áudio NUNCA possui legenda ou assinatura.
+    if (tipo === "audio") {
+      caption = null;
+    } else if (typeof caption === "string") {
+      caption = caption.replace(/\0/g, "").trim();
+      if (!caption) caption = null;
+    }
     const rotulos = {
       imagem: "[Imagem]", video: "[Vídeo]", documento: "[Documento]",
       audio: "[Áudio]", localizacao: "[Localização]",

@@ -190,13 +190,16 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
 
   const exportarAvaliacoesCsv = useCallback(() => {
     const linhas = [
-      ['Cliente', 'Telefone', 'Nota', 'Atendente', 'Setor', 'Comentário'],
+      ['Cliente', 'Telefone', 'Nota', 'Atendente', 'Setor', 'Finalizado em', 'Comentário'],
       ...feedbacksFiltrados.map(c => [
         c.cliente || '',
         c.telefone || '',
         c.avaliacao,
         c.atendenteNome || c.ultimoAtendenteNome || '',
         c.setor || 'Geral',
+        c.fechadoEm
+          ? new Date(c.fechadoEm).toLocaleString('pt-BR', { timeZone: FUSO_BR })
+          : '',
         (c.feedback || '').replace(/[\r\n;]+/g, ' '),
       ]),
     ];
@@ -632,6 +635,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                       <th className="text-center py-2.5 px-3 font-semibold">Nota</th>
                       <th className="text-left py-2.5 px-3 font-semibold">Atendente</th>
                       <th className="text-left py-2.5 px-3 font-semibold">Setor</th>
+                      <th className="text-left py-2.5 px-3 font-semibold">Finalizado em</th>
                       <th className="text-left py-2.5 px-3 font-semibold">Comentário</th>
                     </tr>
                   </thead>
@@ -677,6 +681,18 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/15 text-blue-400 border border-blue-500/30">
                             {c.setor || 'Geral'}
                           </span>
+                        </td>
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          {c.fechadoEm ? (
+                            <span className="inline-flex items-center gap-1 font-mono text-[11px] text-slate-300">
+                              <Clock size={11} className="text-slate-500 shrink-0" />
+                              {new Date(c.fechadoEm).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', timeZone: FUSO_BR })}
+                              {' '}
+                              {new Date(c.fechadoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: FUSO_BR })}
+                            </span>
+                          ) : (
+                            <span className="text-slate-600 text-[11px]">-</span>
+                          )}
                         </td>
                         <td className="py-2.5 px-3 text-slate-300 max-w-xs truncate" title={c.feedback || ''}>{c.feedback || '-'}</td>
                       </tr>
