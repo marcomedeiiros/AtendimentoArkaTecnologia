@@ -75,6 +75,9 @@ function prepararRespostaMidia(res, { mimetype, fileName, tamanho }) {
     `${inline ? "inline" : "attachment"}; filename="${nomeSeguroHeader(fileName, tipo)}"`
   );
   res.setHeader("X-Content-Type-Options", "nosniff");
+  // Avisa que aceitamos faixa: e o que deixa o player descobrir a duracao e
+  // procurar dentro do audio/video (ver interpretarRange e o servirMidia).
+  res.setHeader("Accept-Ranges", "bytes");
   // Mesmo que algo escape das regras acima, aqui nao roda script nem carrega
   // recurso externo.
   res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox; frame-ancestors 'none'");
@@ -84,4 +87,38 @@ function prepararRespostaMidia(res, { mimetype, fileName, tamanho }) {
   return tipo;
 }
 
-module.exports = { prepararRespostaMidia, tipoSeguro };
+/**
+ * Interpreta o cabecalho `Range` de midia. Aceita so a forma simples de UM
+ * intervalo de bytes -- e o que os players usam:
+ *
+ *   bytes=0-        -> do inicio ao fim
+ *   bytes=500-999   -> intervalo fechado
+ *   bytes=-500      -> os ultimos 500 bytes
+ *
+ * Qualquer coisa fora disso (multiplos intervalos, unidade diferente, numero
+ * absurdo) devolve null e a resposta sai INTEIRA -- degradar para 200 e sempre
+ * seguro; inventar faixa nao e.
+ */
+function interpretarRange(cabecalho, total = null) {
+  const m = /^bytes=(\d*)-(\d*)$/.exec(String(cabecalho || "").trim());
+  if (!m) return null;
+  const [, cruInicio, cruFim] = m;
+  if (cruInicio === "" && cruFim === "") return null;
+
+  // Sufixo (ultimos N bytes) so da para resolver sabendo o tamanho.
+  if (cruInicio === "") {
+    const ultimos = Number(cruFim);
+    if (!Number.isFinite(ultimos) || ultimos <= 0 || !Number.isFinite(total)) return null;
+    return { inicio: Math.max(0, total - ultimos), fim: total - 1 };
+  }
+
+  const inicio = Number(cruInicio);
+  if (!Number.isFinite(inicio) || inicio < 0) return null;
+  if (cruFim === "") return { inicio, fim: undefined };
+
+  const fim = Number(cruFim);
+  if (!Number.isFinite(fim) || fim < inicio) return null;
+  return { inicio, fim };
+}
+
+module.exports = { prepararRespostaMidia, tipoSeguro, interpretarRange };

@@ -105,13 +105,37 @@ async function salvarDataUrl(dataUrl, mimetypeSugerido = null, { maxBytes = MAX_
 }
 
 // Stream de leitura + tamanho, para servir o arquivo sem carregar na memória.
-async function abrirParaLeitura(relativo) {
+/**
+ * Abre o arquivo para leitura, opcionalmente só um PEDAÇO dele.
+ *
+ * A faixa existe para o navegador conseguir procurar dentro de áudio e vídeo:
+ * sem resposta parcial (206), o player não descobre a duração de um opus/ogg do
+ * WhatsApp -- ele reporta `Infinity` -- e arrastar a barra não funciona.
+ *
+ * `inicio`/`fim` são presos ao tamanho real do arquivo antes de virar leitura:
+ * faixa vinda de fora nunca decide sozinha onde o disco é lido.
+ */
+async function abrirParaLeitura(relativo, faixa = null) {
   const abs = caminhoAbsoluto(relativo);
   if (!abs) return null;
   try {
     const stat = await fsp.stat(abs);
     if (!stat.isFile()) return null;
-    return { stream: fs.createReadStream(abs), tamanho: stat.size };
+    const total = stat.size;
+    if (!faixa || total === 0) {
+      return { stream: fs.createReadStream(abs), tamanho: total, total };
+    }
+    const inicio = Math.min(Math.max(0, Number(faixa.inicio) || 0), total - 1);
+    const fimPedido = Number.isFinite(faixa.fim) ? Number(faixa.fim) : total - 1;
+    const fim = Math.min(Math.max(inicio, fimPedido), total - 1);
+    return {
+      stream: fs.createReadStream(abs, { start: inicio, end: fim }),
+      tamanho: fim - inicio + 1,
+      total,
+      inicio,
+      fim,
+      parcial: true,
+    };
   } catch {
     return null;
   }

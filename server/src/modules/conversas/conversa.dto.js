@@ -61,6 +61,17 @@ const MIMES_PERMITIDOS = {
 // isto barra o abuso antes de repassar a midia adiante).
 const MAX_BYTES = 20 * 1024 * 1024;
 
+// Teto POR TIPO, alinhado ao que o WhatsApp aceita. Existe para o operador
+// receber um "nao" claro AQUI em vez de um erro opaco da Evolution depois de
+// esperar o upload de 15MB: a imagem de 8MB era aceita por nos e recusada la.
+const MAX_POR_TIPO = {
+  imagem: 5 * 1024 * 1024,
+  video: 16 * 1024 * 1024,
+  audio: 16 * 1024 * 1024,
+  documento: MAX_BYTES,
+};
+const emMB = (bytes) => `${(bytes / (1024 * 1024)).toFixed(bytes >= 1024 * 1024 ? 1 : 2)}MB`;
+
 // Aceita data URL, base64 cru ou URL http(s). Devolve { mimeDeclarado, bytes }.
 //
 // O cabecalho do data URL pode ter parametros ANTES do `;base64`, ex.:
@@ -131,6 +142,71 @@ function assinaturaImagemConfere(media, mime) {
   }
 }
 
+/**
+ * Assinatura de CONTAINER por familia (audio, video, documento).
+ *
+ * Terceira camada da defesa: o mimetype declarado ja passou pela allowlist, e o
+ * download ainda serve com nosniff + CSP sandbox. Isto barra na ENTRADA um
+ * arquivo que so finge ser midia -- um .html renomeado para .ogg nunca chega ao
+ * disco.
+ *
+ * A checagem e por FAMILIA, nao por mimetype exato, de proposito: o gravador do
+ * navegador as vezes rotula webm como ogg (e vice-versa), e reprovar por isso
+ * quebraria o envio de audio sem ganho de seguranca nenhum -- o que importa e
+ * "isto e mesmo um container de audio/video?".
+ */
+const ASSINATURAS = {
+  audio: [
+    { nome: "ogg", casa: (b) => b.toString("ascii", 0, 4) === "OggS" },
+    { nome: "webm/mkv", casa: (b) => b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3 },
+    { nome: "mp4/m4a", casa: (b) => b.toString("ascii", 4, 8) === "ftyp" },
+    { nome: "wav", casa: (b) => b.toString("ascii", 0, 4) === "RIFF" && b.toString("ascii", 8, 12) === "WAVE" },
+    { nome: "mp3(id3)", casa: (b) => b.toString("ascii", 0, 3) === "ID3" },
+    // MPEG/AAC cru: sincronizacao 0xFF seguida de 0xE_/0xF_.
+    { nome: "mpeg/adts", casa: (b) => b[0] === 0xff && (b[1] & 0xe0) === 0xe0 },
+    { nome: "amr", casa: (b) => b.toString("ascii", 0, 5) === "#!AMR" },
+  ],
+  video: [
+    { nome: "mp4/3gp/mov", casa: (b) => b.toString("ascii", 4, 8) === "ftyp" },
+    { nome: "webm/mkv", casa: (b) => b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3 },
+    { nome: "ogg", casa: (b) => b.toString("ascii", 0, 4) === "OggS" },
+  ],
+  documento: [
+    { nome: "pdf", casa: (b) => b.toString("ascii", 0, 4) === "%PDF" },
+    // docx/xlsx/pptx e zip: todos sao ZIP por dentro.
+    { nome: "zip", casa: (b) => b[0] === 0x50 && b[1] === 0x4b && (b[2] === 0x03 || b[2] === 0x05 || b[2] === 0x07) },
+    // doc/xls/ppt antigos (OLE2).
+    { nome: "ole2", casa: (b) => b[0] === 0xd0 && b[1] === 0xcf && b[2] === 0x11 && b[3] === 0xe0 },
+  ],
+};
+
+// Tipos sem assinatura confiavel: texto e o "octet-stream" generico. Barrar
+// esses por bytes seria adivinhacao -- eles ficam de pe nas outras camadas
+// (allowlist de Content-Type, nosniff, download como anexo).
+const SEM_ASSINATURA = new Set(["text/plain", "text/csv", "application/octet-stream"]);
+
+function cabecalhoDaMedia(media) {
+  try {
+    // 32 bytes bastam para toda assinatura desta tabela; nao decodificamos o
+    // arquivo inteiro so para olhar o comeco dele.
+    const b64 = extrairBase64(media).replace(/\s/g, "").slice(0, 64);
+    return Buffer.from(b64, "base64");
+  } catch {
+    return Buffer.alloc(0);
+  }
+}
+
+function assinaturaFamiliaConfere(media, tipo, mime) {
+  if (SEM_ASSINATURA.has(mime)) return true;
+  const tabela = ASSINATURAS[tipo];
+  if (!tabela) return true;
+  const buf = cabecalhoDaMedia(media);
+  if (buf.length < 12) return false;
+  return tabela.some((a) => {
+    try { return a.casa(buf); } catch { return false; }
+  });
+}
+
 // Nome de arquivo seguro: sem separadores de caminho (evita path traversal) e
 // sem caracteres de controle (evita cabecalhos quebrados ao repassar a midia).
 function nomeArquivoSeguro(nome) {
@@ -179,8 +255,15 @@ const enviarMidiaSchema = z
     const mime = (d.mimetype || info.mimeDeclarado || "").toLowerCase().split(";")[0].trim();
 
     // URL http(s): sem bytes para medir; ainda exigimos um mimetype valido.
-    if (!info.url && info.bytes > MAX_BYTES) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Arquivo excede o limite de 20MB", path: ["media"] });
+    const tetoDoTipo = MAX_POR_TIPO[d.tipo] || MAX_BYTES;
+    if (!info.url && info.bytes > tetoDoTipo) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        // Mensagem com os dois numeros: o operador precisa saber o quanto passou,
+        // nao so que passou.
+        message: `Arquivo de ${emMB(info.bytes)} excede o limite de ${emMB(tetoDoTipo)} para ${d.tipo}`,
+        path: ["media"],
+      });
     }
     if (!mime) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Informe o mimetype do arquivo", path: ["mimetype"] });
@@ -195,6 +278,13 @@ const enviarMidiaSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "O conteudo enviado nao corresponde a uma imagem valida",
+        path: ["media"],
+      });
+    } else if (!info.url && !assinaturaFamiliaConfere(d.media, d.tipo, mime)) {
+      // Audio, video e documento: os bytes tambem precisam ser do que dizem ser.
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `O conteudo enviado nao parece ser um arquivo de ${d.tipo} valido`,
         path: ["media"],
       });
     }

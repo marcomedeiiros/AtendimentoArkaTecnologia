@@ -1,7 +1,7 @@
 const conversaService = require("./conversa.service");
 const { success } = require("../../shared/helpers/response.helper");
 const { validarTokenMidia } = require("../../shared/helpers/midiaToken.helper");
-const { prepararRespostaMidia } = require("../../shared/helpers/midiaResposta.helper");
+const { prepararRespostaMidia, interpretarRange } = require("../../shared/helpers/midiaResposta.helper");
 
 class ConversaController {
   listar(req, res) {
@@ -74,7 +74,17 @@ class ConversaController {
         error: { code: "TOKEN_MIDIA_INVALIDO", message: "Link de mídia inválido ou expirado" },
       });
     }
-    const midia = await conversaService.obterMidiaBruta(mensagemId);
+    // Duas passadas quando ha Range: a primeira so para saber o tamanho total
+    // (o sufixo "bytes=-500" nao da para resolver sem ele), a segunda ja com a
+    // faixa presa ao arquivo. Sem Range, uma passada so.
+    let midia = await conversaService.obterMidiaBruta(mensagemId);
+    if (midia && req.headers.range) {
+      const faixa = interpretarRange(req.headers.range, midia.total ?? midia.tamanho);
+      if (faixa) {
+        if (midia.stream) midia.stream.destroy(); // descarta o stream inteiro
+        midia = await conversaService.obterMidiaBruta(mensagemId, faixa);
+      }
+    }
     if (!midia) {
       return res.status(404).json({
         success: false,
@@ -89,9 +99,21 @@ class ConversaController {
       fileName: midia.fileName,
       tamanho: midia.tamanho ?? midia.buffer?.length,
     });
+    // Resposta parcial: 206 + Content-Range. E este par que faz o player
+    // descobrir a duracao de um audio do WhatsApp (opus/ogg, que chega sem
+    // duracao no cabecalho) e conseguir arrastar a barra.
+    if (midia.parcial && Number.isFinite(midia.total)) {
+      res.status(206);
+      res.setHeader("Content-Range", `bytes ${midia.inicio}-${midia.fim}/${midia.total}`);
+    }
     // Arquivo em disco vai por STREAM (nao carrega o video inteiro na memoria).
     if (midia.stream) {
       midia.stream.on("error", () => res.destroy());
+      // Cliente desistiu no meio (trocou de conversa, arrastou a barra do video,
+      // fechou a aba): sem destruir a leitura, cada seek deixava um descritor de
+      // arquivo aberto para tras -- e um player arrastado algumas vezes abre
+      // dezenas de requisicoes parciais.
+      res.on("close", () => midia.stream.destroy());
       return midia.stream.pipe(res);
     }
     return res.end(midia.buffer);

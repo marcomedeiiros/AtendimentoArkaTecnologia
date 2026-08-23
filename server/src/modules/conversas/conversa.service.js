@@ -818,18 +818,24 @@ class ConversaService {
     return meta.url || null;
   }
 
-  async obterMidiaBruta(mensagemId) {
+  // `faixa` (opcional) vem do cabecalho Range: entrega so o pedaco pedido, que e
+  // o que permite ao player descobrir a duracao e procurar dentro do arquivo.
+  async obterMidiaBruta(mensagemId, faixa = null) {
     const msg = await conversaRepository.findMensagem(mensagemId);
     const meta = msg?.metadata;
     if (!meta) return null;
 
     // Novo: arquivo no disco -> devolve um STREAM (nao carrega na memoria).
     if (meta.arquivo) {
-      const aberto = await midiaStorage.abrirParaLeitura(meta.arquivo);
+      const aberto = await midiaStorage.abrirParaLeitura(meta.arquivo, faixa);
       if (aberto) {
         return {
           stream: aberto.stream,
           tamanho: aberto.tamanho,
+          total: aberto.total,
+          inicio: aberto.inicio,
+          fim: aberto.fim,
+          parcial: !!aberto.parcial,
           mimetype: meta.mimetype || "application/octet-stream",
           fileName: meta.fileName || null,
         };
@@ -850,7 +856,21 @@ class ConversaService {
     } catch {
       return null;
     }
-    return { buffer, mimetype, fileName: meta.fileName || null };
+    // Legado tambem respeita faixa: o player nao sabe (nem precisa saber) se o
+    // arquivo veio do disco ou do banco.
+    const total = buffer.length;
+    if (faixa && total > 0) {
+      const inicio = Math.min(Math.max(0, Number(faixa.inicio) || 0), total - 1);
+      const fimPedido = Number.isFinite(faixa.fim) ? Number(faixa.fim) : total - 1;
+      const fim = Math.min(Math.max(inicio, fimPedido), total - 1);
+      return {
+        buffer: buffer.subarray(inicio, fim + 1),
+        tamanho: fim - inicio + 1,
+        total, inicio, fim, parcial: true,
+        mimetype, fileName: meta.fileName || null,
+      };
+    }
+    return { buffer, tamanho: total, total, mimetype, fileName: meta.fileName || null };
   }
 
   _emitir(conversa) {
