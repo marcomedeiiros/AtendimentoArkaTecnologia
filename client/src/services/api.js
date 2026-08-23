@@ -376,9 +376,11 @@ export const BugsAPI = {
   criar: (dados) => request('/bugs', { method: 'POST', body: JSON.stringify(dados) }),
   listar: (status = '') => request(`/bugs${status ? `?status=${encodeURIComponent(status)}` : ''}`),
   atualizarStatus: (id, status) => request(`/bugs/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
-  // Edicao na triagem: so descricao e prioridade (o servidor recusa o resto).
-  atualizar: (id, { descricao, prioridade }) =>
-    request(`/bugs/${id}`, { method: 'PATCH', body: JSON.stringify({ descricao, prioridade }) }),
+  // Edicao na triagem: descricao, prioridade e/ou imagens.
+  // `imagens` undefined = nao mexer nos prints existentes (o servidor interpreta
+  // a ausencia do campo como "manter o que tem"). null/[] = remover todos.
+  atualizar: (id, { descricao, prioridade, imagens }) =>
+    request(`/bugs/${id}`, { method: 'PATCH', body: JSON.stringify({ descricao, prioridade, imagens }) }),
   remover: (id) => request(`/bugs/${id}`, { method: 'DELETE' }),
 };
 

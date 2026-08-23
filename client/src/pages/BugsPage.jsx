@@ -5,12 +5,61 @@
  * restrita a Administrador -- o mesmo cargo tambem e exigido no servidor, entao
  * esconder aqui e so cortesia de interface, nao a barreira de fato.
  */
-import { useState, useEffect } from 'react';
-import { Bug, Loader2, CheckCircle2, RotateCcw, Trash2, X, ShieldAlert, MapPin, User, Flag, Pencil, Save } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Bug, Loader2, CheckCircle2, RotateCcw, Trash2, X, ShieldAlert, MapPin, User, Flag, Pencil, Save, ImagePlus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { BugsAPI } from '../services/api';
 import Portal from '../components/Portal';
 import { FUSO_BR } from '../utils/data';
+
+// ── Constantes de imagem (espelham o servidor: bug.imagens.js) ─────────────
+// A barreira real fica no backend (whitelist de mime + magic bytes +
+// reserializacao); aqui evitamos converter arquivos obviamente errados.
+const MAX_IMAGENS  = 3;
+const MAX_BYTES    = 3 * 1024 * 1024; // 3 MB
+const TIPOS_ACEITOS = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+const ACCEPT_ATTR  = TIPOS_ACEITOS.join(',');
+
+function lerComoDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Não foi possível ler o arquivo.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Converte uma lista de File em objetos { id, dataUrl }, validando tipo e
+ * tamanho antes. Devolve { novas, erro } — erro é string ou ''.
+ * `qtdAtual` é quantas imagens já existem na lista atual do modal.
+ */
+async function prepararImagens(files, qtdAtual) {
+  const lista = Array.from(files || []).filter(Boolean);
+  if (lista.length === 0) return { novas: [], erro: '' };
+
+  let restantes = MAX_IMAGENS - qtdAtual;
+  if (restantes <= 0) return { novas: [], erro: `Máximo de ${MAX_IMAGENS} imagens atingido.` };
+
+  const novas = [];
+  let ultimoErro = '';
+
+  for (const file of lista) {
+    if (restantes <= 0) { ultimoErro = `Só foram adicionadas as primeiras ${MAX_IMAGENS - qtdAtual}.`; break; }
+    if (!TIPOS_ACEITOS.includes(file.type)) { ultimoErro = 'Só são aceitas imagens PNG, JPEG, WebP ou GIF.'; continue; }
+    if (file.size > MAX_BYTES)              { ultimoErro = 'Cada imagem deve ter no máximo 3 MB.'; continue; }
+    try {
+      const dataUrl = await lerComoDataUrl(file);
+      novas.push({ id: `edit-${file.name}-${file.size}-${novas.length}`, dataUrl });
+      restantes -= 1;
+    } catch {
+      ultimoErro = 'Não foi possível ler uma das imagens.';
+    }
+  }
+
+  return { novas, erro: ultimoErro };
+}
+
 
 function quando(iso) {
   if (!iso) return '';
@@ -19,6 +68,7 @@ function quando(iso) {
   const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: FUSO_BR });
   return `${data} · ${hora}`;
 }
+
 
 const FILTROS = [
   { valor: '', label: 'Todos' },
@@ -228,7 +278,7 @@ function ModalEditarRelato({ relato, onSalvar, onFechar, salvando, erro }) {
               Cancelar
             </button>
             <button
-              onClick={() => onSalvar({ descricao: texto, prioridade })}
+              onClick={() => onSalvar({ descricao: texto, prioridade, imagens: listaAtual })}
               disabled={!podeSalvar || semMudanca}
               title={
                 texto.length < 5 ? 'Descreva o problema com pelo menos 5 caracteres'
@@ -306,11 +356,11 @@ export default function BugsPage() {
   // que o admin acabou de digitar -- se o servidor recusar (validacao, sessao
   // expirada), o modal fica aberto com o erro e o rascunho intacto, em vez de a
   // lista mostrar uma versao que nunca foi gravada.
-  async function salvarEdicao({ descricao, prioridade }) {
+  async function salvarEdicao({ descricao, prioridade, imagens }) {
     setSalvandoEdicao(true);
     setErroEdicao('');
     try {
-      const atualizado = await BugsAPI.atualizar(editando.id, { descricao, prioridade });
+      const atualizado = await BugsAPI.atualizar(editando.id, { descricao, prioridade, imagens });
       setRelatos(prev => prev.map(r => (r.id === atualizado.id ? atualizado : r)));
       setEditando(null);
     } catch (e) {
