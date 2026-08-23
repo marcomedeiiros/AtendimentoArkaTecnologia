@@ -14,7 +14,11 @@ client/dist/
 server/prisma/*.db.bak-*
 
 # Banco local de desenvolvimento
+server/prisma/dev.db
 server/prisma/dev.db-journal
+
+# Backups do banco gerados na VM (deploy/backup.sh)
+backups/
 
 # Logs
 *.log

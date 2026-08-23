@@ -1,0 +1,16 @@
+node_modules
+npm-debug.log*
+*.log
+
+# Segredos: as variaveis vem do compose, nunca de um .env copiado pra imagem.
+.env
+.env.*
+
+# O banco de desenvolvimento NAO vai para producao (esta commitado no repo).
+prisma/dev.db
+prisma/dev.db-journal
+prisma/*.db.bak-*
+
+docker-compose*.yml
+Dockerfile
+*.md

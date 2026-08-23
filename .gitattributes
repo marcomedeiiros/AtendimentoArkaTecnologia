@@ -1,0 +1,8 @@
+# O projeto e editado no Windows, mas estes arquivos rodam dentro de containers
+# Linux. Sem isso o Git pode grava-los com CRLF e o shell falha com
+# "bad interpreter: no such file or directory".
+*.sh            text eol=lf
+Dockerfile      text eol=lf
+*.yml           text eol=lf
+nginx.conf      text eol=lf
+.env.example    text eol=lf

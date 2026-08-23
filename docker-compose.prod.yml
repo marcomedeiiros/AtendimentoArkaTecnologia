@@ -1,0 +1,138 @@
+# Stack completa do Arka para a VM: painel, API, Evolution e o Postgres da
+# Evolution. Um unico comando sobe tudo e o Docker religa sozinho no boot.
+#
+#   subir:      docker compose -f docker-compose.prod.yml up -d --build
+#   logs:       docker compose -f docker-compose.prod.yml logs -f api
+#   parar:      docker compose -f docker-compose.prod.yml down
+#
+# Os segredos vem do arquivo .env desta pasta (copie de .env.example). Ele nao
+# vai para o git.
+name: arka-chat
+
+services:
+  # ------------------------------------------------------------------------
+  # Painel React ja buildado, servido pelo nginx. E a unica porta publicada
+  # para a rede: tudo o mais conversa pela rede interna do compose.
+  # ------------------------------------------------------------------------
+  web:
+    build: ./client
+    container_name: arka-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-80}:80"
+    depends_on:
+      api:
+        condition: service_started
+
+  # ------------------------------------------------------------------------
+  # API Node/Express. Nao publica porta: quem fala com ela e o nginx do painel
+  # (http://api:3000) e a Evolution, ambos pela rede interna.
+  # ------------------------------------------------------------------------
+  api:
+    build: ./server
+    container_name: arka-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      # Banco no volume, fora da imagem: sobrevive a rebuild e update.
+      DATABASE_URL: "file:/data/arka.db"
+      # Nome do servico na rede do compose -- nao e localhost aqui dentro.
+      EVOLUTION_API_URL: "http://evolution-api:8080"
+      # Um proxy na frente (o nginx do container web).
+      TRUST_PROXY: "1"
+      # Midia no mesmo volume do banco: /app nao e gravavel pelo usuario node,
+      # e sem isto o boot loga "EACCES ... mkdir '/app/dados'" e o envio de
+      # audio/imagem falha.
+      MEDIA_DIR: "/data/midia"
+      # Fuso de Brasilia no container. O servidor tambem assume esse padrao no
+      # codigo (src/server.js), mas declarar aqui deixa explicito no deploy --
+      # sem isto o log sai em UTC e a hora local do processo fica 3h adiantada.
+      TZ: "America/Sao_Paulo"
+    volumes:
+      - arka_data:/data
+      - ./backups:/backups
+    depends_on:
+      evolution-api:
+        condition: service_started
+
+  # ------------------------------------------------------------------------
+  # Evolution API: ponte com o WhatsApp (le o QR e entrega as mensagens).
+  # A porta so escuta em 127.0.0.1, entao o /manager dela nao fica exposto na
+  # rede -- para abrir do seu PC use um tunel SSH (veja DEPLOY.md).
+  # ------------------------------------------------------------------------
+  evolution-api:
+    image: evoapicloud/evolution-api:v2.3.7
+    container_name: arka-evolution
+    restart: unless-stopped
+    depends_on:
+      evolution-db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      SERVER_URL: "http://${VM_IP}:8080"
+      AUTHENTICATION_API_KEY: "${EVOLUTION_API_KEY}"
+      AUTHENTICATION_TYPE: "apikey"
+
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: "postgresql"
+      DATABASE_CONNECTION_URI: "postgresql://evolution:${EVOLUTION_DB_PASSWORD}@evolution-db:5432/evolution?schema=public"
+      DATABASE_CONNECTION_CLIENT_NAME: "arka"
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      DATABASE_SAVE_DATA_NEW_MESSAGE: "true"
+      DATABASE_SAVE_MESSAGE_UPDATE: "true"
+      DATABASE_SAVE_DATA_CONTACTS: "true"
+      DATABASE_SAVE_DATA_CHATS: "true"
+
+      CACHE_REDIS_ENABLED: "false"
+      CACHE_LOCAL_ENABLED: "true"
+
+      DEL_INSTANCE: "false"
+      QRCODE_LIMIT: "30"
+      CONFIG_SESSION_PHONE_CLIENT: "Arka Tecnologia"
+      CONFIG_SESSION_PHONE_NAME: "Chrome"
+      LOG_LEVEL: "ERROR"
+
+      # Webhook -> Arka. Na VM tudo esta na mesma rede do compose, entao o
+      # destino e o nome do servico. (No setup local em Windows isso era
+      # host.docker.internal, que aqui nao e mais necessario.)
+      WEBHOOK_GLOBAL_ENABLED: "true"
+      WEBHOOK_GLOBAL_URL: "http://api:3000/api/webhook/v1/whatsapp?token=${WEBHOOK_SECRET}"
+      WEBHOOK_GLOBAL_BY_EVENTS: "false"
+      WEBHOOK_EVENTS_MESSAGES_UPSERT: "true"
+      WEBHOOK_EVENTS_CONNECTION_UPDATE: "true"
+      WEBHOOK_EVENTS_MESSAGES_UPDATE: "true"
+      WEBHOOK_BASE64: "true"
+    volumes:
+      - evolution_instances:/evolution/instances
+
+  # ------------------------------------------------------------------------
+  # Postgres exclusivo da Evolution (instancias, contatos, chats). Nao publica
+  # porta: e privado da stack.
+  # ------------------------------------------------------------------------
+  evolution-db:
+    image: postgres:16-alpine
+    container_name: arka-evolution-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: "${EVOLUTION_DB_PASSWORD}"
+      POSTGRES_DB: evolution
+    volumes:
+      - evolution_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evolution"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  # Banco SQLite do Arka (conversas, contatos, usuarios). E o volume que o
+  # deploy/backup.sh copia -- o unico com dado insubstituivel.
+  arka_data:
+  # Sessao pareada do WhatsApp: perder isso significa escanear o QR de novo.
+  evolution_instances:
+  evolution_pg:

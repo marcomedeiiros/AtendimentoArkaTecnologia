@@ -2,7 +2,7 @@
  * Datas SEMPRE no fuso de Brasília.
  *
  * Por que existe: `new Date().toISOString().slice(0,10)` devolve a data em UTC.
- * Às 21h de Brasília já é o dia SEGUINTE em UTC — então, toda noite, a Agenda
+ * Às 21h de Brasília já é o dia SEGUINTE em UTC então, toda noite, a Agenda
  * marcava o dia errado como "hoje", o formulário de novo compromisso abria com a
  * data de amanhã e a contagem de pendentes (`data >= hoje`) deixava de contar os
  * compromissos do próprio dia.
@@ -36,7 +36,7 @@ export function hojeISO() {
   return dataISO(new Date());
 }
 
-/** Ano e mês (0-11) de hoje em Brasília — para o calendário abrir no mês certo. */
+/** Ano e mês (0-11) de hoje em Brasília para o calendário abrir no mês certo. */
 export function anoMesHoje() {
   const [ano, mes] = hojeISO().split('-');
   return { ano: Number(ano), mes: Number(mes) - 1 };
