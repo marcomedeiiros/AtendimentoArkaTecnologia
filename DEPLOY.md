@@ -8,7 +8,7 @@ O `README.md` continua valendo para desenvolvimento na sua maquina.
 | | Local (Windows) | VM |
 |---|---|---|
 | Painel | `npm start` (Vite, porta 5173) | buildado e servido pelo nginx na porta 80 |
-| API | `npm run dev` (nodemon) | container, sem porta publica — so o nginx a alcanca |
+| API | `npm run dev` (nodemon) | container, sem porta publica so o nginx a alcanca |
 | Chamada `/api` | proxy do Vite | proxy do nginx (mesma origem, sem CORS) |
 | Banco | `server/prisma/dev.db` | volume `arka_data`, em `/data/arka.db` |
 | Webhook da Evolution | `host.docker.internal:3000` | `http://api:3000` (rede do compose) |
@@ -79,7 +79,7 @@ O script confere o Docker, cria o `.env` sorteando todos os segredos, pergunta o
 IP da VM e o e-mail do administrador, builda as imagens e sobe a stack.
 
 **Ao terminar ele imprime a senha do administrador e o codigo de cadastro da
-equipe. Anote — a senha so aparece ali** (fica no `.env`, com permissao `600`).
+equipe. Anote a senha so aparece ali** (fica no `.env`, com permissao `600`).
 
 <details>
 <summary>Instalacao manual, se preferir nao usar o script</summary>
@@ -125,7 +125,7 @@ A porta 8080 da Evolution **nao** deve ser liberada: ela escuta apenas em
 4. O status vira 🟢 Online e as mensagens comecam a cair na Central
 
 O pareamento fica no volume `evolution_instances` e sobrevive a restart e
-atualizacao — so um `down -v` obriga a escanear o QR de novo.
+atualizacao so um `down -v` obriga a escanear o QR de novo.
 
 ## 6. Backup
 
@@ -150,7 +150,7 @@ crontab -e
 ```
 
 Como os backups ficam na propria VM, copie a pasta `backups/` para fora
-periodicamente — um disco perdido leva o backup junto.
+periodicamente um disco perdido leva o backup junto.
 
 <details>
 <summary>Restaurar um backup</summary>
@@ -213,7 +213,7 @@ ssh -L 8080:127.0.0.1:8080 usuario@IP_DA_VM
 
 Com o tunel aberto, acesse `http://localhost:8080/manager` no seu navegador.
 
-## 9. Seguranca — o que conferir antes de liberar para a equipe
+## 9. Seguranca o que conferir antes de liberar para a equipe
 
 - **`REGISTRO_CODIGO` preenchido.** Vazio significa cadastro aberto: qualquer
   pessoa que alcance a URL cria conta e passa a ler as conversas dos clientes.
@@ -225,13 +225,13 @@ Com o tunel aberto, acesse `http://localhost:8080/manager` no seu navegador.
   for para a internet, e obrigatorio por um dominio com certificado na frente.
 - **`ADMIN_PASSWORD` e reaplicada a cada subida.** O seed ressincroniza a senha
   do administrador com o `.env` toda vez que o container inicia. Uma troca de
-  senha feita pelo painel seria desfeita no proximo restart — troque no `.env`.
+  senha feita pelo painel seria desfeita no proximo restart troque no `.env`.
 
 ## 10. Problemas comuns
 
 **Painel abre mas mostra "back-end offline"**
 A API nao subiu. `docker compose -f docker-compose.prod.yml logs api` mostra o
-motivo — quase sempre uma variavel faltando no `.env`.
+motivo quase sempre uma variavel faltando no `.env`.
 
 **WhatsApp conecta mas as mensagens nao chegam**
 O webhook nao esta alcancando a API. Confira nos logs da Evolution se ela chama
@@ -241,7 +241,7 @@ local em Windows).
 **A tela de Configuracoes sobrepoe o `.env`**
 A URL da Evolution salva pelo painel tem prioridade sobre a variavel de
 ambiente. Se alguem salvar `http://localhost:8080` ali, a API para de achar a
-Evolution — dentro do container o valor correto e `http://evolution-api:8080`.
+Evolution dentro do container o valor correto e `http://evolution-api:8080`.
 
 **`permission denied` ao gerar backup**
 A pasta `backups/` precisa pertencer ao uid 1000, que e quem roda a API dentro
