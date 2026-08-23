@@ -60,6 +60,13 @@ const FILTROS_PRIORIDADE = [
 function ModalEditarRelato({ relato, onSalvar, onFechar, salvando, erro }) {
   const [descricao, setDescricao] = useState(relato.descricao || '');
   const [prioridade, setPrioridade] = useState(relato.prioridade || 'media');
+  // Prints já anexados + os novos, na mesma lista: para a tela e para o servidor
+  // não existe diferença entre "veio do banco" e "acabei de colar".
+  const [imagens, setImagens] = useState(
+    () => (Array.isArray(relato.imagens) ? relato.imagens : []).map((dataUrl, i) => ({ id: `atual-${i}`, dataUrl }))
+  );
+  const [erroImagem, setErroImagem] = useState('');
+  const inputRef = useRef(null);
 
   // Esc fecha, como nos outros modais do painel.
   useEffect(() => {
@@ -68,10 +75,36 @@ function ModalEditarRelato({ relato, onSalvar, onFechar, salvando, erro }) {
     return () => window.removeEventListener('keydown', onTecla);
   }, [onFechar, salvando]);
 
+  async function anexar(files) {
+    setErroImagem('');
+    const { novas, erro: recusa } = await prepararImagens(files, imagens.length);
+    if (recusa) setErroImagem(recusa);
+    if (novas.length) setImagens(prev => [...prev, ...novas].slice(0, MAX_IMAGENS));
+  }
+
+  // Ctrl+V com print na área de transferência: é assim que a pessoa anexa
+  // screenshot sem salvar arquivo antes -- e o caso que motivou este campo
+  // (relato enviado sem imagem, print ainda na memória).
+  function aoColar(e) {
+    const arquivos = Array.from(e.clipboardData?.items || [])
+      .filter(i => i.kind === 'file')
+      .map(i => i.getAsFile())
+      .filter(Boolean);
+    if (arquivos.length) { e.preventDefault(); anexar(arquivos); }
+  }
+
   const texto = descricao.trim();
   // Mesma regra do servidor (DTO + service): 5 a 4000 caracteres.
   const podeSalvar = texto.length >= 5 && texto.length <= 4000 && !salvando;
-  const semMudanca = texto === (relato.descricao || '').trim() && prioridade === (relato.prioridade || 'media');
+  const imagensAtuais = (Array.isArray(relato.imagens) ? relato.imagens : []);
+  const listaAtual = imagens.map(i => i.dataUrl);
+  const imagensMudaram =
+    listaAtual.length !== imagensAtuais.length ||
+    listaAtual.some((url, i) => url !== imagensAtuais[i]);
+  const semMudanca =
+    texto === (relato.descricao || '').trim() &&
+    prioridade === (relato.prioridade || 'media') &&
+    !imagensMudaram;
 
   return (
     <Portal>
@@ -124,6 +157,61 @@ function ModalEditarRelato({ relato, onSalvar, onFechar, salvando, erro }) {
                   );
                 })}
               </div>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-[11px] font-semibold text-texto">
+                Prints <span className="font-normal text-texto-fraco">({imagens.length}/{MAX_IMAGENS})</span>
+              </label>
+
+              {imagens.length > 0 && (
+                <div className="mb-2 flex flex-wrap gap-2">
+                  {imagens.map(img => (
+                    <div key={img.id} className="relative">
+                      <img
+                        src={img.dataUrl}
+                        alt="Print anexado"
+                        className="h-20 w-20 rounded-lg border border-linha bg-grafite-800 object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setImagens(prev => prev.filter(i => i.id !== img.id))}
+                        title="Remover este print"
+                        aria-label="Remover este print"
+                        className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-falha/40 bg-grafite-800 text-falha-400 transition-colors hover:bg-falha/20"
+                      >
+                        <X size={11} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {imagens.length < MAX_IMAGENS && (
+                <button
+                  type="button"
+                  onClick={() => inputRef.current?.click()}
+                  className="flex items-center gap-1.5 rounded-lg border border-linha bg-grafite-700 px-2.5 py-1.5 text-[11px] font-semibold text-texto-suave transition-colors hover:border-acao/40 hover:text-acao-200"
+                >
+                  <ImagePlus size={13} /> Anexar print
+                </button>
+              )}
+
+              <input
+                ref={inputRef}
+                type="file"
+                accept={ACCEPT_ATTR}
+                multiple
+                className="hidden"
+                onChange={e => { const f = e.target.files; e.target.value = ''; anexar(f); }}
+              />
+
+              <p className="mt-1.5 text-[10px] text-texto-fraco">
+                Até {MAX_IMAGENS} · PNG, JPEG, WebP ou GIF · máx. 3 MB cada · ou cole com Ctrl+V
+              </p>
+              {erroImagem && (
+                <p className="mt-1 text-[11px] text-espera-400">{erroImagem}</p>
+              )}
             </div>
 
             {erro && (

@@ -2,6 +2,7 @@ const relatoBugRepository = require("../../infrastructure/repositories/relatoBug
 const { mapRelatoBug } = require("../../shared/helpers/mapper.helper");
 const { validarImagensBug } = require("./bug.imagens");
 const AppError = require("../../shared/errors/AppError");
+const logger = require("../../config/logger");
 
 const PRIORIDADES = ["baixa", "media", "alta", "critica"];
 
@@ -67,6 +68,22 @@ class BugService {
         throw new AppError("Prioridade invalida", 400, "INVALID_PRIORITY");
       }
       data.prioridade = dados.prioridade;
+    }
+
+    // Prints: mesma validacao do criar -- whitelist raster, magic bytes apos
+    // decodificar, teto por imagem e reserializacao a partir dos bytes
+    // conferidos. Nada aqui confia no que o front declarou.
+    //
+    // A distincao entre AUSENTE e VAZIO e proposital: `undefined` nao mexe nos
+    // prints existentes (editar so o texto nao pode apagar anexo), enquanto
+    // null/[] remove todos porque foi pedido.
+    if (dados.imagens !== undefined) {
+      data.imagens = validarImagensBug(dados.imagens);
+      logger.info("Prints do relato atualizados", {
+        id,
+        antes: Array.isArray(relato.imagens) ? relato.imagens.length : 0,
+        depois: data.imagens ? data.imagens.length : 0,
+      });
     }
 
     // Nada mudou: devolve o relato como esta em vez de gravar por gravar.
