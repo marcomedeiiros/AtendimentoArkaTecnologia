@@ -4,6 +4,7 @@ const { mapContato } = require("../../shared/helpers/mapper.helper");
 const { limparTelefone } = require("../../shared/helpers/cnpj.helper");
 const logger = require("../../config/logger");
 const AppError = require("../../shared/errors/AppError");
+const bus = require("../../shared/events/event-bus");
 
 class ContatoService {
   async listar(filtros) {
@@ -18,6 +19,9 @@ class ContatoService {
     }
 
     const contato = await contatoRepository.create({ ...data, telefone });
+    // A agenda e compartilhada: quem esta com a tela aberta rele pelo SSE, em
+    // vez de so descobrir o contato novo no proximo F5.
+    bus.emitRecurso("contatos");
     return mapContato(contato);
   }
 
@@ -29,6 +33,7 @@ class ContatoService {
     if (data.telefone) payload.telefone = limparTelefone(data.telefone);
 
     const contato = await contatoRepository.update(id, payload);
+    bus.emitRecurso("contatos");
     return mapContato(contato);
   }
 
@@ -36,6 +41,7 @@ class ContatoService {
     const existente = await contatoRepository.findById(id);
     if (!existente) throw new AppError("Contato nao encontrado", 404, "NOT_FOUND");
     await contatoRepository.delete(id);
+    bus.emitRecurso("contatos");
     return { removido: true };
   }
 
@@ -84,6 +90,7 @@ class ContatoService {
       }
     }
 
+    if (criados || atualizados) bus.emitRecurso("contatos");
     logger.info("Contatos sincronizados do WhatsApp", { criados, atualizados, ignorados });
     return { total: brutos.length, criados, atualizados, ignorados };
   }

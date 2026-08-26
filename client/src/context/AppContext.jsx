@@ -41,6 +41,14 @@ export function AppProvider({ children }) {
   const [notificacoes,      setNotificacoes]      = useState([]);
   const [historico,         setHistorico]         = useState([]);
   const [apiOffline,        setApiOffline]        = useState(false);
+  // Contador que sobe a cada evento de conversa vindo do servidor. Painéis que
+  // não vivem do estado de `conversas` (Help Desk, indicadores) observam isto
+  // para se recarregarem sozinhos, em vez de cada um abrir o seu próprio
+  // polling -- um mecanismo de tempo real só, o SSE, para a aplicação inteira.
+  const [sinalConversas,    setSinalConversas]    = useState(0);
+  // Idem para a agenda de contatos, que vive dentro das telas que a usam
+  // (Contatos e a busca da Central) e não no estado global.
+  const [sinalContatos,     setSinalContatos]     = useState(0);
   const msgCountsRef = useRef(null);
 
   const carregarDadosDoServidor = useCallback(async () => {
@@ -109,16 +117,38 @@ export function AppProvider({ children }) {
     } catch { /* back-end offline: mantem estado atual */ }
   }, []);
 
+  // Mesma ideia para os clientes (CNPJ): a Central usa esta lista para mostrar
+  // a razao social de quem ja se identificou, entao cadastrar/editar um parceiro
+  // precisa refletir na hora, sem F5.
+  const recarregarParceiros = useCallback(async () => {
+    try {
+      const pa = await ParceirosAPI.listar();
+      if (Array.isArray(pa)) setParceiros(pa);
+    } catch { /* back-end offline: mantem estado atual */ }
+  }, []);
+
   // Patch incremental vindo do SSE: substitui/insere/remove uma conversa sem
   // recarregar a lista inteira. O disparo de som/notificacao continua no efeito
   // de msgCountsRef, que reage a qualquer mudanca em `conversas`.
   const aplicarEvento = useCallback((evt) => {
     if (!evt?.type) return;
+    // Uma LISTA mudou no servidor (clientes, equipe). O evento traz só o nome do
+    // recurso: relemos pela API normal, com as permissões daquele operador
+    // aplicadas -- empurrar o conteúdo pelo stream exigiria repetir aqui cada
+    // regra de acesso das rotas.
+    if (evt.type === 'recurso:update') {
+      if (evt.recurso === 'parceiros') recarregarParceiros();
+      if (evt.recurso === 'equipe') recarregarEquipe();
+      if (evt.recurso === 'contatos') setSinalContatos(n => n + 1);
+      return;
+    }
     if (evt.type === 'conversa:delete') {
       setConversas(prev => prev.filter(c => c.id !== evt.id));
+      setSinalConversas(n => n + 1);
       return;
     }
     if (evt.type === 'conversa:update' && evt.conversa?.id) {
+      setSinalConversas(n => n + 1);
       setConversas(prev => {
         const atual = prev.find(c => c.id === evt.conversa.id);
         // Exclusao e MONOTONICA: se uma mensagem ja esta apagada no cliente, um
@@ -135,7 +165,7 @@ export function AppProvider({ children }) {
         return ordenarConversas(lista);
       });
     }
-  }, []);
+  }, [recarregarParceiros, recarregarEquipe]);
 
   // Tempo real por SSE do nosso back-end. O EventSource nao envia header
   // Authorization, entao pegamos um ticket de uso unico antes de abrir o stream.
@@ -319,8 +349,10 @@ export function AppProvider({ children }) {
       recargarDados: carregarDadosDoServidor,
       equipe,            recarregarEquipe,
       fluxos,            atualizarFluxos,
-      parceiros,         atualizarParceiros,
-      conversas,         atualizarConversas,
+      parceiros,         atualizarParceiros, recarregarParceiros,
+      conversas,         atualizarConversas, recarregarConversas,
+      // Pulsos de "algo mudou" para os painéis derivados, vindos do mesmo SSE.
+      sinalConversas,   sinalContatos,
       whatsAppConectado, setWhatsAppConectado,
       notificacoes,      removerNotificacao,
       historico,         marcarNotificacoesLidas, limparHistorico,

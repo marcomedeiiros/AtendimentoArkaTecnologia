@@ -127,6 +127,39 @@ A porta 8080 da Evolution **nao** deve ser liberada: ela escuta apenas em
 O pareamento fica no volume `evolution_instances` e sobrevive a restart e
 atualizacao so um `down -v` obriga a escanear o QR de novo.
 
+## 5.1 Consolidacao de conversas e OS (uma vez, no primeiro deploy desta versao)
+
+A partir desta versao a **conversa e o fio permanente do cliente** (uma por
+telefone) e cada ciclo de atendimento e uma **OS** (tabela `atendimentos`).
+Antes, fechar um atendimento e o cliente escrever de novo criava uma conversa
+NOVA -- o historico anterior ficava numa linha separada.
+
+O `docker-entrypoint.sh` ja roda a consolidacao sozinho, entre o `prisma db
+push` e o seed:
+
+```bash
+node prisma/backfill-atendimentos.js
+```
+
+O que ele faz: funde as conversas duplicadas do mesmo telefone na mais antiga
+(movendo as mensagens, nunca apagando nenhuma), cria uma OS para cada conversa
+fundida preservando o numero que ela ja tinha, e preenche a razao social das
+conversas que ja tinham CNPJ identificado. E **idempotente**: nos deploys
+seguintes ele nao acha nada para fazer e custa uma consulta.
+
+> **Antes do primeiro deploy desta versao, gere um backup** (secao 6). A fusao
+> reescreve linhas de `conversas` e `mensagens`; com o backup em maos, uma base
+> com dado estranho pode ser restaurada e reavaliada sem pressa.
+>
+> No log do deploy procure a linha `[arka] backfill de atendimentos: ...` --
+> ela diz quantos clientes foram consolidados e quantas OS foram criadas.
+
+O `prisma db push` desta versao tambem **remove a chave estrangeira** de
+`conversas.cnpj` para `parceiros`. Era ela que derrubava com erro 500 a
+identificacao de qualquer CNPJ que nao estivesse cadastrado como parceiro. O
+`--accept-data-loss` do entrypoint cobre a reconstrucao da tabela; nenhum dado e
+perdido.
+
 ## 6. Backup
 
 O unico dado insubstituivel e o banco do Arka (conversas, contatos, usuarios).

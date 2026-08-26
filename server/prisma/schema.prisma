@@ -27,9 +27,9 @@ model Instancia {
   criadoEm      DateTime @default(now()) @map("criado_em")
   atualizadoEm  DateTime @updatedAt @map("atualizado_em")
 
-  conversas     Conversa[]
-  sessoes       SessaoChatbot[]
-  logsExecucao  LogExecucaoFluxo[]
+  conversas    Conversa[]
+  sessoes      SessaoChatbot[]
+  logsExecucao LogExecucaoFluxo[]
 
   @@map("instancias")
 }
@@ -58,22 +58,22 @@ model Preferencia {
 }
 
 model Usuario {
-  id           String   @id @default(uuid())
-  nome         String
-  email        String   @unique
-  senhaHash    String   @map("senha_hash")
-  cargo        String   @default("Administrador")
-  ativo        Boolean  @default(false)
+  id             String    @id @default(uuid())
+  nome           String
+  email          String    @unique
+  senhaHash      String    @map("senha_hash")
+  cargo          String    @default("Administrador")
+  ativo          Boolean   @default(false)
   // Reservado (opcional). O nome de assinatura em uso e guardado como
   // preferencia do operador; esta coluna existe para o Prisma Client bater com
   // o banco e pode alimentar a assinatura no futuro sem migracao.
-  assinatura   String?
+  assinatura     String?
   // Ultima requisicao autenticada desta pessoa. E o que sustenta o "online" da
   // Gestao da Equipe: com o painel aberto, o front consulta o servidor a cada
   // poucos segundos, entao presenca recente aqui significa aba aberta agora.
   ultimoAcessoEm DateTime? @map("ultimo_acesso_em")
-  criadoEm     DateTime @default(now()) @map("criado_em")
-  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+  criadoEm       DateTime  @default(now()) @map("criado_em")
+  atualizadoEm   DateTime  @updatedAt @map("atualizado_em")
 
   conversasAtendidas Conversa[] @relation("AtendenteConversa")
 
@@ -96,9 +96,9 @@ model Usuario {
 /// inteira e revogada e as duas pontas caem no login. Sem rotacao, um refresh
 /// token copiado valeria pelo prazo inteiro sem ninguem notar.
 model SessaoRefresh {
-  id         String    @id @default(uuid())
+  id              String    @id @default(uuid())
   /// Mesma sessao atraves de todas as rotacoes -- e o que se revoga no logout.
-  familia    String
+  familia         String
   /// Nascimento da SESSAO (o login), copiado em cada rotacao. Sustenta o teto
   /// absoluto (SESSAO_MAX): sem ele, "deslizante" viraria eterna. E uma coluna,
   /// e nao a data da linha mais antiga, porque a faxina apaga linha gasta -- a
@@ -108,15 +108,15 @@ model SessaoRefresh {
   /// coluna, `prisma db push` a adiciona sem exigir --accept-data-loss (linha
   /// existente herda o instante da migracao). O valor real e sempre gravado
   /// explicitamente pelo servico.
-  familiaCriadaEm DateTime @default(now()) @map("familia_criada_em")
+  familiaCriadaEm DateTime  @default(now()) @map("familia_criada_em")
   /// SHA-256 do token; nunca o token em claro.
-  tokenHash  String    @unique @map("token_hash")
-  usuarioId  String    @map("usuario_id")
+  tokenHash       String    @unique @map("token_hash")
+  usuarioId       String    @map("usuario_id")
   /// Prazo desta linha. Renovado a cada rotacao (sessao deslizante).
-  expiraEm   DateTime  @map("expira_em")
-  usadoEm    DateTime? @map("usado_em")
-  revogadoEm DateTime? @map("revogado_em")
-  criadoEm   DateTime  @default(now()) @map("criado_em")
+  expiraEm        DateTime  @map("expira_em")
+  usadoEm         DateTime? @map("usado_em")
+  revogadoEm      DateTime? @map("revogado_em")
+  criadoEm        DateTime  @default(now()) @map("criado_em")
 
   @@index([familia])
   @@index([usuarioId])
@@ -132,18 +132,25 @@ model SessaoRefresh {
 // virava. A equipe agora sai de Usuario -- quem tem conta e quem esta na lista.
 
 model Parceiro {
-  cnpj         String         @id
-  razaoSocial  String         @map("razao_social")
+  cnpj         String   @id
+  razaoSocial  String   @map("razao_social")
   email        String?
   telefones    String?
   cidades      String?
-  contratos    String?        @default("") // tipos de contrato, chaves separadas por virgula (ex: "ti,backups")
-  status       String         @default("ativo")
-  criadoEm     DateTime       @default(now()) @map("criado_em")
-  atualizadoEm DateTime       @updatedAt @map("atualizado_em")
+  contratos    String?  @default("") // tipos de contrato, chaves separadas por virgula (ex: "ti,backups")
+  status       String   @default("ativo")
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  conversas Conversa[]
-
+  // NAO existe mais `conversas Conversa[]` aqui.
+  //
+  // `Conversa.cnpj` apontava para esta tabela como CHAVE ESTRANGEIRA, e o CNPJ
+  // que o cliente informa e dado EXTERNO: quem nao e parceiro cadastrado nao
+  // tem linha aqui. Gravar um CNPJ desses na conversa violava a FK (P2003) e a
+  // identificacao morria com erro 500 -- o painel so "lembrava" do CNPJ ate o
+  // F5, porque o front caia no catch e atualizava so a tela. Agora
+  // `Conversa.cnpj` e coluna simples e o parceiro, quando existe, e resolvido
+  // por consulta (parceiroRepository.findAtivoByCnpj).
   @@index([status])
   @@map("parceiros")
 }
@@ -154,10 +161,10 @@ model Parceiro {
 model Compromisso {
   id           String   @id @default(uuid())
   titulo       String
-  data         String   // YYYY-MM-DD
+  data         String // YYYY-MM-DD
   hora         String   @default("09:00")
-  tipo         String   @default("reuniao")  // reuniao|ligacao|tarefa|followup|lembrete
-  prioridade   String   @default("media")    // alta|media|baixa
+  tipo         String   @default("reuniao") // reuniao|ligacao|tarefa|followup|lembrete
+  prioridade   String   @default("media") // alta|media|baixa
   descricao    String   @default("")
   contato      String   @default("")
   concluido    Boolean  @default(false)
@@ -171,16 +178,16 @@ model Compromisso {
 }
 
 model Contato {
-  id           String     @id @default(uuid())
+  id           String   @id @default(uuid())
   nome         String
   telefone     String
   email        String?
   empresa      String?
-  tag          String     @default("cliente")
-  favorito     Boolean    @default(false)
+  tag          String   @default("cliente")
+  favorito     Boolean  @default(false)
   observacoes  String?
-  criadoEm     DateTime   @default(now()) @map("criado_em")
-  atualizadoEm DateTime   @updatedAt @map("atualizado_em")
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
   @@index([telefone])
   @@index([tag])
@@ -204,21 +211,21 @@ model Fluxo {
 }
 
 model PassoFluxo {
-  id           String         @id @default(uuid())
-  fluxoId      String         @map("fluxo_id")
+  id           String   @id @default(uuid())
+  fluxoId      String   @map("fluxo_id")
   tipo         String
   titulo       String
-  descricao    String?        @map("descricao")
+  descricao    String?  @map("descricao")
   texto        String?
   config       Json?
-  posX         Float?         @map("pos_x")
-  posY         Float?         @map("pos_y")
-  largura      Float?         @map("largura")
-  altura       Float?         @map("altura")
-  targetId     String?        @map("target_id")
-  ordem        Int            @default(0)
-  criadoEm     DateTime       @default(now()) @map("criado_em")
-  atualizadoEm DateTime       @updatedAt @map("atualizado_em")
+  posX         Float?   @map("pos_x")
+  posY         Float?   @map("pos_y")
+  largura      Float?   @map("largura")
+  altura       Float?   @map("altura")
+  targetId     String?  @map("target_id")
+  ordem        Int      @default(0)
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
   fluxo Fluxo @relation(fields: [fluxoId], references: [id], onDelete: Cascade)
 
@@ -226,53 +233,136 @@ model PassoFluxo {
   @@map("fluxo_passos")
 }
 
+/// Conversa = A LINHA DO TEMPO DO CLIENTE, uma so por (instancia, telefone).
+///
+/// Antes cada atendimento era uma Conversa nova: fechar e o cliente escrever de
+/// novo criava outra linha na lista, com outro numero, e o historico anterior
+/// ficava perdido numa conversa separada. Agora a conversa e o fio permanente
+/// do contato (todas as mensagens, para sempre) e cada CICLO de atendimento e
+/// um `Atendimento` (a OS) pendurado nela -- ver o model abaixo.
+///
+/// Os campos de status/atendente/avaliacao continuam aqui porque a tela inteira
+/// (abas, filtros, badges) le a conversa: eles espelham o ATENDIMENTO ATUAL. O
+/// historico de cada ciclo fica em `atendimentos`.
 model Conversa {
-  id                String            @id @default(uuid())
-  instanciaId       String            @map("instancia_id")
-  cliente           String
-  telefone          String
-  statusAtendimento String            @default("pendente") @map("status_atendimento")
-  setor             String?           @default("Geral")
-  cnpj              String?
-  cnpjVerificado    Boolean           @default(false) @map("cnpj_verificado")
-  lido              Boolean           @default(false)
-  naoLidas          Int               @default(0) @map("nao_lidas")
-  fotoUrl           String?           @map("foto_url")
-  avaliacao         Int?
-  feedback          String?
+  id                  String    @id @default(uuid())
+  instanciaId         String    @map("instancia_id")
+  cliente             String
+  telefone            String
+  statusAtendimento   String    @default("pendente") @map("status_atendimento")
+  setor               String?   @default("Geral")
+  cnpj                String?
+  // Razao social gravada no momento em que o CNPJ foi identificado. E o que a
+  // Central exibe: o numero do CNPJ segue no banco para busca e relacionamento,
+  // mas nao aparece mais na conversa.
+  empresa             String?
+  cnpjVerificado      Boolean   @default(false) @map("cnpj_verificado")
+  lido                Boolean   @default(false)
+  naoLidas            Int       @default(0) @map("nao_lidas")
+  fotoUrl             String?   @map("foto_url")
+  avaliacao           Int?
+  /// Espelho do `avaliacaoStatus` da OS em curso (ver model Atendimento).
+  avaliacaoStatus     String?   @map("avaliacao_status")
+  feedback            String?
   // Flags de organizacao da lista. Arquivar/ocultar NAO apagam nada: apenas
   // tiram a conversa da listagem padrao (controlado pelos filtros da tela).
-  favorita          Boolean           @default(false)
-  fixada            Boolean           @default(false)
-  arquivada         Boolean           @default(false)
-  oculta            Boolean           @default(false)
+  favorita            Boolean   @default(false)
+  fixada              Boolean   @default(false)
+  arquivada           Boolean   @default(false)
+  oculta              Boolean   @default(false)
   // Numeracao sequencial. Ticket para toda conversa (exibido como AK00001);
   // OS gerada so quando o atendimento e do setor Tecnico (exibido como OS00001).
   // Unicos e anulaveis (varios NULL convivem no SQLite ate serem atribuidos).
-  numeroTicket      Int?              @unique @map("numero_ticket")
-  numeroOS          Int?              @unique @map("numero_os")
-  atendenteId       String?           @map("atendente_id")
+  numeroTicket        Int?      @unique @map("numero_ticket")
+  numeroOS            Int?      @unique @map("numero_os")
+  /// Ciclo de atendimento (OS) em curso. E dele que saem o numero da OS exibido
+  /// no cabecalho e o recorte do historico. Coluna simples (e nao relacao) para
+  /// nao criar um ciclo Conversa <-> Atendimento no Prisma Client.
+  atendimentoAtualId  String?   @map("atendimento_atual_id")
+  /// REVISAO MONOTONICA. Todo caminho de escrita passa pelo repositorio, e o
+  /// repositorio incrementa isto. O front descarta qualquer versao MENOR ou
+  /// IGUAL a que ja tem em tela: sem isso, a resposta HTTP de uma acao lenta (ou
+  /// um evento SSE atrasado) reescrevia por cima de uma mudanca mais recente --
+  /// era o que fazia a conversa recem-assumida "voltar" para Pendentes.
+  versao              Int       @default(0)
+  atendenteId         String?   @map("atendente_id")
   // Nome de quem atendeu, gravado como HISTORICO. `atendenteId` e o responsavel
   // ATUAL: ele e limpo quando a conversa volta para a fila, e some do relatorio.
   // Como a avaliacao (CSAT) chega no fechamento, sem este campo a coluna
   // "Atendente" ficava vazia na maioria das conversas. Guardamos o nome (e nao
   // so o id) para o historico sobreviver ate a exclusao da conta.
-  ultimoAtendenteNome String?         @map("ultimo_atendente_nome")
-  atendidoEm        DateTime?         @map("atendido_em")
-  fechadoEm         DateTime?         @map("fechado_em")
-  criadoEm          DateTime          @default(now()) @map("criado_em")
-  atualizadoEm      DateTime          @updatedAt @map("atualizado_em")
+  ultimoAtendenteNome String?   @map("ultimo_atendente_nome")
+  atendidoEm          DateTime? @map("atendido_em")
+  fechadoEm           DateTime? @map("fechado_em")
+  criadoEm            DateTime  @default(now()) @map("criado_em")
+  atualizadoEm        DateTime  @updatedAt @map("atualizado_em")
 
-  instancia   Instancia  @relation(fields: [instanciaId], references: [id], onDelete: Cascade)
-  atendente   Usuario?   @relation("AtendenteConversa", fields: [atendenteId], references: [id], onDelete: SetNull)
-  parceiroRef Parceiro?  @relation(fields: [cnpj], references: [cnpj], onDelete: SetNull)
-  mensagens   Mensagem[]
-  sessao      SessaoChatbot?
+  instancia    Instancia      @relation(fields: [instanciaId], references: [id], onDelete: Cascade)
+  atendente    Usuario?       @relation("AtendenteConversa", fields: [atendenteId], references: [id], onDelete: SetNull)
+  mensagens    Mensagem[]
+  atendimentos Atendimento[]
+  sessao       SessaoChatbot?
 
   @@index([telefone])
   @@index([statusAtendimento])
+  // NAO ha @@unique([instanciaId, telefone]) de proposito.
+  //
+  // A regra "uma conversa por cliente" e garantida no codigo: a busca por
+  // telefone devolve o fio existente (em qualquer status) e o webhook do mesmo
+  // numero e serializado por `comLock`. Um indice unico aqui explodiria o
+  // `prisma db push` do deploy enquanto houvesse duplicata antiga no banco --
+  // e o entrypoint morre no `set -e`, derrubando a API. A consolidacao das
+  // duplicatas e feita por prisma/backfill-atendimentos.js, que roda no deploy.
   @@index([instanciaId, telefone])
   @@map("conversas")
+}
+
+/// Atendimento = UMA OS, um ciclo de atendimento dentro da conversa do cliente.
+///
+/// A conversa nunca mais e duplicada: quando um atendimento e fechado e o
+/// cliente volta a escrever, abrimos um Atendimento NOVO (numero de OS novo) na
+/// MESMA conversa. O historico completo continua num lugar so, e "o que
+/// aconteceu em cada OS" fica aqui -- inclusive a avaliacao, que antes era
+/// sobrescrita a cada novo ciclo.
+model Atendimento {
+  id            String    @id @default(uuid())
+  conversaId    String    @map("conversa_id")
+  /// Sequencial exibido como OS00001. Vem do contador atomico "ticket", o mesmo
+  /// que numerava a conversa antes -- assim os numeros ja emitidos continuam
+  /// validos e nao ha colisao com o historico.
+  numeroOS      Int       @unique @map("numero_os")
+  setor         String?
+  /// pendente | aberta | fechada (mesmo vocabulario da conversa).
+  status        String    @default("pendente")
+  atendenteId   String?   @map("atendente_id")
+  /// Nome gravado como historico: sobrevive a exclusao da conta.
+  atendenteNome String?   @map("atendente_nome")
+  avaliacao     Int?
+  /// COMO a avaliacao terminou -- e diferente de "qual foi a nota".
+  ///
+  /// Sem isto so existia "tem nota" ou "nao tem nota", e os dois casos em que
+  /// nao ha nota sao coisas MUITO diferentes: o cliente que sumiu e o cliente
+  /// que respondeu dizendo que nao quer avaliar. Juntar os dois obrigava o
+  /// relatorio a chutar (ou o sistema a gravar uma nota falsa).
+  ///
+  ///   nao_solicitada -> a pesquisa nem chegou a ser enviada
+  ///   aguardando     -> perguntou, esperando a resposta do cliente
+  ///   respondida     -> cliente deu uma nota de 1 a 5
+  ///   sem_nota       -> cliente respondeu, mas optou por nao dar nota
+  ///   sem_resposta   -> o prazo do fluxo acabou sem resposta nenhuma
+  avaliacaoStatus String? @map("avaliacao_status")
+  feedback      String?
+  abertoEm      DateTime  @default(now()) @map("aberto_em")
+  atendidoEm    DateTime? @map("atendido_em")
+  fechadoEm     DateTime? @map("fechado_em")
+  atualizadoEm  DateTime  @updatedAt @map("atualizado_em")
+
+  conversa  Conversa   @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+  mensagens Mensagem[]
+
+  @@index([conversaId, abertoEm])
+  @@index([status])
+  @@map("atendimentos")
 }
 
 // Sequencias numericas atomicas (ex.: "ticket", "os"). O incremento via
@@ -286,26 +376,32 @@ model Contador {
 }
 
 model Mensagem {
-  id         String         @id @default(uuid())
-  conversaId String         @map("conversa_id")
-  origem     String
-  texto      String
-  metadata   Json?
+  id             String    @id @default(uuid())
+  conversaId     String    @map("conversa_id")
+  /// A qual OS esta mensagem pertence. E o que permite recortar o historico por
+  /// atendimento sem quebrar o fio unico da conversa. Nulo nas mensagens
+  /// anteriores a esta mudanca que o backfill nao conseguiu atribuir.
+  atendimentoId  String?   @map("atendimento_id")
+  origem         String
+  texto          String
+  metadata       Json?
   // Id da mensagem na Evolution API. A unicidade e o que impede o mesmo
   // webhook reentregue de rodar o fluxo duas vezes.
-  waMessageId String?       @unique @map("wa_message_id")
+  waMessageId    String?   @unique @map("wa_message_id")
   // Ciclo de vida da mensagem que NOS enviamos, alimentado pelo evento
   // messages.update da Evolution: enviando | enviada | entregue | lida | erro.
   // Null nas mensagens recebidas do cliente (nao ha o que confirmar).
   status         String?
   // Mensagem citada (recurso "responder" do WhatsApp).
-  respondendoAId String?    @map("respondendo_a_id")
-  editadaEm      DateTime?  @map("editada_em")
-  criadoEm   DateTime       @default(now()) @map("criado_em")
+  respondendoAId String?   @map("respondendo_a_id")
+  editadaEm      DateTime? @map("editada_em")
+  criadoEm       DateTime  @default(now()) @map("criado_em")
 
-  conversa Conversa @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+  conversa    Conversa     @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+  atendimento Atendimento? @relation(fields: [atendimentoId], references: [id], onDelete: SetNull)
 
   @@index([conversaId, criadoEm])
+  @@index([atendimentoId])
   @@map("mensagens")
 }
 
@@ -336,17 +432,17 @@ model SessaoChatbot {
 // Usuario: mesmo que a conta seja excluida depois, o relato preserva a autoria.
 // Valores validos de status (controlados pelo DTO): aberto | resolvido.
 model RelatoBug {
-  id            String   @id @default(uuid())
-  descricao     String
-  pagina        String?  // rota de onde o relato foi aberto (ex: /atendimento)
-  imagens       Json?    // prints anexados (array de data URLs base64), opcional
-  status        String   @default("aberto")
-  prioridade    String   @default("media") // baixa | media | alta | critica (triagem do admin)
-  usuarioId     String?  @map("usuario_id")
-  usuarioNome   String?  @map("usuario_nome")
-  usuarioEmail  String?  @map("usuario_email")
-  criadoEm      DateTime @default(now()) @map("criado_em")
-  atualizadoEm  DateTime @updatedAt @map("atualizado_em")
+  id           String   @id @default(uuid())
+  descricao    String
+  pagina       String? // rota de onde o relato foi aberto (ex: /atendimento)
+  imagens      Json? // prints anexados (array de data URLs base64), opcional
+  status       String   @default("aberto")
+  prioridade   String   @default("media") // baixa | media | alta | critica (triagem do admin)
+  usuarioId    String?  @map("usuario_id")
+  usuarioNome  String?  @map("usuario_nome")
+  usuarioEmail String?  @map("usuario_email")
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
   @@index([status, criadoEm])
   @@map("relatos_bug")
@@ -361,7 +457,7 @@ model MensagemRapida {
   texto         String   @default("")
   categoria     String   @default("geral")
   icon          String   @default("default")
-  anexoMedia    String?  @map("anexo_media")    // data URL base64 (raster), opcional
+  anexoMedia    String?  @map("anexo_media") // data URL base64 (raster), opcional
   anexoMimetype String?  @map("anexo_mimetype")
   anexoNome     String?  @map("anexo_nome")
   ordem         Int      @default(0)
@@ -398,25 +494,25 @@ model LogExecucaoFluxo {
 // uma regra de tela (a API aceitava rajada e podia queimar o numero). Agora o
 // estado e o ritmo sao do backend, e a tela apenas acompanha o progresso.
 model Campanha {
-  id            String   @id @default(uuid())
+  id            String    @id @default(uuid())
   nome          String
   mensagem      String
   // Intervalo (segundos) sorteado entre cada envio. O servidor impoe o minimo.
-  intervaloDe   Int      @default(2) @map("intervalo_de")
-  intervaloAte  Int      @default(5) @map("intervalo_ate")
+  intervaloDe   Int       @default(2) @map("intervalo_de")
+  intervaloAte  Int       @default(5) @map("intervalo_ate")
   // rascunho | enviando | pausada | concluida | cancelada
-  status        String   @default("rascunho")
-  total         Int      @default(0)
-  enviados      Int      @default(0)
-  falhas        Int      @default(0)
+  status        String    @default("rascunho")
+  total         Int       @default(0)
+  enviados      Int       @default(0)
+  falhas        Int       @default(0)
   // Quem criou (auditoria) e ultimo erro geral, quando houver.
-  criadoPorId   String?  @map("criado_por_id")
-  criadoPorNome String?  @map("criado_por_nome")
+  criadoPorId   String?   @map("criado_por_id")
+  criadoPorNome String?   @map("criado_por_nome")
   erro          String?
   iniciadoEm    DateTime? @map("iniciado_em")
   concluidoEm   DateTime? @map("concluido_em")
-  criadoEm      DateTime @default(now()) @map("criado_em")
-  atualizadoEm  DateTime @updatedAt @map("atualizado_em")
+  criadoEm      DateTime  @default(now()) @map("criado_em")
+  atualizadoEm  DateTime  @updatedAt @map("atualizado_em")
 
   destinatarios CampanhaDestinatario[]
 
@@ -425,15 +521,15 @@ model Campanha {
 }
 
 model CampanhaDestinatario {
-  id         String   @id @default(uuid())
-  campanhaId String   @map("campanha_id")
+  id         String    @id @default(uuid())
+  campanhaId String    @map("campanha_id")
   nome       String?
   telefone   String
   // pendente | enviado | erro
-  status     String   @default("pendente")
+  status     String    @default("pendente")
   erro       String?
   enviadoEm  DateTime? @map("enviado_em")
-  ordem      Int      @default(0)
+  ordem      Int       @default(0)
 
   campanha Campanha @relation(fields: [campanhaId], references: [id], onDelete: Cascade)
 

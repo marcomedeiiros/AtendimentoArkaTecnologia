@@ -6,21 +6,58 @@ const ms = (d) => (d ? new Date(d).getTime() : null);
 const media = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0);
 
 class HelpDeskService {
-  // Painel de suporte: tudo derivado das conversas/mensagens que ja existem no
-  // banco -- nao ha tabela propria. So leitura.
+  /**
+   * Painel de suporte. So leitura, tudo derivado do que ja existe no banco.
+   *
+   * A UNIDADE DE MEDIDA aqui e o ATENDIMENTO (a OS), nao a conversa.
+   *
+   * Antes as duas coisas eram a mesma linha, entao contar conversas respondia
+   * "quantos atendimentos houve". Agora a conversa e o fio permanente do
+   * cliente: contar conversas fechadas passaria a responder "quantos clientes
+   * estao sem atendimento em curso" -- e o volume do mes despencaria para o
+   * numero de clientes distintos. Cada metrica abaixo passou a olhar a OS.
+   */
   async obterMetricas() {
     // Metas de SLA configuraveis (tela do Help Desk); caem no padrao 15min/24h.
     const { respostaMin: SLA_RESPOSTA_MIN, resolucaoHoras: SLA_RESOLUCAO_HORAS } =
       await configuracaoService.slaHelpDesk();
-    const conversas = await conversaRepository.findAll();
+
+    const [conversas, atendimentos] = await Promise.all([
+      conversaRepository.findAll(),
+      conversaRepository.listarTodosAtendimentos(),
+    ]);
+
     const agora = Date.now();
     const inicioHoje = new Date();
     inicioHoje.setHours(0, 0, 0, 0);
 
+    // Mensagens de cada OS. As anteriores a esta mudanca nao tem carimbo de
+    // atendimento: caem na OS MAIS ANTIGA daquela conversa, que e o ciclo a que
+    // de fato pertenciam quando conversa e atendimento eram a mesma coisa.
+    const conversaPorId = new Map(conversas.map((c) => [c.id, c]));
+    const setorDaConversa = new Map(conversas.map((c) => [c.id, c.setor || "Geral"]));
+    const maisAntigaDaConversa = new Map(); // conversaId -> atendimentoId
+    for (const a of atendimentos) {
+      const atual = maisAntigaDaConversa.get(a.conversaId);
+      if (!atual || ms(a.abertoEm) < atual.em) {
+        maisAntigaDaConversa.set(a.conversaId, { id: a.id, em: ms(a.abertoEm) });
+      }
+    }
+    const msgsPorAtendimento = new Map();
+    for (const c of conversas) {
+      const fallback = maisAntigaDaConversa.get(c.id)?.id || null;
+      for (const m of c.mensagens || []) {
+        const alvo = m.atendimentoId || fallback;
+        if (!alvo) continue;
+        if (!msgsPorAtendimento.has(alvo)) msgsPorAtendimento.set(alvo, []);
+        msgsPorAtendimento.get(alvo).push(m);
+      }
+    }
+
     let pendente = 0;
     let aberta = 0;
     let fechada = 0;
-    const volume = { hoje: 0, semana: 0, mes: 0, total: conversas.length };
+    const volume = { hoje: 0, semana: 0, mes: 0, total: atendimentos.length };
     const respostas = []; // segundos ate a 1a resposta
     const resolucoes = []; // segundos ate fechar
     let dentroSlaResposta = 0;
@@ -30,13 +67,16 @@ class HelpDeskService {
     let maisAntigoPendente = null;
     const setores = {};
 
-    for (const c of conversas) {
-      const st = c.statusAtendimento;
+    for (const a of atendimentos) {
+      // OS orfa (conversa apagada) nao entra: sem o fio nao ha o que medir.
+      if (!conversaPorId.has(a.conversaId)) continue;
+
+      const st = a.status;
       if (st === "pendente") pendente++;
       else if (st === "aberta") aberta++;
       else if (st === "fechada") fechada++;
 
-      const criado = ms(c.criadoEm);
+      const criado = ms(a.abertoEm);
       if (criado != null) {
         if (criado >= inicioHoje.getTime()) volume.hoje++;
         if (agora - criado <= 7 * DIA) volume.semana++;
@@ -47,17 +87,17 @@ class HelpDeskService {
         maisAntigoPendente = criado;
       }
 
-      const setor = c.setor || "Geral";
+      const setor = a.setor || setorDaConversa.get(a.conversaId) || "Geral";
       if (!setores[setor]) setores[setor] = { setor, total: 0, backlog: 0, fechadas: 0, respostas: [] };
       const sb = setores[setor];
       sb.total++;
       if (st === "pendente" || st === "aberta") sb.backlog++;
       if (st === "fechada") sb.fechadas++;
 
-      // Tempo de 1a resposta: do 1o texto do cliente ate a 1a resposta nossa
-      // (equipe ou bot) que veio depois. Ignora conversa que o cliente nunca
-      // escreveu ou que ninguem respondeu ainda.
-      const msgs = c.mensagens || [];
+      // Tempo de 1a resposta: do 1o texto do cliente NESTE ciclo ate a 1a
+      // resposta nossa (equipe ou bot) que veio depois. Ignora ciclo que o
+      // cliente nunca escreveu ou que ninguem respondeu ainda.
+      const msgs = msgsPorAtendimento.get(a.id) || [];
       const primeiroCliente = msgs.find((m) => m.origem === "cliente");
       if (primeiroCliente) {
         const t0 = ms(primeiroCliente.criadoEm);
@@ -74,11 +114,11 @@ class HelpDeskService {
         }
       }
 
-      // Tempo de resolucao: de quando foi atendida (ou criada) ate fechar.
-      if (st === "fechada" && c.fechadoEm) {
-        const base = ms(c.atendidoEm) || criado;
+      // Tempo de resolucao: de quando foi atendido (ou aberto) ate fechar.
+      if (st === "fechada" && a.fechadoEm) {
+        const base = ms(a.atendidoEm) || criado;
         if (base != null) {
-          const seg = (ms(c.fechadoEm) - base) / 1000;
+          const seg = (ms(a.fechadoEm) - base) / 1000;
           if (seg >= 0) {
             resolucoes.push(seg);
             if (seg <= SLA_RESOLUCAO_HORAS * 3600) dentroSlaResolucao++;
@@ -86,8 +126,8 @@ class HelpDeskService {
         }
       }
 
-      if (c.avaliacao != null && c.avaliacao > 0) {
-        avaliacaoSoma += c.avaliacao;
+      if (a.avaliacao != null && a.avaliacao > 0) {
+        avaliacaoSoma += a.avaliacao;
         avaliacaoQtd++;
       }
     }
@@ -102,6 +142,8 @@ class HelpDeskService {
         respostaAmostra: s.respostas.length,
       }))
       .sort((a, b) => b.backlog - a.backlog || b.total - a.total);
+
+    const totalOS = pendente + aberta + fechada;
 
     return {
       geradoEm: new Date().toISOString(),
@@ -124,10 +166,12 @@ class HelpDeskService {
         resolucaoPct: resolucoes.length ? Math.round((dentroSlaResolucao / resolucoes.length) * 100) : null,
         resolucaoLimiteHoras: SLA_RESOLUCAO_HORAS,
       },
-      taxaResolucao: conversas.length ? Math.round((fechada / conversas.length) * 100) : 0,
+      taxaResolucao: totalOS ? Math.round((fechada / totalOS) * 100) : 0,
       status: { pendente, aberta, fechada },
       csat: { media: avaliacaoQtd ? avaliacaoSoma / avaliacaoQtd : 0, total: avaliacaoQtd },
       porSetor,
+      // Quantos clientes distintos estao em atendimento (o fio, nao o ciclo).
+      clientes: conversas.length,
     };
   }
 }

@@ -7,6 +7,7 @@ import {
 import { ContatosAPI } from '../../services/api';
 import Portal from '../Portal';
 import { contatoCombina } from '../../utils/busca';
+import { useAppContext } from '../../context/AppContext';
 
 function limparTel(v) { return String(v || '').replace(/\D/g, ''); }
 function mascararTel(v) {
@@ -182,6 +183,8 @@ const ItemContatoWhatsApp = React.memo(function ItemContatoWhatsApp({ contato, o
 });
 
 export default function Contatos({ setAba }) {
+  // Pulso de "a agenda mudou no servidor", vindo do SSE do AppContext.
+  const { sinalContatos } = useAppContext();
   const [contatos,     setContatos]   = useState([]);
   const [carregando,   setCarregando] = useState(true);
   const [modalAberto,  setModal]      = useState(false);
@@ -234,6 +237,13 @@ export default function Contatos({ setAba }) {
   useEffect(() => {
     carregarContatosServidor();
   }, [carregarContatosServidor]);
+
+  // Alguém mexeu na agenda (outro operador, ou a importação do WhatsApp):
+  // relê a lista. Ignora o primeiro valor, que é só o estado inicial do sinal.
+  useEffect(() => {
+    if (!sinalContatos) return;
+    carregarContatosServidor();
+  }, [sinalContatos, carregarContatosServidor]);
 
   // So mexe no estado depois que o servidor confirma. Antes, o catch gravava
   // o contato apenas na tela: parecia salvo e sumia no F5.

@@ -4,6 +4,7 @@ const crypto = require("crypto");
 const env = require("../../config/env");
 const logger = require("../../config/logger");
 const AppError = require("../../shared/errors/AppError");
+const bus = require("../../shared/events/event-bus");
 const usuarioRepository = require("../../infrastructure/repositories/usuario.repository");
 const sessaoRefreshRepository = require("../../infrastructure/repositories/sessaoRefresh.repository");
 const permissaoService = require("../permissoes/permissao.service");
@@ -111,6 +112,13 @@ class AuthService {
 
     const senhaHash = await bcrypt.hash(senha, 10);
     const usuario = await usuarioRepository.criar({ nome, email, senhaHash, cargo: cargoSeguro });
+
+    // A solicitacao ja esta no banco -- o que faltava era AVISAR quem aprova.
+    // Sem este evento, a Gestao da Equipe so descobria a conta nova na proxima
+    // releitura periodica (ate 30s) ou num F5, e parecia que o cadastro nao
+    // tinha sido salvo. O evento so carrega o NOME do recurso: cada painel rele
+    // a lista pela API, com as permissoes de quem esta olhando.
+    bus.emitRecurso("equipe");
 
     // Sem token: criar conta nao e entrar. Quem acabou de se cadastrar passa
     // pelo login como qualquer outra pessoa -- assim a senha e exercitada uma

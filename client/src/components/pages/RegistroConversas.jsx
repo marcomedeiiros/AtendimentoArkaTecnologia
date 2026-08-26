@@ -30,6 +30,27 @@ const STATUS = {
   fechada: { label: 'Fechada', cls: 'bg-slate-500/15 text-slate-300 border-slate-500/30' },
 };
 
+/**
+ * Como a avaliação terminou, quando NÃO há nota.
+ *
+ * "Sem nota" e "não respondeu" são coisas diferentes e o relatório precisa
+ * distingui-las: antes, os dois viravam um traço na coluna, e não havia como
+ * saber se o cliente recusou ou se a pesquisa ficou no vácuo. O estado vem do
+ * backend (campo avaliacaoStatus), definido pelo Fluxo de Automação.
+ */
+const AVALIACAO_SEM_NOTA = {
+  sem_nota: { label: 'Optou por não dar nota', curto: 'Sem nota', cls: 'text-slate-400' },
+  sem_resposta: { label: 'Não respondeu no prazo do fluxo', curto: 'Sem resposta', cls: 'text-slate-500' },
+  aguardando: { label: 'Aguardando a resposta do cliente', curto: 'Aguardando', cls: 'text-espera-400' },
+};
+
+function rotuloAvaliacao(c) {
+  if (c.avaliacao) return { texto: `${c.avaliacao}★`, titulo: `Nota ${c.avaliacao}`, cls: 'text-white' };
+  const st = AVALIACAO_SEM_NOTA[c.avaliacaoStatus];
+  if (st) return { texto: st.curto, titulo: st.label, cls: st.cls };
+  return { texto: '-', titulo: 'Sem pesquisa de satisfação', cls: 'text-slate-500' };
+}
+
 // Normaliza para comparar palavra-chave (minusculo, sem acento).
 function semAcento(s) {
   return String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -103,7 +124,45 @@ function baixar(nome, conteudo, tipo = 'text/plain;charset=utf-8;') {
   URL.revokeObjectURL(url);
 }
 
-export default function RegistroConversas({ conversas = [], equipe = [] }) {
+/**
+ * Uma linha do registro POR ATENDIMENTO (OS), e não por conversa.
+ *
+ * A conversa virou o fio permanente do cliente: se o registro continuasse
+ * listando conversas, cada cliente apareceria uma única vez, mostrando só a OS
+ * em curso -- todos os atendimentos anteriores sumiriam do relatório e do CSV.
+ * Aqui o fio é reaberto em uma linha por ciclo, com as mensagens daquele ciclo,
+ * que é exatamente o que o registro mostrava antes desta mudança.
+ *
+ * O formato de cada linha continua o de uma conversa (mesmos campos), então
+ * filtros, CSV e transcrição em PDF seguem funcionando sem saber da diferença.
+ */
+function expandirEmAtendimentos(conversas) {
+  return conversas.flatMap((c) => {
+    const lista = c.atendimentos && c.atendimentos.length ? c.atendimentos : null;
+    // Base ainda sem OS (nada consolidado): a própria conversa é a linha.
+    if (!lista) return [c];
+    return lista.map((a) => ({
+      ...c,
+      // `id` continua sendo o da conversa (o PDF e o tooltip citam o fio);
+      // `linhaId` identifica a linha para o React e para o filtro.
+      linhaId: a.id,
+      ticket: a.os,
+      statusAtendimento: a.status,
+      setor: a.setor || c.setor,
+      criadoEm: a.abertoEm,
+      fechadoEm: a.fechadoEm,
+      avaliacao: a.avaliacao ?? null,
+      avaliacaoStatus: a.avaliacaoStatus ?? null,
+      feedback: a.feedback ?? null,
+      atendenteNome: a.atendenteNome || null,
+      atendenteId: a.atendenteId || null,
+      mensagens: (c.mensagens || []).filter((m) => m.atendimentoId === a.id),
+    }));
+  });
+}
+
+export default function RegistroConversas({ conversas: fios = [], equipe = [] }) {
+  const conversas = useMemo(() => expandirEmAtendimentos(fios), [fios]);
   const [busca, setBusca] = useState('');
   const [status, setStatus] = useState('');
   const [setor, setSetor] = useState('');
@@ -167,7 +226,7 @@ export default function RegistroConversas({ conversas = [], equipe = [] }) {
         fmtData(c.criadoEm),
         fmtData(c.fechadoEm),
         (c.mensagens || []).length,
-        c.avaliacao || '',
+        c.avaliacao || (AVALIACAO_SEM_NOTA[c.avaliacaoStatus]?.label ?? ''),
         atendenteDe(c) || '',
       ]),
     ];
@@ -260,7 +319,7 @@ export default function RegistroConversas({ conversas = [], equipe = [] }) {
                 {filtradas.slice(0, 200).map((c) => {
                   const st = STATUS[c.statusAtendimento] || { label: c.statusAtendimento, cls: 'bg-slate-500/15 text-slate-300 border-slate-500/30' };
                   return (
-                    <tr key={c.id} className="border-b border-linha/40 hover:bg-grafite-600/40 transition-colors">
+                    <tr key={c.linhaId || c.id} className="border-b border-linha/40 hover:bg-grafite-600/40 transition-colors">
                       <td className="py-2.5 px-3 text-acao-200 font-mono font-bold text-[11px] whitespace-nowrap" title={c.id}>#{c.ticket || idCurto(c.id)}</td>
                       <td className="py-2.5 px-3 text-white font-semibold whitespace-nowrap">{c.cliente || '-'}</td>
                       <td className="py-2.5 px-3 text-slate-400 font-mono whitespace-nowrap">{c.telefone || '-'}</td>
@@ -272,7 +331,14 @@ export default function RegistroConversas({ conversas = [], equipe = [] }) {
                       <td className="py-2.5 px-3 text-slate-400 whitespace-nowrap">{fmtData(c.criadoEm)}</td>
                       <td className="py-2.5 px-3 text-slate-400 whitespace-nowrap">{fmtData(c.fechadoEm)}</td>
                       <td className="py-2.5 px-3 text-center text-slate-300">{(c.mensagens || []).length}</td>
-                      <td className="py-2.5 px-3 text-center">{c.avaliacao ? `${c.avaliacao}★` : '-'}</td>
+                      {(() => {
+                        const av = rotuloAvaliacao(c);
+                        return (
+                          <td className={`py-2.5 px-3 text-center text-[11px] whitespace-nowrap ${av.cls}`} title={av.titulo}>
+                            {av.texto}
+                          </td>
+                        );
+                      })()}
                       <td className="py-2.5 px-3 text-right">
                         <button
                           onClick={() => baixarTranscricao(c)}

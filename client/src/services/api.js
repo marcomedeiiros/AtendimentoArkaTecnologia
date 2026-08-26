@@ -308,6 +308,8 @@ export const FluxosAPI = {
   atualizar: (id, dados) => request(`/fluxos/${id}`, { method: 'PUT', body: JSON.stringify(dados) }),
   remover: (id) => request(`/fluxos/${id}`, { method: 'DELETE' }),
   removerTodos: () => request('/fluxos', { method: 'DELETE' }),
+  // Retrato de TODAS as regras do bot, fluxo a fluxo (painel Automacoes do BOT).
+  automacoes: () => request('/fluxos/automacoes/resumo'),
 };
 
 // ── Chatbot API ──
@@ -423,6 +425,10 @@ export const ConfiguracoesAPI = {
 // ── Conversas API ──
 export const ConversasAPI = {
   listar: () => request('/conversas'),
+  // Uma conversa, direto do servidor. É o desempate quando o estado local pode
+  // estar errado (ex.: falhou ao assumir): em vez de restaurar um retrato antigo
+  // guardado na tela, perguntamos qual é a verdade.
+  obter: (id) => request(`/conversas/${id}`),
   atender: (id) => request(`/conversas/${id}/atender`, { method: 'POST' }),
   // Conversa nova a partir de um numero digitado. Diferente de
   // `WhatsAppAPI.enviar`, que dispara no WhatsApp mas nao registra nada na
@@ -436,8 +442,13 @@ export const ConversasAPI = {
   encaminharMensagem: (mensagemId, conversaDestinoId) => request('/conversas/mensagens/encaminhar', { method: 'POST', body: JSON.stringify({ mensagemId, conversaDestinoId }) }),
   solicitarCnpj: (id) => request(`/conversas/${id}/solicitar-cnpj`, { method: 'POST' }),
   validarCnpj: (id, cnpj) => request(`/conversas/${id}/validar-cnpj`, { method: 'POST', body: JSON.stringify({ cnpj }) }),
-  // Desvincula o CNPJ: a conversa volta para "CNPJ pendente".
-  desvincularCnpj: (id) => request(`/conversas/${id}/cnpj`, { method: 'DELETE' }),
+  // NAO existe mais `desvincularCnpj`: o "X" saiu do cabecalho da conversa e a
+  // rota DELETE /conversas/:id/cnpj deixou de existir no servidor. A correcao de
+  // um CNPJ errado e feita pelo proprio cliente (responde "NAO" ao bot) ou pelo
+  // administrador em Clientes (CNPJ).
+  // Historico de OS (atendimentos) do cliente. A conversa ja traz a lista; esta
+  // rota serve para reler so o historico sem baixar o fio inteiro.
+  atendimentos: (id) => request(`/conversas/${id}/atendimentos`),
   atualizarStatus: (id, status) => request(`/conversas/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   atualizarSetor: (id, setor) => request(`/conversas/${id}/setor`, { method: 'PATCH', body: JSON.stringify({ setor }) }),
   // Define/limpa o responsavel (compartilhado). atendenteId null = remover.

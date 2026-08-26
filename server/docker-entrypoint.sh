@@ -17,6 +17,14 @@ echo "[arka] aplicando schema em ${DATABASE_URL}"
 # schema.prisma -- se aparecer aviso de perda de dados, era intencional?
 npx prisma db push --skip-generate --accept-data-loss
 
+# Consolida o historico no modelo "uma conversa por cliente, uma OS por ciclo".
+# Idempotente: nas subidas seguintes nao ha duplicata para fundir nem OS para
+# criar, e o passo custa uma consulta. Precisa vir DEPOIS do db push (usa a
+# tabela `atendimentos`) e antes da API subir, para nenhuma requisicao pegar o
+# banco no meio da consolidacao.
+echo "[arka] consolidando conversas e atendimentos (OS)"
+node prisma/backfill-atendimentos.js
+
 echo "[arka] seed (instancia + usuario administrador)"
 node prisma/seed.js
 

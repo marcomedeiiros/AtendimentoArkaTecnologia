@@ -18,7 +18,7 @@ class ChatbotService {
     return instancia;
   }
 
-  async processar({ telefone, texto, nomeCliente, instanceName, waMessageId, midia = null }) {
+  async processar({ telefone, texto, nomeCliente, instanceName, waMessageId, midia = null, encaminhada = null }) {
     const instancia = await this.resolverInstancia(instanceName);
     return chatbotEngine.processarMensagemEntrada({
       instanciaId: instancia.id,
@@ -28,6 +28,7 @@ class ChatbotService {
       nomeCliente,
       waMessageId,
       midia,
+      encaminhada,
     });
   }
 

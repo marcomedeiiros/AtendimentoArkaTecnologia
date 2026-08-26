@@ -3,8 +3,10 @@ const instanciaRepository = require("../../infrastructure/repositories/instancia
 const evolutionApi = require("../../infrastructure/external/evolution-api.client");
 const transcricaoClient = require("../../infrastructure/external/transcricao.client");
 const midiaStorage = require("../../infrastructure/storage/midia.storage");
-const { mapConversa } = require("../../shared/helpers/mapper.helper");
-const { limparCnpj, cnpjValido, mascararCnpj, normalizarTelefoneBr } = require("../../shared/helpers/cnpj.helper");
+const { mapConversa, mapAtendimento } = require("../../shared/helpers/mapper.helper");
+// `mascararCnpj` saiu daqui: nenhuma mensagem deste service imprime mais os 14
+// digitos -- o que confirma a identificacao e a razao social.
+const { limparCnpj, cnpjValido, normalizarTelefoneBr } = require("../../shared/helpers/cnpj.helper");
 const { normalizarSetor, podeAcessarSetor } = require("../../shared/helpers/setor.helper");
 const parceiroRepository = require("../../infrastructure/repositories/parceiro.repository");
 const usuarioRepository = require("../../infrastructure/repositories/usuario.repository");
@@ -45,19 +47,23 @@ class ConversaService {
     return dto;
   }
 
+  /**
+   * ASSUMIR O ATENDIMENTO.
+   *
+   * Operacao ATOMICA e idempotente. Antes era ler-depois-escrever: dois
+   * atendentes clicando ao mesmo tempo recebiam 200 os dois, o ultimo UPDATE
+   * vencia, e o primeiro seguia com a conversa marcada como sua na tela --
+   * inclusive respondendo o cliente de outra pessoa. Agora quem decide o dono e
+   * o banco (UPDATE condicional em conversa.repository.assumirAtomico); quem
+   * perder recebe 409 e o estado real, ja atualizado, chega pelo SSE.
+   *
+   * Clicar duas vezes (ou reenviar por reconexao) NAO conflita: a condicao
+   * aceita "vago OU ja e meu".
+   */
   async atender(id, atendenteId = null, userCargo = null) {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
     exigirAcessoSetor(userCargo, conversa.setor);
-
-    // Auto-recuperacao da foto: se a Evolution estava fora (ou sem foto) quando
-    // a conversa nasceu, tentamos de novo ao assumir o atendimento.
-    if (!conversa.fotoUrl) {
-      const foto = await evolutionApi
-        .fetchProfilePictureUrl(conversa.telefone, env.evolutionApi.instance)
-        .catch(() => null);
-      if (foto) await conversaRepository.update(id, { fotoUrl: foto });
-    }
 
     // Nome de quem assumiu, guardado como historico (ver ultimoAtendenteNome no
     // schema): sobrevive a conversa voltar para a fila e alimenta a coluna
@@ -68,17 +74,55 @@ class ConversaService {
       nomeAtendente = usuario?.nome || null;
     }
 
-    const atualizada = await conversaRepository.update(id, {
-      statusAtendimento: "aberta",
-      lido: true,
-      naoLidas: 0,
-      atendenteId,
-      ...(nomeAtendente ? { ultimoAtendenteNome: nomeAtendente } : {}),
-      // So marca o inicio do atendimento na primeira vez (nao sobrescreve em reabertura).
-      atendidoEm: conversa.atendidoEm || new Date(),
+    // Fio fechado que volta a ser atendido precisa de OS aberta para receber o
+    // ciclo (o operador pode assumir uma conversa que o bot ja encerrou).
+    await conversaRepository.garantirAtendimentoAberto(id, { setor: conversa.setor });
+
+    const { assumido } = await conversaRepository.assumirAtomico(id, atendenteId, nomeAtendente);
+
+    if (!assumido) {
+      // Perdeu a corrida. Emitimos o estado REAL antes de recusar: assim o
+      // painel de quem perdeu ja recebe o dono certo pelo stream, sem depender
+      // do F5. (O front ainda relê a conversa no catch, porque a resposta de
+      // erro so carrega codigo e mensagem -- ver error.middleware.)
+      const real = await conversaRepository.findById(id);
+      this._emitir(real);
+      throw new AppError(
+        `${real?.atendente?.nome || "Outro atendente"} assumiu esta conversa primeiro.`,
+        409,
+        "CONVERSA_JA_ATENDIDA"
+      );
+    }
+
+    await conversaRepository.atualizarAtendimentoAtual(id, {
+      status: "aberta",
+      atendenteId: atendenteId || null,
+      ...(nomeAtendente ? { atendenteNome: nomeAtendente } : {}),
+      atendidoEm: new Date(),
     });
 
-    return this._emitir(atualizada);
+    // Auto-recuperacao da foto: se a Evolution estava fora (ou sem foto) quando
+    // a conversa nasceu, tentamos de novo ao assumir o atendimento. Depois do
+    // guard de concorrencia de proposito -- e chamada de rede, e nao pode
+    // atrasar a decisao de quem fica com a conversa.
+    if (!conversa.fotoUrl) {
+      const foto = await evolutionApi
+        .fetchProfilePictureUrl(conversa.telefone, env.evolutionApi.instance)
+        .catch(() => null);
+      if (foto) await conversaRepository.update(id, { fotoUrl: foto });
+    }
+
+    return this._emitir(await conversaRepository.findById(id));
+  }
+
+  // Historico de OS do cliente. As mensagens de cada ciclo ja vao na conversa
+  // (carimbadas com `atendimentoId`); aqui vem so o resumo de cada atendimento.
+  async listarAtendimentos(id, userCargo = null) {
+    const conversa = await conversaRepository.findByIdBasico(id);
+    if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
+    exigirAcessoSetor(userCargo, conversa.setor);
+    const lista = await conversaRepository.listarAtendimentos(id);
+    return lista.map(mapAtendimento);
   }
 
   /**
@@ -126,23 +170,31 @@ class ConversaService {
       );
     }
 
-    // Reaproveita conversa em andamento com o mesmo numero: criar outra deixaria
-    // o mesmo cliente em duas linhas da lista, cada uma com metade do historico.
-    // (`findByTelefone` so considera pendente/aberta, entao um atendimento ja
-    // encerrado nao e reaberto por um contato novo -- ele vira conversa nova.)
+    // Reaproveita SEMPRE o fio do cliente (qualquer status): criar outra linha
+    // deixaria o mesmo cliente duplicado na lista, cada metade com um pedaco do
+    // historico. Se o ultimo atendimento ja estava fechado, isto abre uma OS
+    // nova no mesmo fio -- o historico continua inteiro e so o ciclo muda.
     const existente = await conversaRepository.findByTelefone(instancia.id, numero);
 
     let conversaId;
     if (existente) {
       conversaId = existente.id;
+      await conversaRepository.garantirAtendimentoAberto(existente.id, { setor: setorFinal });
       await conversaRepository.update(existente.id, {
         statusAtendimento: "aberta",
         setor: setorFinal,
         lido: true,
         naoLidas: 0,
+        fechadoEm: null,
         // Nao rouba a conversa de quem ja estava nela.
         atendenteId: existente.atendenteId || atendenteId,
         atendidoEm: existente.atendidoEm || new Date(),
+      });
+      await conversaRepository.atualizarAtendimentoAtual(existente.id, {
+        status: "aberta",
+        setor: setorFinal,
+        atendenteId: existente.atendenteId || atendenteId || null,
+        atendidoEm: new Date(),
       });
     } else {
       const criada = await conversaRepository.create({
@@ -200,7 +252,17 @@ class ConversaService {
     exigirAcessoSetor(userCargo, conversa?.setor);
   }
 
-  async enviarMensagem(id, texto, origem = "equipe", respondendoAId = null, userCargo = null, autor = null) {
+  async enviarMensagem(
+    id,
+    texto,
+    origem = "equipe",
+    respondendoAId = null,
+    userCargo = null,
+    autor = null,
+    // Metadata extra da bolha. Hoje so a marca de encaminhamento, vinda do
+    // botao "Encaminhar" -- por isso opcional e sem valor padrao proprio.
+    metadataExtra = null
+  ) {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
     exigirAcessoSetor(userCargo, conversa.setor);
@@ -239,14 +301,20 @@ class ConversaService {
 
     if (cnpjNumeros.length === 14 && !conversa.cnpjVerificado && cnpjValido(cnpjNumeros)) {
       const parceiro = await parceiroRepository.findAtivoByCnpj(cnpjNumeros);
+      // `empresa` e o que a Central passa a exibir no lugar do numero. Fica
+      // gravado aqui (e nao resolvido a cada leitura) para a identificacao
+      // sobreviver mesmo que o cadastro do parceiro mude ou saia depois.
       await conversaRepository.update(id, {
         cnpj: cnpjNumeros,
+        empresa: parceiro?.razaoSocial || null,
         cnpjVerificado: true,
       });
 
+      // Sem os 14 digitos: a bolha e parte da conversa, e o que identifica o
+      // cliente e a razao social. O numero segue no banco para busca e vinculo.
       const msgConf = parceiro
-        ? `CNPJ ${mascararCnpj(cnpjNumeros)} validado! Razao Social: ${parceiro.razaoSocial} Parceiro com Contrato Ativo.`
-        : `CNPJ ${mascararCnpj(cnpjNumeros)} consultado. Nao possui contrato de parceiro ativo.`;
+        ? `Cliente identificado: ${parceiro.razaoSocial} - parceiro com contrato ativo.`
+        : "CNPJ recebido. Nao consta contrato de parceiro ativo para esta empresa.";
 
       mensagensExtras.push(
         await conversaRepository.addMensagem(id, "bot", `[Validacao Automatica Arka]: ${msgConf}`)
@@ -257,7 +325,7 @@ class ConversaService {
       id,
       origem === "equipe" ? "equipe" : "bot",
       texto.trim(),
-      null,
+      metadataExtra || null,
       null,
       { status: "enviando", respondendoAId: respondendoAId || null }
     );
@@ -289,7 +357,7 @@ class ConversaService {
     // Mandar foto/audio tambem e atender (mesma regra do texto).
     await this._registrarAtendente(conversa, origem, autor);
 
-    let { tipo, media, mimetype, fileName, caption, latitude, longitude, name, address } = payload;
+    let { tipo, media, mimetype, fileName, caption, latitude, longitude, name, address, encaminhada } = payload;
     // Defesa em profundidade: Áudio NUNCA possui legenda ou assinatura.
     if (tipo === "audio") {
       caption = null;
@@ -323,9 +391,11 @@ class ConversaService {
       }
     }
 
+    const marcaEncaminhada = encaminhada ? { encaminhada: true } : {};
     const metadata = tipo === "localizacao"
-      ? { tipo, latitude, longitude, name, address }
+      ? { tipo, latitude, longitude, name, address, ...marcaEncaminhada }
       : {
+          ...marcaEncaminhada,
           tipo,
           // `arquivo` (novo) ou `url` (legado/URL externa) -- o mapper e a rota
           // de midia entendem os dois.
@@ -452,11 +522,15 @@ class ConversaService {
           mimetype: meta.mimetype,
           fileName: meta.fileName,
           caption: meta.caption,
+          // Marca real: esta bolha nasceu de um encaminhamento nosso.
+          encaminhada: true,
         });
       }
     }
 
-    return this.enviarMensagem(conversaDestinoId, original.texto, "equipe");
+    return this.enviarMensagem(conversaDestinoId, original.texto, "equipe", null, null, null, {
+      encaminhada: true,
+    });
   }
 
   // Edicao de mensagem propria, como no WhatsApp. Se a Evolution recusar
@@ -557,30 +631,15 @@ class ConversaService {
     return dto;
   }
 
-  // Desvincula o CNPJ da conversa: ela volta para "CNPJ pendente" e o bot pode
-  // perguntar de novo. Usado quando o CNPJ veio errado (cliente informou outro,
-  // ou o atendente identificou a troca). Fica no historico quem desfez.
-  async desvincularCnpj(id, userCargo = null, nomeUsuario = null) {
-    const conversa = await conversaRepository.findById(id);
-    if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
-    exigirAcessoSetor(userCargo, conversa.setor);
-
-    if (!conversa.cnpj && !conversa.cnpjVerificado) {
-      // Nada a fazer: evita poluir o historico com aviso sem efeito.
-      return this._emitir(conversa);
-    }
-
-    const anterior = conversa.cnpj ? mascararCnpj(conversa.cnpj) : "-";
-    await conversaRepository.update(id, { cnpj: null, cnpjVerificado: false });
-    await conversaRepository.addMensagem(
-      id,
-      "sistema",
-      `${nomeUsuario || "Atendente"} removeu o CNPJ ${anterior} da conversa`
-    );
-
-    logger.info("CNPJ desvinculado da conversa", { id, anterior });
-    return this._emitir(await conversaRepository.findById(id));
-  }
+  // NAO existe mais `desvincularCnpj` aqui (nem a rota DELETE /conversas/:id/cnpj).
+  //
+  // O "X" que removia o CNPJ da conversa saiu da interface: uma vez identificado,
+  // o cliente fica identificado. Continuam existindo dois caminhos legitimos de
+  // correcao, e nenhum deles e um clique solto no cabecalho do chat:
+  //   - o proprio cliente responde "NAO" quando o bot confirma o CNPJ anterior
+  //     (chatbot.engine desfaz o vinculo e pergunta o novo);
+  //   - o administrador desvincula o contato em Clientes (CNPJ), onde a acao tem
+  //     o contexto da empresa inteira (parceiro.service.desvincularContato).
 
   async solicitarCnpj(id, userCargo = null) {
     const conversa = await conversaRepository.findById(id);
@@ -602,10 +661,14 @@ class ConversaService {
 
     const parceiro = await parceiroRepository.findAtivoByCnpj(cnpjLimpo);
     const msgBot = parceiro
-      ? `CNPJ ${mascararCnpj(cnpjLimpo)} identificado! Razao Social: ${parceiro.razaoSocial} (Parceiro Cadastrado).`
-      : `CNPJ ${mascararCnpj(cnpjLimpo)} nao consta como parceiro cadastrado.`;
+      ? `Cliente identificado: ${parceiro.razaoSocial} (parceiro cadastrado).`
+      : "CNPJ recebido. A empresa nao consta como parceiro cadastrado.";
 
-    await conversaRepository.update(id, { cnpj: cnpjLimpo, cnpjVerificado: true });
+    await conversaRepository.update(id, {
+      cnpj: cnpjLimpo,
+      empresa: parceiro?.razaoSocial || null,
+      cnpjVerificado: true,
+    });
     await conversaRepository.addMensagem(id, "bot", `[Validacao de CNPJ]: ${msgBot}`);
     await this._enviarWhatsApp(
       (await conversaRepository.findById(id)).telefone,
@@ -649,27 +712,46 @@ class ConversaService {
 
     const mudouStatus = conversa.statusAtendimento !== status;
     const data = { statusAtendimento: status };
+    // Espelho do mesmo estado na OS em curso (ver model Atendimento). Montado
+    // junto com `data` para nao existir caminho em que a conversa muda e a OS
+    // fica para tras.
+    const dataOS = { status };
     if (status === "fechada") {
       data.fechadoEm = new Date();
       data.lido = true;
       data.naoLidas = 0;
+      dataOS.fechadoEm = data.fechadoEm;
     } else if (status === "aberta") {
-      // Reabertura: limpa o fechamento e garante marca de atendimento.
+      // Reabertura: limpa o fechamento e garante marca de atendimento. REABRIR
+      // continua na MESMA OS (e a continuacao do atendimento); OS nova so
+      // quando o cliente inicia um ciclo novo depois do fechamento.
       data.fechadoEm = null;
+      dataOS.fechadoEm = null;
       data.atendidoEm = conversa.atendidoEm || new Date();
+      dataOS.atendidoEm = data.atendidoEm;
       // Quem reabre assume, se ninguem assumiu. Antes a conversa voltava a
       // ficar aberta SEM responsavel, e o atendimento inteiro corria anonimo --
       // era um dos caminhos que deixava a coluna "Atendente" vazia na avaliacao.
       if (!conversa.atendenteId && autor?.sub) {
         data.atendenteId = autor.sub;
-        if (autor.nome) data.ultimoAtendenteNome = autor.nome;
+        dataOS.atendenteId = autor.sub;
+        if (autor.nome) {
+          data.ultimoAtendenteNome = autor.nome;
+          dataOS.atendenteNome = autor.nome;
+        }
       }
     } else if (status === "pendente") {
       // Volta para a fila: perde o responsavel -- a badge some enquanto pendente.
       data.atendenteId = null;
+      dataOS.atendenteId = null;
     }
 
+    // Linha antiga (de antes das OS) ainda nao tem atendimento nenhum: cria o
+    // primeiro para o espelho abaixo ter onde escrever. Nao abre ciclo novo --
+    // "Reabrir" continua a MESMA OS, so limpando o fechamento.
+    await conversaRepository.garantirAtendimento(id);
     await conversaRepository.update(id, data);
+    await conversaRepository.atualizarAtendimentoAtual(id, dataOS);
 
     // Aviso de sistema no chat, com o nome de quem fez a acao (nao vai para o
     // WhatsApp do cliente). So quando o status muda de fato e ha um autor
@@ -703,14 +785,28 @@ class ConversaService {
   // (o engine nao depende deste service, mas manter o require local e mais seguro).
   async _dispararPesquisaSatisfacao(conversa) {
     const chatbotEngine = require("../chatbot/chatbot.engine");
-    // instanceName fica null de proposito: o engine cai no env.evolutionApi.instance,
-    // mesma instancia usada por _enviarWhatsApp neste service (setup single-instance).
-    await chatbotEngine.iniciarPesquisaSatisfacao({
-      conversa,
-      telefone: conversa.telefone,
-      instanciaId: conversa.instanciaId,
-      instanceName: null,
-    });
+    const { comLock } = require("../../shared/helpers/lock.helper");
+    // MESMA FILA do webhook (instancia:telefone).
+    //
+    // Esta pesquisa roda em SEGUNDO PLANO depois do fechamento. Sem a fila, uma
+    // mensagem do cliente chegando nesse exato intervalo era processada em
+    // paralelo: abria um atendimento novo e, logo em seguida, a pesquisa fechava
+    // esse atendimento recem-aberto. Serializar as duas coisas elimina a corrida
+    // na origem -- e o guard de ciclo no engine e a segunda linha de defesa.
+    //
+    // A fila e tomada AQUI e nao dentro do engine porque o caminho do fluxo
+    // (encerrarAtendimento) ja roda dentro dela: pedir a mesma chave duas vezes
+    // travaria a conversa para sempre.
+    await comLock(`${conversa.instanciaId}:${conversa.telefone}`, () =>
+      // instanceName fica null de proposito: o engine cai no env.evolutionApi.instance,
+      // mesma instancia usada por _enviarWhatsApp neste service (setup single-instance).
+      chatbotEngine.iniciarPesquisaSatisfacao({
+        conversa,
+        telefone: conversa.telefone,
+        instanciaId: conversa.instanciaId,
+        instanceName: null,
+      })
+    );
   }
 
   // Define (ou limpa) o responsavel pelo atendimento. Antes isso vivia so no
@@ -733,9 +829,15 @@ class ConversaService {
 
     // Guarda tambem o nome como historico (ver ultimoAtendenteNome no schema):
     // ao remover a atribuicao, o relatorio continua sabendo quem atendeu.
+    await conversaRepository.garantirAtendimento(id);
     await conversaRepository.update(id, {
       atendenteId: novoId,
       ...(nome ? { ultimoAtendenteNome: nome } : {}),
+    });
+    // A OS em curso acompanha a transferencia: e ela que o historico mostra.
+    await conversaRepository.atualizarAtendimentoAtual(id, {
+      atendenteId: novoId,
+      ...(nome ? { atendenteNome: nome } : {}),
     });
 
     // Aviso de sistema no chat quando ha um novo responsavel (mudou de fato).
@@ -788,10 +890,14 @@ class ConversaService {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
     exigirAcessoSetor(userCargo, conversa.setor);
-    const atualizada = await conversaRepository.update(id, {
-      avaliacao: Number(avaliacao) || null,
-      feedback: feedback ? String(feedback).trim() : null,
-    });
+    const nota = Number(avaliacao) || null;
+    const texto = feedback ? String(feedback).trim() : null;
+
+    await conversaRepository.garantirAtendimento(id);
+    const atualizada = await conversaRepository.update(id, { avaliacao: nota, feedback: texto });
+    // A nota pertence ao CICLO: com um fio unico por cliente, guardar so na
+    // conversa faria cada novo atendimento apagar a nota do anterior.
+    await conversaRepository.atualizarAtendimentoAtual(id, { avaliacao: nota, feedback: texto });
     return this._emitir(atualizada);
   }
 

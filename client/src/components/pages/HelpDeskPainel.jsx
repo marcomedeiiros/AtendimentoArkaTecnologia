@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { HelpDeskAPI, ConfiguracoesAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { useAppContext } from '../../context/AppContext';
 import { FUSO_BR } from '../../utils/data';
 
 /**
@@ -158,20 +159,35 @@ export default function HelpDeskPainel() {
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
+  // Pulso de "mudou alguma conversa", vindo do SSE que o painel já mantém
+  // aberto (AppContext). É o que substitui o F5: os indicadores são derivados
+  // das conversas/atendimentos, então quando eles mudam estes números mudam.
+  const { sinalConversas } = useAppContext();
 
-  const carregar = useCallback(async () => {
-    setCarregando(true);
+  // `silencioso` evita o spinner nas recargas automáticas: o número troca no
+  // lugar, sem a tela inteira piscar a cada mensagem que chega.
+  const carregar = useCallback(async (silencioso = false) => {
+    if (!silencioso) setCarregando(true);
     setErro('');
     try {
       setDados(await HelpDeskAPI.metricas());
     } catch (e) {
       setErro(e.message);
     } finally {
-      setCarregando(false);
+      if (!silencioso) setCarregando(false);
     }
   }, []);
 
   useEffect(() => { carregar(); }, [carregar]);
+
+  // Recarrega quando o servidor avisa que algo mudou. Agrupado num pequeno
+  // atraso porque uma rajada de eventos (várias mensagens seguidas) deve virar
+  // UMA releitura, não uma por evento.
+  useEffect(() => {
+    if (!sinalConversas) return;
+    const t = setTimeout(() => carregar(true), 1500);
+    return () => clearTimeout(t);
+  }, [sinalConversas, carregar]);
 
   return (
     <div className="space-y-6">

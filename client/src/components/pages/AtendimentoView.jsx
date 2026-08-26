@@ -1,14 +1,14 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import {
   MessageSquare, Send, Eye, Trash2, UserCheck, Check, X,
   CheckCircle2, Clock, Inbox, Play, Search, Zap,
   CheckCheck, WifiOff, Wifi, Bell, Pin, ChevronLeft,
-  ArrowRightLeft, AlertCircle, Users, RotateCcw, ArrowDown, Tv,
+  ArrowRightLeft, AlertCircle, Users, RotateCcw, ArrowDown, ArrowUp, Tv,
   // `Loader2` estava importado como `Image as Loader2`: o "spinner" do envio de
   // midia girava um icone de IMAGEM. Agora e o Loader2 de verdade.
   FileText, MapPin, Contact, Paperclip, Smile, Loader2,
   SlidersHorizontal, Star, Archive, EyeOff, MoreVertical,
-  ZoomIn, ZoomOut, Maximize2, Download, CornerUpLeft, Share2, Pencil, MoreHorizontal, Mic, Tag, PenLine,
+  ZoomIn, ZoomOut, Maximize2, Download, CornerUpLeft, CornerUpRight, Share2, Pencil, MoreHorizontal, Mic, Tag, PenLine,
   Sun, Moon
 } from 'lucide-react';
 import { EmojiIcon, FormattedMessage } from './EmojiIcon';
@@ -25,6 +25,7 @@ import { contatoCombina, normalizarBusca, telefoneComparavel } from '../../utils
 import { FUSO_BR } from '../../utils/data';
 import { mesclarConversa, registrarApagada, desfazerApagada } from '../../utils/mesclarConversa';
 import { formatarComAssinatura } from '../../utils/assinatura';
+import { CATEGORIAS_EMOJI, TODOS_EMOJIS } from './emojis';
 
 // O responsavel pelo atendimento agora vem do banco (conversa.atendenteNome /
 // atendenteId), compartilhado por toda a equipe. Antes vivia no localStorage e
@@ -71,6 +72,35 @@ function tempoDesde(iso) {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit', timeZone: FUSO_BR,
   }).replace(',', '');
+}
+
+/**
+ * Tempo desde a última mensagem, curto: "agora", "3min", "1h", "2d".
+ *
+ * É o que o cartão da lista mostra. O horário exato continua a um passe de
+ * mouse (`dataHoraCompleta`), que é onde ele importa -- na varredura da fila o
+ * que responde "essa conversa está esperando?" é o tempo decorrido, não a hora.
+ *
+ * `agora` vem de fora de propósito: um relógio só, no componente da lista,
+ * atualiza todos os cartões. Um timer por conversa custaria N timers para
+ * mostrar a mesma informação.
+ */
+function tempoCurto(iso, agora = Date.now()) {
+  if (!iso) return '';
+  const ms = new Date(iso).getTime();
+  if (Number.isNaN(ms)) return '';
+  const s = Math.max(0, Math.floor((agora - ms) / 1000));
+  if (s < 60) return 'agora';
+  const min = Math.floor(s / 60);
+  if (min < 60) return `${min}min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d`;
+  // Passada uma semana, "52d" não diz nada: a data é mais útil.
+  return new Date(ms).toLocaleDateString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: '2-digit', timeZone: FUSO_BR,
+  });
 }
 
 // "09/08/2026 14:32" -- data e hora da ultima mensagem, do jeito que aparece
@@ -158,37 +188,57 @@ const SETORES = [
   },
 ];
 
-// Situacao do CNPJ como badge. Fica fora dos componentes porque duas telas
+/**
+ * Nome da empresa do cliente, para exibição.
+ *
+ * O CNPJ continua no banco e continua sendo o que liga a conversa à empresa --
+ * ele só não aparece mais na tela. A razão social vem de dois lugares, nesta
+ * ordem: o cadastro vivo em Clientes (CNPJ), para uma edição de nome valer na
+ * hora; e `conversa.empresa`, gravada quando o CNPJ foi identificado, que
+ * sobrevive mesmo se o parceiro sair do cadastro depois.
+ */
+function empresaDaConversa(c, parceiros = []) {
+  if (!c?.cnpjVerificado) return null;
+  const digitos = limparCnpj(c.cnpj);
+  const parceiro = digitos ? parceiros.find(p => limparCnpj(p.cnpj) === digitos) : null;
+  return parceiro?.razaoSocial || c.empresa || null;
+}
+
+// Situacao do cliente como badge. Fica fora dos componentes porque duas telas
 // mostram a mesma informacao -- o cartao da lista e o painel de TV -- e, quando
 // a regra do "parceiro ativo" vivia duplicada, era questao de tempo as duas
 // discordarem sobre o mesmo cliente.
-function chipDoCnpj(c, parceiros = []) {
-  const ehParceiro = c.cnpjVerificado && c.cnpj &&
-    parceiros.some(p => p.cnpj === limparCnpj(c.cnpj) && p.status === 'ativo');
-
+//
+// O QUE APARECE E O NOME DA EMPRESA, nunca o numero do CNPJ: quem atende
+// precisa saber COM QUEM esta falando, e os 14 digitos so ocupavam a badge sem
+// dizer nada. A cor continua distinguindo parceiro com contrato de cliente sem
+// contrato.
+function chipDoCliente(c, parceiros = []) {
   if (!c.cnpjVerificado) {
     return {
-      label: 'CNPJ PENDENTE',
+      label: 'CLIENTE NÃO IDENTIFICADO',
       classe: 'bg-slate-700/50 border-linha-forte text-slate-300',
-      titulo: 'CNPJ pendente de validação',
+      titulo: 'Cliente ainda não identificado',
     };
   }
-  // Com o CNPJ confirmado, a badge mostra o PROPRIO numero: e o dado que o
-  // atendente precisa ver (antes so aparecia no hover). O rotulo
-  // parceiro/avulso vira a cor + o titulo.
-  const numero = mascararCnpj(c.cnpj);
+
+  const digitos = limparCnpj(c.cnpj);
+  const parceiro = digitos ? parceiros.find(p => limparCnpj(p.cnpj) === digitos) : null;
+  const ehParceiro = parceiro?.status === 'ativo';
+  // Identificado sem razao social conhecida (empresa fora do cadastro): dizer
+  // "identificado" e mais util do que devolver o numero para a tela.
+  const nome = (empresaDaConversa(c, parceiros) || 'CLIENTE IDENTIFICADO').toUpperCase();
+
   return ehParceiro
     ? {
-        label: numero,
+        label: nome,
         classe: 'bg-ativo/15 border-ativo/30 text-ativo-400',
-        titulo: `Parceiro com contrato ativo · ${numero}`,
-        removivel: true,
+        titulo: `${nome} · parceiro com contrato ativo`,
       }
     : {
-        label: numero,
+        label: nome,
         classe: 'bg-espera/15 border-espera/30 text-espera-400',
-        titulo: `Sem contrato de parceiro · ${numero}`,
-        removivel: true,
+        titulo: `${nome} · sem contrato de parceiro`,
       };
 }
 
@@ -660,7 +710,7 @@ function PainelTv({ pendentes, abertas, parceiros, onFechar }) {
       : { cor: 'text-quieto', borda: 'border-linha' };
     const ultima = c.mensagens?.[c.mensagens.length - 1];
     const tempo = tempoEspera(c.ultimaMensagemEm);
-    const chipCnpj = chipDoCnpj(c, parceiros);
+    const chipCliente = chipDoCliente(c, parceiros);
     const setor = setorDaConversa(c);
     const atendente = atendenteDaConversa(c);
 
@@ -680,12 +730,13 @@ function PainelTv({ pendentes, abertas, parceiros, onFechar }) {
         </div>
 
         {/* As mesmas badges do cartao da lista, em corpo de parede: quem olha a
-            TV decide para quem vai a conversa, e "CNPJ pendente" ou o setor
-            pedido e justamente o que muda essa decisao. */}
+            TV decide para quem vai a conversa, e saber a empresa (ou que ela
+            ainda nao foi identificada) e o setor pedido e o que muda essa
+            decisao. O numero do CNPJ nunca vai para a parede. */}
         <div className="flex items-center gap-2 flex-wrap">
-          <span className={`inline-flex items-center text-sm 2xl:text-base font-bold px-2.5 py-0.5 rounded-lg border ${chipCnpj.classe}`}
-            title={chipCnpj.titulo}>
-            {chipCnpj.label}
+          <span className={`inline-flex items-center max-w-full truncate text-sm 2xl:text-base font-bold px-2.5 py-0.5 rounded-lg border ${chipCliente.classe}`}
+            title={chipCliente.titulo}>
+            {chipCliente.label}
           </span>
           {setor && (
             <span className={`inline-flex items-center text-sm 2xl:text-base font-bold px-2.5 py-0.5 rounded-lg border ${setor.classe}`}
@@ -1204,6 +1255,21 @@ function MensagemMidia({ m, escuro, onAbrirImagem }) {
     );
   }
 
+  // FIGURINHA: imagem WebP (às vezes animada) sem legenda e sem moldura -- é
+  // assim que ela aparece no WhatsApp. Não entra no visualizador de imagem
+  // ampliada porque não há nada para ampliar.
+  if (m.tipo === 'figurinha') {
+    return (
+      <img
+        src={md.url}
+        alt="figurinha"
+        title={md.animada ? 'Figurinha animada' : 'Figurinha'}
+        className="w-32 h-32 object-contain select-none"
+        draggable={false}
+      />
+    );
+  }
+
   if (m.tipo === 'imagem') {
     return (
       <div className="space-y-1.5">
@@ -1230,14 +1296,21 @@ function MensagemMidia({ m, escuro, onAbrirImagem }) {
   }
   if (m.tipo === 'documento') {
     return (
-      <a href={md.url} download={md.fileName || 'documento'} target="_blank" rel="noreferrer"
-        className={`flex items-center gap-2 p-2 rounded-lg ${escuro ? 'bg-grafite-700 border border-linha' : 'bg-slate-900/10'}`}>
-        <FileText size={20} className={escuro ? 'text-acao-200' : 'text-slate-900'} />
-        <div className="min-w-0">
-          <div className={`text-[11px] font-semibold truncate ${escuro ? 'text-slate-100' : 'text-slate-900'}`}>{md.fileName || 'Documento'}</div>
-          <div className={`text-[9px] ${escuro ? 'text-slate-400' : 'text-slate-900/60'}`}>Baixar</div>
-        </div>
-      </a>
+      <div className="space-y-1.5">
+        <a href={md.url} download={md.fileName || 'documento'} target="_blank" rel="noreferrer"
+          className={`flex items-center gap-2 p-2 rounded-lg ${escuro ? 'bg-grafite-700 border border-linha' : 'bg-slate-900/10'}`}>
+          <FileText size={20} className={escuro ? 'text-acao-200' : 'text-slate-900'} />
+          <div className="min-w-0">
+            <div className={`text-[11px] font-semibold truncate ${escuro ? 'text-slate-100' : 'text-slate-900'}`}>{md.fileName || 'Documento'}</div>
+            <div className={`text-[9px] ${escuro ? 'text-slate-400' : 'text-slate-900/60'}`}>Baixar</div>
+          </div>
+        </a>
+        {md.caption && (
+          <div className={`text-[11px] leading-relaxed whitespace-pre-wrap break-words ${escuro ? 'text-slate-200' : 'text-slate-900'}`}>
+            {md.caption}
+          </div>
+        )}
+      </div>
     );
   }
   if (m.tipo === 'localizacao') {
@@ -1260,7 +1333,7 @@ function MensagemMidia({ m, escuro, onAbrirImagem }) {
 }
 
 const CardConversa = React.memo(function CardConversa({
-  c, selecionada, parceiros, whatsAppConectado,
+  c, selecionada, parceiros, whatsAppConectado, agora,
   onSelecionar, onAtender, onFechar, onReabrir, onEspiar, onFixar, fixado, onFlag, atendente
 }) {
   const [menuAberto, setMenuAberto] = useState(false);
@@ -1284,7 +1357,7 @@ const CardConversa = React.memo(function CardConversa({
 
   // #id e badges (situacao do CNPJ e setor pedido pelo cliente) ficam ao lado
   // do nome, na primeira linha do cartao.
-  const chipCnpj = chipDoCnpj(c, parceiros);
+  const chipCliente = chipDoCliente(c, parceiros);
   const setor = setorDaConversa(c);
 
   return (
@@ -1321,9 +1394,11 @@ const CardConversa = React.memo(function CardConversa({
             <span className="shrink-0 text-[9px] font-mono font-bold text-acao-200/90" title={`OS ${c.ticket || ''} · Conversa ${c.id}`}>
               #{c.ticket || idCurto(c.id)}
             </span>
-            <span className={`shrink-0 inline-flex items-center text-[9px] font-bold px-1.5 py-px rounded-md border ${chipCnpj.classe}`}
-              title={chipCnpj.titulo}>
-              {chipCnpj.label}
+            {/* Razao social pode ser longa: a badge trunca em vez de empurrar
+                as outras para fora do cartao. */}
+            <span className={`shrink-0 max-w-[11rem] truncate inline-flex items-center text-[9px] font-bold px-1.5 py-px rounded-md border ${chipCliente.classe}`}
+              title={chipCliente.titulo}>
+              {chipCliente.label}
             </span>
             {setor && (
               <span className={`shrink-0 inline-flex items-center text-[9px] font-bold px-1.5 py-px rounded-md border ${setor.classe}`}
@@ -1346,9 +1421,10 @@ const CardConversa = React.memo(function CardConversa({
             </span>
 
             {c.ultimaMensagemEm && (
+              // Tempo decorrido na lista; horário exato no title (hover).
               <span className="shrink-0 text-[9px] text-slate-500 font-mono whitespace-nowrap"
                 title={dataHoraCompleta(c.ultimaMensagemEm)}>
-                {dataHoraCurta(c.ultimaMensagemEm)}
+                {tempoCurto(c.ultimaMensagemEm, agora)}
               </span>
             )}
 
@@ -1420,7 +1496,75 @@ const CardConversa = React.memo(function CardConversa({
   );
 });
 
-const EMOJIS = ['😀','😁','😂','🥰','😅','😉','👍','🙏','🎉','✅','❌','🔥','💰','📄','📎','⚠️','🤝','👏','🚀','📌'];
+/**
+ * Seletor de emojis com categorias, do jeito que os aplicativos de mensagem
+ * fazem: abas no topo, grade rolável e busca.
+ *
+ * O que sai daqui é TEXTO Unicode -- o mesmo que já era enviado antes. Quem
+ * desenha o emoji é o sistema de quem lê: no iPhone do cliente ele aparece com
+ * o traço da Apple, aqui na tela do atendente com a melhor fonte de emoji que a
+ * máquina tiver (ver `.emoji-fonte` no index.css). Nada muda no armazenamento,
+ * no envio ou nas mensagens antigas.
+ */
+function SeletorEmojis({ onEscolher }) {
+  const [aba, setAba] = useState(CATEGORIAS_EMOJI[0].id);
+  const [busca, setBusca] = useState('');
+
+  const termo = busca.trim().toLowerCase();
+  const lista = termo
+    ? [...new Set(
+        TODOS_EMOJIS
+          .filter(e => e.categoria.toLowerCase().includes(termo))
+          .map(e => e.emoji)
+      )]
+    : (CATEGORIAS_EMOJI.find(c => c.id === aba) || CATEGORIAS_EMOJI[0]).emojis;
+
+  return (
+    <div className="absolute bottom-full left-2 mb-2 glass-panel border border-linha rounded-2xl shadow-2xl z-30 w-72 overflow-hidden">
+      <div className="flex items-center gap-1 p-1.5 border-b border-linha overflow-x-auto">
+        {CATEGORIAS_EMOJI.map(c => (
+          <button
+            key={c.id}
+            onClick={() => { setAba(c.id); setBusca(''); }}
+            title={c.rotulo}
+            aria-label={c.rotulo}
+            className={`emoji-fonte shrink-0 text-base leading-none px-2 py-1 rounded-lg transition-colors ${
+              !termo && aba === c.id ? 'bg-acao/20 ring-1 ring-acao/40' : 'hover:bg-grafite-600'
+            }`}
+          >
+            {c.icone}
+          </button>
+        ))}
+      </div>
+
+      <div className="px-2 pt-2">
+        <input
+          value={busca}
+          onChange={e => setBusca(e.target.value)}
+          placeholder="Buscar categoria..."
+          className="w-full bg-grafite-700 border border-linha rounded-lg px-2 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50"
+        />
+      </div>
+
+      <div className="p-2 grid grid-cols-8 gap-0.5 max-h-52 overflow-y-auto">
+        {lista.map(e => (
+          <button
+            key={e}
+            onClick={() => onEscolher(e)}
+            className="emoji-fonte text-xl leading-none rounded-lg hover:bg-grafite-600 p-1 transition-colors"
+          >
+            {e}
+          </button>
+        ))}
+        {lista.length === 0 && (
+          <div className="col-span-8 text-center text-[11px] text-slate-500 py-4">
+            Nenhuma categoria com esse nome.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function tipoDoArquivo(file) {
   if (file.type.startsWith('image/')) return 'imagem';
@@ -1493,7 +1637,7 @@ function PainelChat({
   onMarcarLido, onSolicitarCnpj, onValidarCnpjModal,
   onExecutarFluxo, fluxoSugerido, onVoltar, atendente, onTransferir,
   onEditar, onEncaminharPara, conversas, onAtender,
-  assinar, onToggleAssinar, assinaturaNome, onApagarMensagem, onDesvincularCnpj
+  assinar, onToggleAssinar, assinaturaNome, onApagarMensagem
 }) {
   const [showMsgRapidas, setShowMsgRapidas] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
@@ -1502,6 +1646,13 @@ function PainelChat({
   const [encaminhando, setEncaminhando] = useState(null);   // mensagem a encaminhar
   const [editando, setEditando] = useState(null);           // { id, textoOriginal }
   const [gravandoAudio, setGravandoAudio] = useState(false);
+  // Quantos atendimentos (OS) estão carregados na conversa, do mais recente para
+  // trás. Começa em 1: o chat abre no atendimento em curso, e os anteriores
+  // entram DENTRO da mesma conversa conforme o operador rola para cima.
+  const [osCarregadas, setOsCarregadas] = useState(1);
+  // Guarda a altura da rolagem antes de carregar o trecho antigo, para a tela
+  // não "pular" quando as mensagens entram acima do que está sendo lido.
+  const ancoraRef = useRef(null);
 
   const iniciarEdicao = useCallback((m) => {
     setEditando({ id: m.id, textoOriginal: m.texto });
@@ -1666,11 +1817,77 @@ function PainelChat({
   }, [anexo, enviarAnexo, onEnviar, onEditar, texto, irParaFim, respondendoA, editando, setTexto]);
 
   const ehParceiro = conversa.cnpjVerificado &&
-    parceiros.some(p => p.cnpj === limparCnpj(conversa.cnpj) && p.status === 'ativo');
-  const parceiroCadastrado = conversa.cnpjVerificado
-    ? parceiros.find(p => p.cnpj === limparCnpj(conversa.cnpj))
-    : null;
+    parceiros.some(p => limparCnpj(p.cnpj) === limparCnpj(conversa.cnpj) && p.status === 'ativo');
+  // Nome da empresa identificada. O NUMERO do CNPJ não aparece mais aqui: ele
+  // segue no banco (busca, relacionamento com o parceiro, Registro), mas na
+  // conversa quem importa é com quem se está falando.
+  const empresa = empresaDaConversa(conversa, parceiros);
   const setorPedido = setorDaConversa(conversa);
+
+  /**
+   * HISTÓRICO DENTRO DA PRÓPRIA CONVERSA.
+   *
+   * O fio do cliente guarda TUDO -- inclusive atendimentos de meses atrás. Abrir
+   * tudo de uma vez faria a conversa nascer com centenas de mensagens e o
+   * operador teria de rolar muito só para ver o que está acontecendo agora.
+   *
+   * Então o chat abre no atendimento EM CURSO e, ao rolar para o topo, aparece
+   * "Ver mensagens antigas": cada clique traz o atendimento anterior para dentro
+   * da mesma conversa, na ordem certa e com um separador marcando onde ele
+   * começa. Nada é buscado de novo -- as mensagens já vieram com a conversa;
+   * o que muda é quanto se mostra.
+   */
+  const atendimentos = conversa.atendimentos || [];
+
+  // Ordem cronológica das OS (a API manda da mais nova para a mais antiga).
+  const osCronologicas = useMemo(
+    () => [...atendimentos].sort((a, b) => new Date(a.abertoEm || 0) - new Date(b.abertoEm || 0)),
+    [atendimentos]
+  );
+
+  const { mensagensVisiveis, temMaisAntigas, proximaOsAntiga } = useMemo(() => {
+    const todas = conversa.mensagens || [];
+    // Conversa sem OS (base ainda não consolidada): mostra o fio inteiro, como
+    // sempre foi -- não há por onde recortar.
+    if (osCronologicas.length === 0) {
+      return { mensagensVisiveis: todas, temMaisAntigas: false, proximaOsAntiga: null };
+    }
+
+    const visiveis = osCronologicas.slice(-osCarregadas);
+    const idsVisiveis = new Set(visiveis.map(a => a.id));
+    const idsConhecidos = new Set(osCronologicas.map(a => a.id));
+    // Mensagem sem carimbo de OS (ou apontando para uma OS que não existe mais)
+    // é de antes deste modelo existir: pertence ao trecho mais antigo, então só
+    // aparece quando a conversa inteira estiver carregada. Nunca some.
+    const ehOrfa = (m) => !m.atendimentoId || !idsConhecidos.has(m.atendimentoId);
+    const mostrandoTudo = visiveis.length === osCronologicas.length;
+
+    return {
+      mensagensVisiveis: todas.filter(m =>
+        ehOrfa(m) ? mostrandoTudo : idsVisiveis.has(m.atendimentoId)
+      ),
+      temMaisAntigas: !mostrandoTudo,
+      proximaOsAntiga: osCronologicas[osCronologicas.length - osCarregadas - 1] || null,
+    };
+  }, [conversa.mensagens, osCronologicas, osCarregadas]);
+
+  // Trocou de conversa: volta a abrir no atendimento em curso.
+  useEffect(() => { setOsCarregadas(1); }, [conversa.id]);
+
+  // Puxa o atendimento anterior para dentro da conversa, mantendo o ponto de
+  // leitura: sem a âncora, o conteúdo novo entra ACIMA e a tela salta.
+  const verMensagensAntigas = useCallback(() => {
+    const el = scrollRef.current;
+    ancoraRef.current = el ? el.scrollHeight - el.scrollTop : null;
+    setOsCarregadas(n => n + 1);
+  }, [scrollRef]);
+
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el || ancoraRef.current == null) return;
+    el.scrollTop = el.scrollHeight - ancoraRef.current;
+    ancoraRef.current = null;
+  }, [mensagensVisiveis.length, scrollRef]);
 
   return (
     <>
@@ -1690,33 +1907,25 @@ function PainelChat({
               <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
               {meta.label}
             </span>
-            {/* Numero da OS (identificador unico da conversa): e por ele que o
-                operador cita o atendimento. */}
+            {/* Numero da OS EM CURSO: e por ele que o operador cita o
+                atendimento. A conversa e a mesma para sempre; o que muda a cada
+                novo chamado do cliente e este numero. */}
             <span className="inline-flex items-center text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-grafite-700 border border-linha text-acao-200"
-              title={`OS ${conversa.ticket || ''} · Conversa ${conversa.id}`}>
+              title={`OS atual: ${conversa.ticket || ''} · Conversa ${conversa.id}`}>
               #{conversa.ticket || idCurto(conversa.id)}
             </span>
           </div>
           <div className="mt-1 flex items-center gap-2 flex-wrap">
+            {/* Identificação do cliente: NOME DA EMPRESA, sem o número do CNPJ
+                e sem botão de remover. Uma vez identificado, o cliente fica
+                identificado -- corrigir um CNPJ errado é feito pelo próprio
+                cliente (responde "NÃO" quando o bot confirma) ou pelo
+                administrador em Clientes (CNPJ). */}
             {!conversa.cnpjVerificado
-              ? <EmojiIcon name="question" label="CNPJ Pendente" size="sm" />
-              : (
-                <span className="inline-flex items-center gap-1">
-                  {ehParceiro
-                    ? <EmojiIcon name="shield" label={`${parceiroCadastrado?.razaoSocial} (${mascararCnpj(conversa.cnpj)})`} size="sm" />
-                    : <EmojiIcon name="warning" label={`CNPJ ${mascararCnpj(conversa.cnpj)} (Sem Contrato)`} size="sm" />}
-                  {/* Desvincular: quando o CNPJ veio errado, devolve a conversa
-                      para "CNPJ pendente" e o bot pode perguntar de novo. */}
-                  <button
-                    onClick={() => onDesvincularCnpj?.(conversa)}
-                    title="Remover este CNPJ da conversa"
-                    aria-label="Remover CNPJ da conversa"
-                    className="p-0.5 rounded-md text-slate-500 hover:text-falha-400 hover:bg-falha/10 transition-colors"
-                  >
-                    <X size={12} />
-                  </button>
-                </span>
-              )
+              ? <EmojiIcon name="question" label="Cliente não identificado" size="sm" />
+              : ehParceiro
+                ? <EmojiIcon name="shield" label={empresa || 'Cliente identificado'} size="sm" />
+                : <EmojiIcon name="warning" label={`${empresa || 'Cliente identificado'} (Sem Contrato)`} size="sm" />
             }
             {/* Mesma badge de setor do cartao: com o chat aberto ela continua
                 sendo o motivo pelo qual o cliente chamou. */}
@@ -1794,11 +2003,61 @@ function PainelChat({
             </div>
           </div>
         )}
+        {/* Atendimentos anteriores DESTE cliente, dentro da própria conversa.
+            Antes cada chamado virava uma conversa separada e o histórico sumia
+            da tela; agora ele está aqui, no mesmo fio, um atendimento por vez --
+            a conversa abre leve, mostrando o que está acontecendo agora. */}
+        {temMaisAntigas && (
+          <div className="flex justify-center pb-2">
+            <button
+              onClick={verMensagensAntigas}
+              title={
+                proximaOsAntiga
+                  ? `Carregar o atendimento #${proximaOsAntiga.os} (${dataHoraCurta(proximaOsAntiga.abertoEm)})`
+                  : 'Carregar o atendimento anterior'
+              }
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-grafite-700/80 hover:bg-grafite-600 border border-linha text-slate-300 hover:text-white text-[11px] font-semibold transition-colors"
+            >
+              <ArrowUp size={12} />
+              Ver mensagens antigas
+              {proximaOsAntiga && (
+                <span className="font-mono text-acao-200/90">#{proximaOsAntiga.os}</span>
+              )}
+            </button>
+          </div>
+        )}
         {/* Chave pelo ID da mensagem (nao pelo indice): com indice, ao trocar a
             mensagem otimista pela confirmada o React reaproveitava o mesmo no do
             DOM e a bolha "piscava"/remontava. Otimista (sem id) cai no indice. */}
-        {conversa.mensagens.map((m, i) => (
-          <div key={m.id || `tmp-${i}`} className={`group flex items-center gap-1 ${m.de === 'cliente' ? 'justify-start' : m.de === 'sistema' ? 'justify-center' : 'justify-end'}`}>
+        {mensagensVisiveis.map((m, i) => {
+          // Cabeçalho de atendimento: marca onde cada OS começa. Aparece também
+          // na PRIMEIRA mensagem da lista -- é ele que identifica o trecho que
+          // acabou de ser carregado por "Ver mensagens antigas".
+          const anterior = mensagensVisiveis[i - 1];
+          const trocouOS = !!m.atendimentoId && (!anterior || anterior.atendimentoId !== m.atendimentoId);
+          const osDaMsg = trocouOS ? atendimentos.find(a => a.id === m.atendimentoId) : null;
+          return (
+          <React.Fragment key={m.id || `tmp-${i}`}>
+          {osDaMsg && (
+            <div className="flex items-center gap-2 py-2">
+              <span className="flex-1 h-px bg-linha" />
+              <span className="text-[10px] px-2.5 py-1 rounded-full bg-grafite-700/70 border border-linha whitespace-nowrap flex items-center gap-1.5">
+                <span className="font-mono font-bold text-acao-200/90">#{osDaMsg.os}</span>
+                <span className="text-slate-400">{dataHoraCurta(osDaMsg.abertoEm)}</span>
+                {osDaMsg.atendenteNome && (
+                  <span className="text-slate-500">· {osDaMsg.atendenteNome}</span>
+                )}
+                {osDaMsg.avaliacao ? (
+                  <span className="text-espera-400">· ★ {osDaMsg.avaliacao}</span>
+                ) : null}
+                {osDaMsg.id === conversa.atendimentoAtualId && (
+                  <span className="text-ativo-400 font-bold uppercase text-[9px]">· em curso</span>
+                )}
+              </span>
+              <span className="flex-1 h-px bg-linha" />
+            </div>
+          )}
+          <div className={`group flex items-center gap-1 ${m.de === 'cliente' ? 'justify-start' : m.de === 'sistema' ? 'justify-center' : 'justify-end'}`}>
             {m.deletada ? (
               /* "Apagar para todos": some para o cliente no WhatsApp e vira este
                  aviso no chat ao vivo. O texto original continua no Registro
@@ -1838,6 +2097,21 @@ function PainelChat({
                   {m.de === 'cliente' ? conversa.cliente : 'Arka Tecnologia'}
                 </div>
 
+                {/* Selo de ENCAMINHADA, como no WhatsApp. A marca vem do próprio
+                    aparelho (contextInfo.isForwarded / forwardingScore) ou de um
+                    encaminhamento feito aqui na Central -- nunca é deduzida pela
+                    aparência da mensagem. Mensagem antiga, sem a marca, não
+                    recebe selo nenhum. */}
+                {m.encaminhada && (
+                  <div className="flex items-center gap-1 text-[10px] italic text-texto-fraco"
+                    title={m.encaminhadaVezes >= 5
+                      ? 'O cliente encaminhou esta mensagem de outra conversa (encaminhada muitas vezes)'
+                      : 'Esta mensagem foi encaminhada de outra conversa'}>
+                    <CornerUpRight size={11} className="shrink-0 opacity-80" />
+                    {m.encaminhadaVezes >= 5 ? 'Encaminhada muitas vezes' : 'Encaminhada'}
+                  </div>
+                )}
+
                 {/* Trecho citado (recurso "responder") */}
                 {m.respondendoAId && (() => {
                   const orig = conversa.mensagens.find(x => x.id === m.respondendoAId);
@@ -1854,10 +2128,14 @@ function PainelChat({
                 })()}
 
                 {m.tipo && m.tipo !== 'texto' ? (
-                  <>
-                    <MensagemMidia m={m} escuro onAbrirImagem={setImagemAmpliada} />
-                    {m.midia?.caption && <FormattedMessage text={m.midia.caption} />}
-                  </>
+                  // A LEGENDA É DESENHADA POR `MensagemMidia`, e só por ela.
+                  //
+                  // Aqui existia um segundo render da mesma legenda. Numa
+                  // mensagem rápida com anexo (o PIX com QR Code) o texto saía
+                  // duas vezes na bolha: uma dentro do bloco da imagem, outra
+                  // logo abaixo. Não era duplicação de dados -- a mensagem
+                  // sempre esteve gravada uma vez só.
+                  <MensagemMidia m={m} escuro onAbrirImagem={setImagemAmpliada} />
                 ) : (
                   <FormattedMessage text={m.texto} />
                 )}
@@ -1884,7 +2162,9 @@ function PainelChat({
             </>
             )}
           </div>
-        ))}
+          </React.Fragment>
+          );
+        })}
       </div>
 
       {temNovas && (
@@ -2051,12 +2331,8 @@ function PainelChat({
         )}
 
         {showEmoji && (
-          <div className="absolute bottom-full left-2 mb-2 p-2 glass-panel border border-linha rounded-2xl shadow-2xl z-30 grid grid-cols-5 gap-1 w-56">
-            {EMOJIS.map(e => (
-              <button key={e} onClick={() => { setTexto(t => t + e); setShowEmoji(false); }}
-                className="text-lg rounded-lg hover:bg-grafite-600 p-1 transition-colors">{e}</button>
-            ))}
-          </div>
+          // Não fecha ao escolher: quem manda emoji costuma mandar mais de um.
+          <SeletorEmojis onEscolher={(e) => setTexto(t => t + e)} />
         )}
 
         <input
@@ -2220,13 +2496,20 @@ const ItemContatoAgenda = React.memo(function ItemContatoAgenda({ contato, onAbr
 });
 
 export default function AtendimentoView({ conversas, setConversas, fluxos, parceiros, equipe = [] }) {
-  const { whatsAppConectado, carregando, historico = [], marcarNotificacoesLidas, limparHistorico } = useAppContext();
+  const { whatsAppConectado, carregando, historico = [], marcarNotificacoesLidas, limparHistorico, sinalContatos } = useAppContext();
   const { usuario, assinaturaNome, tema, alternarTema } = useAuth();
   // Nome usado ao assinar mensagens: vem do perfil (personalizavel no menu de
   // perfil) e cai no primeiro nome como padrao. Fica no AuthContext, entao muda
   // na hora quando o operador edita no perfil.
   // Toggle de assinatura, por operador (sobrevive ao F5).
-  const [assinar, setAssinar] = usePreferencia('central.assinatura', false);
+  // ASSINATURA LIGADA POR PADRÃO.
+  //
+  // O padrão só vale para quem NUNCA escolheu: `usePreferencia` lê a
+  // preferência do operador no banco e, havendo valor gravado (inclusive
+  // `false`), é ele que manda. Quem desligou continua desligado; quem nunca
+  // mexeu passa a assinar. O padrão nunca é gravado sozinho -- só uma ação da
+  // pessoa escreve no servidor.
+  const [assinar, setAssinar] = usePreferencia('central.assinatura', true);
   const [abaAtual,      setAbaAtual]     = usePreferencia('central.aba', 'abertas');
   const [selecionada,   setSelecionada]  = useState(null);
   const [texto,         setTexto]        = useState('');
@@ -2283,7 +2566,71 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   const totalMsgClienteRef = useRef(null);
   const sinoRef = useRef(null);
 
+  // RELÓGIO ÚNICO da lista. Um só `setInterval` mantém o "há quanto tempo" de
+  // TODOS os cartões atualizado; um timer por conversa custaria N timers para
+  // mostrar a mesma coisa. 30s basta: a menor unidade exibida é o minuto.
+  //
+  // Mensagem nova não espera o tique -- ela muda `conversas`, o cartão
+  // re-renderiza e o tempo já sai certo.
+  const [agora, setAgora] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setAgora(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   const conversa = conversas.find(c => c.id === selecionada);
+
+  /**
+   * ESC sai da conversa aberta.
+   *
+   * Atalho de INTERFACE (não é regra de negócio): só troca o que está
+   * selecionado na tela, sem tocar no atendimento -- a conversa continua aberta
+   * e atribuída no servidor.
+   *
+   * Só age quando ESC não tem nada mais urgente para fechar:
+   *  - qualquer modal/painel aberto tem prioridade (ele mesmo trata o ESC, ou
+   *    fecha aqui) -- fechar a conversa por baixo de um modal seria fazer duas
+   *    coisas com uma tecla;
+   *  - digitando (campo de mensagem, busca, textarea, editor) o ESC pertence ao
+   *    campo: quem está escrevendo não quer perder a conversa sem querer;
+   *  - `defaultPrevented` respeita quem já tratou a tecla antes.
+   */
+  useEffect(() => {
+    const aoTeclar = (e) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+
+      // Camadas que o ESC fecha ANTES de pensar na conversa.
+      if (modoTv) { fecharModoTv(); return; }
+      if (transferindo) { setTransferindo(null); return; }
+      if (modalNova) { setModalNova(false); return; }
+      if (modalCnpj) { setModalCnpj(false); return; }
+      if (espiandoChat) { setEspiandoChat(null); return; }
+      if (showNotif) { setShowNotif(false); return; }
+      if (showFiltros) { setShowFiltros(false); return; }
+
+      // Algum outro modal na tela (imagem ampliada, encaminhar mensagem,
+      // gravador...): eles vivem em <Portal>, e os estados deles não chegam
+      // aqui. Procuramos a marca no DOM em vez de listar cada modal -- assim o
+      // próximo modal que alguém criar já nasce respeitado.
+      //
+      // `inset-0` distingue MODAL de menu suspenso: os modais cobrem a tela
+      // inteira, os menus (o "⋮" da mensagem) são caixinhas posicionadas. Um
+      // menu aberto não pode sequestrar o ESC.
+      if (document.querySelector('[data-portal-modal] .inset-0')) return;
+
+      const alvo = e.target;
+      const digitando =
+        alvo && (alvo.tagName === 'INPUT' || alvo.tagName === 'TEXTAREA' || alvo.isContentEditable);
+      if (digitando) return;
+
+      if (selecionada) setSelecionada(null);
+    };
+    window.addEventListener('keydown', aoTeclar);
+    return () => window.removeEventListener('keydown', aoTeclar);
+  }, [
+    selecionada, modoTv, fecharModoTv, transferindo, modalNova, modalCnpj,
+    espiandoChat, showNotif, showFiltros,
+  ]);
 
   // Notificacoes ainda nao lidas do historico (sino).
   const naoLidasSino = historico.filter(n => !n.lida).length;
@@ -2322,7 +2669,11 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     setConversas(prev => prev.map(c => c.id === id ? { ...c, ...flags } : c));
     try {
       const atualizada = await ConversasAPI.atualizarFlags(id, flags);
-      if (atualizada?.id) setConversas(prev => prev.map(c => c.id === atualizada.id ? atualizada : c));
+      // Merge (e nao substituicao crua): esta resposta pode ter sido montada
+      // antes de uma mudanca mais recente. Ver utils/mesclarConversa.
+      if (atualizada?.id) {
+        setConversas(prev => prev.map(c => (c.id === atualizada.id ? mesclarConversa(c, atualizada) : c)));
+      }
     } catch {
       // Falhou: desfaz o otimismo invertendo as flags aplicadas.
       setConversas(prev => prev.map(c =>
@@ -2376,13 +2727,16 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   // Le a agenda uma vez ao abrir a Central. Best-effort de proposito: operador
   // sem o modulo "contatos" recebe 403 e a busca continua funcionando com as
   // conversas -- nao vale travar a tela de atendimento por causa da agenda.
+  // Relê também quando a agenda muda no servidor (sinalContatos, via SSE):
+  // sem isso, um contato cadastrado agora só era encontrado pela busca depois
+  // de recarregar a página.
   useEffect(() => {
     let vivo = true;
     ContatosAPI.listar()
       .then(lista => { if (vivo && Array.isArray(lista)) setContatos(lista); })
       .catch(() => { /* sem permissao ou back-end fora: segue sem a agenda */ });
     return () => { vivo = false; };
-  }, []);
+  }, [sinalContatos]);
 
   // Telefone (sem DDI) -> contato da agenda. Serve para a conversa "herdar" o
   // nome, a empresa e o e-mail cadastrados na hora de comparar com a busca.
@@ -2539,7 +2893,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       // conversa apareceria duplicada por um instante.
       setConversas(prev =>
         prev.some(c => c.id === nova.id)
-          ? prev.map(c => (c.id === nova.id ? nova : c))
+          ? prev.map(c => (c.id === nova.id ? mesclarConversa(c, nova) : c))
           : [nova, ...prev]
       );
       // Ela nasce aberta, entao a aba Abertas e onde ela aparece.
@@ -2554,6 +2908,24 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     }
   }, [setConversas, setAbaAtual, assinar, assinaturaNome]);
 
+  /**
+   * Assumir a conversa.
+   *
+   * A troca de aba é otimista para o clique parecer instantâneo, mas quem
+   * DECIDE o dono é o servidor (UPDATE condicional atômico). Se outra pessoa
+   * assumiu primeiro, a resposta é 409: desfazemos o otimismo com o estado real
+   * que veio junto e avisamos -- antes os dois lados recebiam "sucesso" e cada
+   * tela mostrava um responsável diferente.
+   *
+   * Qualquer outra falha também precisa desfazer o otimismo: era isso que
+   * deixava a conversa "aberta" só na tela de quem clicou, e ela voltava para
+   * Pendentes no primeiro F5.
+   *
+   * O desfazer NÃO restaura um retrato guardado antes do clique -- esse retrato
+   * é velho, e reaplicá-lo apagava por cima o estado verdadeiro que o SSE já
+   * tinha entregue (a conversa reaparecia em Pendentes com o dono errado).
+   * Perguntamos ao servidor qual é o estado atual e aplicamos esse.
+   */
   const atenderConversa = useCallback(async (id, e) => {
     if (e) e.stopPropagation();
     setAbaAtual('abertas');
@@ -2561,10 +2933,23 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     setConversas(prev => prev.map(c =>
       c.id === id ? { ...c, statusAtendimento: 'aberta', lido: true, naoLidas: 0 } : c
     ));
-    // O backend grava quem assumiu (atendenteId = usuario do token) e devolve a
-    // conversa com atendenteNome -- a badge do responsavel aparece para todos.
-    try { aplicarConversa(await ConversasAPI.atender(id)); } catch {}
-  }, [setConversas, aplicarConversa]);
+    try {
+      aplicarConversa(await ConversasAPI.atender(id));
+    } catch (err) {
+      let real = null;
+      try { real = await ConversasAPI.obter(id); } catch { /* sem rede: o SSE reconcilia */ }
+      if (real?.id) {
+        aplicarConversa(real);
+        setSelecionada(null);
+        setAbaAtual(ABAS.find(a => a.statusMatch(real))?.id || 'pendentes');
+      }
+      window.alert(
+        err?.codigo === 'CONVERSA_JA_ATENDIDA'
+          ? err.message
+          : 'Não foi possível assumir a conversa: ' + (err?.message || 'erro desconhecido')
+      );
+    }
+  }, [setConversas, setAbaAtual, aplicarConversa]);
 
   const fecharConversa = useCallback(async (id) => {
     setSelecionada(null);
@@ -2610,22 +2995,6 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       aplicarConversa(await ConversasAPI.encaminharMensagem(mensagemId, conversaDestinoId));
     } catch (e) {
       window.alert('Não foi possível encaminhar: ' + e.message);
-    }
-  }, [aplicarConversa]);
-
-  // Desvincula o CNPJ da conversa (volta para "CNPJ pendente"). Pede confirmacao
-  // porque desfaz uma identificacao que o cliente ja informou.
-  const desvincularCnpj = useCallback(async (conv) => {
-    if (!conv?.id) return;
-    const ok = window.confirm(
-      `Remover o CNPJ ${conv.cnpj ? mascararCnpj(conv.cnpj) : ''} desta conversa?\n\n` +
-      'Ela volta para "CNPJ pendente" e o bot poderá perguntar novamente.'
-    );
-    if (!ok) return;
-    try {
-      aplicarConversa(await ConversasAPI.desvincularCnpj(conv.id));
-    } catch (e) {
-      window.alert('Não foi possível remover o CNPJ: ' + e.message);
     }
   }, [aplicarConversa]);
 
@@ -2675,8 +3044,21 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     ));
     setTexto('');
     // O back-end persiste, detecta CNPJ e devolve a conversa completa.
-    try { aplicarConversa(await ConversasAPI.enviarMensagem(id, final, respondendoAId)); } catch {}
-  }, [conversa, setConversas, aplicarConversa, assinar, assinaturaNome]);
+    try {
+      aplicarConversa(await ConversasAPI.enviarMensagem(id, final, respondendoAId));
+    } catch (e) {
+      // NÃO saiu para o cliente: a bolha otimista tem de sumir, senão o operador
+      // acha que respondeu. O texto volta para a caixa, para não se perder.
+      setConversas(prev => prev.map(c => {
+        if (c.id !== id) return c;
+        const i = c.mensagens.findIndex(m => !m.id && m.de === 'equipe' && m.texto === final);
+        if (i < 0) return c;
+        return { ...c, mensagens: c.mensagens.filter((_, k) => k !== i) };
+      }));
+      setTexto(txt);
+      window.alert('A mensagem NÃO foi enviada: ' + (e?.message || 'erro desconhecido'));
+    }
+  }, [conversa, setConversas, setTexto, aplicarConversa, assinar, assinaturaNome]);
 
   // Envio de mídia com progresso/cancelamento. Devolve { promise, cancel } para
   // o PainelChat controlar a barra e o botão de cancelar. A conversa atualizada
@@ -2691,13 +3073,12 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   const solicitarCnpjBot = useCallback(async () => {
     if (!conversa) return;
     try { aplicarConversa(await ConversasAPI.solicitarCnpj(conversa.id)); }
-    catch {
-      const msg = '[🤖 Arka Tecnologia]: Para prosseguirmos e verificar benefícios de parceiro, informe o CNPJ da sua empresa:';
-      setConversas(prev => prev.map(c =>
-        c.id === conversa.id ? { ...c, mensagens: [...c.mensagens, { de: 'equipe', texto: msg, hora: horaAgora() }] } : c
-      ));
+    catch (e) {
+      // Falhou = o cliente não recebeu o pedido. Fingir a bolha aqui só
+      // enganaria o operador até o próximo F5.
+      window.alert('Não foi possível pedir o CNPJ ao cliente: ' + (e?.message || 'erro desconhecido'));
     }
-  }, [conversa, setConversas, aplicarConversa]);
+  }, [conversa, aplicarConversa]);
 
   const validarCnpjManual = useCallback(async () => {
     const c = limparCnpj(inputCnpj);
@@ -2706,19 +3087,13 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     setInputCnpj('');
     setModalCnpj(false);
     try { aplicarConversa(await ConversasAPI.validarCnpj(id, c)); }
-    catch {
-      const parceiroEncontrado = parceiros.find(p => p.cnpj === c && p.status === 'ativo');
-      const msgBot = parceiroEncontrado
-        ? `✅ CNPJ ${mascararCnpj(c)} identificado! Razão Social: ${parceiroEncontrado.razaoSocial} (Parceiro Cadastrado).`
-        : `⚠️ CNPJ ${mascararCnpj(c)} não consta como parceiro cadastrado.`;
-      setConversas(prev => prev.map(item =>
-        item.id === id
-          ? { ...item, cnpj: c, cnpjVerificado: true,
-              mensagens: [...item.mensagens, { de: 'equipe', texto: `[🤖 Validação de CNPJ]: ${msgBot}`, hora: horaAgora() }] }
-          : item
-      ));
+    catch (e) {
+      // Antes o catch marcava o cliente como identificado SÓ na tela: nada era
+      // gravado, e a identificação evaporava no F5. (A causa mais comum desse
+      // erro era a chave estrangeira de `conversas.cnpj`, já removida.)
+      window.alert('Não foi possível identificar o cliente: ' + (e?.message || 'erro desconhecido'));
     }
-  }, [inputCnpj, conversa, parceiros, setConversas, aplicarConversa]);
+  }, [inputCnpj, conversa, aplicarConversa]);
 
   const executarFluxo = useCallback(async (fluxo) => {
     if (!conversa || !fluxo) return;
@@ -2730,11 +3105,11 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       let atualizada = null;
       for (const t of textos) atualizada = await ConversasAPI.enviarMensagem(id, t);
       if (atualizada) aplicarConversa(atualizada);
-    } catch {
-      const msgsBot = textos.map(t => ({ de: 'equipe', texto: t, hora: horaAgora() }));
-      setConversas(prev => prev.map(c => c.id === id ? { ...c, mensagens: [...c.mensagens, ...msgsBot] } : c));
+    } catch (e) {
+      // Idem: sem servidor, nenhuma dessas mensagens chegou ao cliente.
+      window.alert('O fluxo não foi executado: ' + (e?.message || 'erro desconhecido'));
     }
-  }, [conversa, setConversas, aplicarConversa]);
+  }, [conversa, aplicarConversa]);
 
   const fluxoSugerido = conversa
     ? fluxos.find(f => f.ativo && conversa.mensagens.some(m =>
@@ -2966,6 +3341,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                   c={c}
                   selecionada={selecionada}
                   parceiros={parceiros}
+                  agora={agora}
                   whatsAppConectado={whatsAppConectado}
                   onSelecionar={setSelecionada}
                   onAtender={atenderConversa}
@@ -3041,7 +3417,6 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               onToggleAssinar={() => setAssinar(v => !v)}
               assinaturaNome={assinaturaNome}
               onApagarMensagem={apagarMensagem}
-              onDesvincularCnpj={desvincularCnpj}
             />
           )}
         </div>

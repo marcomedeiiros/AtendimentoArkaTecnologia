@@ -1,7 +1,8 @@
 const parceiroRepository = require("../../infrastructure/repositories/parceiro.repository");
 const conversaRepository = require("../../infrastructure/repositories/conversa.repository");
 const logger = require("../../config/logger");
-const { mapParceiro } = require("../../shared/helpers/mapper.helper");
+const { mapParceiro, mapConversa } = require("../../shared/helpers/mapper.helper");
+const bus = require("../../shared/events/event-bus");
 const { limparCnpj, cnpjValido } = require("../../shared/helpers/cnpj.helper");
 const { TIPOS_CONTRATO } = require("./parceiro.dto");
 const AppError = require("../../shared/errors/AppError");
@@ -43,9 +44,29 @@ class ParceiroService {
     if (!cnpjValido(cnpjLimpo)) throw new AppError("CNPJ invalido", 400, "INVALID_CNPJ");
     if (!tel) throw new AppError("Telefone invalido", 400, "TELEFONE_INVALIDO");
 
-    const afetadas = await conversaRepository.limparCnpjDoContato(tel, cnpjLimpo);
-    logger.info("Contato desvinculado do CNPJ", { cnpj: cnpjLimpo, telefone: tel, afetadas });
-    return { desvinculado: true, conversasAfetadas: afetadas };
+    const ids = await conversaRepository.limparCnpjDoContato(tel, cnpjLimpo);
+    // Empurra cada conversa afetada pelo SSE. Sem isto, a Central continuava
+    // mostrando a empresa antiga ate alguem apertar F5: a escrita acontecia por
+    // updateMany, fora dos caminhos que emitem.
+    await this._emitirConversas(ids);
+    bus.emitRecurso("parceiros");
+    logger.info("Contato desvinculado do CNPJ", {
+      cnpj: cnpjLimpo,
+      telefone: tel,
+      afetadas: ids.length,
+    });
+    return { desvinculado: true, conversasAfetadas: ids.length };
+  }
+
+  async _emitirConversas(ids) {
+    for (const id of ids) {
+      try {
+        const conversa = await conversaRepository.findById(id);
+        if (conversa) bus.emitConversa(mapConversa(conversa));
+      } catch (e) {
+        logger.warn("Falha ao emitir conversa apos mudanca de CNPJ", { id, message: e.message });
+      }
+    }
   }
 
   async criar({ cnpj, razaoSocial, email, telefones, cidades, contratos, status = "ativo" }) {
@@ -62,6 +83,8 @@ class ParceiroService {
       contratos: normalizarContratos(contratos),
       status,
     });
+    // A lista de clientes mudou: quem esta com o painel aberto rele sozinho.
+    bus.emitRecurso("parceiros");
     return mapParceiro(parceiro);
   }
 
@@ -94,6 +117,7 @@ class ParceiroService {
       ...(contratos !== undefined ? { contratos: normalizarContratos(contratos) } : {}),
       ...(status ? { status } : {}),
     });
+    bus.emitRecurso("parceiros");
     return mapParceiro(atualizado);
   }
 
@@ -105,6 +129,7 @@ class ParceiroService {
     const atualizado = await parceiroRepository.upsert(cnpjLimpo, {
       status: parceiro.status === "ativo" ? "inativo" : "ativo",
     });
+    bus.emitRecurso("parceiros");
     return mapParceiro(atualizado);
   }
 
@@ -113,6 +138,7 @@ class ParceiroService {
     const parceiro = await parceiroRepository.findByCnpj(cnpjLimpo);
     if (!parceiro) throw new AppError("Parceiro nao encontrado", 404, "NOT_FOUND");
     await parceiroRepository.delete(cnpjLimpo);
+    bus.emitRecurso("parceiros");
     return { removido: true };
   }
 }

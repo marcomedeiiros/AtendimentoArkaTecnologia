@@ -12,6 +12,12 @@ const {
   sleep,
 } = require("../../shared/helpers/cnpj.helper");
 const { comLock } = require("../../shared/helpers/lock.helper");
+// PARAMETROS DA AUTOMACAO: quem manda e o FLUXO, nao o codigo. Ver
+// fluxos/fluxo.automacao.js -- todo texto, tentativa e prazo do bot sai de la.
+const { paramsCnpj, paramsAvaliacao } = require("../fluxos/fluxo.automacao");
+// Setor do atendimento deduzido do que o cliente pediu, quando o fluxo nao
+// informa um explicitamente (ver setorDetectado.helper).
+const { resolverSetor } = require("../../shared/helpers/setorDetectado.helper");
 const { mapConversa } = require("../../shared/helpers/mapper.helper");
 const configuracaoService = require("../configuracoes/configuracao.service");
 const n8nClient = require("../../infrastructure/external/n8n.client");
@@ -333,7 +339,10 @@ class ChatbotEngine {
     if (sessao.aguardando === AGUARDANDO.HUMANO) return null;
 
     const fluxo = await this.deps.fluxoRepository.findById(sessao.fluxoAtualId);
-    const cfg = fluxo && this.configuracaoInatividade(fluxo);
+    // FLUXO PAUSADO = SEM AUTOMACAO (defesa em profundidade: o varredor ja
+    // confere, mas este metodo e publico e nao pode depender de quem chama).
+    if (!fluxo || !fluxo.ativo) return null;
+    const cfg = this.configuracaoInatividade(fluxo);
     if (!cfg) return null;
 
     const parado = Date.now() - new Date(sessao.atualizadoEm || sessao.criadoEm).getTime();
@@ -539,8 +548,8 @@ class ChatbotEngine {
   //   mensagemConfirmarCnpj: "..."  -> texto proprio; aceita {{cnpj}} e {{empresa}}
   async _pedirOuConfirmarCnpj(conversa, textoDoPasso, passo = null) {
     const pedirNormal = { aguardando: AGUARDANDO.CNPJ, resposta: textoDoPasso };
-    const cfg = passo?.config || {};
-    if (cfg.memoriaCnpj === false) return pedirNormal;
+    const cfg = paramsCnpj(passo);
+    if (!cfg.memoria) return pedirNormal;
     try {
       const anterior = await this.deps.conversaRepository.ultimoCnpjDoTelefone(
         conversa.telefone,
@@ -552,20 +561,17 @@ class ChatbotEngine {
       const cnpjFmt = mascararCnpj(anterior.cnpj);
       const empresaNome = parceiro?.razaoSocial || "";
 
-      const padrao =
-        `Vi que você já foi atendido por aqui. O CNPJ continua sendo este?\n\n` +
-        `📄 {{cnpj}}{{empresa}}\n\n` +
-        `Responda *SIM* para confirmar ou *NÃO* para informar outro.`;
-      const modelo =
-        typeof cfg.mensagemConfirmarCnpj === "string" && cfg.mensagemConfirmarCnpj.trim()
-          ? cfg.mensagemConfirmarCnpj
-          : padrao;
+      // Dois modelos porque a pergunta muda: com razao social conhecida se
+      // confirma A EMPRESA; sem ela, so resta mostrar o numero.
+      const modelo = empresaNome ? cfg.mensagemConfirmar : cfg.mensagemConfirmarSemEmpresa;
 
       return {
         aguardando: AGUARDANDO.CNPJ_CONFIRMA,
         resposta: modelo
           .replace(/\{\{\s*cnpj\s*\}\}/g, cnpjFmt)
-          .replace(/\{\{\s*empresa\s*\}\}/g, empresaNome ? `\n🏢 ${empresaNome}` : ""),
+          // No modelo padrao com empresa o cabecalho ja traz o emoji; num
+          // modelo proprio (passo.config) o nome entra como veio.
+          .replace(/\{\{\s*empresa\s*\}\}/g, empresaNome || ""),
         cnpjSugerido: anterior.cnpj,
       };
     } catch (e) {
@@ -575,23 +581,62 @@ class ChatbotEngine {
     }
   }
 
-  async validarCnpjRecebido(conversa, texto) {
+  /**
+   * QUATRO ESTADOS, e nao dois.
+   *
+   * Antes isto devolvia so `valido: true|false`, e o fluxo tratava igual coisas
+   * que o cliente vive de forma bem diferente:
+   *
+   *   resposta_invalida -> ele nem tentou mandar um CNPJ ("quero falar com
+   *                        alguem"). Repetir "CNPJ invalido" aqui e grosseiro e
+   *                        nao ajuda: o certo e dizer que nao entendemos.
+   *   invalido          -> ele tentou, mas o numero nao fecha (digitou errado).
+   *   avulso            -> CNPJ correto, empresa fora da nossa lista.
+   *   cadastrado        -> CNPJ correto e parceiro conhecido.
+   *
+   * A mensagem de cada estado vem do FLUXO (fluxo.automacao), nunca daqui.
+   */
+  async validarCnpjRecebido(conversa, texto, cfg = paramsCnpj(null)) {
     const cnpjLimpo = limparCnpj(texto);
+
+    // Poucos digitos = o cliente respondeu outra coisa, nao um CNPJ torto.
+    // O limiar e generoso de proposito: quem digita 13 digitos ERROU o CNPJ;
+    // quem escreveu uma frase com um numero solto nao estava tentando.
+    if (cnpjLimpo.length < 11) {
+      return {
+        valido: false,
+        estado: "resposta_invalida",
+        cnpj: cnpjLimpo,
+        mensagem: cfg.mensagemRespostaInvalida,
+      };
+    }
+
     if (cnpjLimpo.length !== 14 || !cnpjValido(cnpjLimpo)) {
-      return { valido: false, cnpj: cnpjLimpo };
+      return { valido: false, estado: "invalido", cnpj: cnpjLimpo, mensagem: cfg.mensagemInvalido };
     }
 
     const parceiro = await this.deps.parceiroRepository.findAtivoByCnpj(cnpjLimpo);
+    // `empresa` e o nome que a Central mostra no lugar do numero do CNPJ.
+    // Gravado aqui, no momento da identificacao, para nao depender de o
+    // parceiro continuar cadastrado depois.
     await this.deps.conversaRepository.update(conversa.id, {
       cnpj: cnpjLimpo,
+      empresa: parceiro?.razaoSocial || null,
       cnpjVerificado: true,
     });
 
-    const msg = parceiro
-      ? `CNPJ ${mascararCnpj(cnpjLimpo)} validado! Razao Social: ${parceiro.razaoSocial} - parceiro com contrato ativo.`
-      : `CNPJ ${mascararCnpj(cnpjLimpo)} consultado. Nao consta contrato de parceiro ativo.`;
+    // Sem os 14 digitos na bolha: quem identifica o cliente e a razao social.
+    const mensagem = parceiro
+      ? `Cliente identificado: ${parceiro.razaoSocial} - parceiro com contrato ativo.`
+      : cfg.mensagemNaoCadastrado;
 
-    return { valido: true, cnpj: cnpjLimpo, parceiro, mensagem: msg };
+    return {
+      valido: true,
+      estado: parceiro ? "cadastrado" : "avulso",
+      cnpj: cnpjLimpo,
+      parceiro,
+      mensagem,
+    };
   }
 
   // ---------------------------------------------------------------- menu ---
@@ -614,7 +659,10 @@ class ChatbotEngine {
 
   async transferirParaHumano(
     ctx,
-    { avisar = true, motivo = "solicitado", setor = null, filaId = null } = {}
+    // `rotuloOpcao`: o texto da opcao que o cliente escolheu no menu ("1,tecnico,
+    // suporte tecnico"). E o sinal mais confiavel do setor -- no menu o cliente
+    // digita so "1", entao a fala dele nao diz nada, mas a opcao diz.
+    { avisar = true, motivo = "solicitado", setor = null, filaId = null, rotuloOpcao = null } = {}
   ) {
     const { conversa, telefone, instanciaId, instanceName } = ctx;
 
@@ -622,11 +670,30 @@ class ChatbotEngine {
     }
 
     const dados = { statusAtendimento: "pendente", lido: false };
-    // `filaId` vem do editor de origem (queueId) e nao tem equivalente aqui:
-    // fica no log para rastreio. Se a opcao trouxer um setor, ele entra na
-    // conversa e o HelpDesk ja consegue filtrar por ele.
-    if (setor) dados.setor = setor;
+
+    // SETOR DO ATENDIMENTO -- gravado, nao adivinhado depois por cada tela.
+    //
+    // `filaId` vem do editor de origem (queueId: 33, 35...) e so vira setor se
+    // alguem tiver preenchido o mapa em Configuracoes. Com o mapa vazio, o setor
+    // ficava nulo e TODA conversa era gravada como "Geral" -- o que fazia a aba
+    // de Feedbacks classificar tudo como "Atendimento Geral". Agora, sem setor
+    // explicito nem mapa, deduzimos do que o cliente escolheu/escreveu e
+    // gravamos: Conversa, OS e Feedback passam a ler o mesmo valor.
+    const setorFinal = resolverSetor({
+      setorExplicito: setor,
+      setorDaFila: null,
+      conversa,
+      rotuloOpcao,
+    });
+    dados.setor = setorFinal;
+
+    // Fila e um ciclo em curso: precisa de OS aberta para o atendente assumir.
+    await this.deps.conversaRepository.garantirAtendimentoAberto(conversa.id, { setor: setorFinal });
     await this.deps.conversaRepository.update(conversa.id, dados);
+    await this.deps.conversaRepository.atualizarAtendimentoAtual(conversa.id, {
+      status: "pendente",
+      setor: setorFinal,
+    });
 
     await this.deps.sessaoRepository.upsert(instanciaId, conversa.id, telefone, {
       fluxoAtualId: null,
@@ -679,11 +746,19 @@ class ChatbotEngine {
   async fecharConversa(ctx, { motivo = "fluxo" } = {}) {
     const { conversa, telefone, instanciaId } = ctx;
 
+    const fechadoEm = new Date();
     await this.deps.conversaRepository.update(conversa.id, {
       statusAtendimento: "fechada",
-      fechadoEm: new Date(),
+      fechadoEm,
       lido: true,
       naoLidas: 0,
+    });
+    // A OS em curso encerra junto. E o fechamento dela que faz a proxima
+    // mensagem do cliente abrir uma OS NOVA no mesmo fio, em vez de continuar
+    // um atendimento que ja acabou.
+    await this.deps.conversaRepository.atualizarAtendimentoAtual(conversa.id, {
+      status: "fechada",
+      fechadoEm,
     });
 
     await this.deps.sessaoRepository.upsert(instanciaId, conversa.id, telefone, {
@@ -715,35 +790,35 @@ class ChatbotEngine {
     return nota;
   }
 
-  // Config efetiva da pesquisa para um PASSO de fluxo do tipo "avaliacao": parte
-  // dos padroes globais (Configuracoes) e deixa o passo sobrescrever cada texto e
-  // o "pedir comentario". Assim cada fluxo pode ter a sua pesquisa sem depender
-  // da config global.
-  async _configPesquisaPasso(passo) {
-    const global = await this.deps.configuracaoService.pesquisaSatisfacao();
-    const c = (passo && passo.config) || {};
-    const txt = (v, padrao) => (typeof v === "string" && v.trim() ? v : padrao);
-    return {
-      ativo: true,
-      pedirComentario:
-        typeof c.pedirComentario === "boolean" ? c.pedirComentario : global.pedirComentario,
-      mensagemNota: txt(c.mensagemNota, global.mensagemNota),
-      mensagemComentario: txt(c.mensagemComentario, global.mensagemComentario),
-      mensagemAgradecimento: txt(c.mensagemAgradecimento, global.mensagemAgradecimento),
-      mensagemNotaInvalida: txt(c.mensagemNotaInvalida, global.mensagemNotaInvalida),
-    };
+  // Config da pesquisa a partir do PASSO do fluxo. Nao ha mais mistura com a
+  // configuracao global: o parametro que vale e o que esta no fluxo (ou o padrao
+  // documentado em fluxo.automacao, que a tela mostra como placeholder).
+  _configPesquisaPasso(passo) {
+    return { ativo: true, ...paramsAvaliacao(passo) };
   }
 
-  // Config da pesquisa usada pela pesquisa AUTOMATICA (ao fechar): se algum fluxo
-  // ativo tiver um no "avaliacao", usa os textos DELE (editaveis no editor de
-  // fluxos, sem passar por Configuracoes). Sem no, cai nos padroes globais.
+  /**
+   * A pesquisa de satisfacao e uma ETAPA DO FLUXO -- e so isso.
+   *
+   * Antes, nao havendo no de avaliacao em fluxo nenhum, isto caia na
+   * configuracao GLOBAL e a pesquisa era enviada assim mesmo. O efeito pratico
+   * era o bug relatado: com TODOS os fluxos pausados, o cliente continuava
+   * recebendo "de 1 a 5, que nota voce da?" de um bot que a tela mostrava
+   * desligado -- e nao havia onde clicar para parar aquilo.
+   *
+   * Agora, sem fluxo ATIVO com passo "avaliacao", nao ha pesquisa. Pausar o
+   * fluxo passa a ser o botao de desligar, como se espera.
+   *
+   * Devolve { cfg, fluxoId } ou null.
+   */
   async _configPesquisaAtiva() {
     const fluxos = await this.deps.fluxoRepository.findAtivos();
     for (const f of fluxos || []) {
+      if (!f.ativo) continue;
       const no = (f.passos || []).find((p) => p.tipo === "avaliacao");
-      if (no) return this._configPesquisaPasso(no);
+      if (no) return { cfg: this._configPesquisaPasso(no), fluxoId: f.id, passoId: no.id };
     }
-    return this.deps.configuracaoService.pesquisaSatisfacao();
+    return null;
   }
 
   // Dispara a pesquisa (CSAT) AUTOMATICAMENTE ao encerrar. Retorna o resultado
@@ -757,32 +832,81 @@ class ChatbotEngine {
     const modo = await this.deps.configuracaoService.modoAtendimento();
     if (modo !== "local") return null;
 
-    const cfg = await this._configPesquisaAtiva();
-    if (!cfg.ativo) return null;
+    // FLUXO PAUSADO = SEM AUTOMACAO. Sem fluxo ativo com passo de avaliacao,
+    // nenhuma pesquisa e enviada (ver _configPesquisaAtiva).
+    const ativa = await this._configPesquisaAtiva();
+    if (!ativa) {
+      logger.info("Pesquisa de satisfacao nao enviada: nenhum fluxo ativo com passo de avaliacao", {
+        conversaId: conversa.id,
+      });
+      return null;
+    }
+    const { cfg, fluxoId } = ativa;
 
     // Nao pergunta duas vezes: se ja existe nota (ex.: um no de avaliacao no
     // fluxo ja perguntou), apenas segue para o fechamento.
     const atual = await this.deps.conversaRepository.findById(conversa.id);
     if (atual && atual.avaliacao != null) return null;
 
+    // O CICLO JA VIROU?
+    //
+    // A pesquisa automatica e disparada em segundo plano depois do fechamento
+    // (conversa.service). Se nesse intervalo o cliente escreveu de novo, um
+    // atendimento NOVO ja comecou -- e mandar a pesquisa agora fecharia esse
+    // chamado recem-aberto antes de qualquer atendente ver. Nesse caso a
+    // pesquisa simplesmente nao acontece.
+    if (
+      conversa.atendimentoAtualId &&
+      atual?.atendimentoAtualId &&
+      atual.atendimentoAtualId !== conversa.atendimentoAtualId
+    ) {
+      logger.info("Pesquisa de satisfacao ignorada: novo atendimento ja aberto", {
+        conversaId: conversa.id,
+      });
+      return null;
+    }
+
     await this.enviarBot(conversa.id, telefone, cfg.mensagemNota, instanceName);
 
+    // `osAvaliada` prende a pesquisa ao CICLO que acabou de fechar. Sem isso, se
+    // o cliente abrir um chamado novo antes de responder a nota, a nota (e o
+    // fechamento) cairiam na OS nova -- fechando por tras um atendimento que
+    // acabou de comecar.
+    const osAvaliada = atual?.atendimentoAtualId || conversa.atendimentoAtualId || null;
+    // `fluxoAtualId` guardado de proposito: e por ele que a varredura do
+    // servidor confere, 5 minutos depois, se o fluxo AINDA esta ativo antes de
+    // executar a proxima acao. Sem isso, pausar o fluxo no meio da espera nao
+    // teria efeito nenhum.
     await this.deps.sessaoRepository.upsert(instanciaId, conversa.id, telefone, {
-      fluxoAtualId: null,
+      fluxoAtualId: fluxoId,
       passoAtualId: null,
       aguardando: AGUARDANDO.AVALIACAO_NOTA,
       ativo: true,
-      contexto: { pesquisa: true, pesquisaCfg: cfg, tentativasAval: 0 },
+      contexto: { pesquisa: true, pesquisaCfg: cfg, tentativasAval: 0, osAvaliada },
     });
+    // A OS passa a constar como "aguardando" a nota -- diferente de "sem nota".
+    if (osAvaliada) {
+      await this.deps.conversaRepository.atualizarAtendimento(osAvaliada, {
+        avaliacaoStatus: "aguardando",
+      });
+    }
 
     // Fecha desde ja: a conversa sai da fila, mas a sessao da pesquisa continua
     // viva para capturar a resposta. Sem resposta, a sessao expira pelo TTL.
+    const fechadoEm = new Date();
     await this.deps.conversaRepository.update(conversa.id, {
       statusAtendimento: "fechada",
-      fechadoEm: new Date(),
+      fechadoEm,
       lido: true,
       naoLidas: 0,
+      avaliacaoStatus: "aguardando",
     });
+    if (osAvaliada) {
+      await this.deps.conversaRepository.atualizarAtendimento(osAvaliada, {
+        status: "fechada",
+        fechadoEm,
+      });
+    }
     await this._emitirConversa(conversa.id);
 
     logger.info("Pesquisa de satisfacao iniciada", { conversaId: conversa.id });
@@ -798,22 +922,71 @@ class ChatbotEngine {
   // comentario. Ao final agradece e encerra a sessao da pesquisa.
   async continuarPesquisaSatisfacao(sessao, ctx, textoEntrada) {
     const { conversa, telefone, instanceName } = ctx;
+
+    // FLUXO PAUSADO NO MEIO DA PESQUISA.
+    //
+    // Pausar o fluxo cala o bot: ele nao manda mais nada (nem o agradecimento,
+    // nem a proxima pergunta). Mas a nota que o cliente ACABOU de enviar e dado
+    // que ele nos deu -- jogar fora seria pior do que guardar. Entao gravamos a
+    // resposta em silencio e encerramos a sessao.
+    if (sessao.fluxoAtualId) {
+      const fluxo = await this.deps.fluxoRepository.findById(sessao.fluxoAtualId);
+      if (!fluxo || !fluxo.ativo) {
+        const alvo = sessao.conversaId || conversa.id;
+        const os = sessao.contexto?.osAvaliada || null;
+        const nota = this.interpretarNota(textoEntrada);
+        if (nota != null && sessao.aguardando === AGUARDANDO.AVALIACAO_NOTA) {
+          await this.deps.conversaRepository.update(alvo, {
+            avaliacao: nota,
+            avaliacaoStatus: "respondida",
+          });
+          if (os) {
+            await this.deps.conversaRepository.atualizarAtendimento(os, {
+              avaliacao: nota,
+              avaliacaoStatus: "respondida",
+            });
+          }
+        }
+        await this.deps.sessaoRepository.update(sessao.id, {
+          fluxoAtualId: null,
+          passoAtualId: null,
+          aguardando: null,
+          ativo: false,
+          contexto: {},
+        });
+        await this._emitirConversa(alvo);
+        logger.info("Pesquisa encerrada sem resposta do bot: fluxo pausado", { conversaId: alvo });
+        return { processado: true, conversaId: alvo, fluxoPausado: true };
+      }
+    }
     // A nota pertence a conversa que FOI AVALIADA (a da sessao), nao a que
     // trouxe a mensagem. Normalmente sao a mesma agora, mas manter o alvo
     // explicito e o que garante que a nota nunca mais caia numa conversa que
     // ninguem atendeu, mesmo se o desvio do webhook falhar.
     const alvoId = sessao.conversaId || conversa.id;
-    // Passo "avaliacao" do fluxo guarda a config dele no contexto da sessao;
-    // fora isso, cai na config global (pesquisa automatica ao encerrar).
-    const cfg = sessao.contexto?.pesquisaCfg || (await this.deps.configuracaoService.pesquisaSatisfacao());
+    // A config foi congelada no contexto da sessao quando a pesquisa comecou --
+    // e a do FLUXO daquele momento. Congelar evita que editar o fluxo no meio
+    // de uma pesquisa em curso troque as regras debaixo do cliente.
+    const cfg = sessao.contexto?.pesquisaCfg || this._configPesquisaPasso(null);
+    const osAvaliada = sessao.contexto?.osAvaliada || null;
 
     if (sessao.aguardando === AGUARDANDO.AVALIACAO_NOTA) {
       const nota = this.interpretarNota(textoEntrada);
 
+      // O cliente DISSE que nao quer avaliar. Isso nao e "nao respondeu" nem
+      // nota zero: e uma escolha, e o relatorio precisa mostra-la como tal.
+      if (this.recusouAvaliar(textoEntrada)) {
+        await this.registrarStatusAvaliacao(alvoId, osAvaliada, "sem_nota");
+        await this.enviarBot(conversa.id, telefone, cfg.mensagemAgradecimento, instanceName);
+        return this.finalizarPesquisa(ctx, sessao);
+      }
+
       if (nota == null) {
         const tentativas = (sessao.contexto?.tentativasAval || 0) + 1;
-        // Cliente nao colabora: encerra sem insistir, para nao virar spam.
-        if (tentativas >= limites.maxTentativasOpcao) {
+        // Cliente nao colabora: encerra sem insistir, para nao virar spam. O
+        // limite vem do FLUXO (antes era o `maxTentativasOpcao` global do .env).
+        if (tentativas >= (cfg.maxTentativas || 2)) {
+          await this.registrarStatusAvaliacao(alvoId, osAvaliada, "sem_nota");
           return this.finalizarPesquisa(ctx, sessao);
         }
         await this.enviarBot(conversa.id, telefone, cfg.mensagemNotaInvalida, instanceName);
@@ -823,7 +996,19 @@ class ChatbotEngine {
         return { processado: true, conversaId: conversa.id, aguardando: AGUARDANDO.AVALIACAO_NOTA };
       }
 
-      await this.deps.conversaRepository.update(alvoId, { avaliacao: nota });
+      await this.deps.conversaRepository.update(alvoId, {
+        avaliacao: nota,
+        avaliacaoStatus: "respondida",
+      });
+      // A nota pertence ao CICLO (a OS) que foi avaliado -- `osAvaliada`, e nao
+      // "a OS atual": o cliente pode ter aberto um chamado novo entre o
+      // fechamento e a resposta da pesquisa.
+      if (osAvaliada) {
+        await this.deps.conversaRepository.atualizarAtendimento(osAvaliada, {
+          avaliacao: nota,
+          avaliacaoStatus: "respondida",
+        });
+      }
       await this._emitirConversa(alvoId);
 
       // Pediu comentario? avanca; senao agradece e encerra.
@@ -853,10 +1038,113 @@ class ChatbotEngine {
       await this.deps.conversaRepository.update(alvoId, {
         feedback: comentario.slice(0, 1000),
       });
+      if (osAvaliada) {
+        await this.deps.conversaRepository.atualizarAtendimento(osAvaliada, {
+          feedback: comentario.slice(0, 1000),
+        });
+      }
       await this._emitirConversa(alvoId);
     }
     await this.enviarBot(conversa.id, telefone, cfg.mensagemAgradecimento, instanceName);
     return this.finalizarPesquisa(ctx, sessao);
+  }
+
+  /** A sessao esta parada esperando a nota (ou o comentario) do cliente? */
+  aguardandoAvaliacao(sessao) {
+    return (
+      !!sessao?.ativo &&
+      (sessao.aguardando === AGUARDANDO.AVALIACAO_NOTA ||
+        sessao.aguardando === AGUARDANDO.AVALIACAO_COMENTARIO)
+    );
+  }
+
+  /**
+   * PRAZO DA AVALIACAO ESGOTADO (os "5 minutos").
+   *
+   * Chamado pela varredura do servidor (chatbot.inatividade), nunca pelo
+   * navegador. Se o cliente nao respondeu dentro do prazo que o FLUXO define:
+   *
+   *   - envia a mensagem de encerramento configurada no fluxo;
+   *   - registra `sem_resposta` -- e nao uma nota falsa nem "pendente eterno";
+   *   - encerra a sessao e o atendimento.
+   *
+   * Quem garante que o fluxo esta ATIVO e a varredura, no instante da execucao.
+   * Devolve true quando fez alguma coisa.
+   */
+  async aplicarTimeoutAvaliacao(sessao, { conversa, instanciaId, instanceName }) {
+    if (!this.aguardandoAvaliacao(sessao)) return false;
+
+    const cfg = sessao.contexto?.pesquisaCfg || this._configPesquisaPasso(null);
+    const prazoMs = (cfg.timeoutMin || 5) * 60 * 1000;
+    const desde = new Date(sessao.atualizadoEm || sessao.criadoEm).getTime();
+    if (Date.now() - desde < prazoMs) return false;
+
+    const alvoId = sessao.conversaId || conversa.id;
+    const osAvaliada = sessao.contexto?.osAvaliada || null;
+
+    // Comentario pendente nao invalida a nota que ja veio: quem respondeu a
+    // nota e sumiu no comentario continua "respondida".
+    const jaTemNota = conversa?.avaliacao != null;
+    await this.registrarStatusAvaliacao(
+      alvoId,
+      osAvaliada,
+      jaTemNota ? "respondida" : "sem_resposta"
+    );
+
+    if (cfg.mensagemTimeout) {
+      await this.enviarBot(alvoId, sessao.telefone, cfg.mensagemTimeout, instanceName);
+    }
+
+    await this.deps.sessaoRepository.update(sessao.id, {
+      fluxoAtualId: null,
+      passoAtualId: null,
+      aguardando: null,
+      ativo: false,
+      contexto: {},
+    });
+
+    logger.info("Avaliacao encerrada por falta de resposta", {
+      conversaId: alvoId,
+      prazoMin: cfg.timeoutMin,
+      status: jaTemNota ? "respondida" : "sem_resposta",
+    });
+    await this._emitirConversa(alvoId);
+    return true;
+  }
+
+  // "Nao quero avaliar" dito com todas as letras. Separado de `interpretarNota`
+  // porque a intencao e outra: aqui o cliente RESPONDEU -- ele so nao quis dar
+  // nota. Gravar isso como "sem resposta" (ou como nota 0) seria mentir no
+  // relatorio.
+  recusouAvaliar(texto) {
+    const t = this.normalizarTexto(texto);
+    if (!t) return false;
+    const recusas = [
+      "pular", "nao quero", "nao quero avaliar", "nao vou avaliar", "prefiro nao",
+      "prefiro nao responder", "sem nota", "nao avaliar", "dispensar", "deixa",
+      "deixa pra la", "nao obrigado", "nao, obrigado",
+    ];
+    return recusas.includes(t);
+  }
+
+  // Grava COMO a avaliacao terminou, na conversa e na OS avaliada. Silencioso:
+  // e registro, e nao pode derrubar o encerramento do atendimento.
+  async registrarStatusAvaliacao(conversaId, atendimentoId, status) {
+    try {
+      await this.deps.conversaRepository.update(conversaId, { avaliacaoStatus: status });
+      if (atendimentoId) {
+        await this.deps.conversaRepository.atualizarAtendimento(atendimentoId, {
+          avaliacaoStatus: status,
+        });
+      }
+      await this._emitirConversa(conversaId);
+    } catch (e) {
+      logger.warn("Nao foi possivel registrar o status da avaliacao", {
+        conversaId,
+        status,
+        message: e.message,
+      });
+    }
   }
 
   // Encerra a sessao da pesquisa e garante que a conversa fique fechada.
@@ -870,12 +1158,22 @@ class ChatbotEngine {
       contexto: {},
     });
     const atual = await this.deps.conversaRepository.findById(conversa.id);
-    if (atual && atual.statusAtendimento !== "fechada") {
+    // So fecha se o fio ainda estiver no MESMO ciclo que foi avaliado. Se o
+    // cliente abriu um chamado novo enquanto a pesquisa corria, fechar aqui
+    // mataria esse chamado antes de qualquer atendente ver.
+    const osAvaliada = sessao?.contexto?.osAvaliada || null;
+    const mesmoCiclo = !osAvaliada || atual?.atendimentoAtualId === osAvaliada;
+    if (atual && mesmoCiclo && atual.statusAtendimento !== "fechada") {
+      const fechadoEm = new Date();
       await this.deps.conversaRepository.update(conversa.id, {
         statusAtendimento: "fechada",
-        fechadoEm: new Date(),
+        fechadoEm,
         lido: true,
         naoLidas: 0,
+      });
+      await this.deps.conversaRepository.atualizarAtendimentoAtual(conversa.id, {
+        status: "fechada",
+        fechadoEm,
       });
     }
     await this._emitirConversa(conversa.id);
@@ -922,10 +1220,15 @@ class ChatbotEngine {
         // Pesquisa de satisfacao como PASSO do fluxo: pergunta a nota e para
         // aqui. A resposta e capturada por continuarPesquisaSatisfacao, que le a
         // config guardada no contexto da sessao (contextoSessao abaixo).
-        const cfg = await this._configPesquisaPasso(passo);
+        const cfg = this._configPesquisaPasso(passo);
         resposta = cfg.mensagemNota;
         aguardando = AGUARDANDO.AVALIACAO_NOTA;
-        contextoSessao = { pesquisa: true, pesquisaCfg: cfg, tentativasAval: 0 };
+        contextoSessao = {
+          pesquisa: true,
+          pesquisaCfg: cfg,
+          tentativasAval: 0,
+          osAvaliada: conversa.atendimentoAtualId || null,
+        };
         // Tira a conversa da fila desde ja (como a pesquisa automatica ao
         // encerrar); a sessao segue viva para capturar a nota/comentario.
         await this.deps.conversaRepository.update(conversa.id, {
@@ -933,6 +1236,12 @@ class ChatbotEngine {
           fechadoEm: new Date(),
           lido: true,
           naoLidas: 0,
+          avaliacaoStatus: "aguardando",
+        });
+        await this.deps.conversaRepository.atualizarAtendimentoAtual(conversa.id, {
+          status: "fechada",
+          fechadoEm: new Date(),
+          avaliacaoStatus: "aguardando",
         });
         await this._emitirConversa(conversa.id);
         break;
@@ -1139,7 +1448,14 @@ class ChatbotEngine {
         const mapa = await this.deps.configuracaoService.filasParaSetor();
         setor = mapa[String(filaId)] || null;
       }
-      return this.transferirParaHumano(contexto, { motivo: "fluxo_transferiu", setor, filaId });
+      // O rotulo da opcao vai junto: e o que permite deduzir o setor quando nao
+      // ha setor explicito nem mapa de filas configurado.
+      return this.transferirParaHumano(contexto, {
+        motivo: "fluxo_transferiu",
+        setor,
+        filaId,
+        rotuloOpcao: opcao.rotulo || opcao.label || null,
+      });
     }
 
     const destino = fluxo.passos.find((p) => p.id === opcao.targetId) || null;
@@ -1169,8 +1485,8 @@ class ChatbotEngine {
     const fluxo = await this.deps.fluxoRepository.findById(sessao.fluxoAtualId);
 
     if (!fluxo || !fluxo.ativo) {
-      // Fluxo apagado ou desativado no meio do atendimento.
-      const fluxos = await this.deps.fluxoRepository.findAtivos();
+      // Fluxo apagado ou PAUSADO no meio do atendimento: o bot para de conduzir
+      // e a conversa vai para a fila, para uma pessoa assumir.
       return this.enviarMenu(ctx);
     }
 
@@ -1231,7 +1547,8 @@ class ChatbotEngine {
         // conversa e devolve a mensagem de confirmacao.
         const cnpjValidacao = await this.validarCnpjRecebido(
           conversa,
-          sessao.contexto?.cnpjSugerido || ""
+          sessao.contexto?.cnpjSugerido || "",
+          paramsCnpj(passoAtual)
         );
         if (cnpjValidacao.valido) {
           await this.enviarBot(conversa.id, telefone, cnpjValidacao.mensagem, instanceName);
@@ -1254,11 +1571,12 @@ class ChatbotEngine {
         }
         // CNPJ guardado nao vale mais (ex.: base mudou): pede digitado.
       } else if (!nao.includes(resp)) {
-        // Resposta que nao e sim nem nao: reforca a pergunta uma vez.
+        // Nem sim nem nao: e o caso "cliente nao respondeu o que foi pedido".
+        // O texto vem do fluxo, igual a todos os outros.
         await this.enviarBot(
           conversa.id,
           telefone,
-          "Por favor, responda *SIM* para usar o mesmo CNPJ ou *NÃO* para informar outro.",
+          paramsCnpj(passoAtual).mensagemRespostaInvalida,
           instanceName
         );
         return { conversaId: conversa.id, aguardando: AGUARDANDO.CNPJ_CONFIRMA };
@@ -1270,6 +1588,7 @@ class ChatbotEngine {
       if (conversa.cnpj || conversa.cnpjVerificado) {
         await this.deps.conversaRepository.update(conversa.id, {
           cnpj: null,
+          empresa: null,
           cnpjVerificado: false,
         });
         await this._emitirConversa(conversa.id);
@@ -1277,7 +1596,7 @@ class ChatbotEngine {
       await this.enviarBot(
         conversa.id,
         telefone,
-        "Sem problema. Por favor, informe o *CNPJ* (pode enviar com ou sem pontuação).",
+        paramsCnpj(passoAtual).mensagemPedirOutro,
         instanceName
       );
       await this.deps.sessaoRepository.update(sessao.id, {
@@ -1289,14 +1608,48 @@ class ChatbotEngine {
     }
 
     if (sessao.aguardando === AGUARDANDO.CNPJ) {
-      const cnpjValidacao = await this.validarCnpjRecebido(conversa, textoEntrada);
+      // Parametros do PASSO que pediu o CNPJ (tentativas e textos). Sem passo
+      // identificado, valem os padroes documentados em fluxo.automacao.
+      const cfgCnpj = paramsCnpj(passoAtual);
+      const cnpjValidacao = await this.validarCnpjRecebido(conversa, textoEntrada, cfgCnpj);
 
       if (!cnpjValidacao.valido) {
-        const tentativas = (sessao.contexto?.tentativasCnpj || 0) + 1;
+        // "Nao entendi o que voce falou" NAO gasta tentativa: o cliente que
+        // pergunta outra coisa no meio do caminho nao errou o CNPJ. Gastar
+        // tentativa aqui fazia uma duvida legitima empurrar o cliente para fora
+        // do fluxo.
+        if (cnpjValidacao.estado === "resposta_invalida") {
+          await this.enviarBot(conversa.id, telefone, cnpjValidacao.mensagem, instanceName);
+          return { conversaId: conversa.id, aguardando: AGUARDANDO.CNPJ };
+        }
 
-        if (tentativas >= limites.maxTentativasCnpj) {
+        const tentativas = (sessao.contexto?.tentativasCnpj || 0) + 1;
+        const restantes = cfgCnpj.maxTentativas - tentativas;
+
+        if (restantes <= 0) {
+          // Acabaram as tentativas: o FLUXO decide o desfecho.
+          if (cfgCnpj.aoEsgotarTentativas === "avulso") {
+            await this.enviarBot(conversa.id, telefone, cfgCnpj.mensagemNaoCadastrado, instanceName);
+            await this.deps.sessaoRepository.update(sessao.id, {
+              contexto: { ...(sessao.contexto || {}), tentativasCnpj: 0 },
+            });
+            logger.info("CNPJ nao confirmado: seguindo como cliente avulso", {
+              conversaId: conversa.id,
+            });
+            return this.transferirParaHumano(ctx, { avisar: false, motivo: "cliente_avulso" });
+          }
           return this.transferirParaHumano(ctx, { motivo: "cnpj_invalido" });
         }
+
+        // Ainda ha tentativa: avisa QUE errou (antes o bot ficava mudo e o
+        // cliente reenviava o mesmo numero sem saber o motivo) e, quando so
+        // resta uma, usa o texto que diz isso explicitamente.
+        await this.enviarBot(
+          conversa.id,
+          telefone,
+          restantes === 1 ? cfgCnpj.mensagemUltimaTentativa : cnpjValidacao.mensagem,
+          instanceName
+        );
 
         await this.deps.sessaoRepository.update(sessao.id, {
           contexto: { ...(sessao.contexto || {}), tentativasCnpj: tentativas },
@@ -1348,6 +1701,7 @@ class ChatbotEngine {
     nomeCliente = "Cliente",
     waMessageId = null,
     midia = null,
+    encaminhada = null,
   }) {
     const textoLimpo = this.extrairTextoMensagem(texto);
     const ehMidia = !!midia && midia.tipo && midia.tipo !== "texto";
@@ -1361,9 +1715,12 @@ class ChatbotEngine {
     }
 
     // Texto exibido na bolha/preview + metadata da midia (quando houver).
-    const rotulos = { imagem: "[Imagem]", video: "[Vídeo]", documento: "[Documento]", audio: "[Áudio]", localizacao: "[Localização]", contato: "[Contato]" };
+    const rotulos = { imagem: "[Imagem]", figurinha: "[Figurinha]", video: "[Vídeo]", documento: "[Documento]", audio: "[Áudio]", localizacao: "[Localização]", contato: "[Contato]" };
     const textoMsg = ehMidia ? (textoLimpo || rotulos[midia.tipo] || "[Mídia]") : textoLimpo;
-    const metadata = ehMidia ? midia : null;
+    // A marca de encaminhamento entra no metadata (campo Json que ja existe --
+    // sem migracao) e vale tambem para texto puro, que nao tem midia nenhuma.
+    const metadata =
+      ehMidia || encaminhada ? { ...(ehMidia ? midia : {}), ...(encaminhada || {}) } : null;
 
     // RESPOSTA DA PESQUISA DE SATISFACAO: a conversa avaliada JA ESTA FECHADA, e
     // findByTelefone (de proposito) so olha pendente/aberta. Sem este desvio, a
@@ -1400,6 +1757,37 @@ class ChatbotEngine {
       if (fotoUrl) await this.deps.conversaRepository.update(conversa.id, { fotoUrl });
       conversa = await this.deps.conversaRepository.findById(conversa.id);
     } else {
+      // NOVO CICLO NO MESMO FIO.
+      //
+      // Aqui ficava a duplicacao: `findByTelefone` ignorava conversa fechada,
+      // entao o cliente que voltava a escrever ganhava uma conversa NOVA, com
+      // outro numero, e o historico anterior sumia numa linha separada. Agora o
+      // fio e sempre o mesmo e o que nasce e uma OS nova -- o historico inteiro
+      // continua junto e so o numero da OS muda.
+      //
+      // A resposta da PESQUISA DE SATISFACAO e a excecao: ela pertence ao ciclo
+      // que acabou de fechar, entao nao abre atendimento nenhum.
+      if (!respondendoPesquisa && conversa.statusAtendimento === "fechada") {
+        const r = await this.deps.conversaRepository.garantirAtendimentoAberto(conversa.id, {
+          setor: conversa.setor,
+        });
+        await this.deps.conversaRepository.update(conversa.id, {
+          statusAtendimento: "pendente",
+          fechadoEm: null,
+          atendidoEm: null,
+          // Ciclo novo comeca sem responsavel: quem assumir o anterior nao herda
+          // este de graca (`ultimoAtendenteNome` guarda o historico).
+          atendenteId: null,
+          avaliacao: null,
+          feedback: null,
+          lido: false,
+        });
+        logger.info("Novo atendimento aberto no fio existente", {
+          conversaId: conversa.id,
+          numeroOS: r?.atendimento?.numeroOS ?? null,
+        });
+      }
+
       await this.deps.conversaRepository.addMensagem(
         conversa.id,
         "cliente",
@@ -1619,6 +2007,7 @@ class ChatbotEngine {
       const cnpjNumeros = limparCnpj(textoLimpo);
       let cnpjValidacao = null;
       if (cnpjNumeros.length === 14 && cnpjValido(cnpjNumeros) && !conversa.cnpjVerificado) {
+        // Fora de fluxo nao ha passo: valem os padroes de fluxo.automacao.
         cnpjValidacao = await this.validarCnpjRecebido(conversa, textoLimpo);
         await this.enviarBot(conversa.id, telefone, cnpjValidacao.mensagem, instanceName);
         conversa = await this.deps.conversaRepository.findById(conversa.id);

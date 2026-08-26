@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { GitBranch, Workflow } from 'lucide-react';
+import { GitBranch, Workflow, Bot } from 'lucide-react';
 import { VisualFlowEditor } from '../components/flow/VisualFlowEditor';
 import PainelN8n from '../components/flow/PainelN8n';
+import PainelAutomacoes from '../components/flow/PainelAutomacoes';
 import { useAppContext } from '../context/AppContext';
 
 // Duas fontes de automacao convivem: os fluxos locais (executados pelo motor de
@@ -9,6 +10,7 @@ import { useAppContext } from '../context/AppContext';
 // alterar o editor visual existente.
 const ABAS = [
   { id: 'locais', label: 'Fluxos do Chatbot', Icon: GitBranch },
+  { id: 'automacoes', label: 'Automações do BOT', Icon: Bot },
   { id: 'n8n',    label: 'Workflows n8n',     Icon: Workflow },
 ];
 
@@ -41,6 +43,8 @@ export default function FluxosPage() {
       <div className="flex-1 min-h-0">
         {aba === 'locais' ? (
           <VisualFlowEditor fluxos={fluxos} setFluxos={atualizarFluxos} equipe={equipe} />
+        ) : aba === 'automacoes' ? (
+          <PainelAutomacoes />
         ) : (
           <div className="h-full overflow-y-auto p-4 sm:p-6">
             <PainelN8n />

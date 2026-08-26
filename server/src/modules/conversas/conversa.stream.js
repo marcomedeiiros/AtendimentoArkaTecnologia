@@ -55,7 +55,14 @@ class ConversaStreamController {
 
     const onConversa = (evento) => {
       // Mesmo guard da leitura: quem nao pode ver o setor nao recebe o evento.
-      if (!podeAcessarSetor(cargo, evento?.setor)) return;
+      //
+      // O setor mora em `evento.conversa.setor`. Ler `evento.setor` (como era
+      // antes) sempre dava `undefined`, `normalizarSetor` traduzia isso para
+      // "Geral" -- que todo mundo ve -- e o stream entregava AO VIVO conversas
+      // de setores que a listagem esconde daquele cargo.
+      if (evento?.type === "conversa:update" && !podeAcessarSetor(cargo, evento.conversa?.setor)) {
+        return;
+      }
       try {
         res.write(`data: ${JSON.stringify(evento)}\n\n`);
       } catch (err) {

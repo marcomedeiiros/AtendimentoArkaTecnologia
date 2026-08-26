@@ -25,6 +25,9 @@ function mapMensagem(m) {
   return {
     id: m.id,
     de: m.origem === "bot" ? "equipe" : m.origem,
+    // A qual OS esta mensagem pertence: e o que permite ao painel recortar o
+    // historico por atendimento sem quebrar o fio unico da conversa.
+    atendimentoId: m.atendimentoId || null,
     texto: m.texto,
     hora: formatarHora(m.criadoEm),
     // Risquinhos: so faz sentido no que sai daqui.
@@ -34,6 +37,11 @@ function mapMensagem(m) {
     // Marcada por "Apagar para todos": some do WhatsApp do cliente e vira aviso
     // no chat ao vivo, mas segue no Registro (o texto original continua aqui).
     deletada: !!meta.deletada,
+    // Selo "Encaminhada": vem do WhatsApp (contextInfo.isForwarded /
+    // forwardingScore) ou de um encaminhamento feito na propria Central. Nunca
+    // e deduzido pela aparencia da mensagem.
+    encaminhada: !!meta.encaminhada,
+    encaminhadaVezes: Number(meta.encaminhadaVezes) || 0,
     tipo,
     // Dados da midia (url, mimetype, nome, legenda, coords, contato) quando a
     // mensagem nao for de texto puro. `url` vai como link curto (ver urlDaMidia),
@@ -42,9 +50,34 @@ function mapMensagem(m) {
   };
 }
 
+// Resumo de uma OS para o seletor de historico da Central. Sem mensagens: quem
+// abre um atendimento antigo filtra as mensagens que ja vieram na conversa.
+function mapAtendimento(a) {
+  return {
+    id: a.id,
+    numeroOS: a.numeroOS ?? null,
+    os: a.numeroOS != null ? "OS" + String(a.numeroOS).padStart(5, "0") : null,
+    setor: a.setor || null,
+    status: a.status,
+    atendenteNome: a.atendenteNome || null,
+    avaliacao: a.avaliacao ?? null,
+    // COMO a avaliacao terminou (respondida | sem_nota | sem_resposta |
+    // aguardando). Sem isto, "sem nota" e "nao respondeu" ficavam iguais.
+    avaliacaoStatus: a.avaliacaoStatus || null,
+    feedback: a.feedback || null,
+    abertoEm: a.abertoEm ? a.abertoEm.toISOString?.() || a.abertoEm : null,
+    atendidoEm: a.atendidoEm ? a.atendidoEm.toISOString?.() || a.atendidoEm : null,
+    fechadoEm: a.fechadoEm ? a.fechadoEm.toISOString?.() || a.fechadoEm : null,
+  };
+}
+
 function mapConversa(c) {
   const mensagens = c.mensagens || [];
   const ultima = mensagens[mensagens.length - 1];
+  // Historico de OS (mais recente primeiro) e a OS em curso.
+  const atendimentos = (c.atendimentos || []).map(mapAtendimento);
+  const atual =
+    atendimentos.find((a) => a.id === c.atendimentoAtualId) || atendimentos[0] || null;
   return {
     id: c.id,
     cliente: c.cliente,
@@ -52,8 +85,13 @@ function mapConversa(c) {
     statusAtendimento: c.statusAtendimento,
     setor: c.setor || "Geral",
     avaliacao: c.avaliacao || null,
+    avaliacaoStatus: c.avaliacaoStatus || null,
     feedback: c.feedback || null,
+    // O NUMERO do CNPJ continua saindo daqui porque a busca da Central, o
+    // relacionamento com o parceiro e o Registro dependem dele -- o que mudou e
+    // que a tela da conversa nao o EXIBE mais. Quem aparece e `empresa`.
     cnpj: c.cnpj,
+    empresa: c.empresa || null,
     cnpjVerificado: c.cnpjVerificado,
     lido: c.lido,
     naoLidas: c.naoLidas ?? 0,
@@ -70,9 +108,21 @@ function mapConversa(c) {
     // Historico: quem atendeu, mesmo que a conversa nao tenha mais responsavel
     // (voltou para a fila / foi fechada). Alimenta a coluna das Avaliacoes.
     ultimoAtendenteNome: c.ultimoAtendenteNome || c.atendente?.nome || null,
-    // Identificador unico e sequencial da conversa, exibido como OS00001.
+    // REVISAO: o front descarta qualquer snapshot com versao <= a que ja tem.
+    versao: c.versao ?? 0,
+    // Numero do fio do cliente (interno; nao e mais o que a tela mostra).
     numeroTicket: c.numeroTicket ?? null,
-    ticket: c.numeroTicket != null ? "OS" + String(c.numeroTicket).padStart(5, "0") : null,
+    // A OS EM CURSO. `ticket` mantem o nome que todas as telas ja usam (Registro,
+    // PDF, cabecalho do chat), mas agora aponta para o atendimento atual em vez
+    // do numero fixo da conversa -- e o numero que muda a cada novo ciclo.
+    // Conversa de base antiga, ainda sem OS, cai no numero do fio.
+    atendimentoAtualId: atual?.id || c.atendimentoAtualId || null,
+    numeroOS: atual?.numeroOS ?? c.numeroTicket ?? null,
+    ticket:
+      atual?.os ||
+      (c.numeroTicket != null ? "OS" + String(c.numeroTicket).padStart(5, "0") : null),
+    // Historico de atendimentos do cliente (inclui a OS atual).
+    atendimentos,
     criadoEm: c.criadoEm ? c.criadoEm.toISOString?.() || c.criadoEm : null,
     atendidoEm: c.atendidoEm ? c.atendidoEm.toISOString?.() || c.atendidoEm : null,
     fechadoEm: c.fechadoEm ? c.fechadoEm.toISOString?.() || c.fechadoEm : null,
@@ -210,6 +260,7 @@ function mapCompromisso(c) {
 
 module.exports = {
   mapMensagem,
+  mapAtendimento,
   mapConversa,
   mapParceiro,
   mapContato,

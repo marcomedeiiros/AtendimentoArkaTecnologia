@@ -1,16 +1,26 @@
-// Varredor de sessoes inativas.
+// Varredor de sessoes paradas -- O RELOGIO DA AUTOMACAO.
 //
-// O motor do chatbot so acorda quando chega mensagem do cliente, e o
-// `notResponseMessage` do fluxo ("por falta de interacao o chat foi encerrado")
-// depende exatamente do contrario: da AUSENCIA de mensagem. Sem alguem olhando
-// o relogio, esse trecho do fluxo importado nunca dispararia.
+// O motor do chatbot so acorda quando chega mensagem do cliente, e boa parte do
+// fluxo depende exatamente do contrario: da AUSENCIA de mensagem. Sem alguem
+// olhando o relogio, nada disso dispararia.
 //
-// Roda em intervalo, e nao por conversa: um timer por sessao vazaria memoria e
-// morreria em qualquer restart do processo. Aqui o estado esta todo no banco.
+// Duas coisas passam por aqui:
+//
+//   1. inatividade do fluxo -- o `notResponseMessage` ("por falta de interacao o
+//      chat foi encerrado") do fluxo importado;
+//   2. ESPERA PELA AVALIACAO -- os 5 minutos (configuraveis no fluxo) entre
+//      perguntar a nota e desistir dela.
+//
+// Por que aqui e nao no navegador: o prazo tem de correr com a aba fechada, com
+// o operador deslogado e atravessando restart do servidor. Um `setTimeout` no
+// front (ou um timer por sessao aqui dentro) morreria em qualquer uma dessas
+// situacoes e deixaria a avaliacao pendente para sempre. O estado esta todo no
+// banco; esta varredura so le o relogio.
 const prisma = require("../../infrastructure/database/prisma.client");
 const conversaRepository = require("../../infrastructure/repositories/conversa.repository");
 const instanciaRepository = require("../../infrastructure/repositories/instancia.repository");
 const chatbotEngine = require("./chatbot.engine");
+const fluxoRepository = require("../../infrastructure/repositories/fluxo.repository");
 const configuracaoService = require("../configuracoes/configuracao.service");
 const logger = require("../../config/logger");
 
@@ -40,10 +50,39 @@ async function varrer() {
       try {
         const conversa = await conversaRepository.findById(sessao.conversaId);
         if (!conversa) continue;
+
+        // FLUXO PAUSADO = NENHUMA ACAO AUTOMATICA.
+        //
+        // A checagem e feita AQUI, no instante de executar, e nao quando a
+        // espera comecou: pausar o fluxo durante os 5 minutos tem de valer. Sem
+        // isto, uma pesquisa disparada antes da pausa continuaria cobrando
+        // resposta de um bot que a tela mostra desligado.
+        const fluxo = await fluxoRepository.findById(sessao.fluxoAtualId);
+        if (!fluxo || !fluxo.ativo) {
+          logger.debug("Acao automatica ignorada: fluxo pausado ou removido", {
+            sessaoId: sessao.id,
+            fluxoId: sessao.fluxoAtualId,
+          });
+          continue;
+        }
+
+        const instancia = await instanciaRepository.findById(sessao.instanciaId);
+
+        // ESPERA PELA AVALIACAO: a conversa aqui esta FECHADA (a pesquisa fecha
+        // desde ja), entao ela nao passa pelo filtro de "pendente" abaixo.
+        if (chatbotEngine.aguardandoAvaliacao(sessao)) {
+          const tratou = await chatbotEngine.aplicarTimeoutAvaliacao(sessao, {
+            conversa,
+            instanciaId: sessao.instanciaId,
+            instanceName: instancia?.nome,
+          });
+          if (tratou) tratadas += 1;
+          continue;
+        }
+
         // Atendente ja assumiu: nao e mais conversa do bot.
         if (conversa.statusAtendimento !== "pendente") continue;
 
-        const instancia = await instanciaRepository.findById(sessao.instanciaId);
         const resultado = await chatbotEngine.aplicarInatividade(sessao, {
           conversa,
           instanciaId: sessao.instanciaId,

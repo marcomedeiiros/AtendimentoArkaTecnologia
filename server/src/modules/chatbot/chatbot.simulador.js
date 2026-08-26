@@ -56,6 +56,13 @@ function criarAmbiente({ fluxo, nomeCliente, horario, filas, agora, pesquisaAtiv
       },
       vincularWaMessageId: async () => {},
       update: async (_id, dados) => Object.assign(estado.conversa, dados),
+      // OS (Atendimento): no simulador nao ha banco nem historico para manter --
+      // o teste do fluxo so quer saber o que o bot responde. Precisam existir
+      // porque o motor real chama estes metodos ao transferir/encerrar.
+      garantirAtendimento: async () => null,
+      garantirAtendimentoAberto: async () => ({ atendimento: null, nova: false }),
+      atualizarAtendimentoAtual: async () => null,
+      atualizarAtendimento: async () => null,
       // Memoria de contato recorrente: no teste nao ha atendimento anterior
       // (a nao ser que o operador passe `cnpjAnterior` nas opcoes).
       ultimoCnpjDoTelefone: async () => (cnpjAnterior ? { cnpj: cnpjAnterior } : null),

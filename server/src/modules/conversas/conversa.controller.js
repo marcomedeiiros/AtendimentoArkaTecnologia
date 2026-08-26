@@ -16,6 +16,13 @@ class ConversaController {
     return conversaService.atender(req.params.id, req.user?.sub, req.user?.cargo).then((data) => success(res, data));
   }
 
+  // Historico de OS (atendimentos) do cliente.
+  atendimentos(req, res) {
+    return conversaService
+      .listarAtendimentos(req.params.id, req.user?.cargo)
+      .then((data) => success(res, data));
+  }
+
   enviarMensagem(req, res) {
     return conversaService
       // `req.user` vai junto para o service poder registrar QUEM respondeu como
@@ -119,12 +126,8 @@ class ConversaController {
     return res.end(midia.buffer);
   }
 
-  // DELETE /conversas/:id/cnpj -- desvincula o CNPJ da conversa.
-  desvincularCnpj(req, res) {
-    return conversaService
-      .desvincularCnpj(req.params.id, req.user?.cargo, req.user?.nome)
-      .then((data) => success(res, data));
-  }
+  // NAO existe mais `desvincularCnpj` (DELETE /conversas/:id/cnpj): o "X" saiu
+  // da conversa. Ver a nota em conversa.service.js.
 
   apagarMensagem(req, res) {
     return conversaService

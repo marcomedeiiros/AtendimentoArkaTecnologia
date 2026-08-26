@@ -253,7 +253,14 @@ function ModalEditarRelato({ relato, onSalvar, onFechar, salvando, erro }) {
                 accept={ACCEPT_ATTR}
                 multiple
                 className="hidden"
-                onChange={e => { const f = e.target.files; e.target.value = ''; anexar(f); }}
+                // `Array.from` ANTES de limpar o input, e não depois.
+                //
+                // `e.target.files` é um FileList VIVO, preso ao input: zerar
+                // `value` esvazia a mesma lista que `f` aponta. Como `anexar` é
+                // async, ele lia a lista já vazia -- o print escolhido nunca
+                // entrava, sem erro nenhum na tela. (O modal de criar o relato
+                // não tinha o bug porque copia a lista na primeira linha.)
+                onChange={e => { const f = Array.from(e.target.files || []); e.target.value = ''; anexar(f); }}
               />
 
               <p className="mt-1.5 text-[10px] text-texto-fraco">

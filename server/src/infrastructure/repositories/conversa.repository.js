@@ -1,14 +1,37 @@
 const prisma = require("../database/prisma.client");
+const { comLock } = require("../../shared/helpers/lock.helper");
 
 // Proximo numero da sequencia. Incremento atomico por linha: criacoes
 // simultaneas nunca recebem o mesmo numero.
-async function proximoNumero(chave) {
-  const r = await prisma.contador.upsert({
+async function proximoNumero(chave, cliente = prisma) {
+  const r = await cliente.contador.upsert({
     where: { chave },
     create: { chave, valor: 1 },
     update: { valor: { increment: 1 } },
   });
   return r.valor;
+}
+
+// Tudo que a Central precisa de uma conversa. Fica numa constante so para a
+// listagem, a leitura por id e as escritas devolverem SEMPRE a mesma forma --
+// quando cada consulta montava o seu include, o DTO mudava conforme o caminho
+// e a tela recebia campos ora presentes, ora ausentes.
+const INCLUDE_CONVERSA = {
+  mensagens: { orderBy: { criadoEm: "asc" } },
+  atendente: { select: { id: true, nome: true, cargo: true } },
+  // Historico de OS do cliente (mais recente primeiro). Sao poucas linhas por
+  // conversa e sem mensagens juntas: barato o bastante para vir na listagem e
+  // evitar um round-trip extra so para desenhar o seletor de historico.
+  atendimentos: { orderBy: { abertoEm: "desc" } },
+};
+
+// Toda escrita na conversa incrementa `versao`. E esse numero que o front usa
+// para descartar uma atualizacao mais VELHA que a que ja tem em tela (resposta
+// HTTP atrasada, evento SSE fora de ordem). Centralizado aqui de proposito: se
+// cada service lembrasse de incrementar por conta propria, um esquecimento
+// silencioso traria o problema de volta.
+function comVersao(data) {
+  return { ...data, versao: { increment: 1 } };
 }
 
 class ConversaRepository {
@@ -26,15 +49,13 @@ class ConversaRepository {
         { cliente: { contains: filtros.busca } },
         { telefone: { contains: filtros.busca } },
         { cnpj: { contains: filtros.busca } },
+        { empresa: { contains: filtros.busca } },
       ];
     }
 
     return prisma.conversa.findMany({
       where,
-      include: {
-        mensagens: { orderBy: { criadoEm: "asc" } },
-        atendente: { select: { id: true, nome: true, cargo: true } },
-      },
+      include: INCLUDE_CONVERSA,
       orderBy: { atualizadoEm: "desc" },
     });
   }
@@ -42,17 +63,14 @@ class ConversaRepository {
   findById(id) {
     return prisma.conversa.findUnique({
       where: { id },
-      include: {
-        mensagens: { orderBy: { criadoEm: "asc" } },
-        sessao: true,
-        atendente: { select: { id: true, nome: true, cargo: true } },
-      },
+      include: { ...INCLUDE_CONVERSA, sessao: true },
     });
   }
 
-  // MEMORIA DO CONTATO: ultimo CNPJ confirmado por este telefone em atendimentos
-  // anteriores. Cada atendimento novo nasce sem CNPJ, entao sem isto o cliente
-  // recorrente precisa digitar tudo de novo. Busca leve (so os campos usados).
+  // MEMORIA DO CONTATO: ultimo CNPJ confirmado por este telefone. Continua
+  // valendo mesmo com a conversa unica por cliente -- o mesmo numero pode ter
+  // fio em outra instancia, e a consulta tambem serve de rede de seguranca para
+  // bases que ainda tenham duplicatas nao consolidadas.
   async ultimoCnpjDoTelefone(telefone, ignorarConversaId = null) {
     if (!telefone) return null;
     return prisma.conversa.findFirst({
@@ -63,7 +81,7 @@ class ConversaRepository {
         ...(ignorarConversaId ? { id: { not: ignorarConversaId } } : {}),
       },
       orderBy: { atualizadoEm: "desc" },
-      select: { cnpj: true, cliente: true, atualizadoEm: true },
+      select: { cnpj: true, empresa: true, cliente: true, atualizadoEm: true },
     });
   }
 
@@ -96,13 +114,20 @@ class ConversaRepository {
 
   // Desfaz o vinculo entre um telefone e um CNPJ: limpa o CNPJ das conversas
   // daquele contato. Usado ao "desmarcar" um contato na tela Clientes (CNPJ) --
-  // ex.: a pessoa informou o CNPJ errado. Devolve quantas conversas mudaram.
+  // ex.: a pessoa informou o CNPJ errado. Devolve as conversas afetadas (e nao
+  // so a contagem) para quem chamou conseguir reemitir no SSE: sem isso a
+  // Central so mostrava a mudanca depois do F5.
   async limparCnpjDoContato(telefone, cnpj) {
-    const r = await prisma.conversa.updateMany({
+    const alvos = await prisma.conversa.findMany({
       where: { telefone, cnpj },
-      data: { cnpj: null, cnpjVerificado: false },
+      select: { id: true },
     });
-    return r.count;
+    if (alvos.length === 0) return [];
+    await prisma.conversa.updateMany({
+      where: { telefone, cnpj },
+      data: { cnpj: null, empresa: null, cnpjVerificado: false, versao: { increment: 1 } },
+    });
+    return alvos.map((a) => a.id);
   }
 
   // Versao LEVE: so os campos escalares (sem carregar todas as mensagens). Para
@@ -110,80 +135,314 @@ class ConversaRepository {
   findByIdBasico(id) {
     return prisma.conversa.findUnique({
       where: { id },
-      select: { id: true, setor: true, telefone: true, statusAtendimento: true },
+      select: {
+        id: true,
+        setor: true,
+        telefone: true,
+        statusAtendimento: true,
+        atendimentoAtualId: true,
+      },
     });
   }
 
+  /**
+   * O FIO do cliente naquela instancia -- em QUALQUER status.
+   *
+   * Antes esta busca ignorava conversa fechada, e era exatamente isso que
+   * duplicava o cliente na lista: fechado o atendimento, a proxima mensagem
+   * dele criava uma conversa nova, com outro numero, e o historico anterior
+   * ficava numa linha separada que ninguem reencontrava. Agora ha um fio so por
+   * (instancia, telefone) e o que muda a cada ciclo e a OS (ver Atendimento).
+   *
+   * Com base ainda nao consolidada pode haver mais de uma linha para o mesmo
+   * numero; nesse caso vale a MAIS ANTIGA (a que carrega o historico), e o
+   * backfill consolida o resto.
+   */
   findByTelefone(instanciaId, telefone) {
     return prisma.conversa.findFirst({
-      where: {
-        instanciaId,
-        telefone,
-        statusAtendimento: { in: ["pendente", "aberta"] },
-      },
-      include: {
-        mensagens: { orderBy: { criadoEm: "asc" } },
-        sessao: true,
-        atendente: { select: { id: true, nome: true, cargo: true } },
-      },
-      orderBy: { atualizadoEm: "desc" },
+      where: { instanciaId, telefone },
+      include: { ...INCLUDE_CONVERSA, sessao: true },
+      orderBy: { criadoEm: "asc" },
     });
   }
 
+  /**
+   * Cria o fio do cliente ja com o primeiro Atendimento (OS) aberto.
+   *
+   * Tudo numa transacao: uma conversa sem atendimento atual ficaria sem numero
+   * de OS na tela e sem lugar para pendurar as mensagens do ciclo.
+   */
   async create(data) {
-    // Numero unico e sequencial para TODA conversa (exibido como OS00001).
-    const numeroTicket = data.numeroTicket ?? (await proximoNumero("ticket"));
-    return prisma.conversa.create({
-      data: { ...data, numeroTicket },
-      include: {
-        mensagens: true,
-        atendente: { select: { id: true, nome: true, cargo: true } },
-      },
+    const { mensagens, ...campos } = data;
+    // Mensagem inicial vinha aninhada (`mensagens: { create: ... }`). Ela agora
+    // e criada DEPOIS do atendimento, para nascer ja carimbada com a OS.
+    const primeira = mensagens?.create || null;
+
+    const criada = await prisma.$transaction(async (tx) => {
+      const numeroTicket = campos.numeroTicket ?? (await proximoNumero("ticket", tx));
+      const conversa = await tx.conversa.create({ data: { ...campos, numeroTicket } });
+
+      const atendimento = await tx.atendimento.create({
+        data: {
+          conversaId: conversa.id,
+          // A OS reaproveita o mesmo contador do ticket: os numeros ja
+          // divulgados aos clientes continuam validos e nunca colidem.
+          numeroOS: numeroTicket,
+          setor: conversa.setor || null,
+          status: conversa.statusAtendimento,
+          atendenteId: conversa.atendenteId || null,
+          atendenteNome: conversa.ultimoAtendenteNome || null,
+          abertoEm: conversa.criadoEm,
+          atendidoEm: conversa.atendidoEm || null,
+        },
+      });
+
+      if (primeira) {
+        await tx.mensagem.create({
+          data: { ...primeira, conversaId: conversa.id, atendimentoId: atendimento.id },
+        });
+      }
+
+      return tx.conversa.update({
+        where: { id: conversa.id },
+        data: { atendimentoAtualId: atendimento.id },
+      });
     });
+
+    return this.findById(criada.id);
   }
 
   update(id, data) {
     return prisma.conversa.update({
       where: { id },
-      data,
-      include: {
-        mensagens: { orderBy: { criadoEm: "asc" } },
-        atendente: { select: { id: true, nome: true, cargo: true } },
+      data: comVersao(data),
+      include: INCLUDE_CONVERSA,
+    });
+  }
+
+  /**
+   * ASSUMIR O ATENDIMENTO, de forma atomica.
+   *
+   * Antes `atender` era ler-depois-escrever: dois atendentes clicando juntos
+   * recebiam 200 os dois, o ultimo UPDATE vencia e o primeiro continuava vendo a
+   * conversa como sua. Aqui o dono e decidido pelo BANCO, num unico UPDATE
+   * condicional: so muda a linha que ainda esta sem responsavel (ou que ja e de
+   * quem esta pedindo). Quem perder recebe 0 linhas afetadas e o service devolve
+   * 409 com o estado real.
+   */
+  async assumirAtomico(id, atendenteId, nomeAtendente) {
+    const agora = new Date();
+    // Vago, ou ja e meu (clique repetido / reconexao nao pode dar conflito).
+    // Montado condicionalmente porque `{ atendenteId: undefined }` no Prisma
+    // significa "sem filtro" -- o guard viraria um `updateMany` sem condicao.
+    const livreOuMeu = atendenteId
+      ? [{ atendenteId: null }, { atendenteId }]
+      : [{ atendenteId: null }];
+    const r = await prisma.conversa.updateMany({
+      where: { id, OR: livreOuMeu },
+      data: {
+        statusAtendimento: "aberta",
+        lido: true,
+        naoLidas: 0,
+        atendenteId: atendenteId || null,
+        ...(nomeAtendente ? { ultimoAtendenteNome: nomeAtendente } : {}),
+        versao: { increment: 1 },
       },
     });
+    if (r.count === 0) return { assumido: false };
+
+    // `atendidoEm` so na primeira vez: reabrir nao pode reescrever o inicio.
+    await prisma.conversa.updateMany({
+      where: { id, atendidoEm: null },
+      data: { atendidoEm: agora },
+    });
+    return { assumido: true };
   }
 
   delete(id) {
     return prisma.conversa.delete({ where: { id } });
   }
 
+  // ---------------------------------------------------------- atendimentos ---
+
+  listarAtendimentos(conversaId) {
+    return prisma.atendimento.findMany({
+      where: { conversaId },
+      orderBy: { abertoEm: "desc" },
+    });
+  }
+
+  /**
+   * Abre uma OS NOVA no fio do cliente e passa a ser a atual.
+   *
+   * E o que substitui a antiga "conversa nova a cada atendimento": o historico
+   * fica onde sempre esteve (a conversa) e so o ciclo muda.
+   */
+  async abrirAtendimento(conversaId, { setor = null, status = "pendente", atendenteId = null, atendenteNome = null } = {}) {
+    const atendimento = await prisma.$transaction(async (tx) => {
+      const numeroOS = await proximoNumero("ticket", tx);
+      const novo = await tx.atendimento.create({
+        data: { conversaId, numeroOS, setor, status, atendenteId, atendenteNome },
+      });
+      await tx.conversa.update({
+        where: { id: conversaId },
+        data: { atendimentoAtualId: novo.id, versao: { increment: 1 } },
+      });
+      return novo;
+    });
+    return atendimento;
+  }
+
+  // Escreve numa OS ESPECIFICA. Usado quando o alvo nao e "a OS atual" -- o
+  // caso da pesquisa de satisfacao, que avalia o ciclo que acabou de fechar
+  // mesmo que outro ja tenha comecado. Silencioso se a OS nao existir mais.
+  async atualizarAtendimento(atendimentoId, data) {
+    if (!atendimentoId) return null;
+    try {
+      return await prisma.atendimento.update({ where: { id: atendimentoId }, data });
+    } catch {
+      return null;
+    }
+  }
+
+  // Espelha na OS atual o que mudou na conversa (status, responsavel, nota).
+  // Silencioso quando a conversa ainda nao tem OS: bases antigas so ganham a
+  // primeira no proximo ciclo, e nada disso pode derrubar a operacao pedida.
+  async atualizarAtendimentoAtual(conversaId, data) {
+    const conversa = await prisma.conversa.findUnique({
+      where: { id: conversaId },
+      select: { atendimentoAtualId: true },
+    });
+    if (!conversa?.atendimentoAtualId) return null;
+    return prisma.atendimento.update({
+      where: { id: conversa.atendimentoAtualId },
+      data,
+    });
+  }
+
+  /**
+   * Garante que a conversa TEM uma OS, sem abrir ciclo novo.
+   *
+   * Rede de seguranca para linhas anteriores a esta mudanca (criadas quando
+   * conversa e atendimento eram a mesma coisa): elas ainda nao tem OS nenhuma, e
+   * qualquer espelho em `atualizarAtendimentoAtual` seria silenciosamente
+   * ignorado. Diferente de `garantirAtendimentoAberto`, aqui uma OS FECHADA
+   * satisfaz a condicao -- reabrir uma conversa e continuar o mesmo atendimento,
+   * nao comecar outro.
+   */
+  garantirAtendimento(conversaId) {
+    // Serializado por conversa: sem isso, duas requisicoes simultaneas leem
+    // "sem OS" ao mesmo tempo e criam duas, deixando uma orfa e o numero de OS
+    // pulando sem motivo. Mesma fila em memoria que o webhook ja usa.
+    return comLock(`conversa:${conversaId}`, async () => {
+      const conversa = await prisma.conversa.findUnique({
+        where: { id: conversaId },
+        select: { atendimentoAtualId: true, setor: true, statusAtendimento: true },
+      });
+      if (!conversa || conversa.atendimentoAtualId) return null;
+      return this.abrirAtendimento(conversaId, {
+        setor: conversa.setor || null,
+        status: conversa.statusAtendimento,
+      });
+    });
+  }
+
+  /**
+   * Garante que existe uma OS ABERTA para receber o proximo ciclo.
+   *
+   * Chamado quando o cliente volta a escrever num fio ja fechado: se a OS atual
+   * esta fechada (ou nem existe), abre outra. Devolve `{ atendimento, nova }`.
+   */
+  garantirAtendimentoAberto(conversaId, { setor = null } = {}) {
+    // Mesma fila por conversa: dois atendentes assumindo ao mesmo tempo um fio
+    // ja encerrado nao podem abrir duas OS para o mesmo ciclo.
+    return comLock(`conversa:${conversaId}`, async () => {
+      const conversa = await prisma.conversa.findUnique({
+        where: { id: conversaId },
+        select: { atendimentoAtualId: true, setor: true },
+      });
+      if (!conversa) return null;
+
+      if (conversa.atendimentoAtualId) {
+        const atual = await prisma.atendimento.findUnique({
+          where: { id: conversa.atendimentoAtualId },
+        });
+        if (atual && atual.status !== "fechada") return { atendimento: atual, nova: false };
+      }
+
+      const atendimento = await this.abrirAtendimento(conversaId, {
+        setor: setor || conversa.setor || null,
+        status: "pendente",
+      });
+      return { atendimento, nova: true };
+    });
+  }
+
+  // ------------------------------------------------------------- mensagens ---
+
   // Cria a mensagem E "toca" a conversa na mesma transacao. Sem o update, o
   // @updatedAt nao muda ao chegar mensagem nova e a conversa nao sobe na lista
   // (ordenada por atualizadoEm). Mensagem do cliente ainda incrementa o
-  // contador de nao-lidas usado pelo badge numerico.
+  // contador de nao-lidas usado pelo badge numerico. A mensagem nasce carimbada
+  // com a OS atual, e e esse carimbo que recorta o historico por atendimento.
   async addMensagem(conversaId, origem, texto, metadata = null, waMessageId = null, extras = {}) {
+    const conversa = await prisma.conversa.findUnique({
+      where: { id: conversaId },
+      select: { atendimentoAtualId: true },
+    });
+
     const [mensagem] = await prisma.$transaction([
       prisma.mensagem.create({
-        data: { conversaId, origem, texto, metadata, waMessageId, ...extras },
+        data: {
+          conversaId,
+          atendimentoId: conversa?.atendimentoAtualId || null,
+          origem,
+          texto,
+          metadata,
+          waMessageId,
+          ...extras,
+        },
       }),
       prisma.conversa.update({
         where: { id: conversaId },
         data:
           origem === "cliente"
-            ? { atualizadoEm: new Date(), naoLidas: { increment: 1 }, lido: false }
-            : { atualizadoEm: new Date() },
+            ? { atualizadoEm: new Date(), naoLidas: { increment: 1 }, lido: false, versao: { increment: 1 } }
+            : { atualizadoEm: new Date(), versao: { increment: 1 } },
       }),
     ]);
     return mensagem;
   }
 
+  /**
+   * Toda escrita em MENSAGEM tambem envelhece a conversa.
+   *
+   * O front descarta retrato com versao <= a que tem em tela. Editar, apagar,
+   * transcrever ou confirmar o envio de uma mensagem muda a conversa aos olhos
+   * de quem olha, mas mexia so na tabela de mensagens -- a versao ficava igual e
+   * o painel dos OUTROS atendentes descartava o evento, voltando a exigir F5.
+   */
+  async _tocarConversaDaMensagem(mensagemId) {
+    const msg = await prisma.mensagem.findUnique({
+      where: { id: mensagemId },
+      select: { conversaId: true },
+    });
+    if (!msg) return;
+    await prisma.conversa.update({
+      where: { id: msg.conversaId },
+      data: { versao: { increment: 1 } },
+    });
+  }
+
   // Vincula o id da Evolution a mensagem recem-criada, para o ACK
   // (messages.update) conseguir encontra-la depois.
-  vincularWaMessageId(id, waMessageId, status = "enviada") {
-    return prisma.mensagem.update({
+  async vincularWaMessageId(id, waMessageId, status = "enviada") {
+    const msg = await prisma.mensagem.update({
       where: { id },
       data: { waMessageId, status },
     });
+    await this._tocarConversaDaMensagem(id);
+    return msg;
   }
 
   // Nao rebaixa o status: um "entregue" atrasado nao pode apagar um "lida".
@@ -194,22 +453,33 @@ class ConversaRepository {
     if (status !== "erro" && (ordem[status] ?? 0) <= (ordem[msg.status] ?? -1)) {
       return msg;
     }
-    return prisma.mensagem.update({ where: { id: msg.id }, data: { status } });
+    const atualizada = await prisma.mensagem.update({ where: { id: msg.id }, data: { status } });
+    // O risquinho mudou: a conversa precisa de versao nova, senao o front
+    // descarta o evento como "igual ao que ja tenho".
+    await prisma.conversa.update({
+      where: { id: msg.conversaId },
+      data: { versao: { increment: 1 } },
+    });
+    return atualizada;
   }
 
   findMensagem(id) {
     return prisma.mensagem.findUnique({ where: { id } });
   }
 
-  atualizarMetadata(id, metadata) {
-    return prisma.mensagem.update({ where: { id }, data: { metadata } });
+  async atualizarMetadata(id, metadata) {
+    const msg = await prisma.mensagem.update({ where: { id }, data: { metadata } });
+    await this._tocarConversaDaMensagem(id);
+    return msg;
   }
 
-  editarMensagem(id, texto) {
-    return prisma.mensagem.update({
+  async editarMensagem(id, texto) {
+    const msg = await prisma.mensagem.update({
       where: { id },
       data: { texto, editadaEm: new Date() },
     });
+    await this._tocarConversaDaMensagem(id);
+    return msg;
   }
 
   removerMensagem(id) {
@@ -229,14 +499,16 @@ class ConversaRepository {
       deletada: true,
       deletadaEm: new Date().toISOString(),
     };
-    return prisma.mensagem.update({ where: { id }, data: { metadata } });
+    const atualizada = await prisma.mensagem.update({ where: { id }, data: { metadata } });
+    await this._tocarConversaDaMensagem(id);
+    return atualizada;
   }
 
   zerarNaoLidas(id) {
     return prisma.conversa.update({
       where: { id },
-      data: { naoLidas: 0, lido: true },
-      include: { mensagens: { orderBy: { criadoEm: "asc" } } },
+      data: { naoLidas: 0, lido: true, versao: { increment: 1 } },
+      include: INCLUDE_CONVERSA,
     });
   }
 
@@ -254,6 +526,21 @@ class ConversaRepository {
       by: ["statusAtendimento"],
       _count: { id: true },
     });
+  }
+
+  // Contagem por status das OS (e nao dos fios): "quantos atendimentos foram
+  // finalizados" e uma pergunta sobre ciclos. Com a conversa unica por cliente,
+  // contar conversas fechadas passaria a responder "quantos clientes estao sem
+  // atendimento em curso" -- outra coisa.
+  countAtendimentosByStatus() {
+    return prisma.atendimento.groupBy({
+      by: ["status"],
+      _count: { id: true },
+    });
+  }
+
+  listarTodosAtendimentos() {
+    return prisma.atendimento.findMany({ orderBy: { abertoEm: "desc" } });
   }
 }
 

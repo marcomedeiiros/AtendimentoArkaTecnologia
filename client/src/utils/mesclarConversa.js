@@ -16,6 +16,12 @@
  *     ser corrigida. O soft-delete é permanente no banco, então manter é correto.
  *  2. Mensagens OTIMISTAS (ainda sem `id`, enviadas há instantes) sobrevivem até
  *     o servidor confirmá-las -- senão somem e voltam.
+ *  3. NENHUMA versão antiga sobrescreve uma mais nova. Cada escrita no servidor
+ *     incrementa `conversa.versao`; aqui um retrato com versão menor ou igual à
+ *     que já está em tela é DESCARTADO. Sem isso, a resposta lenta de uma ação
+ *     (ou um evento SSE atrasado) reescrevia o estado atual com o de antes --
+ *     era o que fazia a conversa recém-assumida voltar para "Pendentes" e o
+ *     responsável piscar entre dois nomes.
  */
 
 // Ids apagados nesta sessão. Sobrevive a qualquer substituição de estado; é
@@ -30,8 +36,30 @@ export function desfazerApagada(id) {
   if (id) apagadasLocais.delete(id);
 }
 
+/**
+ * A versão recebida é mais velha (ou igual) à que já está em tela?
+ *
+ * Igual também é descartada: nada de novo veio do servidor, e manter o que está
+ * em tela preserva a atualização otimista que ainda espera confirmação.
+ * Conversa sem `versao` (resposta de uma API antiga durante um deploy parcial)
+ * nunca é descartada -- na dúvida, o mais novo é o que acabou de chegar.
+ */
+function ehDesatualizada(atual, recebida) {
+  return (
+    atual != null &&
+    typeof atual.versao === 'number' &&
+    typeof recebida?.versao === 'number' &&
+    recebida.versao <= atual.versao
+  );
+}
+
 export function mesclarConversa(atual, recebida) {
   if (!recebida || !Array.isArray(recebida.mensagens)) return recebida;
+
+  // Retrato mais velho que o atual: fica o que já está em tela. Como toda
+  // escrita (inclusive gravar mensagem) incrementa a versão, um retrato antigo
+  // nunca traz mensagem que o atual não tenha.
+  if (ehDesatualizada(atual, recebida)) return atual;
 
   let mensagens = recebida.mensagens;
 

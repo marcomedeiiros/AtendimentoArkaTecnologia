@@ -63,6 +63,40 @@ class WhatsAppService {
     return null;
   }
 
+  /**
+   * A mensagem foi ENCAMINHADA? Informação real do WhatsApp, não palpite.
+   *
+   * O Baileys entrega isso no `contextInfo` de cada tipo de mensagem:
+   *   - `isForwarded`: booleano;
+   *   - `forwardingScore`: quantas vezes já foi repassada (>0 = encaminhada;
+   *     >=5 é o "encaminhada muitas vezes" do aplicativo).
+   *
+   * O `contextInfo` fica DENTRO do nó do tipo (extendedTextMessage,
+   * imageMessage, ...), e não na raiz -- por isso varremos os nós conhecidos.
+   * Sem nenhum dos dois campos, a resposta é "não": marcar por aparência criaria
+   * um selo falso.
+   */
+  extrairEncaminhada(payload) {
+    const msg = payload?.data?.message || payload?.message;
+    if (!msg || typeof msg !== "object") return null;
+
+    const nos = [
+      msg.extendedTextMessage, msg.imageMessage, msg.videoMessage, msg.audioMessage,
+      msg.documentMessage, msg.documentWithCaptionMessage?.message?.documentMessage,
+      msg.stickerMessage, msg.locationMessage, msg.contactMessage, msg.contextInfo && msg,
+    ].filter(Boolean);
+
+    for (const no of nos) {
+      const ctx = no.contextInfo;
+      if (!ctx) continue;
+      const vezes = Number(ctx.forwardingScore) || 0;
+      if (ctx.isForwarded === true || vezes > 0) {
+        return { encaminhada: true, encaminhadaVezes: vezes || 1 };
+      }
+    }
+    return null;
+  }
+
   // Detecta mídia no payload do webhook (Baileys/Evolution). Retorna o metadata
   // com `tipo` (imagem/video/audio/documento/localizacao/contato) ou null.
   // Os bytes NÃO vêm aqui: a `url` é criptografada; quem baixa é o webhook.
@@ -72,6 +106,25 @@ class WhatsAppService {
 
     const doc = msg.documentMessage || msg.documentWithCaptionMessage?.message?.documentMessage;
 
+    // FIGURINHA (sticker). Precisa vir ANTES de imageMessage: algumas versoes da
+    // Evolution mandam os dois campos no mesmo payload, e casar por imagem
+    // primeiro transformaria a figurinha numa imagem estatica.
+    //
+    // Esta era a causa raiz de "figurinha nao aparece": nao havia ramo nenhum
+    // para `stickerMessage` aqui. `extrairMidia` devolvia null, `texto` tambem
+    // era null, e o webhook respondia "dados_incompletos" -- a figurinha nao
+    // chegava a entrar no sistema. Nao era problema de renderizacao: nao havia
+    // o que renderizar.
+    //
+    // Figurinha do WhatsApp e sempre WebP (animada ou nao) e nunca tem legenda.
+    if (msg.stickerMessage) {
+      return {
+        tipo: "figurinha",
+        mimetype: msg.stickerMessage.mimetype || "image/webp",
+        animada: !!msg.stickerMessage.isAnimated,
+        fileName: "figurinha.webp",
+      };
+    }
     if (msg.imageMessage) {
       return { tipo: "imagem", mimetype: msg.imageMessage.mimetype || "image/jpeg", caption: msg.imageMessage.caption || null };
     }
@@ -189,6 +242,9 @@ class WhatsAppService {
     const texto = this.extrairTexto(body);
     const nomeCliente = data?.pushName || data?.senderName || "Cliente";
 
+    // Encaminhamento vale para QUALQUER tipo -- inclusive texto puro, que não
+    // passa por `extrairMidia`. Por isso é lido em separado e juntado depois.
+    const encaminhada = this.extrairEncaminhada(body);
     let midia = this.extrairMidia(body);
     // Para tipos com arquivo, tenta obter os bytes (base64 no payload quando o
     // "Webhook Base64" está ligado, senão baixa via getBase64FromMediaMessage).
@@ -196,7 +252,11 @@ class WhatsAppService {
       // A Evolution acomoda o base64 em lugares diferentes conforme a versao e o
       // "Webhook Base64": no proprio audioMessage, na raiz da mensagem, ou solto.
       const msg = data?.message || {};
-      const doMidia = msg.audioMessage || msg.imageMessage || msg.videoMessage || msg.documentMessage || {};
+      // `stickerMessage` entra na lista: sem ele o base64 embutido da
+      // figurinha nunca era encontrado e a midia chegava vazia.
+      const doMidia =
+        msg.audioMessage || msg.imageMessage || msg.videoMessage || msg.documentMessage ||
+        msg.stickerMessage || {};
       let base64 =
         doMidia.base64 ||
         msg.base64 ||
@@ -262,6 +322,7 @@ class WhatsAppService {
       instanceName,
       waMessageId: key?.id || null,
       midia,
+      encaminhada,
     });
 
     return { recebido: true, ...result };

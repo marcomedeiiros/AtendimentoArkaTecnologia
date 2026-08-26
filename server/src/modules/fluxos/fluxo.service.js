@@ -1,8 +1,27 @@
 const fluxoRepository = require("../../infrastructure/repositories/fluxo.repository");
 const { mapFluxo } = require("../../shared/helpers/mapper.helper");
+const { resumoAutomacoes } = require("./fluxo.automacao");
 const AppError = require("../../shared/errors/AppError");
 
 class FluxoService {
+  /**
+   * TODAS as automacoes do bot, fluxo a fluxo.
+   *
+   * Existe para responder de um lugar so a pergunta "o que o bot faz?". Antes,
+   * a resposta estava espalhada entre variaveis de ambiente, a configuracao
+   * global e textos embutidos no motor -- descobrir uma regra exigia ler
+   * codigo. Agora cada regra sai do proprio fluxo (fluxo.automacao) e aparece
+   * aqui com o valor que esta REALMENTE valendo.
+   *
+   * O estado ativo/pausado vem junto de proposito: fluxo pausado nao executa
+   * nada, e essa e a primeira coisa que alguem precisa ver ao investigar "o bot
+   * nao respondeu".
+   */
+  async resumoAutomacoes() {
+    const fluxos = await fluxoRepository.findAll();
+    return fluxos.map((f) => resumoAutomacoes(mapFluxo(f)));
+  }
+
   async listar() {
     const fluxos = await fluxoRepository.findAll();
     return fluxos.map(mapFluxo);

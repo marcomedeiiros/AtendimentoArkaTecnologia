@@ -113,8 +113,32 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
   const [filtroSetor, setFiltroSetor] = useState('');
 
   // ---------- Avaliações ----------
+  //
+  // UMA LINHA POR ATENDIMENTO (OS), e não por conversa.
+  //
+  // A conversa é o fio permanente do cliente: ela guarda só a avaliação do
+  // ciclo em curso. Listar conversas aqui mostraria uma única nota por cliente
+  // e esconderia todo o histórico de feedbacks. Cada OS traz também o SETOR em
+  // que ela foi atendida -- que é o que classifica o feedback.
+  const avaliacoesPorOS = useMemo(() => conversas.flatMap(c => {
+    const lista = c.atendimentos && c.atendimentos.length ? c.atendimentos : null;
+    if (!lista) return [c];
+    return lista.map(a => ({
+      ...c,
+      linhaId: a.id,
+      ticket: a.os,
+      setor: a.setor || c.setor,
+      avaliacao: a.avaliacao ?? null,
+      avaliacaoStatus: a.avaliacaoStatus ?? null,
+      feedback: a.feedback ?? null,
+      fechadoEm: a.fechadoEm,
+      atendenteNome: a.atendenteNome || null,
+      ultimoAtendenteNome: a.atendenteNome || c.ultimoAtendenteNome || null,
+    }));
+  }), [conversas]);
+
   const avaliacoes = useMemo(() => {
-    const avaliadas = conversas
+    const avaliadas = avaliacoesPorOS
       .filter(c => c.avaliacao != null && c.avaliacao > 0)
       // Mais recentes primeiro quando houver data de fechamento.
       .sort((a, b) => new Date(b.fechadoEm || 0) - new Date(a.fechadoEm || 0));
@@ -143,7 +167,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
     const setores = porSetor.map(s => s.setor);
 
     return { avaliadas, total, media, distribuicao, maxQtd, promotores, detratores, porSetor, setores };
-  }, [conversas]);
+  }, [avaliacoesPorOS]);
 
   // Aplica os filtros da aba sobre a lista de avaliacoes.
   const feedbacksFiltrados = useMemo(() => {
@@ -423,7 +447,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
               </div>
               <div className="space-y-2">
                 {conversas.filter(c => c.statusAtendimento === 'pendente').map(c => (
-                  <div key={c.id} className="flex items-center justify-between p-3 rounded-xl bg-grafite-600/60 border border-linha/60">
+                  <div key={c.linhaId || c.id} className="flex items-center justify-between p-3 rounded-xl bg-grafite-600/60 border border-linha/60">
                     <div>
                       <div className="font-semibold text-xs text-white">{c.cliente}</div>
                       <div className="text-[11px] text-slate-400 font-mono">{c.telefone || '+55 11 99999-0000'}</div>
@@ -641,7 +665,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                   </thead>
                   <tbody>
                     {feedbacksFiltrados.slice(0, 100).map(c => (
-                      <tr key={c.id} className={`border-b border-linha/40 hover:bg-grafite-600/40 transition-colors ${
+                      <tr key={c.linhaId || c.id} className={`border-b border-linha/40 hover:bg-grafite-600/40 transition-colors ${
                         c.avaliacao <= 2 ? 'bg-falha/5' : ''
                       }`}>
                         <td className="py-2.5 px-3 text-white font-semibold">{c.cliente}</td>

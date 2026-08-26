@@ -6,6 +6,11 @@ class FluxoController {
     return fluxoService.listar().then((data) => success(res, data));
   }
 
+  // GET /fluxos/automacoes/resumo
+  automacoes(req, res) {
+    return fluxoService.resumoAutomacoes().then((data) => success(res, data));
+  }
+
   obter(req, res) {
     return fluxoService.obter(req.params.id).then((data) => success(res, data));
   }

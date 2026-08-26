@@ -325,3 +325,16 @@
      movimento reduzido nao ataca. */
   .fade-in { animation: none; }
 }
+/* Fonte de emoji na tela do atendente.
+ *
+ * O que trafega é sempre Unicode (o cliente vê o desenho do aparelho dele).
+ * Aqui só pedimos ao navegador a MELHOR fonte de emoji disponível na máquina,
+ * em vez de deixar a fonte de texto desenhar glifos pobres: no macOS/iOS isso
+ * dá o traço da Apple, no Windows 11 o Segoe UI Emoji colorido, no Linux o Noto.
+ * `font-variant-emoji: emoji` força a apresentação colorida em caracteres que
+ * têm versão em texto preto-e-branco (ex.: ⚠️, ✔️). */
+.emoji-fonte {
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",
+    "Twemoji Mozilla", "Android Emoji", "EmojiOne Color", sans-serif;
+  font-variant-emoji: emoji;
+}

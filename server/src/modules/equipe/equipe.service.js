@@ -3,6 +3,7 @@ const AppError = require("../../shared/errors/AppError");
 const usuarioRepository = require("../../infrastructure/repositories/usuario.repository");
 const sessaoRefreshRepository = require("../../infrastructure/repositories/sessaoRefresh.repository");
 const { CARGOS_VALIDOS } = require("./equipe.dto");
+const bus = require("../../shared/events/event-bus");
 
 // Alguem conta como online se o servidor viu uma requisicao autenticada dessa
 // pessoa nos ultimos minutos. Com o painel aberto o front consulta a API a cada
@@ -79,6 +80,9 @@ class EquipeService {
     // login: sem revogar, o refresh token dela continuaria existindo e voltaria
     // a valer no instante em que a conta fosse reativada.
     if (!ativo) await sessaoRefreshRepository.revogarDoUsuario(id);
+    // A equipe mudou para TODO mundo: quem tem o painel aberto rele a lista
+    // pelo mesmo stream que ja usa, em vez de descobrir no proximo F5.
+    bus.emitRecurso("equipe");
     return atualizado;
   }
 
@@ -108,7 +112,9 @@ class EquipeService {
       }
     }
 
-    return usuarioRepository.atualizarCargo(id, cargo);
+    const atualizado = await usuarioRepository.atualizarCargo(id, cargo);
+    bus.emitRecurso("equipe");
+    return atualizado;
   }
 
   // Nao ha recuperacao por e-mail: quem esqueceu a senha pede a um Administrador,
@@ -178,6 +184,7 @@ class EquipeService {
     // conta apagada com refresh tokens orfaos ainda de pe.
     await sessaoRefreshRepository.revogarDoUsuario(idAlvo);
     await usuarioRepository.remover(idAlvo);
+    bus.emitRecurso("equipe");
     return { removido: true, id: idAlvo, nome: alvo.nome };
   }
 }

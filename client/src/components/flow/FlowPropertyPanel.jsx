@@ -218,7 +218,8 @@ export function FlowPropertyPanel({
                 <label className="text-xs font-bold text-yellow-400 flex items-center gap-1.5">⭐ Pesquisa de Satisfação</label>
                 <p className="text-[10px] text-slate-400 leading-relaxed">
                   Ao chegar aqui, o bot pergunta a nota (1–5), salva a avaliação e encerra o
-                  atendimento. Deixe um campo em branco para usar o texto padrão das Configurações.
+                  atendimento. Campo em branco = usa o texto padrão mostrado no próprio campo.
+                  <strong className="text-yellow-400"> Com o fluxo pausado, nada disso é enviado.</strong>
                 </p>
 
                 <div>
@@ -261,10 +262,187 @@ export function FlowPropertyPanel({
                     rows={2}
                     value={node.config?.mensagemAgradecimento || ''}
                     onChange={e => onChangeNode({ ...node, config: { ...(node.config || {}), mensagemAgradecimento: e.target.value } })}
-                    className="w-full bg-grafite-700 border border-linha rounded-lg p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-yellow-500/50 resize-none"
+                    className="w-full bg-grafite-700 border border-linha rounded-lg p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none resize-none focus:border-yellow-500/50"
                     placeholder="Padrão: Sua avaliação foi registrada. Obrigado pelo seu feedback!"
                   />
                 </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Resposta que não é uma nota de 1 a 5</label>
+                  <textarea
+                    rows={2}
+                    value={node.config?.mensagemNotaInvalida || ''}
+                    onChange={e => onChangeNode({ ...node, config: { ...(node.config || {}), mensagemNotaInvalida: e.target.value } })}
+                    className="w-full bg-grafite-700 border border-linha rounded-lg p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none resize-none focus:border-yellow-500/50"
+                    placeholder="Padrão: Por favor, responda apenas com um número de 1 a 5."
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                    Tentativas antes de desistir da nota
+                  </label>
+                  <input
+                    type="number" min="1" max="10"
+                    value={node.config?.maxTentativasAvaliacao ?? 2}
+                    onChange={e => onChangeNode({ ...node, config: { ...(node.config || {}), maxTentativasAvaliacao: Number(e.target.value) || 2 } })}
+                    className="w-full bg-grafite-700 border border-linha rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-yellow-500/50"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Esgotadas, o atendimento é registrado como <strong>“Optou por não dar nota”</strong>
+                    nunca com uma nota inventada.
+                  </p>
+                </div>
+
+                <div className="pt-2 border-t border-yellow-500/20">
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                    ⏱️ Esperar a resposta por (minutos)
+                  </label>
+                  <input
+                    type="number" min="1" max="1440"
+                    value={node.config?.timeoutAvaliacaoMin ?? 5}
+                    onChange={e => onChangeNode({ ...node, config: { ...(node.config || {}), timeoutAvaliacaoMin: Number(e.target.value) || 5 } })}
+                    className="w-full bg-grafite-700 border border-linha rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-yellow-500/50"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Contado pelo <strong>servidor</strong>: vale com o navegador fechado e atravessa
+                    reinício do sistema. Sem resposta no prazo, o atendimento fica como
+                    <strong> “Sem resposta”</strong> (não fica pendente para sempre).
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Mensagem quando o prazo acaba</label>
+                  <textarea
+                    rows={2}
+                    value={node.config?.mensagemTimeoutAvaliacao || ''}
+                    onChange={e => onChangeNode({ ...node, config: { ...(node.config || {}), mensagemTimeoutAvaliacao: e.target.value } })}
+                    className="w-full bg-grafite-700 border border-linha rounded-lg p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none resize-none focus:border-yellow-500/50"
+                    placeholder="Padrão: Agradecemos o seu contato! Caso precise de mais alguma coisa, estaremos à disposição."
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* ---------- VALIDAR CNPJ: todos os parâmetros da identificação ---------- */}
+            {node.tipo === 'condicao' && (
+              <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/30 space-y-3">
+                <label className="text-xs font-bold text-blue-300 flex items-center gap-1.5">🔎 Identificação por CNPJ</label>
+                <p className="text-[10px] text-slate-400 leading-relaxed">
+                  O bot distingue quatro situações: <strong>resposta fora do esperado</strong>,
+                  <strong> CNPJ inválido</strong>, <strong>CNPJ válido mas fora da lista de Clientes</strong> e
+                  <strong> cliente cadastrado</strong>. Cada uma tem a sua mensagem aqui.
+                </p>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Tentativas permitidas</label>
+                  <input
+                    type="number" min="1" max="10"
+                    value={node.config?.maxTentativasCnpj ?? 2}
+                    onChange={e => onChangeNode({ ...node, config: { ...(node.config || {}), maxTentativasCnpj: Number(e.target.value) || 2 } })}
+                    className="w-full bg-grafite-700 border border-linha rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/50"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Quando as tentativas acabam</label>
+                  <select
+                    value={node.config?.aoEsgotarTentativasCnpj || 'transferir'}
+                    onChange={e => onChangeNode({ ...node, config: { ...(node.config || {}), aoEsgotarTentativasCnpj: e.target.value } })}
+                    className="w-full bg-grafite-700 border border-linha rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/50"
+                  >
+                    <option value="transferir">Transferir para um atendente</option>
+                    <option value="avulso">Seguir como cliente avulso</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">CNPJ inválido</label>
+                  <textarea
+                    rows={2}
+                    value={node.config?.mensagemCnpjInvalido || ''}
+                    onChange={e => onChangeNode({ ...node, config: { ...(node.config || {}), mensagemCnpjInvalido: e.target.value } })}
+                    className="w-full bg-grafite-700 border border-linha rounded-lg p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none resize-none focus:border-blue-500/50"
+                    placeholder="Padrão: Hmm, o número informado parece estar incorreto. Poderia conferir o CNPJ e tentar novamente?"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Última tentativa</label>
+                  <textarea
+                    rows={2}
+                    value={node.config?.mensagemCnpjUltimaTentativa || ''}
+                    onChange={e => onChangeNode({ ...node, config: { ...(node.config || {}), mensagemCnpjUltimaTentativa: e.target.value } })}
+                    className="w-full bg-grafite-700 border border-linha rounded-lg p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none resize-none focus:border-blue-500/50"
+                    placeholder="Padrão: O número informado parece estar incorreto. Você tem mais uma tentativa: confira o CNPJ e envie novamente."
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">CNPJ válido, fora da lista de Clientes</label>
+                  <textarea
+                    rows={2}
+                    value={node.config?.mensagemCnpjNaoCadastrado || ''}
+                    onChange={e => onChangeNode({ ...node, config: { ...(node.config || {}), mensagemCnpjNaoCadastrado: e.target.value } })}
+                    className="w-full bg-grafite-700 border border-linha rounded-lg p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none resize-none focus:border-blue-500/50"
+                    placeholder="Padrão: Não encontramos esse CNPJ em nossa lista de Clientes. Você será atendido como cliente avulso."
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Cliente respondeu outra coisa</label>
+                  <textarea
+                    rows={2}
+                    value={node.config?.mensagemRespostaInvalida || ''}
+                    onChange={e => onChangeNode({ ...node, config: { ...(node.config || {}), mensagemRespostaInvalida: e.target.value } })}
+                    className="w-full bg-grafite-700 border border-linha rounded-lg p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none resize-none focus:border-blue-500/50"
+                    placeholder="Padrão: Hmm, não entendi o que você falou. Poderia repetir?"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Usada quando a resposta nem parece um CNPJ (“quero falar com alguém”).
+                    <strong> Não gasta tentativa.</strong>
+                  </p>
+                </div>
+
+                <label className="flex items-center gap-2 text-[11px] font-semibold text-slate-300 cursor-pointer pt-1 border-t border-blue-500/20">
+                  <input
+                    type="checkbox"
+                    checked={node.config?.memoriaCnpj !== false}
+                    onChange={e => onChangeNode({ ...node, config: { ...(node.config || {}), memoriaCnpj: e.target.checked } })}
+                    className="accent-blue-500"
+                  />
+                  Lembrar o CNPJ de atendimentos anteriores e pedir confirmação
+                </label>
+
+                {node.config?.memoriaCnpj !== false && (
+                  <>
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-300 block mb-1">Confirmação (empresa conhecida)</label>
+                      <textarea
+                        rows={3}
+                        value={node.config?.mensagemConfirmarCnpj || ''}
+                        onChange={e => onChangeNode({ ...node, config: { ...(node.config || {}), mensagemConfirmarCnpj: e.target.value } })}
+                        className="w-full bg-grafite-700 border border-linha rounded-lg p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none resize-none focus:border-blue-500/50"
+                        placeholder={'Padrão: Vi que você já foi atendido por aqui. O atendimento continua sendo para esta empresa?\n\n🏢 {{empresa}}\n\nResponda *SIM* para confirmar ou *NÃO* para informar outro CNPJ.'}
+                      />
+                      <p className="text-[10px] text-slate-500 mt-1">
+                        Aceita <code className="text-blue-300 font-mono">{'{{empresa}}'}</code> e{' '}
+                        <code className="text-blue-300 font-mono">{'{{cnpj}}'}</code>.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-300 block mb-1">Pedir outro CNPJ (respondeu NÃO)</label>
+                      <textarea
+                        rows={2}
+                        value={node.config?.mensagemPedirOutroCnpj || ''}
+                        onChange={e => onChangeNode({ ...node, config: { ...(node.config || {}), mensagemPedirOutroCnpj: e.target.value } })}
+                        className="w-full bg-grafite-700 border border-linha rounded-lg p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none resize-none focus:border-blue-500/50"
+                        placeholder="Padrão: Sem problema. Por favor, informe o *CNPJ* (pode enviar com ou sem pontuação)."
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             )}
 

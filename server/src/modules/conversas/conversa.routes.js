@@ -43,6 +43,10 @@ router.post("/iniciar", validate(iniciarConversaSchema), (req, res, next) =>
 );
 router.get("/:id", (req, res, next) => conversaController.obter(req, res).catch(next));
 router.post("/:id/atender", (req, res, next) => conversaController.atender(req, res).catch(next));
+// Historico de atendimentos (OS) do cliente daquele fio de conversa.
+router.get("/:id/atendimentos", (req, res, next) =>
+  conversaController.atendimentos(req, res).catch(next)
+);
 router.post("/:id/mensagens", validate(enviarMensagemSchema), (req, res, next) =>
   conversaController.enviarMensagem(req, res).catch(next)
 );
@@ -64,11 +68,9 @@ router.delete("/mensagens/:mensagemId", (req, res, next) =>
 router.post("/:id/solicitar-cnpj", (req, res, next) =>
   conversaController.solicitarCnpj(req, res).catch(next)
 );
-// Desvincula o CNPJ (volta para "CNPJ pendente"). Sem body: o alvo e a propria
-// conversa. Mesmo gate das demais (auth + modulo + setor no service).
-router.delete("/:id/cnpj", (req, res, next) =>
-  conversaController.desvincularCnpj(req, res).catch(next)
-);
+// DELETE /:id/cnpj foi REMOVIDA junto com o "X" do cabecalho do chat. Correcao
+// de CNPJ errado: o cliente responde "NAO" na confirmacao do bot, ou o
+// administrador desvincula o contato em Clientes (CNPJ).
 router.post("/:id/validar-cnpj", validate(validarCnpjSchema), (req, res, next) =>
   conversaController.validarCnpj(req, res).catch(next)
 );

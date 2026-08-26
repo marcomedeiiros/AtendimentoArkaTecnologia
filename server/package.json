@@ -11,6 +11,7 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "node prisma/seed.js",
+    "db:backfill-atendimentos": "node prisma/backfill-atendimentos.js",
     "db:import-parceiros": "node prisma/importar-parceiros.js",
     "db:conversa-teste": "node prisma/criar-conversa-teste.js",
     "db:setup": "prisma generate && prisma db push && node prisma/seed.js"

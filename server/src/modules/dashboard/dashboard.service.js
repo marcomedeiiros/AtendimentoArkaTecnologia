@@ -8,8 +8,12 @@ class DashboardService {
     // A equipe vem do service, nao de uma contagem SQL: "online" e uma janela
     // de tempo sobre o ultimo acesso, calculada la. Duplicar essa regra aqui
     // faria o Dashboard e a Gestao da Equipe divergirem com o tempo.
+    // A contagem vem dos ATENDIMENTOS (as OS), nao das conversas. A conversa
+    // virou o fio permanente do cliente: contar conversas fechadas responderia
+    // "quantos clientes estao sem atendimento em curso", e nao "quantos
+    // atendimentos foram finalizados" -- que e o rotulo do cartao.
     const [statusCounts, parceirosAtivos, equipe, validacoesCnpj, contatos] = await Promise.all([
-      conversaRepository.countByStatus(),
+      conversaRepository.countAtendimentosByStatus(),
       prisma.parceiro.count({ where: { status: "ativo" } }),
       equipeService.listar(),
       prisma.conversa.count({ where: { cnpjVerificado: true } }),
@@ -17,9 +21,7 @@ class DashboardService {
     ]);
     const equipeOnline = equipe.filter((m) => m.status === "online").length;
 
-    const mapStatus = Object.fromEntries(
-      statusCounts.map((s) => [s.statusAtendimento, s._count.id])
-    );
+    const mapStatus = Object.fromEntries(statusCounts.map((s) => [s.status, s._count.id]));
 
     const atendimentosAtivos =
       (mapStatus.pendente || 0) + (mapStatus.aberta || 0);
