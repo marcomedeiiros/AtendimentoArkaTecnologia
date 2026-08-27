@@ -141,6 +141,14 @@ function mapConversa(c) {
     ultimaMensagemEm: ultima?.criadoEm
       ? ultima.criadoEm.toISOString?.() || ultima.criadoEm
       : null,
+    // ESTA LISTA PODE SER SO A CAUDA DO HISTORICO.
+    //
+    // Eventos de tempo real carregam apenas as ultimas mensagens (ver
+    // conversa.repository.findByIdParaEvento). `parcial` avisa o front de que
+    // ausencia NAO significa exclusao -- ele mantem o que ja tem e apenas
+    // incorpora o que chegou. Sem a marca, a regra ficaria implicita e a
+    // primeira pessoa a "simplificar" o merge apagaria o historico da tela.
+    parcial: !!c.__parcial,
     mensagens: mensagens.map(mapMensagem),
   };
 }

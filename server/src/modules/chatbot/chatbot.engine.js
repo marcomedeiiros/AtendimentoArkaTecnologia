@@ -561,10 +561,34 @@ class ChatbotEngine {
 
   // Publica a conversa atualizada no barramento para o SSE empurrar ao front.
   // Best-effort: uma falha aqui nunca deve interromper o atendimento.
-  async _emitirConversa(conversaId) {
+  /**
+   * @param {string} conversaId
+   * @param {object} [preCarregada] conversa JA lida (de findByIdParaEvento).
+   *   O caminho de recebimento lia a conversa e, uma linha depois, este metodo
+   *   lia DE NOVO -- duas consultas completas seguidas para a mesma coisa.
+   */
+  async _emitirConversa(conversaId, preCarregada = null) {
+    if (preCarregada) {
+      try {
+        this.deps.bus.emitConversa(mapConversa({ ...preCarregada, __parcial: true }));
+      } catch (error) {
+        logger.warn("Falha ao emitir conversa no SSE", { conversaId, message: error.message });
+      }
+      return;
+    }
     try {
-      const conversa = await this.deps.conversaRepository.findById(conversaId);
-      if (conversa) this.deps.bus.emitConversa(mapConversa(conversa));
+      // CAUDA DO HISTORICO, e nao ele inteiro.
+      //
+      // Este metodo e chamado em quase todo passo do bot (mensagem enviada,
+      // menu, CNPJ, transferencia, avaliacao). Lendo a conversa completa, cada
+      // aviso custava proporcionalmente ao tamanho do fio -- 214ms e 1MB num
+      // historico de 3000 mensagens, para anunciar uma linha nova. O merge do
+      // front reconstroi o resto (ver findByIdParaEvento).
+      const repo = this.deps.conversaRepository;
+      const conversa = repo.findByIdParaEvento
+        ? await repo.findByIdParaEvento(conversaId)
+        : await repo.findById(conversaId); // simulador e testes com stub reduzido
+      if (conversa) this.deps.bus.emitConversa(mapConversa({ ...conversa, __parcial: true }));
     } catch (error) {
       logger.warn("Falha ao emitir conversa no SSE", { conversaId, message: error.message });
     }
@@ -1976,7 +2000,10 @@ class ChatbotEngine {
       if (ehPlaceholder && nomeReal && nomeReal !== "Cliente" && nomeReal !== telefone) {
         await this.deps.conversaRepository.update(conversa.id, { cliente: nomeReal });
       }
-      conversa = await this.deps.conversaRepository.findById(conversa.id);
+      // Leitura LEVE: o motor nunca le `conversa.mensagens` (nenhum passo do
+      // fluxo depende do historico), e o que sobra alimenta tanto o resto do
+      // processamento quanto o evento logo abaixo -- uma consulta em vez de duas.
+      conversa = await this.deps.conversaRepository.findByIdParaEvento(conversa.id);
     }
 
     // Guarda defensiva: se a releitura falhar (corrida com exclusao da conversa,
@@ -1986,8 +2013,10 @@ class ChatbotEngine {
       return { processado: false, motivo: "conversa_indisponivel" };
     }
 
-    // Empurra a conversa (nova ou atualizada) ao front imediatamente.
-    await this._emitirConversa(conversa.id);
+    // Empurra a conversa ao front imediatamente, reaproveitando o que ja foi
+    // lido acima. Isto acontece ANTES do fluxo do bot rodar: a mensagem do
+    // cliente aparece na Central sem esperar CNPJ, menu ou envio de resposta.
+    await this._emitirConversa(conversa.id, conversa);
 
     // Quem responde o cliente e definido em Configuracoes. Fora do modo "local",
     // o motor NAO envia nada por conta propria: a mensagem fica registrada na

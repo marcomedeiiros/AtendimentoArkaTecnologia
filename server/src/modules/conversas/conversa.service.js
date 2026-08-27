@@ -15,6 +15,13 @@ const AppError = require("../../shared/errors/AppError");
 const env = require("../../config/env");
 const logger = require("../../config/logger");
 
+// Quantas mensagens acompanham um EVENTO (nao uma leitura). Mesmo numero de
+// conversa.repository.findByIdParaEvento -- os dois caminhos entregam a mesma
+// cauda, e o front trata as duas do mesmo jeito. Folgado o bastante para cobrir
+// uma rajada do cliente entre dois eventos; o que escapar e reconciliado pela
+// releitura periodica do AppContext.
+const CAUDA_EVENTO = 30;
+
 // Guard de autorizacao por setor para operacoes por id/mensagem.
 //
 // A leitura (listar/obter) ja filtrava por setor, mas TODA acao de escrita
@@ -263,7 +270,10 @@ class ConversaService {
     // botao "Encaminhar" -- por isso opcional e sem valor padrao proprio.
     metadataExtra = null
   ) {
-    const conversa = await conversaRepository.findById(id);
+    // Leitura LEVE: nada aqui usa o historico -- so autorizacao (setor,
+    // status), destino (telefone) e responsavel. A leitura completa custava
+    // 65ms num fio de 800 mensagens contra 0,79ms desta (ver findByIdBasico).
+    const conversa = await conversaRepository.findByIdBasico(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
     exigirAcessoSetor(userCargo, conversa.setor);
     this._exigirAberta(conversa, origem);
@@ -330,19 +340,94 @@ class ConversaService {
       { status: "enviando", respondendoAId: respondendoAId || null }
     );
 
-    for (const msg of mensagensExtras) {
-      await this._enviarWhatsApp(conversa.telefone, msg.texto);
+    // A BOLHA APARECE ANTES DA IDA AO WHATSAPP.
+    //
+    // Antes, a resposta HTTP do atendente so voltava DEPOIS do round-trip para a
+    // Evolution API: clicar em enviar travava a interface pelo tempo de uma
+    // chamada externa, que nao tem prazo. Agora a mensagem ja esta gravada com
+    // `status: "enviando"` -- o estado real, vindo do banco, nao uma bolha falsa
+    // inventada no navegador -- e a entrega segue em segundo plano.
+    //
+    // O estado final continua sendo do backend: `vincularWaMessageId` grava
+    // "enviada"/"erro" e os ACKs do WhatsApp levam a "entregue"/"lida", cada um
+    // emitindo o patch de status (ver event-bus.emitStatusMensagem).
+    const dto = await this._emitirLeve(id);
+
+    this._entregarNoWhatsApp({
+      telefone: conversa.telefone,
+      texto: texto.trim(),
+      quoted,
+      mensagemId: msgLocal.id,
+      mensagensExtras,
+      conversaId: id,
+    });
+
+    return dto;
+  }
+
+  /**
+   * Entrega no WhatsApp fora do caminho da resposta HTTP.
+   *
+   * Deliberadamente sem `await` de quem chama: uma falha aqui NAO pode virar
+   * erro da requisicao do atendente, porque a mensagem ja esta gravada e
+   * visivel. O que a falha faz e marcar a mensagem como "erro" -- que e
+   * exatamente o que o atendente precisa ver na bolha.
+   */
+  async _entregarNoWhatsApp({ telefone, texto, quoted, mensagemId, mensagensExtras, conversaId }) {
+    try {
+      for (const msg of mensagensExtras || []) {
+        await this._enviarWhatsApp(telefone, msg.texto);
+      }
+      const envio = await this._enviarWhatsApp(telefone, texto, quoted);
+      await conversaRepository.vincularWaMessageId(
+        mensagemId,
+        envio.waMessageId,
+        envio.ok ? "enviada" : "erro"
+      );
+      bus.emitStatusMensagem({
+        conversaId,
+        mensagemId,
+        status: envio.ok ? "enviada" : "erro",
+        ...(await this._versaoESetor(conversaId)),
+      });
+    } catch (e) {
+      logger.error("Falha ao entregar mensagem no WhatsApp", {
+        conversaId,
+        mensagemId,
+        message: e.message,
+      });
+      try {
+        await conversaRepository.vincularWaMessageId(mensagemId, null, "erro");
+        bus.emitStatusMensagem({
+          conversaId,
+          mensagemId,
+          status: "erro",
+          ...(await this._versaoESetor(conversaId)),
+        });
+      } catch { /* nada mais a fazer: o log acima ja registrou */ }
     }
+  }
 
-    const envio = await this._enviarWhatsApp(conversa.telefone, texto.trim(), quoted);
-    await conversaRepository.vincularWaMessageId(
-      msgLocal.id,
-      envio.waMessageId,
-      envio.ok ? "enviada" : "erro"
-    );
+  // Os dois campos que o patch de status precisa: `versao` (o front descarta
+  // retrato mais velho) e `setor` (o stream filtra por ele).
+  async _versaoESetor(conversaId) {
+    const c = await conversaRepository.findByIdBasico(conversaId);
+    return { versao: c?.versao ?? null, setor: c?.setor ?? null };
+  }
 
-    const atualizada = await conversaRepository.findById(id);
-    return this._emitir(atualizada);
+  /**
+   * Emite a conversa com a CAUDA do historico e devolve o DTO.
+   *
+   * Usado onde a acao muda a conversa mas nao o passado dela (mandar mensagem,
+   * mudar status). O front une o que chega com o que ja tem -- ver
+   * findByIdParaEvento e utils/mesclarConversa.
+   */
+  async _emitirLeve(id) {
+    const conversa = await conversaRepository.findByIdParaEvento(id);
+    if (!conversa) return null;
+    const dto = mapConversa({ ...conversa, __parcial: true });
+    bus.emitConversa(dto);
+    return dto;
   }
 
   // Envia mídia (imagem/vídeo/documento/áudio/localização) pela Evolution e
@@ -988,8 +1073,31 @@ class ConversaService {
     return { buffer, tamanho: total, total, mimetype, fileName: meta.fileName || null };
   }
 
-  _emitir(conversa) {
-    const dto = mapConversa(conversa);
+  /**
+   * Emite a conversa e devolve o DTO (que tambem e a resposta HTTP da acao).
+   *
+   * A LISTA DE MENSAGENS VAI CORTADA NA CAUDA. Toda acao -- atender, marcar
+   * lido, mudar setor, avaliar -- reserializava o historico inteiro so para
+   * anunciar que um campo escalar mudou: medido, 69ms de `mapConversa` num fio
+   * de 1000 mensagens, 182ms em 3000. O corte nao perde nada porque os dois
+   * consumidores do DTO passam pelo mesmo merge (`utils/mesclarConversa`, via
+   * SSE e via `aplicarConversa`), e ele mantem o que a tela ja tem quando o
+   * retrato vem marcado como `parcial`.
+   *
+   * `completo: true` para quem realmente precisa do fio inteiro numa resposta
+   * -- hoje ninguem, mas a porta fica aberta e explicita em vez de alguem
+   * "consertar" o corte sem entender por que ele existe.
+   *
+   * Quem serve o historico e a LEITURA (`obter`/`listar`), que segue completa:
+   * e de la que a Central carrega a conversa e a busca varre as mensagens.
+   */
+  _emitir(conversa, { completo = false } = {}) {
+    if (!conversa) return null;
+    const dto = mapConversa(
+      completo
+        ? conversa
+        : { ...conversa, mensagens: (conversa.mensagens || []).slice(-CAUDA_EVENTO), __parcial: true }
+    );
     bus.emitConversa(dto);
     return dto;
   }

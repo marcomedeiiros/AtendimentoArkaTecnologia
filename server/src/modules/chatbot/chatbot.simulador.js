@@ -46,6 +46,12 @@ function criarAmbiente({ fluxo, nomeCliente, horario, filas, agora, pesquisaAtiv
     },
     conversaRepository: {
       findById: async () => estado.conversa,
+      // O motor usa esta leitura no caminho de recebimento e nas emissoes: em
+      // producao ela traz so a cauda do historico, aqui a conversa de teste
+      // inteira (que tem poucas mensagens). O que importa e existir com o mesmo
+      // contrato -- sem ela o simulador quebraria num caminho que o cliente real
+      // percorre em toda mensagem.
+      findByIdParaEvento: async () => estado.conversa,
       findByTelefone: async () => estado.conversa,
       create: async () => estado.conversa,
       existeMensagemWa: async () => false,

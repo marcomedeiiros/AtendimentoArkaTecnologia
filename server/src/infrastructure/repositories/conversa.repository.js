@@ -67,6 +67,43 @@ class ConversaRepository {
     });
   }
 
+  /**
+   * A CONVERSA PARA UM EVENTO DE TEMPO REAL -- com a CAUDA do historico, nao ele
+   * inteiro.
+   *
+   * Todo evento SSE carregava a conversa completa: para avisar de UMA mensagem
+   * nova, o servidor lia, remapeava e serializava TODAS as mensagens. Medido
+   * neste banco: 6ms/18KB com 50 mensagens, 214ms/1,07MB com 3000 -- e isso
+   * multiplicado por cada ACK do WhatsApp (ate 4 por mensagem enviada) e por
+   * cada aba aberta. O custo de avisar crescia com o tamanho do historico, que e
+   * exatamente o que nao pode acontecer num painel de atendimento.
+   *
+   * Mandar so a cauda e seguro porque o merge do front (utils/mesclarConversa)
+   * ja trata mensagem ausente como "continua valendo o que eu tenho": mensagem
+   * nunca some no servidor (o apagar e soft-delete). O DTO vai marcado com
+   * `parcial: true` para a regra ficar explicita do outro lado.
+   *
+   * 30 e folgado de proposito: cobre uma rajada do cliente entre dois eventos.
+   * Quem precisa do fio inteiro (abrir a conversa, buscar, exportar) continua
+   * usando `findById`.
+   */
+  async findByIdParaEvento(id, limite = 30) {
+    const conversa = await prisma.conversa.findUnique({
+      where: { id },
+      include: {
+        // desc + take = os N mais RECENTES (asc + take daria os N mais antigos,
+        // que e o oposto do que a tela precisa).
+        mensagens: { orderBy: { criadoEm: "desc" }, take: limite },
+        atendente: { select: { id: true, nome: true, cargo: true } },
+        atendimentos: { orderBy: { abertoEm: "desc" } },
+      },
+    });
+    if (!conversa) return null;
+    // O mapper e a tela leem a lista em ordem cronologica.
+    conversa.mensagens.reverse();
+    return conversa;
+  }
+
   // MEMORIA DO CONTATO: ultimo CNPJ confirmado por este telefone.
   //
   // NAO EXCLUI CONVERSA NENHUMA, e isso e deliberado. Havia aqui um parametro
@@ -137,6 +174,16 @@ class ConversaRepository {
         telefone: true,
         statusAtendimento: true,
         atendimentoAtualId: true,
+        // Campos que o caminho de ENVIO precisa antes de gravar a mensagem:
+        // autorizacao (setor/status), destino (telefone) e "quem responde,
+        // atende" (atendenteId/atendidoEm). Reunidos aqui para o envio deixar de
+        // carregar a conversa inteira so para ler cinco escalares -- medido, a
+        // leitura completa de um fio de 800 mensagens custa 65ms contra 0,79ms
+        // desta.
+        atendenteId: true,
+        atendidoEm: true,
+        cnpj: true,
+        versao: true,
       },
     });
   }
@@ -446,17 +493,27 @@ class ConversaRepository {
     const ordem = { enviando: 0, enviada: 1, entregue: 2, lida: 3 };
     const msg = await prisma.mensagem.findUnique({ where: { waMessageId } });
     if (!msg) return null;
+    // ACK que nao muda nada (repetido ou atrasado) devolve `conversa: null`:
+    // sem mudanca real nao ha o que emitir, e emitir mesmo assim era gastar uma
+    // leitura completa da conversa para reenviar o status que o front ja tinha.
     if (status !== "erro" && (ordem[status] ?? 0) <= (ordem[msg.status] ?? -1)) {
-      return msg;
+      return { mensagem: msg, conversa: null };
     }
     const atualizada = await prisma.mensagem.update({ where: { id: msg.id }, data: { status } });
     // O risquinho mudou: a conversa precisa de versao nova, senao o front
     // descarta o evento como "igual ao que ja tenho".
-    await prisma.conversa.update({
+    //
+    // Devolvemos `setor` e a `versao` nova junto porque o ACK vira um PATCH de
+    // status (ver event-bus.emitStatusMensagem): o stream precisa do setor para
+    // o guard e o front precisa da versao para ordenar. Sao os dois campos que
+    // faltavam para nao ter de reler a conversa inteira so por causa de um
+    // icone de entrega.
+    const conversa = await prisma.conversa.update({
       where: { id: msg.conversaId },
       data: { versao: { increment: 1 } },
+      select: { id: true, setor: true, versao: true },
     });
-    return atualizada;
+    return { mensagem: atualizada, conversa };
   }
 
   findMensagem(id) {

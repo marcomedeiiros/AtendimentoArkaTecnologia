@@ -53,7 +53,10 @@ class ConversaStreamController {
     res.write("retry: 3000\n\n");
     res.write(`event: ready\ndata: {"ok":true}\n\n`);
 
-    const onConversa = (evento) => {
+    // `json` vem pronto do barramento: antes o stringify acontecia AQUI, ou
+    // seja, uma vez por conexao aberta -- a mesma conversa era serializada
+    // tantas vezes quantas abas houvesse. Ver event-bus._publicar.
+    const onConversa = (evento, json) => {
       // Mesmo guard da leitura: quem nao pode ver o setor nao recebe o evento.
       //
       // O setor mora em `evento.conversa.setor`. Ler `evento.setor` (como era
@@ -63,8 +66,14 @@ class ConversaStreamController {
       if (evento?.type === "conversa:update" && !podeAcessarSetor(cargo, evento.conversa?.setor)) {
         return;
       }
+      // O patch de status carrega o setor no proprio evento (nao ha conversa
+      // dentro dele). Sem este guard, o risquinho de uma conversa de outro setor
+      // chegaria ao vivo para quem nem enxerga a conversa.
+      if (evento?.type === "mensagem:status" && !podeAcessarSetor(cargo, evento.setor)) {
+        return;
+      }
       try {
-        res.write(`data: ${JSON.stringify(evento)}\n\n`);
+        res.write(`data: ${json ?? JSON.stringify(evento)}\n\n`);
       } catch (err) {
         logger.warn("Falha ao escrever no stream SSE", { message: err.message });
       }

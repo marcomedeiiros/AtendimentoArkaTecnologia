@@ -8,7 +8,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { EquipeAPI, FluxosAPI, ParceirosAPI, ConversasAPI, WhatsAppAPI } from '../services/api';
 import { playPing } from '../utils/sound';
-import { mesclarConversa } from '../utils/mesclarConversa';
+import { mesclarConversa, aplicarStatusMensagem } from '../utils/mesclarConversa';
 
 // NAO existe mais SEED aqui de proposito.
 //
@@ -142,6 +142,24 @@ export function AppProvider({ children }) {
       if (evt.recurso === 'contatos') setSinalContatos(n => n + 1);
       return;
     }
+    // Só o risquinho de UMA mensagem mudou (enviada/entregue/lida/erro).
+    //
+    // Não mexe em `sinalConversas` de propósito: um ACK não é atividade nova na
+    // conversa, e contá-lo como tal tocaria o som de notificação a cada
+    // confirmação de entrega. Também não reordena a lista -- a conversa não
+    // "subiu" só porque o WhatsApp confirmou a entrega.
+    if (evt.type === 'mensagem:status' && evt.conversaId && evt.mensagemId) {
+      setConversas(prev => {
+        const i = prev.findIndex(c => c.id === evt.conversaId);
+        if (i < 0) return prev;
+        const nova = aplicarStatusMensagem(prev[i], evt);
+        if (nova === prev[i]) return prev; // nada mudou: sem re-render
+        const lista = prev.slice();
+        lista[i] = nova;
+        return lista;
+      });
+      return;
+    }
     if (evt.type === 'conversa:delete') {
       setConversas(prev => prev.filter(c => c.id !== evt.id));
       setSinalConversas(n => n + 1);
@@ -212,10 +230,39 @@ export function AppProvider({ children }) {
     };
   }, [aplicarEvento, recarregarConversas]);
 
-  // Fallback lento: reconcilia caso algum evento SSE se perca.
+  /**
+   * REDE DE SEGURANÇA -- e só isso.
+   *
+   * Era um `setInterval` de 30s recarregando a lista inteira. A listagem traz
+   * todas as conversas com todas as mensagens: medido, 10 conversas de 800
+   * mensagens custam 628ms de servidor e 2,76 MB -- por atendente, duas vezes
+   * por minuto, mesmo com o SSE entregando tudo normalmente. Era trabalho
+   * jogado fora que competia com o tráfego real de mensagens.
+   *
+   * O tempo real é o SSE. Esta releitura existe para os casos em que ele pode
+   * ter perdido algo, e roda quando isso é plausível:
+   *   - a cada 5 minutos (evento perdido sem queda de conexão);
+   *   - ao voltar para a aba (o navegador estrangula timers em aba oculta);
+   *   - ao reconectar o stream (já feito em `agendarReconexao`).
+   *
+   * O acelerador de 30s impede que alternar de aba vire uma rajada de
+   * recarregamentos.
+   */
   useEffect(() => {
-    const id = setInterval(recarregarConversas, 30000);
-    return () => clearInterval(id);
+    let ultima = 0;
+    const reconciliar = () => {
+      const agora = Date.now();
+      if (agora - ultima < 30000) return;
+      ultima = agora;
+      recarregarConversas();
+    };
+    const id = setInterval(reconciliar, 300000);
+    const aoVoltar = () => { if (document.visibilityState === 'visible') reconciliar(); };
+    document.addEventListener('visibilitychange', aoVoltar);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', aoVoltar);
+    };
   }, [recarregarConversas]);
 
   const removerNotificacao = useCallback((id) => {

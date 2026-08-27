@@ -79,16 +79,56 @@ export function mesclarConversa(atual, recebida) {
     //    com F5. Mensagem nunca é removida no servidor (o apagar é soft-delete),
     //    então manter o que já está na tela é sempre correto.
     const idsRecebidos = new Set(mensagens.map(m => m.id).filter(Boolean));
-    const sumiram = atual.mensagens.filter(m => m.id && !idsRecebidos.has(m.id));
+    const ausentes = atual.mensagens.filter(m => m.id && !idsRecebidos.has(m.id));
 
     // 3. Mantém as otimistas (ainda sem id) que o servidor não devolveu.
     const jaVeio = new Set(mensagens.map(m => `${m.de}|${m.texto}`));
     const otimistas = atual.mensagens.filter(m => !m.id && !jaVeio.has(`${m.de}|${m.texto}`));
 
-    if (sumiram.length || otimistas.length) {
-      mensagens = [...mensagens, ...sumiram, ...otimistas];
+    if (ausentes.length || otimistas.length) {
+      // ORDEM: as ausentes vêm ANTES das recebidas.
+      //
+      // Um evento de tempo real traz só a CAUDA do histórico (`parcial`), que é
+      // por definição o trecho mais RECENTE -- ver
+      // conversa.repository.findByIdParaEvento. Logo, tudo que a tela já tinha e
+      // não veio agora é mais ANTIGO e precisa ficar acima; concatenar no fim
+      // (como era) jogaria o histórico para depois das mensagens novas e a
+      // conversa apareceria de cabeça para baixo.
+      //
+      // As otimistas ficam por último: ainda não existem no servidor, então são
+      // sempre as mais recentes.
+      mensagens = recebida.parcial
+        ? [...ausentes, ...mensagens, ...otimistas]
+        : [...mensagens, ...ausentes, ...otimistas];
     }
   }
 
   return mensagens === recebida.mensagens ? recebida : { ...recebida, mensagens };
+}
+
+/**
+ * Aplica o patch de status de UMA mensagem (o risquinho de entrega/leitura).
+ *
+ * Existe para o ACK do WhatsApp não precisar redesenhar a conversa: antes, cada
+ * "entregue"/"lida" trazia o histórico inteiro de volta -- até quatro vezes por
+ * mensagem enviada. Aqui muda um campo de um item e o resto do estado é o mesmo
+ * objeto, então nada além daquela bolha precisa ser reprocessado.
+ *
+ * Devolve a MESMA conversa quando não há o que mudar, para o React não
+ * re-renderizar à toa.
+ */
+export function aplicarStatusMensagem(conversa, { mensagemId, status, versao }) {
+  if (!conversa || !Array.isArray(conversa.mensagens)) return conversa;
+  const i = conversa.mensagens.findIndex(m => m.id === mensagemId);
+  if (i < 0 || conversa.mensagens[i].status === status) return conversa;
+
+  const mensagens = conversa.mensagens.slice();
+  mensagens[i] = { ...mensagens[i], status };
+  return {
+    ...conversa,
+    mensagens,
+    // A versão acompanha a do servidor: sem isso, o próximo retrato completo
+    // seria descartado por `ehDesatualizada` como "igual ao que já tenho".
+    versao: typeof versao === 'number' ? versao : conversa.versao,
+  };
 }

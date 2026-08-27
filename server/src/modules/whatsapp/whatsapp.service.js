@@ -218,14 +218,30 @@ class WhatsAppService {
       return { recebido: true, processado: false, motivo: "ack_sem_dados", bruto };
     }
 
-    const msg = await conversaRepository.atualizarStatusPorWaId(waMessageId, status);
-    if (!msg) {
+    const r = await conversaRepository.atualizarStatusPorWaId(waMessageId, status);
+    if (!r) {
       // Mensagem que nao saiu daqui (ex.: enviada pelo celular do atendente).
       return { recebido: true, processado: false, motivo: "mensagem_desconhecida" };
     }
+    // ACK repetido ou atrasado: nada mudou, nada a emitir.
+    if (!r.conversa) {
+      return { recebido: true, processado: false, motivo: "ack_sem_mudanca", status };
+    }
 
-    const conversa = await conversaRepository.findById(msg.conversaId);
-    if (conversa) bus.emitConversa(mapConversa(conversa));
+    // PATCH, e nao a conversa inteira.
+    //
+    // Aqui havia um `findById` completo + `mapConversa` a cada ACK. Como o
+    // WhatsApp manda ate quatro por mensagem (PENDING, SERVER_ACK,
+    // DELIVERY_ACK, READ), UMA mensagem enviada custava quatro leituras e
+    // quatro serializacoes do historico inteiro -- medido: 261ms de CPU e
+    // 1,08MB de SSE num fio de 800 mensagens, so para mudar o risquinho.
+    bus.emitStatusMensagem({
+      conversaId: r.conversa.id,
+      mensagemId: r.mensagem.id,
+      status,
+      versao: r.conversa.versao,
+      setor: r.conversa.setor,
+    });
 
     return { recebido: true, processado: true, status, waMessageId };
   }
