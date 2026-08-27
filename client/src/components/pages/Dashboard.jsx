@@ -270,7 +270,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
   };
 
   return (
-    <div className="fade-in space-y-6">
+    <div className="fade-in space-y-6 baixa:lg:space-y-4">
       {/* Header com abas */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-linha">
         <div className="flex items-center gap-3">

@@ -3286,7 +3286,13 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
           ficava um retangulo de fundo vazio ocupando meia tela. No desktop
           volta a esticar (`lg:items-stretch`), que la e o certo: a lista e o
           chat ficam lado a lado e precisam da mesma altura. */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-0 items-start lg:items-stretch lg:min-h-[550px]">
+      {/* `baixa:lg:min-h-0` -- num notebook (768px de altura) o piso de 550px
+          somado ao cabeçalho e aos filtros passava do que a tela tem, e a
+          página inteira ganhava rolagem: o atendente perdia a lista de vista
+          ao descer até o chat. Sem o piso, a Central usa a altura que existe
+          (`flex-1 min-h-0`) e a rolagem fica DENTRO de cada painel, que é onde
+          ela funciona. Em tela alta o piso continua valendo. */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 baixa:lg:gap-3 flex-1 min-h-0 items-start lg:items-stretch lg:min-h-[550px] baixa:lg:min-h-0">
 
         {/* Sem altura minima: o painel passa a ter a altura das conversas que
             existem. O teto de 70vh e o que mantem a rolagem DENTRO da lista

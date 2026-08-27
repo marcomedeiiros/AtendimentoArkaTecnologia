@@ -195,8 +195,8 @@ export default function ParceirosPage() {
   }, {});
 
   return (
-    <div className="fade-in space-y-6">
-      <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-linha">
+    <div className="fade-in space-y-6 baixa:lg:space-y-4">
+      <div className="mb-8 baixa:lg:mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-linha">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight font-display">Cadastro de Clientes (CNPJ)</h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-1">Cadastro oficial de parceiros com dados de e-mail, telefones e cidades atendidas.</p>

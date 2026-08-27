@@ -436,8 +436,8 @@ export default function EquipePage() {
   }
 
   return (
-    <div className="fade-in space-y-6">
-      <div className="mb-8 flex flex-col gap-4 border-b border-linha pb-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="fade-in space-y-6 baixa:lg:space-y-4">
+      <div className="mb-8 baixa:lg:mb-4 flex flex-col gap-4 border-b border-linha pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-2xl font-bold tracking-tight text-white">Gestão da Equipe & Permissões</h1>
           <p className="mt-1 text-xs text-texto-suave sm:text-sm">

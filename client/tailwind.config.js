@@ -6,6 +6,27 @@ export default {
   ],
   theme: {
     extend: {
+      /**
+       * BREAKPOINT DE ALTURA -- o que faltava para notebook.
+       *
+       * Os breakpoints do Tailwind são todos de LARGURA, e por isso a tela de
+       * notebook passava batida: 1366px de largura entra em `lg`/`xl` e recebe o
+       * mesmo tratamento de um monitor de mesa. Só que o que aperta num notebook
+       * não é a largura -- são os 768px de ALTURA, que viram ~640px de viewport
+       * depois da barra do navegador. Padding de 32px em cima e embaixo, mais um
+       * `min-h-[550px]`, e a página já não cabe.
+       *
+       * `baixa` = tela curta. Vale para notebook (768/800/900) e também para
+       * celular na horizontal -- nos dois casos a resposta certa é a mesma:
+       * apertar o espaçamento vertical e não exigir altura mínima.
+       *
+       * Declarado em `extend` de propósito: assim ele entra DEPOIS dos
+       * breakpoints padrão na folha gerada, e `baixa:p-4` vence `lg:p-8` numa
+       * tela que é larga E curta -- que é exatamente o notebook.
+       */
+      screens: {
+        baixa: { raw: '(max-height: 900px)' },
+      },
       fontFamily: {
         sans: ['Poppins', 'sans-serif'],
         display: ['Poppins', 'sans-serif'],

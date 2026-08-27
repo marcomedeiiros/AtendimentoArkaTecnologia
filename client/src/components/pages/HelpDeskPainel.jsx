@@ -190,7 +190,7 @@ export default function HelpDeskPainel() {
   }, [sinalConversas, carregar]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 baixa:lg:space-y-4">
       <div className="flex items-center justify-between gap-3">
         <p className="text-slate-400 text-xs sm:text-sm">
           Backlog, tempos de resposta e resolução, SLA e volume em tempo real.

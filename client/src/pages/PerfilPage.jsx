@@ -119,7 +119,7 @@ export default function PerfilPage() {
   }
 
   return (
-    <div className="fade-in mx-auto w-full max-w-3xl space-y-6">
+    <div className="fade-in mx-auto w-full max-w-3xl space-y-6 baixa:lg:space-y-4">
       {/* Cabeçalho */}
       <div className="flex flex-col gap-4 border-b border-linha pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">

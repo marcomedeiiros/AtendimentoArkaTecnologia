@@ -165,8 +165,8 @@ export default function WhatsAppPage() {
   const botaoSec = 'px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all disabled:opacity-60 bg-grafite-700 border border-linha text-slate-300 hover:text-white hover:border-linha-forte';
 
   return (
-    <div className="fade-in space-y-6">
-      <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-linha">
+    <div className="fade-in space-y-6 baixa:lg:space-y-4">
+      <div className="mb-8 baixa:lg:mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-linha">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight font-display">Integração WhatsApp API</h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-1">Gerencie a conexão oficial via WhatsApp Web, webhooks e sincronização de dados.</p>

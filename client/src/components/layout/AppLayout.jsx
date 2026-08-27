@@ -130,11 +130,16 @@ function Sidebar({ aberto, onClose }) {
       /* 17rem, nao 16: em w-64 o rotulo mais longo do proprio menu ("Central de
          Atendimento") pedia 147px num vao de 146. A barra era estreita demais
          para o que ela mesma precisa exibir. */
-      className={`w-[17rem] shrink-0 bg-grafite-800 border-r border-linha flex flex-col p-4 h-screen select-none overflow-y-auto
+      /* `baixa:lg:` aperta o espaçamento VERTICAL da barra, nunca a largura: as
+         17rem existem porque o rótulo mais longo do próprio menu precisa delas
+         (ver comentário acima), e estreitar cortaria texto. Numa tela curta o
+         que falta é altura -- com o menu inteiro visível, ninguém precisa rolar
+         a barra para achar um item. */
+      className={`w-[17rem] shrink-0 bg-grafite-800 border-r border-linha flex flex-col p-4 baixa:lg:p-3 h-screen select-none overflow-y-auto
         fixed inset-y-0 left-0 z-50 transition-transform duration-300 lg:static lg:translate-x-0
         ${aberto ? 'translate-x-0 shadow-2xl shadow-black/50' : '-translate-x-full'}`}
     >
-      <div className="flex items-center gap-3 px-2 py-3 mb-4 shrink-0">
+      <div className="flex items-center gap-3 px-2 py-3 mb-4 baixa:lg:py-1.5 baixa:lg:mb-2 shrink-0">
         <div className="p-2 rounded-xl bg-gradient-to-br from-acao/20 to-espera/10 border border-acao/30 shadow-lg shadow-acao/10">
           <ArkaLogo size={32} />
         </div>
@@ -280,7 +285,13 @@ export default function AppLayout() {
 
         <main
           className={`flex-1 min-w-0 min-h-0 ${
-            isFluxos ? 'p-0 overflow-hidden' : 'p-4 sm:p-6 lg:p-8 overflow-y-auto'
+            /* `baixa:lg:` = tela curta (notebook, ou celular deitado). O padding de
+               32px do desktop custa 64px de altura -- 10% de um notebook de 768px
+               -- e não compra nada: numa tela baixa o que falta é espaço para o
+               conteúdo, não respiro em volta dele. A largura continua folgada. */
+            isFluxos
+              ? 'p-0 overflow-hidden'
+              : 'p-4 sm:p-6 lg:p-8 baixa:lg:px-6 baixa:lg:py-4 overflow-y-auto'
           }`}
         >
           <Outlet />
