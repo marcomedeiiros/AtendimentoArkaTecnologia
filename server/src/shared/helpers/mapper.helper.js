@@ -24,7 +24,19 @@ function mapMensagem(m) {
   const tipo = meta.tipo || "texto";
   return {
     id: m.id,
+    // `de` continua colapsando bot->equipe: e o que posiciona a bolha do lado
+    // direito, e mudar isso mexeria em toda a renderizacao.
     de: m.origem === "bot" ? "equipe" : m.origem,
+    // ORIGEM REAL, sem colapsar: cliente | equipe | bot | sistema.
+    //
+    // Sem este campo a Central nao tinha como distinguir o que o BOT mandou do
+    // que um atendente digitou -- as duas coisas chegavam como "equipe". E e
+    // essa distincao que decide se a mensagem conta como atividade nova na
+    // conversa (som, badge) ou se e apenas o fluxo falando sozinho.
+    origem: m.origem,
+    // Mensagem gerada por uma automacao do fluxo (pesquisa de satisfacao, aviso
+    // de espera, timeout). Marcada na gravacao, nao deduzida na tela.
+    automacao: m.origem === "bot" || !!meta.automacao,
     // A qual OS esta mensagem pertence: e o que permite ao painel recortar o
     // historico por atendimento sem quebrar o fio unico da conversa.
     atendimentoId: m.atendimentoId || null,

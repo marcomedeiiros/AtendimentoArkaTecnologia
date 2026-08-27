@@ -246,9 +246,16 @@ export function AppProvider({ children }) {
       return;
     }
 
+    // SÓ MENSAGEM DO CLIENTE TOCA O SINO.
+    //
+    // A contagem olha `origem === 'cliente'` (o campo cru do servidor), e não o
+    // lado da bolha: a pesquisa de satisfação e os avisos automáticos saem do
+    // BOT e não podem soar como se o cliente tivesse escrito. Antes isso
+    // dependia de `de !== 'cliente'` funcionar por acaso -- agora é explícito.
+    const ehDoCliente = (m) => (m.origem ? m.origem === 'cliente' : m.de === 'cliente');
     const counts = {};
     conversas.forEach(c => {
-      counts[c.id] = (c.mensagens || []).filter(m => m.de === 'cliente').length;
+      counts[c.id] = (c.mensagens || []).filter(ehDoCliente).length;
     });
     const anterior = msgCountsRef.current;
     if (anterior !== null) {
@@ -257,7 +264,7 @@ export function AppProvider({ children }) {
         const antes = anterior[c.id] ?? 0;
         const agora = counts[c.id] ?? 0;
         if (agora > antes) {
-          const ultima = [...(c.mensagens || [])].reverse().find(m => m.de === 'cliente');
+          const ultima = [...(c.mensagens || [])].reverse().find(ehDoCliente);
           novas.push({
             id: `${c.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
             convId: c.id,

@@ -352,6 +352,13 @@ model Atendimento {
   ///   sem_resposta   -> o prazo do fluxo acabou sem resposta nenhuma
   avaliacaoStatus String? @map("avaliacao_status")
   feedback      String?
+  /// Quando o cliente foi avisado de que a fila esta demorada.
+  ///
+  /// E o que garante "uma vez por atendimento" (idempotencia) no aviso de
+  /// espera: a varredura roda a cada minuto e, sem uma marca PERSISTIDA, mandaria
+  /// a mesma mensagem a cada passada. Um contador em memoria nao serviria --
+  /// morre no restart e o cliente receberia tudo de novo.
+  avisoEsperaEm DateTime? @map("aviso_espera_em")
   abertoEm      DateTime  @default(now()) @map("aberto_em")
   atendidoEm    DateTime? @map("atendido_em")
   fechadoEm     DateTime? @map("fechado_em")

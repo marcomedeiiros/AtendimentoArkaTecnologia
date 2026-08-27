@@ -9,7 +9,7 @@ import {
   FileText, MapPin, Contact, Paperclip, Smile, Loader2,
   SlidersHorizontal, Star, Archive, EyeOff, MoreVertical,
   ZoomIn, ZoomOut, Maximize2, Download, CornerUpLeft, CornerUpRight, Share2, Pencil, MoreHorizontal, Mic, Tag, PenLine,
-  Sun, Moon
+  Sun, Moon, Bot
 } from 'lucide-react';
 import { EmojiIcon, FormattedMessage } from './EmojiIcon';
 import { useMensagensRapidas } from './MensagensRapidas';
@@ -2093,8 +2093,17 @@ function PainelChat({
                   ? 'bg-grafite-600 text-texto rounded-tl-sm'
                   : 'bg-bolha text-texto rounded-tr-sm'
               }`}>
-                <div className="text-[10px] font-semibold text-texto-suave">
+                <div className="text-[10px] font-semibold text-texto-suave flex items-center gap-1">
                   {m.de === 'cliente' ? conversa.cliente : 'Arka Tecnologia'}
+                  {/* Automação do fluxo: quem lê a conversa precisa saber que
+                      ninguém digitou isso. A marca vem do servidor
+                      (`automacao`), não da aparência do texto. */}
+                  {m.automacao && m.de !== 'cliente' && (
+                    <span className="inline-flex items-center gap-0.5 text-[9px] font-normal text-texto-fraco"
+                      title="Mensagem automática do Fluxo de Automação (não notifica a equipe)">
+                      <Bot size={9} /> automação
+                    </span>
+                  )}
                 </div>
 
                 {/* Selo de ENCAMINHADA, como no WhatsApp. A marca vem do próprio
@@ -2689,8 +2698,12 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
 
   // Sino + som: dispara quando o total de mensagens de clientes aumenta
   // (nova mensagem recebida via polling do AppContext).
+  // Mesma regra do sino no AppContext: automação do bot não é atividade do
+  // cliente e não sacode o sininho.
   const totalMsgCliente = conversas.reduce(
-    (acc, c) => acc + (c.mensagens || []).filter(m => m.de === 'cliente').length, 0
+    (acc, c) => acc + (c.mensagens || []).filter(
+      m => (m.origem ? m.origem === 'cliente' : m.de === 'cliente')
+    ).length, 0
   );
   useEffect(() => {
     if (totalMsgClienteRef.current === null) {

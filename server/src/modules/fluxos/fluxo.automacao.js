@@ -50,6 +50,37 @@ const PADROES = {
     memoria: true,
   },
 
+  /**
+   * TEMPO A -- O CLIENTE NAO RESPONDE AO BOT.
+   *
+   * O bot fez uma pergunta obrigatoria (CNPJ, opcao do menu) e o cliente sumiu.
+   * Isto NAO e sobre a fila: e sobre uma etapa parada esperando resposta.
+   */
+  semResposta: {
+    minutos: 5,
+    mensagem: "Não entendemos a sua demanda. Por favor, abra um chamado novamente.",
+    // "encerrar" fecha a OS (a proxima mensagem do cliente abre um chamado
+    // novo, que e o que a mensagem promete); "fila" devolve para um atendente.
+    acao: "encerrar", // "encerrar" | "fila"
+  },
+
+  /**
+   * TEMPO B -- O CLIENTE ESPERA UM ATENDENTE HA TEMPO DEMAIS.
+   *
+   * Aqui nao ha pergunta nenhuma pendente: a conversa esta na fila de Pendentes
+   * e ninguem assumiu. Sao coisas diferentes e nao podem compartilhar relogio --
+   * quem espera atendimento nao "deixou de responder".
+   */
+  filaPendentes: {
+    minutos: 10,
+    mensagem:
+      "Ei {{cliente}}! Estamos com uma demanda alta no momento, mas fique tranquilo! Em breve, um dos nossos atendentes estará disponível para atendê-lo.",
+    // Uma vez por atendimento. Repetir a cada 10 min viraria spam de quem ja
+    // esta esperando -- e a garantia de "so uma vez" e a coluna
+    // atendimentos.aviso_espera_em, nao um contador em memoria.
+    repetir: false,
+  },
+
   avaliacao: {
     pedirComentario: true,
     mensagemNota:
@@ -124,6 +155,83 @@ function paramsAvaliacao(passo) {
 }
 
 /**
+ * Bloco de configuração de escopo do FLUXO (e não de um passo).
+ *
+ * Ele mora no `config.configuracoesGlobais` do passo "Configurações do bot" --
+ * o mesmo bloco que o editor de origem já usa para `welcomeMessage`,
+ * `notResponseMessage` e companhia. Reaproveitar esse lugar mantém tudo que é
+ * do fluxo inteiro num ponto só, em vez de espalhar por passos.
+ */
+function globaisDoFluxo(fluxo) {
+  for (const passo of fluxo?.passos || []) {
+    const cfg = passo.config?.configuracoesGlobais;
+    if (cfg && typeof cfg === "object") return cfg;
+  }
+  return {};
+}
+
+/**
+ * OS DOIS RELÓGIOS DO FLUXO -- deliberadamente separados.
+ *
+ * `semResposta`   : o bot perguntou e o cliente sumiu (5 min).
+ * `filaPendentes` : ninguém assumiu a conversa na fila (10 min).
+ *
+ * Confundir os dois daria o comportamento errado nos dois casos: quem espera
+ * atendimento receberia "não entendemos sua demanda", e quem abandonou uma
+ * pergunta receberia "estamos com demanda alta".
+ *
+ * COMPATIBILIDADE: fluxos exportados do editor de origem trazem
+ * `notResponseMessage {time, message, type}`, que é o mesmo conceito de
+ * `semResposta`. Ele continua sendo lido, mas o bloco novo VENCE quando existe
+ * -- assim quem já tinha o antigo não perde nada e quem configurar o novo manda.
+ */
+function paramsTempos(fluxo) {
+  const g = globaisDoFluxo(fluxo);
+  const p = PADROES;
+
+  // Legado: {time: minutos, message, type} -- type 3 = encerrar.
+  const legado = g.notResponseMessage || {};
+  const legadoMin = Number(legado.time);
+  const temLegado = Number.isFinite(legadoMin) && legadoMin > 0;
+
+  const sr = g.semResposta || {};
+  const fp = g.filaPendentes || {};
+
+  return {
+    semResposta: {
+      minutos: inteiro(
+        sr.minutos,
+        temLegado ? Math.round(legadoMin) : p.semResposta.minutos,
+        1,
+        24 * 60
+      ),
+      mensagem: texto(
+        sr.mensagem,
+        temLegado && typeof legado.message === "string" && legado.message.trim()
+          ? legado.message.trim()
+          : p.semResposta.mensagem
+      ),
+      acao:
+        sr.acao === "fila" || sr.acao === "encerrar"
+          ? sr.acao
+          : temLegado && Number(legado.type) !== 3
+            ? "fila"
+            : p.semResposta.acao,
+    },
+    filaPendentes: {
+      // `ativo: false` desliga o aviso sem apagar o texto configurado.
+      ativo: fp.ativo !== false,
+      minutos: inteiro(fp.minutos, p.filaPendentes.minutos, 1, 24 * 60),
+      mensagem: texto(fp.mensagem, p.filaPendentes.mensagem),
+      repetir: booleano(fp.repetir, p.filaPendentes.repetir),
+    },
+    // Comandos globais ("atendente", "menu", "sair") podem furar uma etapa
+    // obrigatória? Sai do fluxo, não do código -- ver o guard no motor.
+    permitirComandosGlobais: booleano(g.permitirComandosGlobais, true),
+  };
+}
+
+/**
  * Retrato legível de TODAS as automações que um fluxo executa.
  *
  * É o que alimenta o painel "Automações do BOT" no editor: em vez de descobrir
@@ -177,28 +285,43 @@ function resumoAutomacoes(fluxo) {
     });
   }
 
-  const passoInatividade = passos.find(
-    (p) => p.config && (p.config.notResponseMessage || p.config.inatividadeMinutos)
-  );
-  if (passoInatividade) {
+  // Os dois relógios do fluxo, cada um no seu grupo -- é a leitura que evita
+  // confundi-los ao configurar.
+  const passoGlobais = passos.find((p) => p.config?.configuracoesGlobais);
+  if (passoGlobais) {
+    const t = paramsTempos(fluxo);
     itens.push({
-      grupo: "Inatividade",
-      passoId: passoInatividade.id,
-      passoTitulo: passoInatividade.titulo,
+      grupo: "Cliente não responde ao bot",
+      passoId: passoGlobais.id,
+      passoTitulo: passoGlobais.titulo,
       regras: [
+        { rotulo: "Esperar a resposta por", valor: `${t.semResposta.minutos} min` },
+        { rotulo: "Mensagem", valor: t.semResposta.mensagem },
         {
-          rotulo: "Encerrar após",
-          valor: `${passoInatividade.config.inatividadeMinutos || 10} min sem resposta`,
+          rotulo: "Depois disso",
+          valor: t.semResposta.acao === "fila" ? "Devolver para a fila" : "Encerrar o atendimento",
         },
         {
-          rotulo: "Mensagem",
-          valor: passoInatividade.config.notResponseMessage || "(sem mensagem)",
+          rotulo: "Comandos globais podem pular etapa",
+          valor: t.permitirComandosGlobais ? "Sim" : "Não",
         },
       ],
+    });
+    itens.push({
+      grupo: "Espera na fila de Pendentes",
+      passoId: passoGlobais.id + ":fila",
+      passoTitulo: passoGlobais.titulo,
+      regras: t.filaPendentes.ativo
+        ? [
+            { rotulo: "Avisar após", valor: `${t.filaPendentes.minutos} min na fila` },
+            { rotulo: "Mensagem", valor: t.filaPendentes.mensagem },
+            { rotulo: "Repetir o aviso", valor: t.filaPendentes.repetir ? "Sim" : "Não (uma vez por atendimento)" },
+          ]
+        : [{ rotulo: "Aviso de espera", valor: "Desligado" }],
     });
   }
 
   return { ativo: !!fluxo.ativo, nome: fluxo.nome, gatilho: fluxo.gatilho, itens };
 }
 
-module.exports = { PADROES, paramsCnpj, paramsAvaliacao, resumoAutomacoes };
+module.exports = { PADROES, paramsCnpj, paramsAvaliacao, paramsTempos, resumoAutomacoes };

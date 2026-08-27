@@ -14,7 +14,7 @@ const {
 const { comLock } = require("../../shared/helpers/lock.helper");
 // PARAMETROS DA AUTOMACAO: quem manda e o FLUXO, nao o codigo. Ver
 // fluxos/fluxo.automacao.js -- todo texto, tentativa e prazo do bot sai de la.
-const { paramsCnpj, paramsAvaliacao } = require("../fluxos/fluxo.automacao");
+const { paramsCnpj, paramsAvaliacao, paramsTempos } = require("../fluxos/fluxo.automacao");
 // Setor do atendimento deduzido do que o cliente pediu, quando o fluxo nao
 // informa um explicitamente (ver setorDetectado.helper).
 const { resolverSetor } = require("../../shared/helpers/setorDetectado.helper");
@@ -104,6 +104,8 @@ class ChatbotEngine {
 
     const valores = {
       name: conversa.cliente,
+      // Forma curta, usada pelos textos configurados no fluxo ("Ei {{cliente}}!").
+      cliente: conversa.cliente,
       "cliente.nome": conversa.cliente,
       "cliente.telefone": conversa.telefone,
       "cliente.cnpj": cnpj ? mascararCnpj(cnpj) : "",
@@ -342,25 +344,44 @@ class ChatbotEngine {
     // FLUXO PAUSADO = SEM AUTOMACAO (defesa em profundidade: o varredor ja
     // confere, mas este metodo e publico e nao pode depender de quem chama).
     if (!fluxo || !fluxo.ativo) return null;
-    const cfg = this.configuracaoInatividade(fluxo);
-    if (!cfg) return null;
+
+    // Parametros do FLUXO. `semResposta` e o bloco novo; sem ele, cai no
+    // `notResponseMessage` que os fluxos exportados ja trazem (ver paramsTempos).
+    const cfg = paramsTempos(fluxo).semResposta;
 
     const parado = Date.now() - new Date(sessao.atualizadoEm || sessao.criadoEm).getTime();
     if (parado < cfg.minutos * 60 * 1000) return null;
 
-    const ctx = { conversa, telefone: sessao.telefone, instanciaId, instanceName };
+    // O ESTADO MUDOU ENQUANTO O RELOGIO CORRIA?
+    //
+    // A varredura le a sessao e so entao age. Entre uma coisa e outra o cliente
+    // pode ter respondido, o atendente pode ter assumido, ou a conversa pode ter
+    // sido fechada. Reconferimos AGORA -- disparar o timeout em cima de uma
+    // conversa que ja andou seria mandar "nao entendemos sua demanda" para
+    // alguem que acabou de ser atendido.
+    const agora = await this.deps.sessaoRepository.findByConversa(conversa.id);
+    if (!agora?.ativo || agora.aguardando !== sessao.aguardando) return null;
+    if (new Date(agora.atualizadoEm).getTime() !== new Date(sessao.atualizadoEm).getTime()) return null;
+    const convAgora = await this.deps.conversaRepository.findById(conversa.id);
+    if (!convAgora || convAgora.statusAtendimento !== "pendente") return null;
+    if (convAgora.atendenteId) return null;
+
+    const ctx = { conversa: convAgora, telefone: sessao.telefone, instanciaId, instanceName };
     const texto = cfg.mensagem ? this.interpolar(cfg.mensagem, ctx) : null;
 
-    logger.info("Sessao encerrada por inatividade", {
+    logger.info("Etapa encerrada: cliente nao respondeu ao bot", {
       conversaId: conversa.id,
       minutos: cfg.minutos,
-      encerrar: cfg.encerrar,
+      acao: cfg.acao,
+      aguardava: sessao.aguardando,
     });
 
-    if (cfg.encerrar) return this.encerrarAtendimento(ctx, texto);
+    // "encerrar" fecha a OS -- e o que combina com "abra um chamado novamente":
+    // a proxima mensagem do cliente abre um atendimento novo.
+    if (cfg.acao === "encerrar") return this.encerrarAtendimento(ctx, texto);
 
     if (texto) await this.enviarBot(conversa.id, sessao.telefone, texto, instanceName);
-    return this.transferirParaHumano(ctx, { motivo: "inatividade" });
+    return this.transferirParaHumano(ctx, { motivo: "sem_resposta" });
   }
 
   sessaoExpirada(sessao) {
@@ -390,10 +411,24 @@ class ChatbotEngine {
     }
   }
 
+  /**
+   * Mensagem do BOT -- e ela se identifica como tal.
+   *
+   * `origem: "bot"` ja separava do cliente no banco, mas a API entregava tudo
+   * como "equipe" e a tela nao tinha como saber que aquilo era automacao. O
+   * `metadata.automacao` deixa a marca explicita e persistida: e por ela que a
+   * Central sabe que NAO deve tocar o som de mensagem nova nem contar como
+   * atividade do cliente quando o proprio bot pede a avaliacao.
+   */
   async enviarBot(conversaId, telefone, texto, instanceName) {
-    const msg = await this.deps.conversaRepository.addMensagem(conversaId, "bot", texto, null, null, {
-      status: "enviando",
-    });
+    const msg = await this.deps.conversaRepository.addMensagem(
+      conversaId,
+      "bot",
+      texto,
+      { automacao: true },
+      null,
+      { status: "enviando" }
+    );
     try {
       const r = await this.deps.evolutionApi.sendText(
         telefone,
@@ -658,6 +693,7 @@ class ChatbotEngine {
   // ------------------------------------------------------------ handoff ---
 
   async transferirParaHumano(
+    // eslint-disable-next-line no-unused-vars
     ctx,
     // `rotuloOpcao`: o texto da opcao que o cliente escolheu no menu ("1,tecnico,
     // suporte tecnico"). E o sinal mais confiavel do setor -- no menu o cliente
@@ -700,7 +736,10 @@ class ChatbotEngine {
       passoAtualId: null,
       aguardando: AGUARDANDO.HUMANO,
       ativo: true,
-      contexto: {},
+      // `fluxoOrigemId` fica guardado porque `fluxoAtualId` e zerado aqui (o bot
+      // parou de conduzir). Sem essa pista, a varredura nao saberia de QUAL
+      // fluxo vem a regra de espera na fila -- nem se ele esta pausado.
+      contexto: { fluxoOrigemId: ctx.fluxo?.id || null },
     });
 
     await this._emitirConversa(conversa.id);
@@ -1047,6 +1086,50 @@ class ChatbotEngine {
     }
     await this.enviarBot(conversa.id, telefone, cfg.mensagemAgradecimento, instanceName);
     return this.finalizarPesquisa(ctx, sessao);
+  }
+
+  /**
+   * ESPERA NA FILA DE PENDENTES -- o outro relogio, e nao o mesmo.
+   *
+   * Aqui NAO ha pergunta pendente: a conversa foi para a fila e nenhum atendente
+   * assumiu. Quem espera atendimento nao "deixou de responder", entao receber
+   * "nao entendemos a sua demanda" seria errado -- por isso os dois tempos vivem
+   * em blocos separados do fluxo e em caminhos separados aqui.
+   *
+   * Chamado pela varredura do servidor. Devolve true quando avisou.
+   */
+  async aplicarEsperaFila(conversa, fluxo, { instanceName } = {}) {
+    if (!fluxo?.ativo) return false; // fluxo pausado = sem automacao
+    const cfg = paramsTempos(fluxo).filaPendentes;
+    if (!cfg.ativo) return false;
+
+    // So faz sentido para quem esta MESMO esperando um humano.
+    if (conversa.statusAtendimento !== "pendente" || conversa.atendenteId) return false;
+
+    const os = (conversa.atendimentos || []).find((a) => a.id === conversa.atendimentoAtualId);
+    if (!os) return false;
+    // IDEMPOTENCIA: a marca vive no banco, entao nem a varredura de um minuto
+    // depois nem um restart do servidor mandam a mensagem de novo.
+    if (os.avisoEsperaEm && !cfg.repetir) return false;
+
+    // O relogio conta desde que a conversa ENTROU na fila (a abertura da OS),
+    // nao desde a ultima mensagem: o cliente pode ter mandado varias e continuar
+    // esperando o mesmo tanto.
+    const desde = new Date(os.abertoEm || conversa.criadoEm).getTime();
+    const ultimoAviso = os.avisoEsperaEm ? new Date(os.avisoEsperaEm).getTime() : null;
+    const base = cfg.repetir && ultimoAviso ? ultimoAviso : desde;
+    if (Date.now() - base < cfg.minutos * 60 * 1000) return false;
+
+    const texto = this.interpolar(cfg.mensagem, { conversa });
+    await this.enviarBot(conversa.id, conversa.telefone, texto, instanceName);
+    await this.deps.conversaRepository.atualizarAtendimento(os.id, { avisoEsperaEm: new Date() });
+
+    logger.info("Aviso de espera na fila enviado", {
+      conversaId: conversa.id,
+      minutos: cfg.minutos,
+    });
+    await this._emitirConversa(conversa.id);
+    return true;
   }
 
   /** A sessao esta parada esperando a nota (ou o comentario) do cliente? */
@@ -1935,7 +2018,29 @@ class ChatbotEngine {
       // "encerrar" nao recebe a mensagem de despedida que o fluxo definiu.
       // O pedido explicito de atendente continua atropelando o fluxo.
       const noMenuDoFluxo = sessao?.ativo && sessao.aguardando === AGUARDANDO.OPCAO;
-      const comando = noMenuDoFluxo && comandoBruto !== "atendente" ? null : comandoBruto;
+
+      // ETAPA OBRIGATORIA NAO SE PULA POR ACIDENTE.
+      //
+      // "atendente", "sair" e "menu" sao atalhos do motor que atropelam o
+      // fluxo. Isso e util (quem pede uma pessoa deve conseguir uma pessoa),
+      // mas e uma forma de sair de uma etapa obrigatoria -- entao QUEM DECIDE e
+      // o fluxo, nao o codigo: configuracoesGlobais.permitirComandosGlobais.
+      // Desligado, o cliente que escreve "quero falar com alguem" enquanto o bot
+      // espera o CNPJ recebe o fallback e continua na etapa.
+      const emEtapaObrigatoria =
+        sessao?.ativo &&
+        [AGUARDANDO.CNPJ, AGUARDANDO.CNPJ_CONFIRMA, AGUARDANDO.OPCAO].includes(sessao.aguardando);
+      let permiteAtalhos = true;
+      if (emEtapaObrigatoria && sessao.fluxoAtualId) {
+        const fluxoAtual = await this.deps.fluxoRepository.findById(sessao.fluxoAtualId);
+        permiteAtalhos = paramsTempos(fluxoAtual).permitirComandosGlobais;
+      }
+
+      const comando = !permiteAtalhos
+        ? null
+        : noMenuDoFluxo && comandoBruto !== "atendente"
+          ? null
+          : comandoBruto;
 
       if (comando === "atendente") {
         return await this.transferirParaHumano(ctx, { motivo: "pedido_do_cliente" });
