@@ -165,7 +165,33 @@ class WhatsAppService {
       body?.data?.key ||
       body?.key
     ) {
-      return this._processarMensagem(body, instance);
+      // QUANTO DEMOROU, DE VERDADE.
+      //
+      // "a mensagem demora para chegar" pode ser o webhook, o download da
+      // midia, o fluxo do bot, o envio da resposta ou a rede da Evolution --
+      // camadas diferentes, correcoes diferentes. Sem numero, a conversa vira
+      // troca de palpites.
+      //
+      // `atrasoWhatsApp` e o tempo entre o WhatsApp carimbar a mensagem e ela
+      // chegar aqui: se ELE for grande, o gargalo esta antes do nosso codigo
+      // (fila da Evolution, rede) e nada que eu otimize aqui dentro resolve.
+      const t0 = Date.now();
+      const carimbo = Number(body?.data?.messageTimestamp || body?.messageTimestamp) || null;
+      const r = await this._processarMensagem(body, instance);
+      const ms = Date.now() - t0;
+      // So registra o que interessa: processamento lento, ou atraso de chegada.
+      const atrasoWhatsApp = carimbo ? Date.now() - carimbo * 1000 : null;
+      if (ms > 500 || (atrasoWhatsApp != null && atrasoWhatsApp > 5000)) {
+        logger.warn("Recebimento lento", {
+          processamentoMs: ms,
+          atrasoWhatsAppMs: atrasoWhatsApp,
+          motivo: r?.motivo || null,
+          conversaId: r?.conversaId || null,
+        });
+      } else {
+        logger.debug("Recebimento", { processamentoMs: ms, atrasoWhatsAppMs: atrasoWhatsApp });
+      }
+      return r;
     }
 
     logger.debug("Webhook ignorado", { event, instance });

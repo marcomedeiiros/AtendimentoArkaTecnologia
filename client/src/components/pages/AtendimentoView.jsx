@@ -905,17 +905,33 @@ function SkeletonCard() {
   );
 }
 
-// Risquinhos de entrega, como no WhatsApp:
-//   relogio = saindo | 1 risco = enviada | 2 riscos = entregue | 2 azuis = lida
+// Risquinhos de entrega:
+//   2 riscos = saiu daqui | 2 azuis = lida | ⚠ = falhou
+//
+// SEM RELÓGIO, por decisão do operador. O estado "enviando" (a mensagem está
+// gravada e a caminho da Evolution) e "enviada" (o WhatsApp confirmou o
+// recebimento no servidor dele) passam a mostrar os dois riscos, junto com
+// "entregue".
+//
+// O que isso troca: os dois riscos deixam de significar "chegou no celular do
+// cliente" e passam a significar "saiu daqui". Não dá mais para distinguir, só
+// pelo ícone, uma mensagem entregue de uma ainda a caminho.
+//
+// O que NÃO muda: a FALHA continua visível e distinta (⚠ vermelho). Se a
+// mensagem não sair, o ícone diz isso -- é a única informação que o operador
+// realmente precisa agir sobre, e ela não foi otimizada para sumir.
+//
+// O status real continua no banco e no `title` de cada ícone: passar o mouse
+// mostra o estado verdadeiro daquela mensagem.
 function StatusMensagem({ status, escuro }) {
   if (!status) return null;
   const base = escuro ? 'text-slate-400' : 'text-slate-900/70';
 
-  if (status === 'enviando') return <Clock size={12} className={base} title="Enviando" />;
   if (status === 'erro') return <AlertCircle size={12} className="text-falha-400" title="Falha no envio" />;
-  if (status === 'enviada') return <Check size={13} className={base} title="Enviada" />;
-  if (status === 'entregue') return <CheckCheck size={13} className={base} title="Entregue" />;
   if (status === 'lida') return <CheckCheck size={13} className="text-lida-400" title="Lida" />;
+  if (status === 'enviando') return <CheckCheck size={13} className={base} title="Enviando" />;
+  if (status === 'enviada') return <CheckCheck size={13} className={base} title="Enviada" />;
+  if (status === 'entregue') return <CheckCheck size={13} className={base} title="Entregue" />;
   return null;
 }
 
