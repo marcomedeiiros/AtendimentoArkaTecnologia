@@ -210,6 +210,36 @@ class ConversaRepository {
   }
 
   /**
+   * A CONVERSA PARA O MOTOR DO BOT -- sem o historico.
+   *
+   * Esta e a PRIMEIRA consulta de toda mensagem que chega, e ela carregava o
+   * fio inteiro pelo `INCLUDE_CONVERSA`. Medido em producao: 1,85s de
+   * processamento para uma mensagem em que o bot nem roda o fluxo (a conversa
+   * ja estava com um atendente). O custo de RECEBER crescia com o tamanho do
+   * historico -- e mensagens antigas com midia inline deixam essas linhas
+   * enormes.
+   *
+   * O motor nao le `conversa.mensagens` em passo nenhum (conferido: nenhuma
+   * ocorrencia no engine nem na varredura de inatividade). O que ele usa sao os
+   * escalares -- telefone, status, setor, CNPJ, responsavel -- mais a sessao,
+   * que diz em que ponto do fluxo o cliente esta.
+   *
+   * `atendimentos` vem junto porque o ciclo (OS) decide se a proxima mensagem
+   * abre um chamado novo; sao poucas linhas e nao carregam mensagens.
+   */
+  findByTelefoneParaMotor(instanciaId, telefone) {
+    return prisma.conversa.findFirst({
+      where: { instanciaId, telefone },
+      include: {
+        sessao: true,
+        atendente: { select: { id: true, nome: true, cargo: true } },
+        atendimentos: { orderBy: { abertoEm: "desc" } },
+      },
+      orderBy: { criadoEm: "asc" },
+    });
+  }
+
+  /**
    * Cria o fio do cliente ja com o primeiro Atendimento (OS) aberto.
    *
    * Tudo numa transacao: uma conversa sem atendimento atual ficaria sem numero

@@ -1974,9 +1974,23 @@ class ChatbotEngine {
       (sessaoAberta.aguardando === AGUARDANDO.AVALIACAO_NOTA ||
         sessaoAberta.aguardando === AGUARDANDO.AVALIACAO_COMENTARIO);
     if (respondendoPesquisa) {
-      conversa = await this.deps.conversaRepository.findById(sessaoAberta.conversaId);
+      // Tambem sem o historico: quem responde a nota da pesquisa nao precisa
+      // que o fio inteiro seja carregado para o "5" ser gravado.
+      const repo = this.deps.conversaRepository;
+      conversa = repo.findByIdParaEvento
+        ? await repo.findByIdParaEvento(sessaoAberta.conversaId)
+        : await repo.findById(sessaoAberta.conversaId);
     }
-    if (!conversa) conversa = await this.deps.conversaRepository.findByTelefone(instanciaId, telefone);
+    // Leitura SEM o historico: e a primeira consulta de toda mensagem que
+    // chega, e carregar o fio inteiro aqui era o que fazia o RECEBIMENTO custar
+    // proporcionalmente ao tamanho da conversa (1,85s medido em producao).
+    // O motor nao le `conversa.mensagens` -- ver findByTelefoneParaMotor.
+    if (!conversa) {
+      const repo = this.deps.conversaRepository;
+      conversa = repo.findByTelefoneParaMotor
+        ? await repo.findByTelefoneParaMotor(instanciaId, telefone)
+        : await repo.findByTelefone(instanciaId, telefone); // simulador/stubs
+    }
     if (!conversa) {
       conversa = await this.deps.conversaRepository.create({
         instanciaId,

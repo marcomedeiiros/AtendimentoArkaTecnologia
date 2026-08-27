@@ -53,6 +53,8 @@ function criarAmbiente({ fluxo, nomeCliente, horario, filas, agora, pesquisaAtiv
       // percorre em toda mensagem.
       findByIdParaEvento: async () => estado.conversa,
       findByTelefone: async () => estado.conversa,
+      // Em producao esta e a leitura SEM historico do caminho de recebimento.
+      findByTelefoneParaMotor: async () => estado.conversa,
       create: async () => estado.conversa,
       existeMensagemWa: async () => false,
       addMensagem: async (_id, origem, texto) => {
