@@ -182,53 +182,33 @@ async function preencherEmpresa() {
 }
 
 /**
- * SETOR das conversas/OS que ficaram como "Geral" sem terem sido triadas.
+ * NAO EXISTE MAIS `preencherSetor()` -- e ele nao pode voltar.
  *
- * O fluxo transferia para uma FILA numerica e, sem o mapa fila->setor
- * preenchido, o setor nunca era gravado: tudo virava "Geral" e a aba de
- * Feedbacks classificava todo atendimento como "Atendimento Geral". A deducao
- * agora acontece na hora da transferencia (setorDetectado.helper); aqui ela e
- * aplicada UMA VEZ ao historico que ficou para tras.
+ * Havia aqui um passo que varria todas as conversas "Geral", ADIVINHAVA o setor
+ * pelas palavras do cliente ("boleto" -> Financeiro) e gravava o palpite na
+ * conversa e na OS. Dois problemas, um pior que o outro:
  *
- * Conservador de proposito: so mexe em quem esta "Geral". Uma conversa que
- * alguem triou a mao para Tecnico/Financeiro/Comercial nao e tocada.
+ *  1. Contradizia a regra do sistema: setor so se define quando o CLIENTE
+ *     escolhe uma opcao do menu (ver setor.helper.resolverSetorDeclarado). O
+ *     backfill carimbava "Tecnico" em quem nunca escolheu nada.
+ *  2. Rodava no ENTRYPOINT, ou seja, a CADA subida do container. Nao era uma
+ *     migracao unica: qualquer conversa que voltasse a "Geral" era reclassificada
+ *     no deploy seguinte. Corrigir o setor a mao nao adiantava -- o proximo
+ *     `docker compose up` desfazia.
+ *
+ * O helper que ele importava (`setorDetectado.helper`) foi apagado junto. Este
+ * comentario fica no lugar porque um `require` de arquivo inexistente aqui
+ * derruba o entrypoint pelo `set -e` -- e um passo de boot que morre e um 502
+ * no painel inteiro, nao um aviso.
  */
-async function preencherSetor() {
-  const { detectarSetor } = require("../src/shared/helpers/setorDetectado.helper");
-
-  const alvos = await prisma.conversa.findMany({
-    where: { OR: [{ setor: null }, { setor: "Geral" }] },
-    include: { mensagens: { orderBy: { criadoEm: "asc" } } },
-  });
-
-  let ajustadas = 0;
-  for (const c of alvos) {
-    const setor = detectarSetor(c);
-    if (!setor || setor === "Geral") continue;
-    await prisma.conversa.update({
-      where: { id: c.id },
-      data: { setor, versao: { increment: 1 } },
-    });
-    // As OS herdam o mesmo setor -- e delas que o Feedback tira a categoria.
-    await prisma.atendimento.updateMany({
-      where: { conversaId: c.id, OR: [{ setor: null }, { setor: "Geral" }] },
-      data: { setor },
-    });
-    ajustadas++;
-  }
-  return ajustadas;
-}
-
 async function main() {
   const { fios, fundidas } = await fundirDuplicatas();
   const criadas = await criarAtendimentosFaltantes();
   const empresas = await preencherEmpresa();
-  const setores = await preencherSetor();
   console.log(
     `[arka] backfill de atendimentos: ${fios} cliente(s) consolidado(s), ` +
       `${fundidas} conversa(s) duplicada(s) fundida(s), ` +
-      `${criadas} OS criada(s), ${empresas} razao(oes) social(is) preenchida(s), ` +
-      `${setores} setor(es) classificado(s).`
+      `${criadas} OS criada(s), ${empresas} razao(oes) social(is) preenchida(s).`
   );
 }
 

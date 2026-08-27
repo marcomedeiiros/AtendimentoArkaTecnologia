@@ -17,7 +17,7 @@ const { comLock } = require("../../shared/helpers/lock.helper");
 const { paramsCnpj, paramsAvaliacao, paramsTempos } = require("../fluxos/fluxo.automacao");
 // Setor do atendimento: so por DECLARACAO (opcao escolhida no menu, mapa de
 // filas, ou o que a conversa ja tem). Nunca deduzido do texto -- ver setor.helper.
-const { resolverSetorDeclarado } = require("../../shared/helpers/setor.helper");
+const { resolverSetorDeclarado, SETOR_PADRAO } = require("../../shared/helpers/setor.helper");
 const { mapConversa } = require("../../shared/helpers/mapper.helper");
 const configuracaoService = require("../configuracoes/configuracao.service");
 const n8nClient = require("../../infrastructure/external/n8n.client");
@@ -1925,8 +1925,18 @@ class ChatbotEngine {
       // A resposta da PESQUISA DE SATISFACAO e a excecao: ela pertence ao ciclo
       // que acabou de fechar, entao nao abre atendimento nenhum.
       if (!respondendoPesquisa && conversa.statusAtendimento === "fechada") {
+        // CHAMADO NOVO COMECA SEM SETOR -- a triagem e do CICLO, nao do fio.
+        //
+        // O fio e permanente e o setor mora nele, entao o ciclo novo herdava o
+        // setor do anterior: quem foi ao Técnico em agosto voltava em setembro
+        // ja carimbado como Técnico, sem ter escolhido nada -- e a badge dizia
+        // "SETOR TÉCNICO" antes de o menu sequer ser respondido. Era o mesmo
+        // sintoma da deducao por palavra-chave, por outro caminho.
+        //
+        // O cliente responde o menu de novo a cada chamado; e essa resposta que
+        // define o setor deste ciclo (ver aplicarOpcao). Ate la, "Geral".
         const r = await this.deps.conversaRepository.garantirAtendimentoAberto(conversa.id, {
-          setor: conversa.setor,
+          setor: SETOR_PADRAO,
         });
         await this.deps.conversaRepository.update(conversa.id, {
           statusAtendimento: "pendente",
@@ -1935,11 +1945,16 @@ class ChatbotEngine {
           // Ciclo novo comeca sem responsavel: quem assumir o anterior nao herda
           // este de graca (`ultimoAtendenteNome` guarda o historico).
           atendenteId: null,
+          // Sem triagem ate o cliente escolher no menu deste chamado.
+          setor: SETOR_PADRAO,
           avaliacao: null,
           feedback: null,
           lido: false,
         });
-        logger.info("Novo atendimento aberto no fio existente", {
+        // O objeto em memoria segue o resto do processamento desta mensagem: sem
+        // isto, um handoff no mesmo turno leria o setor antigo e o regravaria.
+        conversa.setor = SETOR_PADRAO;
+        logger.info("Novo atendimento aberto no fio existente (sem setor)", {
           conversaId: conversa.id,
           numeroOS: r?.atendimento?.numeroOS ?? null,
         });

@@ -22,8 +22,30 @@ npx prisma db push --skip-generate --accept-data-loss
 # criar, e o passo custa uma consulta. Precisa vir DEPOIS do db push (usa a
 # tabela `atendimentos`) e antes da API subir, para nenhuma requisicao pegar o
 # banco no meio da consolidacao.
+#
+# NAO E FATAL, e isso foi aprendido do jeito ruim.
+#
+# Com o `set -e` acima, este passo derrubava o container inteiro: em 2026-08-27
+# um `require` de arquivo que tinha sido apagado fez o script sair com 1, o
+# entrypoint morreu, `restart: unless-stopped` reergueu, e o painel ficou em
+# 502 -- crash-loop por causa de uma CONSOLIDACAO DE HISTORICO, que a API nem
+# precisa para atender.
+#
+# O `if` desliga o errexit so para esta chamada (e pega inclusive falha de
+# carregamento do modulo, que acontece antes de qualquer try/catch do script).
+# O aviso fica gritante no log: o passo continua tendo que ser olhado, ele so
+# nao tem mais poder de tirar o sistema do ar.
+#
+# `db push` e `seed` seguem FATAIS de proposito: schema fora de sincronia ou
+# sem usuario administrador significam uma API que sobe quebrada.
 echo "[arka] consolidando conversas e atendimentos (OS)"
-node prisma/backfill-atendimentos.js
+if ! node prisma/backfill-atendimentos.js; then
+  echo "[arka] ================================================================"
+  echo "[arka] AVISO: a consolidacao de historico FALHOU (veja o erro acima)."
+  echo "[arka] A API vai subir mesmo assim -- ela nao depende deste passo."
+  echo "[arka] Conversas duplicadas ou sem OS podem aparecer ate ser corrigido."
+  echo "[arka] ================================================================"
+fi
 
 echo "[arka] seed (instancia + usuario administrador)"
 node prisma/seed.js
