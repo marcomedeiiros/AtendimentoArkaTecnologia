@@ -1,0 +1,35 @@
+{
+  "name": "Arka Tecnologia Central de Atendimento",
+  "short_name": "Arka Chat",
+  "description": "Painel de atendimento ao cliente, validação de CNPJ de parceiros e automação via WhatsApp da Arka Tecnologia.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0B141A",
+  "theme_color": "#0B141A",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/arka_tecnologia_logo-removebg-preview.png",
+      "sizes": "200x200",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icone-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -7,7 +7,7 @@
  * corpo), então ninguém edita a conta de outro por aqui.
  */
 import { useState } from 'react';
-import { User, PenLine, KeyRound, Loader2, Save, ShieldCheck, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { User, PenLine, KeyRound, Loader2, Save, ShieldCheck, ArrowLeft, Eye, EyeOff, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AuthAPI } from '../services/api';
@@ -80,6 +80,33 @@ export default function PerfilPage() {
       setMsgPerfil({ tipo: 'erro', texto: err.message });
     } finally {
       setSalvandoPerfil(false);
+    }
+  }
+
+  const [saindoDeTodos, setSaindoDeTodos] = useState(false);
+  const [msgSessoes, setMsgSessoes] = useState(null);
+
+  /**
+   * A invalidação acontece no SERVIDOR. Esta função não "desloga" ninguém: ela
+   * pede, e o servidor revoga todas as sessões da conta. Só depois o
+   * `AuthContext` manda a pessoa para o login se a chamada falhar, nada é
+   * limpo, porque fingir que saiu enquanto a sessão segue viva no servidor
+   * seria pior do que mostrar o erro.
+   */
+  async function sairDeTodos() {
+    setMsgSessoes(null);
+    setSaindoDeTodos(true);
+    try {
+      const r = await AuthAPI.sairDeTodos();
+      setMsgSessoes({
+        tipo: 'ok',
+        texto: `${r?.sessoesEncerradas ?? 0} sessão(ões) encerrada(s). Entrando novamente...`,
+      });
+      // Pequena pausa só para a mensagem ser lida antes do redirecionamento.
+      setTimeout(() => navigate('/login', { replace: true }), 900);
+    } catch (err) {
+      setMsgSessoes({ tipo: 'erro', texto: err.message });
+      setSaindoDeTodos(false);
     }
   }
 
@@ -210,6 +237,35 @@ export default function PerfilPage() {
             </button>
           </div>
         </form>
+
+        {/* ── SAIR DE TODOS OS DISPOSITIVOS ───────────────────────────────
+            Quem invalida é o servidor: ele revoga todas as sessões da conta,
+            e como o token de acesso carrega o id da sessão, os que já estão
+            em circulação param de valer no mesmo instante inclusive em
+            outra máquina. Limpar este navegador é só consequência. */}
+        <section className="glass-panel space-y-3 rounded-2xl border border-linha p-5">
+          <h2 className="flex items-center gap-2 text-sm font-bold text-white">
+            <ShieldCheck size={15} className="text-acao-200" /> Sessões ativas
+          </h2>
+          <p className="text-xs leading-relaxed text-texto-suave">
+            Encerra o acesso em <strong className="text-texto">todos os aparelhos</strong>, inclusive
+            neste. Use se desconfiar que alguém entrou na sua conta, ou depois de usar um computador
+            que não é seu. Você vai precisar entrar de novo.
+          </p>
+          <Aviso msg={msgSessoes} />
+          <div className="flex justify-end">
+            <button
+              type="button"
+              disabled={saindoDeTodos}
+              onClick={sairDeTodos}
+              className="flex items-center gap-1.5 rounded-xl border border-falha/30 bg-falha/10 px-4 py-2.5 text-xs font-bold text-falha-400 transition-colors hover:bg-falha/15 disabled:opacity-60"
+            >
+              {saindoDeTodos
+                ? <><Loader2 size={14} className="animate-spin" /> Encerrando...</>
+                : <><LogOut size={14} /> Sair de todos os dispositivos</>}
+            </button>
+          </div>
+        </section>
       </div>
     </div>
   );

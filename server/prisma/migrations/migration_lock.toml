@@ -1,0 +1,4 @@
+# Este arquivo é gerado pelo Prisma e não deve ser editado à mão.
+# Ele registra o provider com que as migrations foram criadas trocar de banco
+# sem regenerar as migrations é justamente o que ele impede.
+provider = "sqlite"
