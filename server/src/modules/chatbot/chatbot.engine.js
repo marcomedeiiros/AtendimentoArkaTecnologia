@@ -17,7 +17,11 @@ const { comLock } = require("../../shared/helpers/lock.helper");
 const { paramsCnpj, paramsAvaliacao, paramsTempos } = require("../fluxos/fluxo.automacao");
 // Setor do atendimento: so por DECLARACAO (opcao escolhida no menu, mapa de
 // filas, ou o que a conversa ja tem). Nunca deduzido do texto -- ver setor.helper.
-const { resolverSetorDeclarado, SETOR_PADRAO } = require("../../shared/helpers/setor.helper");
+const {
+  resolverSetorDeclarado,
+  setorDaOpcaoEscolhida,
+  SETOR_PADRAO,
+} = require("../../shared/helpers/setor.helper");
 const { mapConversa } = require("../../shared/helpers/mapper.helper");
 const configuracaoService = require("../configuracoes/configuracao.service");
 const n8nClient = require("../../infrastructure/external/n8n.client");
@@ -1593,8 +1597,14 @@ class ChatbotEngine {
     // e persistida no instante em que acontece -- e como Conversa, OS e
     // Feedback leem esse mesmo campo, as tres telas concordam sem F5.
     // ---------------------------------------------------------------------
-    if (opcao.setor) {
-      const setorEscolhido = resolverSetorDeclarado({ setorExplicito: opcao.setor });
+    // `opcao.setor` (JSON do fluxo) e o caminho oficial. Quando ele nao existe
+    // -- fluxo montado antes do campo, ou importado do editor de origem, que
+    // nao o conhece -- o setor sai do ROTULO DA OPCAO QUE O CLIENTE ESCOLHEU
+    // ("1 - Setor Tecnico"). Continua sendo escolha do cliente, nao palpite
+    // sobre o texto dele; ver setor.helper.setorDaOpcaoEscolhida.
+    const setorDaEscolha = opcao.setor || setorDaOpcaoEscolhida(opcao);
+    if (setorDaEscolha) {
+      const setorEscolhido = resolverSetorDeclarado({ setorExplicito: setorDaEscolha });
       if (conversa.setor !== setorEscolhido) {
         await this.deps.conversaRepository.update(conversa.id, { setor: setorEscolhido });
         await this.deps.conversaRepository.atualizarAtendimentoAtual(conversa.id, {

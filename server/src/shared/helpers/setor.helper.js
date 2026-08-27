@@ -74,6 +74,56 @@ function resolverSetorDeclarado({ setorExplicito, setorDaFila, setorAtual } = {}
   return declarado ? normalizarSetor(declarado) : SETOR_PADRAO;
 }
 
+/**
+ * O SETOR QUE A OPCAO ESCOLHIDA REPRESENTA.
+ *
+ * ISTO NAO E A ADIVINHACAO QUE FOI REMOVIDA. A diferenca e o que se le:
+ *
+ *   - o que foi removido lia o TEXTO LIVRE DO CLIENTE ("meu computador travou")
+ *     e chutava um setor -- por isso conversa nova nascia Tecnico sem ninguem
+ *     ter escolhido nada;
+ *   - isto le o ROTULO DA OPCAO QUE O CLIENTE SELECIONOU no menu. "1 - Setor
+ *     Tecnico" declara o setor no proprio nome. Nao ha palpite: houve escolha.
+ *
+ * Por que existe: o caminho oficial e `opcao.setor`, gravado no JSON do fluxo.
+ * So que o fluxo vive no BANCO de cada instalacao, e um fluxo montado antes
+ * desse campo existir (ou importado do editor de origem, que nao o conhece) nao
+ * o tem -- e ai o cliente escolhia "1" e o motor nao tinha o que gravar. Sem
+ * este encaixe, a regra dependeria de alguem lembrar de rodar uma migracao em
+ * cada banco, e "funciona depois que voce rodar um script" nao e uma regra que
+ * funciona.
+ *
+ * CASAMENTO EXATO, e contra a lista canonica de setores. Verificado contra o
+ * fluxo real: as palavras de setor aparecem SO nas opcoes do menu principal --
+ * os submenus usam "contrato", "avulso", "produtos", "voltar", "sim"/"nao".
+ * Substring casaria "adm" dentro de "administrativo" e coisas piores, entao a
+ * comparacao e por token inteiro.
+ */
+const PALAVRAS_DE_SETOR = {
+  "Técnico": ["tecnico", "setor tecnico", "suporte tecnico"],
+  "Comercial": ["comercial", "vendas"],
+  "Financeiro": ["financeiro", "adm", "administrativo", "faturamento", "adm/financeiro"],
+};
+
+function setorDaOpcaoEscolhida(opcao) {
+  if (!opcao) return null;
+  const semAcento = (s) =>
+    String(s || "").toLowerCase().trim().normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+  // `palavrasChave` e a forma estruturada; `rotulo` ("1,tecnico,setor tecnico")
+  // e o mesmo conteudo em texto, para fluxos que so tenham ele.
+  const tokens = [
+    ...(Array.isArray(opcao.palavrasChave) ? opcao.palavrasChave : []),
+    ...String(opcao.rotulo || "").split(","),
+  ].map(semAcento).filter(Boolean);
+
+  if (!tokens.length) return null;
+  for (const [setor, palavras] of Object.entries(PALAVRAS_DE_SETOR)) {
+    if (palavras.some((p) => tokens.includes(p))) return setor;
+  }
+  return null;
+}
+
 module.exports = {
   SETORES,
   SETOR_PADRAO,
@@ -81,4 +131,5 @@ module.exports = {
   normalizarSetor,
   podeAcessarSetor,
   resolverSetorDeclarado,
+  setorDaOpcaoEscolhida,
 };
