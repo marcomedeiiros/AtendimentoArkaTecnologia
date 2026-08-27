@@ -37,6 +37,14 @@ function mapMensagem(m) {
     // Mensagem gerada por uma automacao do fluxo (pesquisa de satisfacao, aviso
     // de espera, timeout). Marcada na gravacao, nao deduzida na tela.
     automacao: m.origem === "bot" || !!meta.automacao,
+    // Resposta do cliente a PESQUISA DE SATISFACAO (a nota, ou o comentario).
+    //
+    // Continua sendo mensagem do cliente para todo o resto -- aparece no chat,
+    // entra no historico, e exportada. O que esta marca diz e uma coisa so: ela
+    // NAO e um pedido de atendimento, entao a Central nao toca o som nem
+    // notifica por ela. Gravada pelo motor, que e quem sabe em que estado a
+    // sessao estava; a tela nao teria como adivinhar olhando um "5".
+    respostaPesquisa: !!meta.respostaPesquisa,
     // A qual OS esta mensagem pertence: e o que permite ao painel recortar o
     // historico por atendimento sem quebrar o fio unico da conversa.
     atendimentoId: m.atendimentoId || null,

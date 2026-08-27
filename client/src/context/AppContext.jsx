@@ -299,7 +299,18 @@ export function AppProvider({ children }) {
     // lado da bolha: a pesquisa de satisfação e os avisos automáticos saem do
     // BOT e não podem soar como se o cliente tivesse escrito. Antes isso
     // dependia de `de !== 'cliente'` funcionar por acaso -- agora é explícito.
-    const ehDoCliente = (m) => (m.origem ? m.origem === 'cliente' : m.de === 'cliente');
+    // A RESPOSTA DA PESQUISA NÃO CHAMA NINGUÉM.
+    //
+    // O "5" que o cliente manda para a pesquisa de satisfação é uma mensagem do
+    // cliente como outra qualquer no banco, e tocava o som chamando o atendente
+    // para uma conversa que acabou de fechar. Quem marca é o servidor
+    // (`respostaPesquisa`), porque só ele sabe em que estado a sessão estava --
+    // pela tela, "5" é indistinguível de qualquer outra mensagem.
+    //
+    // Se o cliente escrever DEPOIS de avaliar, aquela mensagem não tem a marca:
+    // abre atendimento novo, entra em Pendentes e avisa normalmente.
+    const ehDoCliente = (m) =>
+      !m.respostaPesquisa && (m.origem ? m.origem === 'cliente' : m.de === 'cliente');
     const counts = {};
     conversas.forEach(c => {
       counts[c.id] = (c.mensagens || []).filter(ehDoCliente).length;

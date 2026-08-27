@@ -1729,10 +1729,21 @@ function PainelChat({
       setEnviandoMidia(false);
       return;
     }
-    // Mídias (imagem, vídeo, áudio, documento) não recebem assinatura automática.
-    // Áudio nunca possui legenda. Para imagens/vídeos/documentos, envia apenas a legenda digitada.
+    // ASSINATURA TAMBÉM NA LEGENDA (imagem, vídeo, documento).
+    //
+    // Antes só o texto puro era assinado, então a mesma equipe aparecia
+    // identificada numa mensagem e anônima na seguinte, só porque a segunda
+    // tinha uma foto junto. Para o cliente é a mesma conversa e a mesma pessoa.
+    //
+    // Vale para a mensagem rápida com anexo pelo mesmo caminho: o texto dela
+    // vira legenda aqui. A mensagem rápida SEM anexo já era assinada, porque o
+    // texto vai para o campo e sai pelo envio normal.
+    //
+    // ÁUDIO continua fora, e não por esquecimento: áudio não tem legenda no
+    // WhatsApp (o servidor zera `caption` para áudio, em enviarMidia). Assinar
+    // ali só criaria uma legenda que ninguém vê.
     const ehAudio = anexo.tipo === 'audio';
-    const legenda = ehAudio ? '' : texto.trim();
+    const legenda = ehAudio ? '' : formatarComAssinatura(texto, assinar, assinaturaNome);
     const payload = {
       tipo: anexo.tipo,
       media,

@@ -382,7 +382,16 @@ class ChatbotEngine {
 
     // "encerrar" fecha a OS -- e o que combina com "abra um chamado novamente":
     // a proxima mensagem do cliente abre um atendimento novo.
-    if (cfg.acao === "encerrar") return this.encerrarAtendimento(ctx, texto);
+    //
+    // SEM PESQUISA DE SATISFACAO: este e o fechamento por ABANDONO. O cliente
+    // parou de responder ao BOT, ninguem o atendeu, e nao existe atendimento
+    // para ele avaliar.
+    if (cfg.acao === "encerrar") {
+      return this.encerrarAtendimento(ctx, texto, {
+        pesquisa: false,
+        motivo: "sem_resposta",
+      });
+    }
 
     if (texto) await this.enviarBot(conversa.id, sessao.telefone, texto, instanceName);
     return this.transferirParaHumano(ctx, { motivo: "sem_resposta" });
@@ -844,7 +853,13 @@ class ChatbotEngine {
   // Encerramento pedido pelo FLUXO (opcao com acao "encerrar"): diferente do
   // comando "sair", aqui a conversa e fechada de fato, com a mensagem de
   // despedida que o proprio fluxo definiu.
-  async encerrarAtendimento(ctx, mensagem) {
+  /**
+   * @param {object} [opcoes]
+   * @param {boolean} [opcoes.pesquisa=true] oferecer a pesquisa de satisfacao?
+   *   `false` para o fechamento por ABANDONO -- ver abaixo.
+   * @param {string} [opcoes.motivo="fluxo"]
+   */
+  async encerrarAtendimento(ctx, mensagem, { pesquisa = true, motivo = "fluxo" } = {}) {
     const { conversa, telefone, instanceName } = ctx;
 
     if (mensagem) {
@@ -855,10 +870,20 @@ class ChatbotEngine {
     // ela iniciar, a conversa ja fica marcada como fechada e a sessao segue viva
     // apenas para capturar a nota/comentario (ver continuarPesquisaSatisfacao).
     // Nao dispara se um no de avaliacao ja tiver perguntado (checa avaliacao).
-    const pesquisa = await this.iniciarPesquisaSatisfacao(ctx);
-    if (pesquisa) return pesquisa;
+    //
+    // QUEM ABANDONOU A CONVERSA NAO RECEBE PESQUISA.
+    //
+    // O cliente que sumiu no meio do menu nao foi atendido -- nao ha atendimento
+    // para avaliar. Perguntar "de 1 a 5, que nota voce da?" a quem parou de
+    // responder ha cinco minutos e mandar mensagem para um chat abandonado, e
+    // ainda contamina o CSAT com notas de quem nunca foi atendido (ou, mais
+    // provavel, com mais um silencio).
+    if (pesquisa) {
+      const iniciada = await this.iniciarPesquisaSatisfacao(ctx);
+      if (iniciada) return iniciada;
+    }
 
-    return this.fecharConversa(ctx, { motivo: "fluxo" });
+    return this.fecharConversa(ctx, { motivo });
   }
 
   // Fechamento efetivo: marca a conversa como fechada e desliga a sessao.
@@ -1994,11 +2019,25 @@ class ChatbotEngine {
         });
       }
 
+      // A NOTA DA PESQUISA NAO E "MENSAGEM NOVA" -- e por isso vai marcada.
+      //
+      // O "5" que o cliente responde a "de 1 a 5, que nota voce da?" e, no
+      // banco, uma mensagem do cliente como outra qualquer -- e a Central tocava
+      // o som e mostrava notificacao para ela, chamando o atendente para uma
+      // conversa que ACABOU de fechar e nao precisa de ninguem.
+      //
+      // A distincao nao da para fazer na tela (o texto e so um numero): quem
+      // sabe que aquilo e resposta de pesquisa e o servidor, que conhece o
+      // estado da sessao. Entao a marca e gravada aqui, junto da mensagem.
+      //
+      // Se o cliente escrever DEPOIS da avaliacao, essa proxima mensagem nao
+      // tem a marca, abre atendimento novo e avisa normalmente -- que e
+      // exatamente quando o atendente precisa saber.
       await this.deps.conversaRepository.addMensagem(
         conversa.id,
         "cliente",
         textoMsg,
-        metadata,
+        respondendoPesquisa ? { ...(metadata || {}), respostaPesquisa: true } : metadata,
         waMessageId
       );
       // Se a conversa ficou so com o numero (ex.: iniciada pelo atendente) ou com

@@ -3,8 +3,15 @@
  *
  * Defesa em profundidade:
  * 1. NUNCA duplica assinatura se o texto já possui o nome do operador no início, no meio ou no fim.
- * 2. Mídias (imagem, vídeo, áudio, documentos) NÃO levam assinatura automática.
- * 3. Normaliza quebras de linha e higieniza espaços.
+ * 2. Normaliza quebras de linha e higieniza espaços.
+ *
+ * ONDE SE APLICA: em tudo que o atendente ESCREVE -- mensagem de texto, primeira
+ * mensagem de uma conversa nova e a LEGENDA de imagem/vídeo/documento (o que
+ * cobre também a mensagem rápida com anexo, cujo texto vira legenda).
+ *
+ * A única exceção é o ÁUDIO, e não por esquecimento: áudio não tem legenda no
+ * WhatsApp, e o servidor zera `caption` para ele em `enviarMidia`. Assinar ali
+ * criaria um texto que ninguém veria.
  */
 
 export function formatarComAssinatura(texto, assinar, nome) {
