@@ -103,6 +103,10 @@ export function mesclarConversa(atual, recebida) {
     }
   }
 
+  // Status que chegou antes da sua mensagem (ver statusPendentes): agora que a
+  // mensagem está aqui, o risquinho é aplicado.
+  mensagens = aplicarPendentes(mensagens);
+
   return mensagens === recebida.mensagens ? recebida : { ...recebida, mensagens };
 }
 
@@ -120,7 +124,14 @@ export function mesclarConversa(atual, recebida) {
 export function aplicarStatusMensagem(conversa, { mensagemId, status, versao }) {
   if (!conversa || !Array.isArray(conversa.mensagens)) return conversa;
   const i = conversa.mensagens.findIndex(m => m.id === mensagemId);
-  if (i < 0 || conversa.mensagens[i].status === status) return conversa;
+  // Mensagem que a tela ainda não conhece: guarda o status para aplicar quando
+  // ela chegar. Ver `statusPendentes` -- sem isto o patch se perdia em silêncio
+  // e a bolha ficava presa no relógio até um F5.
+  if (i < 0) {
+    guardarStatusPendente(mensagemId, status);
+    return conversa;
+  }
+  if (conversa.mensagens[i].status === status) return conversa;
 
   const mensagens = conversa.mensagens.slice();
   mensagens[i] = { ...mensagens[i], status };
@@ -131,4 +142,50 @@ export function aplicarStatusMensagem(conversa, { mensagemId, status, versao }) 
     // seria descartado por `ehDesatualizada` como "igual ao que já tenho".
     versao: typeof versao === 'number' ? versao : conversa.versao,
   };
+}
+
+/**
+ * STATUS QUE CHEGOU ANTES DA MENSAGEM.
+ *
+ * O patch de status (`mensagem:status`) é minúsculo de propósito: ele diz "a
+ * mensagem X agora está entregue" e nada mais. Isso pressupõe que a tela já
+ * conheça X -- e quase sempre conhece, porque o SSE entrega em ordem e o
+ * retrato que traz a mensagem sai antes do patch.
+ *
+ * "Quase sempre" não basta para um risquinho preso no relógio: basta a conversa
+ * não estar carregada naquele instante (recém-reconectado, primeira carga em
+ * andamento) para o patch cair no vazio e a bolha mentir até alguém apertar F5.
+ *
+ * Então o status fica guardado e é aplicado no próximo retrato daquela
+ * conversa. Só a ORDEM de entrega é resolvida aqui -- a verdade continua sendo
+ * a do servidor, que é quem manda o status.
+ *
+ * O mapa é pequeno por construção (some ao ser aplicado) e tem teto, para uma
+ * sequência de patches órfãos não virar vazamento de memória.
+ */
+const statusPendentes = new Map(); // mensagemId -> status
+const MAX_PENDENTES = 200;
+
+function guardarStatusPendente(mensagemId, status) {
+  if (!mensagemId || !status) return;
+  if (statusPendentes.size >= MAX_PENDENTES) {
+    // Descarta o mais antigo: um patch órfão que nunca casou é lixo, e segurar
+    // todos custaria mais do que perder um risquinho.
+    statusPendentes.delete(statusPendentes.keys().next().value);
+  }
+  statusPendentes.set(mensagemId, status);
+}
+
+// Aplica (e consome) os status que chegaram antes das suas mensagens.
+function aplicarPendentes(mensagens) {
+  if (!statusPendentes.size) return mensagens;
+  let mudou = false;
+  const saida = mensagens.map(m => {
+    const pendente = m.id && statusPendentes.get(m.id);
+    if (!pendente || m.status === pendente) return m;
+    statusPendentes.delete(m.id);
+    mudou = true;
+    return { ...m, status: pendente };
+  });
+  return mudou ? saida : mensagens;
 }
