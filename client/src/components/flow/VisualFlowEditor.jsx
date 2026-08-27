@@ -28,7 +28,11 @@ const BLOCK_META = {
   delay:      { emoji: '⏳', label: 'Delay',          desc: 'Simula digitação',   color: 'border-linha bg-slate-500/5',    badge: 'bg-slate-500/20 text-slate-300 border-linha-forte' },
   acao:       { emoji: '🚀', label: 'Ação ERP',        desc: 'Desconto / Boleto',  color: 'border-ativo/60 bg-ativo/5',badge: 'bg-ativo/20 text-ativo-400 border-ativo/30' },
   comentario: { emoji: '📝', label: 'Anotação',       desc: 'Post-it de equipe',  color: 'border-espera/60 bg-espera/10',   badge: 'bg-espera/20 text-espera-400 border-espera/30' },
-  avaliacao:  { emoji: '⭐', label: 'Pesquisa de Satisfação', desc: 'Nota + comentário',  color: 'border-yellow-500/60 bg-yellow-500/5', badge: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' }
+  avaliacao:  { emoji: '⭐', label: 'Pesquisa de Satisfação', desc: 'Nota + comentário',  color: 'border-yellow-500/60 bg-yellow-500/5', badge: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
+  // O RELOGIO DO BOT, agora visivel. A regra 'cliente calado ha 5 min' sempre
+  // existiu, mas morava dentro do config de uma anotacao -- ninguem descobria
+  // olhando o desenho. Como bloco, ela aparece.
+  espera:     { emoji: '⏱️', label: 'Espera / Timeout', desc: 'Cliente calado ou fila', color: 'border-orange-500/60 bg-orange-500/5', badge: 'bg-orange-500/20 text-orange-400 border-orange-500/30' }
 };
 
 
@@ -603,7 +607,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
     // "solto" na tela e sumiria no primeiro reload. Bloqueamos aqui.
     if (!flow) return;
     const newId = 'p_' + Date.now();
-    const titleMap = { gatilho: 'Novo Gatilho', mensagem: 'Nova Mensagem', condicao: 'Validar CNPJ', delay: 'Aguardar...', acao: 'Ação Automática', comentario: 'Anotação', avaliacao: 'Pesquisa de Satisfação' };
+    const titleMap = { gatilho: 'Novo Gatilho', mensagem: 'Nova Mensagem', condicao: 'Validar CNPJ', delay: 'Aguardar...', acao: 'Ação Automática', comentario: 'Anotação', avaliacao: 'Pesquisa de Satisfação', espera: 'Sem resposta (5 min)' };
     const newNode = {
       id: newId, tipo,
       titulo: titleMap[tipo] || 'Nova Etapa',
@@ -612,10 +616,25 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
       y: pos ? pos.y : -canvasOffset.y / zoom + 200,
       w: tipo === 'comentario' ? 240 : 220,
       h: tipo === 'comentario' ? 120 : 96,
-      targetId: null
+      targetId: null,
+      // O bloco de espera nasce com a regra que já valia por padrão, escrita
+      // por extenso: assim ele explica o que faz na hora em que aparece, em vez
+      // de nascer vazio e o operador ter de adivinhar os campos.
+      ...(tipo === 'espera' ? {
+        desc: 'O bot perguntou e o cliente sumiu.',
+        config: {
+          modo: 'sem_resposta',
+          minutos: 5,
+          mensagem: 'Não entendemos a sua demanda. Por favor, abra um chamado novamente.',
+          acao: 'encerrar',
+        },
+      } : {}),
     };
     const updated = [...nodes];
-    if (updated.length > 0 && tipo !== 'comentario') {
+    // Espera e anotação NÃO entram na corrente da conversa: são regras sobre
+    // ela, não passos dela. Ligar o bloco anterior a um relógio faria o fluxo
+    // "seguir" para uma regra, que não é um lugar aonde ir.
+    if (updated.length > 0 && tipo !== 'comentario' && tipo !== 'espera') {
       const last = updated[updated.length - 1];
       if (!last.targetId) last.targetId = newId;
     }

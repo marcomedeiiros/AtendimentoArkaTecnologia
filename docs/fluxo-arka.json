@@ -1,16 +1,16 @@
 {
   "versao": 1,
-  "exportadoEm": "2026-08-27T03:10:00.000Z",
+  "exportadoEm": "2026-08-27T04:00:00.000Z",
   "nome": "ARKA - Atendimento com validação de contrato",
   "gatilho": "*",
   "ativo": true,
   "passos": [
     {
-      "id": "b240dae0-3816-4bde-a5bf-e078b97cc2f8",
+      "id": "b9d0b8cd-12ab-494b-93aa-fd57e7bc2b07",
       "tipo": "gatilho",
       "titulo": "Início",
       "desc": "Abre em qualquer primeira mensagem do cliente (gatilho curinga).",
-      "targetId": "aec4b34a-e38a-4e38-be01-e0e8bc1bf3ea",
+      "targetId": "d70e3322-5760-49c6-98e9-c60550093310",
       "ordem": 0,
       "x": 40,
       "y": 120,
@@ -18,7 +18,7 @@
       "h": 96
     },
     {
-      "id": "9c15b4f8-8495-4049-acfd-868d2f18d045",
+      "id": "0abb83d6-8f39-4f03-b90a-d60e8b01bc07",
       "tipo": "comentario",
       "titulo": "Configurações do bot",
       "desc": "Textos de fallback e timeout de inatividade, herdados do ARKA original.",
@@ -82,11 +82,11 @@
       "h": 120
     },
     {
-      "id": "aec4b34a-e38a-4e38-be01-e0e8bc1bf3ea",
+      "id": "d70e3322-5760-49c6-98e9-c60550093310",
       "tipo": "mensagem",
       "titulo": "Boas Vindas",
       "desc": "Menu inicial.",
-      "targetId": "36dd5d23-fc62-4d04-b5a9-9b314fa980e9",
+      "targetId": "de723e94-ac45-4ed4-b9c8-4d9e71a6c84f",
       "ordem": 2,
       "texto": "🤖Olá, {{cliente.nome}}. Bem-vindo(a) à ARKA TECNOLOGIA. Agradecemos seu contato. Por favor, escolha uma das opções abaixo para direcionar seu atendimento:\n\n1️⃣- Setor Técnico\n2️⃣- Comercial\n3️⃣- Adm/Financeiro\n4️⃣- Encerrar atendimento",
       "config": {
@@ -106,7 +106,7 @@
               "suporte"
             ],
             "acao": "ir",
-            "targetId": "36dd5d23-fc62-4d04-b5a9-9b314fa980e9",
+            "targetId": "de723e94-ac45-4ed4-b9c8-4d9e71a6c84f",
             "setor": "Técnico"
           },
           {
@@ -120,7 +120,7 @@
               "vendas"
             ],
             "acao": "ir",
-            "targetId": "b73fcce1-2ad1-4d8c-b714-3bf8625de2ba",
+            "targetId": "64b85687-198c-49ef-b7a7-827fdb8a456a",
             "setor": "Comercial"
           },
           {
@@ -136,7 +136,7 @@
               "faturamento"
             ],
             "acao": "ir",
-            "targetId": "d7a24e07-b890-4521-a5c3-925cf8f05660",
+            "targetId": "4f5f1646-5441-4afd-974d-dd4fa639f958",
             "setor": "Financeiro"
           },
           {
@@ -151,7 +151,7 @@
               "finalizar"
             ],
             "acao": "ir",
-            "targetId": "c065b828-2d36-4ceb-b9cc-414926b0c42d"
+            "targetId": "bd0fb1d0-fc23-432d-825d-9a2b9a8cd45f"
           }
         ]
       },
@@ -161,11 +161,11 @@
       "h": 96
     },
     {
-      "id": "36dd5d23-fc62-4d04-b5a9-9b314fa980e9",
+      "id": "de723e94-ac45-4ed4-b9c8-4d9e71a6c84f",
       "tipo": "mensagem",
       "titulo": "SUPORTE",
       "desc": "Contrato x avulso.",
-      "targetId": "c385b84c-a900-4fae-a36b-085dfcc7fcc2",
+      "targetId": "8d01304a-ef09-49cf-bc6a-4f97c9a32d74",
       "ordem": 3,
       "texto": "🤖 Você selecionou o Setor Técnico. Para melhor atendê-lo, por favor escolha uma das opções abaixo\n\n1️⃣- TENHO CONTRATO\n2️⃣- SOU CLIENTE AVULSO\n3️⃣- VOLTAR AO MENU INICIAL",
       "config": {
@@ -182,7 +182,7 @@
               "tenho contrato"
             ],
             "acao": "ir",
-            "targetId": "c385b84c-a900-4fae-a36b-085dfcc7fcc2"
+            "targetId": "8d01304a-ef09-49cf-bc6a-4f97c9a32d74"
           },
           {
             "id": "sup_2",
@@ -196,7 +196,7 @@
               "novo cliente"
             ],
             "acao": "ir",
-            "targetId": "086019eb-c8fe-4978-89a1-ea1af5d6d03c"
+            "targetId": "8619e80e-47a4-4a05-80fd-be50e7649756"
           },
           {
             "id": "sup_3",
@@ -210,7 +210,7 @@
               "voltar"
             ],
             "acao": "ir",
-            "targetId": "aec4b34a-e38a-4e38-be01-e0e8bc1bf3ea"
+            "targetId": "d70e3322-5760-49c6-98e9-c60550093310"
           }
         ]
       },
@@ -220,11 +220,11 @@
       "h": 96
     },
     {
-      "id": "c385b84c-a900-4fae-a36b-085dfcc7fcc2",
+      "id": "8d01304a-ef09-49cf-bc6a-4f97c9a32d74",
       "tipo": "condicao",
       "titulo": "VALIDA CONTRATO (CNPJ)",
       "desc": "Recebe o CNPJ, confere os dígitos verificadores e consulta a base de Parceiros. Após 3 tentativas inválidas o motor transfere para um atendente.",
-      "targetId": "527acf9c-6a63-46f6-ab72-933a721f0778",
+      "targetId": "14fe8be5-ffb5-47ee-b2cf-0475e2883554",
       "ordem": 4,
       "texto": "🤖 Certo! Para confirmar seu contrato, me informe o *CNPJ da empresa contratante* (pode enviar com ou sem pontuação).\n\nExemplo: 12.345.678/0001-90",
       "config": {
@@ -246,11 +246,11 @@
       "h": 96
     },
     {
-      "id": "527acf9c-6a63-46f6-ab72-933a721f0778",
+      "id": "14fe8be5-ffb5-47ee-b2cf-0475e2883554",
       "tipo": "mensagem",
       "titulo": "RESULTADO DA CONSULTA",
       "desc": "Mostra o que veio da base de Parceiros e ramifica.",
-      "targetId": "5b8ff2ec-1c57-4a92-ba47-0ef10942fccd",
+      "targetId": "f083aed3-0296-499e-af69-9dfcde346d4a",
       "ordem": 5,
       "texto": "🤖 Resultado da consulta na nossa base:\n\n▪️ CNPJ: {{cliente.cnpj}}\n▪️ Situação: {{parceiro.status}}\n\nComo deseja seguir?\n\n1️⃣- CONFIRMAR E ABRIR CHAMADO\n2️⃣- INFORMAR OUTRO CNPJ\n3️⃣- SEGUIR COMO ATENDIMENTO AVULSO\n4️⃣- VOLTAR AO MENU INICIAL",
       "config": {
@@ -268,7 +268,7 @@
               "sim"
             ],
             "acao": "ir",
-            "targetId": "5b8ff2ec-1c57-4a92-ba47-0ef10942fccd"
+            "targetId": "f083aed3-0296-499e-af69-9dfcde346d4a"
           },
           {
             "id": "res_2",
@@ -282,7 +282,7 @@
               "errado"
             ],
             "acao": "ir",
-            "targetId": "c385b84c-a900-4fae-a36b-085dfcc7fcc2",
+            "targetId": "8d01304a-ef09-49cf-bc6a-4f97c9a32d74",
             "limparCnpj": true
           },
           {
@@ -296,7 +296,7 @@
               "atendimento avulso"
             ],
             "acao": "ir",
-            "targetId": "086019eb-c8fe-4978-89a1-ea1af5d6d03c"
+            "targetId": "8619e80e-47a4-4a05-80fd-be50e7649756"
           },
           {
             "id": "res_4",
@@ -310,7 +310,7 @@
               "voltar"
             ],
             "acao": "ir",
-            "targetId": "aec4b34a-e38a-4e38-be01-e0e8bc1bf3ea"
+            "targetId": "d70e3322-5760-49c6-98e9-c60550093310"
           }
         ]
       },
@@ -320,11 +320,11 @@
       "h": 96
     },
     {
-      "id": "5b8ff2ec-1c57-4a92-ba47-0ef10942fccd",
+      "id": "f083aed3-0296-499e-af69-9dfcde346d4a",
       "tipo": "mensagem",
       "titulo": "IDENTIFICA CONTRATO",
       "desc": "A empresa já veio do CNPJ; aqui só faltam nome e setor de quem fala.",
-      "targetId": "f10995d5-d599-4f31-af1a-9f96401854ca",
+      "targetId": "9bbec3f6-9a9a-4f09-a0b9-b0d8fd973dd9",
       "ordem": 6,
       "texto": "🤖 Perfeito. Agora me informe:\n\n▪️ Seu Nome\n▪️ Seu Setor",
       "config": {
@@ -337,7 +337,7 @@
             "rotulo": "resposta livre",
             "palavrasChave": [],
             "acao": "ir",
-            "targetId": "f10995d5-d599-4f31-af1a-9f96401854ca"
+            "targetId": "9bbec3f6-9a9a-4f09-a0b9-b0d8fd973dd9"
           }
         ]
       },
@@ -347,7 +347,7 @@
       "h": 96
     },
     {
-      "id": "f10995d5-d599-4f31-af1a-9f96401854ca",
+      "id": "9bbec3f6-9a9a-4f09-a0b9-b0d8fd973dd9",
       "tipo": "mensagem",
       "titulo": "IDENTIFICA PROBLEMA",
       "desc": "Último passo do bot: entrega para a fila técnica (queueId 33).",
@@ -375,11 +375,11 @@
       "h": 96
     },
     {
-      "id": "086019eb-c8fe-4978-89a1-ea1af5d6d03c",
+      "id": "8619e80e-47a4-4a05-80fd-be50e7649756",
       "tipo": "mensagem",
       "titulo": "C_AVULSO",
       "desc": "Cliente sem contrato.",
-      "targetId": "f10995d5-d599-4f31-af1a-9f96401854ca",
+      "targetId": "9bbec3f6-9a9a-4f09-a0b9-b0d8fd973dd9",
       "ordem": 8,
       "texto": "🤖 Será um prazer atendê-lo, mas antes preciso te informar os valores do atendimento:\n\n💻 Atendimento Remoto: R$ 120,00\n🛠 Atendimento in Loco: R$ 180,00/h\n\nCaso seja necessário algum outro tipo de serviço ou projeto, o valor será informado mediante consulta. Podemos seguir com o seu atendimento?\n\n1️⃣- SIM\n2️⃣- NÃO\n3️⃣- VOLTAR AO MENU INICIAL",
       "config": {
@@ -395,7 +395,7 @@
               "sim"
             ],
             "acao": "ir",
-            "targetId": "f10995d5-d599-4f31-af1a-9f96401854ca"
+            "targetId": "9bbec3f6-9a9a-4f09-a0b9-b0d8fd973dd9"
           },
           {
             "id": "av_2",
@@ -424,7 +424,7 @@
               "voltar"
             ],
             "acao": "ir",
-            "targetId": "aec4b34a-e38a-4e38-be01-e0e8bc1bf3ea"
+            "targetId": "d70e3322-5760-49c6-98e9-c60550093310"
           }
         ]
       },
@@ -434,11 +434,11 @@
       "h": 96
     },
     {
-      "id": "b73fcce1-2ad1-4d8c-b714-3bf8625de2ba",
+      "id": "64b85687-198c-49ef-b7a7-827fdb8a456a",
       "tipo": "mensagem",
       "titulo": "COMERCIAL",
       "desc": "",
-      "targetId": "5756f859-bd38-43e6-b063-6ce86bdfb880",
+      "targetId": "98273bfb-4099-4020-a61c-ebba61ea1f44",
       "ordem": 9,
       "texto": "🤖 Você selecionou o Setor Comercial. Para melhor atendê-lo, por favor escolha uma das opções abaixo:\n\n1️⃣- PRODUTOS\n2️⃣- SERVIÇOS\n3️⃣- VOLTAR AO INICIO",
       "config": {
@@ -456,7 +456,7 @@
               "notebook"
             ],
             "acao": "ir",
-            "targetId": "5756f859-bd38-43e6-b063-6ce86bdfb880"
+            "targetId": "98273bfb-4099-4020-a61c-ebba61ea1f44"
           },
           {
             "id": "com_2",
@@ -470,7 +470,7 @@
               "serviços"
             ],
             "acao": "ir",
-            "targetId": "5756f859-bd38-43e6-b063-6ce86bdfb880"
+            "targetId": "98273bfb-4099-4020-a61c-ebba61ea1f44"
           },
           {
             "id": "com_3",
@@ -484,7 +484,7 @@
               "inicio"
             ],
             "acao": "ir",
-            "targetId": "aec4b34a-e38a-4e38-be01-e0e8bc1bf3ea"
+            "targetId": "d70e3322-5760-49c6-98e9-c60550093310"
           }
         ]
       },
@@ -494,7 +494,7 @@
       "h": 96
     },
     {
-      "id": "5756f859-bd38-43e6-b063-6ce86bdfb880",
+      "id": "98273bfb-4099-4020-a61c-ebba61ea1f44",
       "tipo": "mensagem",
       "titulo": "VENDEDOR",
       "desc": "Entrega para a fila comercial (queueId 35).",
@@ -522,7 +522,7 @@
       "h": 96
     },
     {
-      "id": "d7a24e07-b890-4521-a5c3-925cf8f05660",
+      "id": "4f5f1646-5441-4afd-974d-dd4fa639f958",
       "tipo": "mensagem",
       "titulo": "FINANCEIRO",
       "desc": "Entrega para a fila adm/financeiro (queueId 35).",
@@ -550,7 +550,7 @@
       "h": 96
     },
     {
-      "id": "c065b828-2d36-4ceb-b9cc-414926b0c42d",
+      "id": "bd0fb1d0-fc23-432d-825d-9a2b9a8cd45f",
       "tipo": "avaliacao",
       "titulo": "Pesquisa de Satisfação",
       "desc": "Pergunta a nota (1-5), pede o comentário, agradece e encerra o atendimento.",
@@ -568,6 +568,43 @@
       },
       "x": 40,
       "y": 470,
+      "w": 220,
+      "h": 96
+    },
+    {
+      "id": "6b7d685b-4a57-4959-902b-4d0d0366f64c",
+      "tipo": "espera",
+      "titulo": "Sem resposta",
+      "desc": "O bot perguntou e o cliente sumiu.",
+      "targetId": null,
+      "ordem": 13,
+      "config": {
+        "modo": "sem_resposta",
+        "minutos": 5,
+        "mensagem": "Não entendemos a sua demanda. Por favor, abra um chamado novamente.",
+        "acao": "encerrar"
+      },
+      "x": 40,
+      "y": 966,
+      "w": 220,
+      "h": 96
+    },
+    {
+      "id": "8d9e7965-a0ff-499b-abef-c94194a407fd",
+      "tipo": "espera",
+      "titulo": "Espera na fila",
+      "desc": "Ninguem assumiu a conversa em Pendentes.",
+      "targetId": null,
+      "ordem": 14,
+      "config": {
+        "modo": "fila_pendentes",
+        "ativo": true,
+        "minutos": 10,
+        "mensagem": "Ei {{cliente}}! Estamos com uma demanda alta no momento, mas fique tranquilo! Em breve, um dos nossos atendentes estará disponível para atendê-lo.",
+        "repetir": false
+      },
+      "x": 40,
+      "y": 1096,
       "w": 220,
       "h": 96
     }

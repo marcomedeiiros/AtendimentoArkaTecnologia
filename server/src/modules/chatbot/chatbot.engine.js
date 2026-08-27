@@ -30,6 +30,11 @@ const logger = require("../../config/logger");
 const env = require("../../config/env");
 const { sessao: cfgSessao, limites, palavrasChave } = require("./chatbot.config");
 
+// Blocos que NAO sao passos da conversa: sao regras SOBRE ela. O motor nunca
+// "entra" neles -- a anotacao e um post-it, e o bloco de espera e um relogio
+// lido pela varredura (ver fluxo.automacao.blocoEspera).
+const NAO_CAMINHAVEIS = ["comentario", "espera"];
+
 // Dependencias em um objeto injetavel. O motor usa `this.deps.*` em vez dos
 // modulos direto para que o simulador (chatbot.simulador.js) possa rodar
 // EXATAMENTE este codigo com conversa/sessao em memoria e sem tocar o WhatsApp.
@@ -266,7 +271,19 @@ class ChatbotEngine {
     // transfere para atendente, emendaria no bloco seguinte da lista).
     if (this.opcoesDoPasso(passoAtual).length) return null;
     const idx = passos.findIndex((p) => p.id === passoAtual.id);
-    return idx >= 0 ? passos[idx + 1] || null : null;
+    if (idx < 0) return null;
+    // PULA O QUE NAO E PASSO DA CONVERSA.
+    //
+    // `comentario` (anotacao) e `espera` (o relogio do bot) sao REGRAS sobre a
+    // conversa, nao lugares aonde ir. Sem este filtro, um passo sem targetId
+    // emendava no bloco seguinte da lista -- e bastava alguem arrastar uma
+    // anotacao para o meio do fluxo para o bot "entrar" nela e o cliente ficar
+    // sem resposta. O risco ja existia; com o bloco de espera ele deixaria de
+    // ser teorico.
+    for (let i = idx + 1; i < passos.length; i++) {
+      if (!NAO_CAMINHAVEIS.includes(passos[i].tipo)) return passos[i];
+    }
+    return null;
   }
 
   // Um passo de mensagem pode pedir CNPJ explicitamente via config.aguardar.
@@ -1400,7 +1417,11 @@ class ChatbotEngine {
 
     switch (passo.tipo) {
       case "gatilho":
+      // Defesa em profundidade: `proximoPasso` ja pula os dois, mas um fluxo
+      // com targetId apontando direto para ca (JSON editado a mao) nao pode
+      // deixar o cliente sem resposta -- segue para o proximo passo de verdade.
       case "comentario":
+      case "espera":
         proximo = this.proximoPasso(fluxo.passos, passo);
         break;
 

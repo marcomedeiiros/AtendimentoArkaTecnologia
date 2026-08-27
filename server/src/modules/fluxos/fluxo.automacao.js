@@ -185,17 +185,43 @@ function globaisDoFluxo(fluxo) {
  * `semResposta`. Ele continua sendo lido, mas o bloco novo VENCE quando existe
  * -- assim quem já tinha o antigo não perde nada e quem configurar o novo manda.
  */
+/**
+ * O BLOCO DE ESPERA daquele modo, se o fluxo tiver um.
+ *
+ * `tipo: "espera"` e o bloco que torna VISIVEL uma regra que sempre existiu,
+ * mas vivia escondida dentro do `config` de uma anotacao: o operador nao tinha
+ * como saber, olhando o desenho, que o bot fecha a conversa depois de 5 minutos
+ * calado. Agora e um bloquinho no canvas como qualquer outro.
+ *
+ * `modo` separa os DOIS RELOGIOS, que sao coisas diferentes:
+ *   sem_resposta   -> o bot perguntou e o cliente sumiu
+ *   fila_pendentes -> ninguem assumiu a conversa na fila
+ */
+function blocoEspera(fluxo, modo) {
+  return (fluxo?.passos || []).find(
+    (p) => p.tipo === "espera" && (p.config?.modo || "sem_resposta") === modo
+  );
+}
+
 function paramsTempos(fluxo) {
   const g = globaisDoFluxo(fluxo);
   const p = PADROES;
+
+  // PRECEDENCIA: bloco no canvas > bloco de configuracoes globais > legado do
+  // editor de origem > padrao do sistema. O bloco vence porque e o que a pessoa
+  // ve na tela -- se o desenho diz uma coisa e um campo escondido diz outra,
+  // quem tem de mandar e o desenho.
+  const bSem = blocoEspera(fluxo, "sem_resposta")?.config || null;
+  const bFila = blocoEspera(fluxo, "fila_pendentes")?.config || null;
 
   // Legado: {time: minutos, message, type} -- type 3 = encerrar.
   const legado = g.notResponseMessage || {};
   const legadoMin = Number(legado.time);
   const temLegado = Number.isFinite(legadoMin) && legadoMin > 0;
 
-  const sr = g.semResposta || {};
-  const fp = g.filaPendentes || {};
+  // Bloco vence o `configuracoesGlobais`, que vence o legado, que vence o padrao.
+  const sr = { ...(g.semResposta || {}), ...(bSem || {}) };
+  const fp = { ...(g.filaPendentes || {}), ...(bFila || {}) };
 
   return {
     semResposta: {
@@ -217,6 +243,8 @@ function paramsTempos(fluxo) {
           : temLegado && Number(legado.type) !== 3
             ? "fila"
             : p.semResposta.acao,
+      // De qual bloco veio, para o painel de automacoes apontar para ele.
+      passoId: blocoEspera(fluxo, "sem_resposta")?.id || null,
     },
     filaPendentes: {
       // `ativo: false` desliga o aviso sem apagar o texto configurado.
@@ -224,6 +252,7 @@ function paramsTempos(fluxo) {
       minutos: inteiro(fp.minutos, p.filaPendentes.minutos, 1, 24 * 60),
       mensagem: texto(fp.mensagem, p.filaPendentes.mensagem),
       repetir: booleano(fp.repetir, p.filaPendentes.repetir),
+      passoId: blocoEspera(fluxo, "fila_pendentes")?.id || null,
     },
     // Comandos globais ("atendente", "menu", "sair") podem furar uma etapa
     // obrigatória? Sai do fluxo, não do código -- ver o guard no motor.
@@ -317,13 +346,20 @@ function resumoAutomacoes(fluxo) {
 
   // Os dois relógios do fluxo, cada um no seu grupo -- é a leitura que evita
   // confundi-los ao configurar.
+  // O grupo aparece quando a regra existe em ALGUM lugar: no bloco de espera
+  // (o caminho novo, visivel no canvas) ou na anotacao de configuracoes (o
+  // antigo). `passoId` aponta para onde ela realmente esta, para o clique no
+  // painel levar ao bloco certo.
   const passoGlobais = passos.find((p) => p.config?.configuracoesGlobais);
-  if (passoGlobais) {
+  const temEspera = passos.some((p) => p.tipo === "espera");
+  if (passoGlobais || temEspera) {
     const t = paramsTempos(fluxo);
+    const tituloDe = (id, padrao) =>
+      passos.find((p) => p.id === id)?.titulo || padrao;
     itens.push({
       grupo: "Cliente não responde ao bot",
-      passoId: passoGlobais.id,
-      passoTitulo: passoGlobais.titulo,
+      passoId: t.semResposta.passoId || passoGlobais?.id || "sem-resposta",
+      passoTitulo: tituloDe(t.semResposta.passoId, passoGlobais?.titulo || "Sem resposta"),
       regras: [
         { rotulo: "Esperar a resposta por", valor: `${t.semResposta.minutos} min` },
         { rotulo: "Mensagem", valor: t.semResposta.mensagem },
@@ -339,8 +375,8 @@ function resumoAutomacoes(fluxo) {
     });
     itens.push({
       grupo: "Espera na fila de Pendentes",
-      passoId: passoGlobais.id + ":fila",
-      passoTitulo: passoGlobais.titulo,
+      passoId: t.filaPendentes.passoId || (passoGlobais?.id || "fila") + ":fila",
+      passoTitulo: tituloDe(t.filaPendentes.passoId, passoGlobais?.titulo || "Espera na fila"),
       regras: t.filaPendentes.ativo
         ? [
             { rotulo: "Avisar após", valor: `${t.filaPendentes.minutos} min na fila` },

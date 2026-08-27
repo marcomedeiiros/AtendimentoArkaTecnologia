@@ -2,7 +2,10 @@ const { z } = require("zod");
 
 const passoSchema = z.object({
   id: z.string().optional(),
-  tipo: z.enum(["gatilho", "mensagem", "condicao", "delay", "acao", "comentario", "avaliacao"]),
+  // "espera": torna VISIVEL no canvas uma regra que vivia escondida no config
+  // de uma anotacao (o bot fecha a conversa depois de N minutos calado). Ver
+  // fluxo.automacao.blocoEspera.
+  tipo: z.enum(["gatilho", "mensagem", "condicao", "delay", "acao", "comentario", "avaliacao", "espera"]),
   titulo: z.string().min(1),
   desc: z.string().optional(),
   descricao: z.string().optional(),

@@ -12,7 +12,11 @@
 
 import { hojeISO } from '../../utils/data';
 
-export const TIPOS_PASSO = ['gatilho', 'mensagem', 'condicao', 'delay', 'acao', 'comentario', 'avaliacao'];
+// 'espera' torna visivel no canvas o relogio do bot (cliente calado / fila
+// parada), que antes vivia escondido no config de uma anotacao. Precisa estar
+// AQUI: a importacao descarta bloco de tipo desconhecido, entao um tipo novo
+// fora desta lista some sem aviso ao importar o JSON.
+export const TIPOS_PASSO = ['gatilho', 'mensagem', 'condicao', 'delay', 'acao', 'comentario', 'avaliacao', 'espera'];
 
 // Gatilho curinga: o fluxo abre em qualquer mensagem em vez de esperar uma
 // palavra-chave. Espelha o GATILHO_CURINGA do server/src/modules/chatbot.
@@ -31,6 +35,7 @@ const ROTULO_TIPO = {
   acao: 'Ação ERP',
   comentario: 'Anotação',
   avaliacao: 'Pesquisa de Satisfação',
+  espera: 'Espera / Timeout',
 };
 
 export function sanitizarPassosImportados(passos) {

@@ -213,6 +213,99 @@ export function FlowPropertyPanel({
               </div>
             )}
 
+            {/* ESPERA / TIMEOUT -- o relógio do bot, agora visível.
+                Esta regra sempre existiu, mas morava dentro do `config` de uma
+                anotação: pelo desenho, ninguém descobria que o bot fecha a
+                conversa depois de 5 minutos calado. Como bloco, ela se explica.
+
+                Os DOIS relógios são coisas diferentes e não podem compartilhar
+                configuração: quem espera atendimento não "deixou de responder",
+                e receber "não entendemos sua demanda" na fila seria errado. */}
+            {node.tipo === 'espera' && (
+              <div className="p-3.5 rounded-xl bg-orange-500/10 border border-orange-500/30 space-y-3">
+                <label className="text-xs font-bold text-orange-400 flex items-center gap-1.5">⏱️ Espera / Timeout</label>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">O que está sendo esperado</label>
+                  <select
+                    value={node.config?.modo || 'sem_resposta'}
+                    onChange={e => onChangeNode({ ...node, config: { ...(node.config || {}), modo: e.target.value } })}
+                    className="w-full bg-grafite-700 border border-linha rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-orange-500/50"
+                  >
+                    <option value="sem_resposta">O cliente não respondeu ao bot</option>
+                    <option value="fila_pendentes">Ninguém assumiu a conversa na fila</option>
+                  </select>
+                  <p className="text-[10px] text-slate-400 leading-relaxed mt-1.5">
+                    {(node.config?.modo || 'sem_resposta') === 'sem_resposta'
+                      ? 'O bot fez uma pergunta obrigatória (CNPJ, opção do menu) e o cliente sumiu.'
+                      : 'Não há pergunta pendente: a conversa está em Pendentes e nenhum atendente assumiu.'}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Esperar por (minutos)</label>
+                  <input
+                    type="number" min="1" max="1440"
+                    value={node.config?.minutos ?? ((node.config?.modo || 'sem_resposta') === 'sem_resposta' ? 5 : 10)}
+                    onChange={e => onChangeNode({ ...node, config: { ...(node.config || {}), minutos: Number(e.target.value) || 5 } })}
+                    className="w-full bg-grafite-700 border border-linha rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-orange-500/50"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    O prazo corre no SERVIDOR: vale com a aba fechada e atravessa reinício.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Mensagem enviada ao cliente</label>
+                  <textarea
+                    rows={2}
+                    value={node.config?.mensagem || ''}
+                    onChange={e => onChangeNode({ ...node, config: { ...(node.config || {}), mensagem: e.target.value } })}
+                    className="w-full bg-grafite-700 border border-linha rounded-lg p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500/50 resize-none"
+                    placeholder={(node.config?.modo || 'sem_resposta') === 'sem_resposta'
+                      ? 'Padrão: Não entendemos a sua demanda. Por favor, abra um chamado novamente.'
+                      : 'Padrão: Ei {{cliente}}! Estamos com uma demanda alta no momento...'}
+                  />
+                </div>
+
+                {(node.config?.modo || 'sem_resposta') === 'sem_resposta' ? (
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Depois disso</label>
+                    <select
+                      value={node.config?.acao || 'encerrar'}
+                      onChange={e => onChangeNode({ ...node, config: { ...(node.config || {}), acao: e.target.value } })}
+                      className="w-full bg-grafite-700 border border-linha rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-orange-500/50"
+                    >
+                      <option value="encerrar">Encerrar o atendimento</option>
+                      <option value="fila">Devolver para a fila (atendente humano)</option>
+                    </select>
+                    <p className="text-[10px] text-slate-400 leading-relaxed mt-1.5">
+                      Encerrar <strong className="text-orange-400">não pede nota de avaliação</strong>: quem
+                      abandonou a conversa não foi atendido, então não há atendimento para avaliar.
+                    </p>
+                  </div>
+                ) : (
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={node.config?.repetir === true}
+                      onChange={e => onChangeNode({ ...node, config: { ...(node.config || {}), repetir: e.target.checked } })}
+                      className="accent-orange-500"
+                    />
+                    <span className="text-[11px] text-slate-300">
+                      Repetir o aviso <span className="text-slate-500">(desmarcado: uma vez por atendimento)</span>
+                    </span>
+                  </label>
+                )}
+
+                <p className="text-[10px] text-slate-500 leading-relaxed border-t border-linha pt-2">
+                  Este bloco é uma REGRA sobre a conversa, não um passo dela: ele não se liga a
+                  outros blocos e não precisa de fio.
+                  <strong className="text-orange-400"> Com o fluxo pausado, nada disso roda.</strong>
+                </p>
+              </div>
+            )}
+
             {node.tipo === 'avaliacao' && (
               <div className="p-3.5 rounded-xl bg-yellow-500/10 border border-yellow-500/30 space-y-3">
                 <label className="text-xs font-bold text-yellow-400 flex items-center gap-1.5">⭐ Pesquisa de Satisfação</label>
