@@ -384,12 +384,17 @@ class ConversaService {
         envio.waMessageId,
         envio.ok ? "enviada" : "erro"
       );
-      bus.emitStatusMensagem({
-        conversaId,
-        mensagemId,
-        status: envio.ok ? "enviada" : "erro",
-        ...(await this._versaoESetor(conversaId)),
-      });
+      // A PRIMEIRA TRANSICAO SAI PELO CAMINHO NORMAL, nao so como patch.
+      //
+      // "enviando -> enviada" e a que tira o relogio da bolha, e ela nao pode
+      // depender de um evento que o cliente talvez ignore: um painel aberto
+      // antes deste deploy nao conhece `mensagem:status` e ficaria com o
+      // relogio parado ate um F5. O retrato leve custa ~4ms e 11KB (a cauda do
+      // historico, nao o fio inteiro), e QUALQUER versao do front sabe aplicar.
+      //
+      // Os ACKs seguintes (entregue/lida) continuam como patch de 113 bytes:
+      // ali a mensagem ja esta na tela ha muito tempo.
+      await this._emitirLeve(conversaId);
     } catch (e) {
       logger.error("Falha ao entregar mensagem no WhatsApp", {
         conversaId,
@@ -398,21 +403,11 @@ class ConversaService {
       });
       try {
         await conversaRepository.vincularWaMessageId(mensagemId, null, "erro");
-        bus.emitStatusMensagem({
-          conversaId,
-          mensagemId,
-          status: "erro",
-          ...(await this._versaoESetor(conversaId)),
-        });
+        // Mesmo motivo do caminho feliz: a falha TEM de aparecer na bolha, e
+        // nao pode depender de o painel conhecer o evento novo.
+        await this._emitirLeve(conversaId);
       } catch { /* nada mais a fazer: o log acima ja registrou */ }
     }
-  }
-
-  // Os dois campos que o patch de status precisa: `versao` (o front descarta
-  // retrato mais velho) e `setor` (o stream filtra por ele).
-  async _versaoESetor(conversaId) {
-    const c = await conversaRepository.findByIdBasico(conversaId);
-    return { versao: c?.versao ?? null, setor: c?.setor ?? null };
   }
 
   /**
