@@ -12,12 +12,17 @@ router.post("/", validate(criarParceiroSchema), (req, res, next) => parceiroCont
 router.put("/:cnpj", validate(atualizarParceiroSchema), (req, res, next) => parceiroController.atualizar(req, res).catch(next));
 router.get("/:cnpj/validar", (req, res, next) => parceiroController.validar(req, res).catch(next));
 router.patch("/:cnpj/status", (req, res, next) => parceiroController.alternarStatus(req, res).catch(next));
-// Desmarca um contato do WhatsApp desta empresa (o vinculo vem das conversas).
-// Antes de "/:cnpj" nao e necessario (rota mais especifica com sufixo), mas fica
-// junto das demais de parceiro -- mesmo gate: auth + modulo "parceiros".
-router.delete("/:cnpj/contatos/:telefone", (req, res, next) =>
-  parceiroController.desvincularContato(req, res).catch(next)
-);
+// REMOCAO MANUAL DE VINCULO NAO EXISTE MAIS.
+//
+// Havia aqui DELETE /:cnpj/contatos/:telefone -- o endpoint do "X" na tela
+// Clientes (CNPJ). Desassociar um CNPJ passou a ser decisao do CLIENTE, tomada
+// dentro da etapa do fluxo que pergunta "o CNPJ continua sendo este?": quem
+// responde NAO desassocia a propria conversa, e so ela (ver
+// chatbot.engine._desassociarCnpj).
+//
+// A rota foi REMOVIDA, e nao apenas escondida no front. Um endpoint que limpa o
+// CNPJ de TODAS as conversas de um telefone continuaria chamavel por qualquer
+// sessao autenticada com o modulo "parceiros" -- com botao ou sem botao.
 router.delete("/:cnpj", (req, res, next) => parceiroController.remover(req, res).catch(next));
 
 module.exports = router;

@@ -67,19 +67,23 @@ class ConversaRepository {
     });
   }
 
-  // MEMORIA DO CONTATO: ultimo CNPJ confirmado por este telefone. Continua
-  // valendo mesmo com a conversa unica por cliente -- o mesmo numero pode ter
-  // fio em outra instancia, e a consulta tambem serve de rede de seguranca para
-  // bases que ainda tenham duplicatas nao consolidadas.
-  async ultimoCnpjDoTelefone(telefone, ignorarConversaId = null) {
+  // MEMORIA DO CONTATO: ultimo CNPJ confirmado por este telefone.
+  //
+  // NAO EXCLUI CONVERSA NENHUMA, e isso e deliberado. Havia aqui um parametro
+  // `ignorarConversaId`, herdado de quando cada atendimento criava uma linha de
+  // conversa nova (o CNPJ ficava na linha antiga, e ignorar a atual so evitava
+  // a auto-referencia). Com "uma conversa por cliente", o CNPJ do atendimento
+  // anterior passou a morar NA MESMA LINHA -- e o filtro, que antes nao custava
+  // nada, passou a esconder a unica memoria que existia: a consulta devolvia
+  // sempre null e o bot nunca reconhecia o cliente recorrente.
+  //
+  // Hoje o motor consulta primeiro o CNPJ da propria conversa; esta busca e a
+  // rede de seguranca para o mesmo numero em outra instancia ou em duplicatas
+  // ainda nao consolidadas.
+  async ultimoCnpjDoTelefone(telefone) {
     if (!telefone) return null;
     return prisma.conversa.findFirst({
-      where: {
-        telefone,
-        cnpj: { not: null },
-        cnpjVerificado: true,
-        ...(ignorarConversaId ? { id: { not: ignorarConversaId } } : {}),
-      },
+      where: { telefone, cnpj: { not: null }, cnpjVerificado: true },
       orderBy: { atualizadoEm: "desc" },
       select: { cnpj: true, empresa: true, cliente: true, atualizadoEm: true },
     });
@@ -112,23 +116,15 @@ class ConversaRepository {
     return porCnpj;
   }
 
-  // Desfaz o vinculo entre um telefone e um CNPJ: limpa o CNPJ das conversas
-  // daquele contato. Usado ao "desmarcar" um contato na tela Clientes (CNPJ) --
-  // ex.: a pessoa informou o CNPJ errado. Devolve as conversas afetadas (e nao
-  // so a contagem) para quem chamou conseguir reemitir no SSE: sem isso a
-  // Central so mostrava a mudanca depois do F5.
-  async limparCnpjDoContato(telefone, cnpj) {
-    const alvos = await prisma.conversa.findMany({
-      where: { telefone, cnpj },
-      select: { id: true },
-    });
-    if (alvos.length === 0) return [];
-    await prisma.conversa.updateMany({
-      where: { telefone, cnpj },
-      data: { cnpj: null, empresa: null, cnpjVerificado: false, versao: { increment: 1 } },
-    });
-    return alvos.map((a) => a.id);
-  }
+  // NAO EXISTE MAIS `limparCnpjDoContato`.
+  //
+  // Ele limpava o CNPJ de TODAS as conversas de um telefone de uma vez, por
+  // `updateMany` -- fora dos caminhos que emitem SSE e sem passar por `update`.
+  // Era a peca de baixo do "X" da tela Clientes/CNPJ.
+  //
+  // A desassociacao acontece agora conversa a conversa, pelo `update` normal do
+  // repositorio, quando o CLIENTE diz no fluxo que o CNPJ nao e o dele. Ver
+  // chatbot.engine._desassociarCnpj.
 
   // Versao LEVE: so os campos escalares (sem carregar todas as mensagens). Para
   // checagens rapidas (setor/telefone) sem o custo de puxar o historico inteiro.

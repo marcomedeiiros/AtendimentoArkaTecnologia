@@ -634,12 +634,14 @@ class ConversaService {
   // NAO existe mais `desvincularCnpj` aqui (nem a rota DELETE /conversas/:id/cnpj).
   //
   // O "X" que removia o CNPJ da conversa saiu da interface: uma vez identificado,
-  // o cliente fica identificado. Continuam existindo dois caminhos legitimos de
-  // correcao, e nenhum deles e um clique solto no cabecalho do chat:
-  //   - o proprio cliente responde "NAO" quando o bot confirma o CNPJ anterior
-  //     (chatbot.engine desfaz o vinculo e pergunta o novo);
-  //   - o administrador desvincula o contato em Clientes (CNPJ), onde a acao tem
-  //     o contexto da empresa inteira (parceiro.service.desvincularContato).
+  // o cliente fica identificado. Existe UM caminho de correcao, e ele nao e um
+  // clique solto em tela nenhuma: o proprio cliente responde "NAO" quando o bot
+  // confirma o CNPJ anterior, e o motor desassocia a conversa e pergunta o novo
+  // (chatbot.engine._desassociarCnpj).
+  //
+  // O outro caminho que existia -- desvincular o contato a mao em Clientes
+  // (CNPJ) -- tambem foi removido, junto com a rota que ele chamava: eram duas
+  // regras disputando o mesmo vinculo, e a manual nao tinha contexto nenhum.
 
   async solicitarCnpj(id, userCargo = null) {
     const conversa = await conversaRepository.findById(id);

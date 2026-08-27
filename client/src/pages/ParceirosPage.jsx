@@ -163,31 +163,6 @@ export default function ParceirosPage() {
     }
   }
 
-  // Desmarca um contato do WhatsApp desta empresa. O vinculo vem das conversas
-  // (quem informou o CNPJ), entao o servidor limpa o CNPJ das conversas daquele
-  // telefone -- elas voltam para "CNPJ pendente" na Central.
-  async function desvincularContato(cnpj, contato) {
-    const quem = contato.nome && contato.nome !== contato.telefone
-      ? `${contato.nome} (${contato.telefone})`
-      : contato.telefone;
-    if (!window.confirm(
-      `Desmarcar ${quem} desta empresa?\n\n` +
-      'As conversas desse contato voltam para "CNPJ pendente".'
-    )) return;
-    try {
-      await ParceirosAPI.desvincularContato(cnpj, contato.telefone);
-      // Tira a badge na hora, sem recarregar a lista inteira.
-      atualizarParceiros(parceiros.map(p => (
-        p.cnpj === cnpj
-          ? { ...p, contatos: (p.contatos || []).filter(ct => ct.telefone !== contato.telefone) }
-          : p
-      )));
-      setErro('');
-    } catch (err) {
-      setErro(`Não foi possível desmarcar o contato: ${err.message}`);
-    }
-  }
-
   async function alternarStatus(c) {
     try {
       const alt = await ParceirosAPI.alternarStatus(c);
@@ -361,26 +336,25 @@ export default function ParceirosPage() {
                 )}
                 {/* Quem fala por esta empresa no WhatsApp: contatos que ja
                     informaram este CNPJ num atendimento. Vem do backend
-                    (conversas com o CNPJ confirmado). */}
+                    (conversas com o CNPJ confirmado).
+
+                    SO LEITURA, de proposito. Havia um "X" aqui para desmarcar o
+                    contato a mao. Quem sabe se o CNPJ esta certo e o CLIENTE, e
+                    ele ja responde isso no fluxo ("o CNPJ continua sendo
+                    este?"): o NAO desassocia a conversa dele sozinho. Um botao
+                    que apagava o vinculo de todas as conversas de um telefone
+                    disputava a mesma decisao com o bot -- e o endpoint que ele
+                    chamava tambem foi removido do servidor. */}
                 {Array.isArray(p.contatos) && p.contatos.length > 0 && (
                   <div className="flex flex-wrap items-center gap-1.5 pt-1.5">
                     {p.contatos.slice(0, 4).map(ct => (
                       <span
                         key={ct.telefone}
                         title={`${ct.nome || 'Contato'} · ${ct.telefone} informou este CNPJ no atendimento`}
-                        className="inline-flex items-center gap-1 rounded-md border border-blue-500/30 bg-blue-500/10 pl-2 pr-1 py-0.5 text-[10px] font-bold text-blue-300"
+                        className="inline-flex items-center gap-1 rounded-md border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[10px] font-bold text-blue-300"
                       >
                         <MessageCircle size={10} />
                         {ct.nome && ct.nome !== ct.telefone ? ct.nome : ct.telefone}
-                        {/* Desmarcar: quando o contato informou o CNPJ errado. */}
-                        <button
-                          onClick={() => desvincularContato(p.cnpj, ct)}
-                          title="Desmarcar este contato da empresa"
-                          aria-label={`Desmarcar ${ct.nome || ct.telefone}`}
-                          className="ml-0.5 rounded p-0.5 text-blue-300/70 hover:text-falha-400 hover:bg-falha/15 transition-colors"
-                        >
-                          <X size={10} />
-                        </button>
                       </span>
                     ))}
                     {p.contatos.length > 4 && (

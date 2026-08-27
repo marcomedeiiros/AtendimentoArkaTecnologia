@@ -266,6 +266,36 @@ function resumoAutomacoes(fluxo) {
     });
   }
 
+  // TRIAGEM POR SETOR -- so aparece se o fluxo realmente declarar setor em
+  // alguma opcao. E a resposta a "de onde vem o setor desta conversa?": das
+  // opcoes abaixo, e de nenhum outro lugar. Nao ha setor padrao e nao ha
+  // deducao por palavra-chave; sem escolha, a conversa fica "Geral" (sem setor).
+  const triagem = [];
+  for (const passo of passos) {
+    for (const op of passo.config?.opcoes || []) {
+      if (op?.setor) {
+        triagem.push({ rotulo: `"${op.rotulo || op.id}"`, valor: `define o setor ${op.setor}` });
+      }
+      if (op?.limparCnpj) {
+        triagem.push({
+          rotulo: `"${op.rotulo || op.id}"`,
+          valor: "desassocia o CNPJ da conversa (o cadastro da empresa é preservado)",
+        });
+      }
+    }
+  }
+  if (triagem.length) {
+    itens.push({
+      grupo: "Triagem por setor",
+      passoId: "triagem",
+      passoTitulo: "Opções do menu",
+      regras: [
+        { rotulo: "Antes da escolha", valor: "Sem setor (Geral) todo mundo vê" },
+        ...triagem,
+      ],
+    });
+  }
+
   const passoAval = passos.find((p) => p.tipo === "avaliacao");
   if (passoAval) {
     const cfg = paramsAvaliacao(passoAval);

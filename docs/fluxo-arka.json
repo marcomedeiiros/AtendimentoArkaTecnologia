@@ -1,6 +1,6 @@
 {
   "versao": 1,
-  "exportadoEm": "2026-08-27T02:31:13.072Z",
+  "exportadoEm": "2026-08-27T03:10:00.000Z",
   "nome": "ARKA - Atendimento com validação de contrato",
   "gatilho": "*",
   "ativo": true,
@@ -106,7 +106,8 @@
               "suporte"
             ],
             "acao": "ir",
-            "targetId": "36dd5d23-fc62-4d04-b5a9-9b314fa980e9"
+            "targetId": "36dd5d23-fc62-4d04-b5a9-9b314fa980e9",
+            "setor": "Técnico"
           },
           {
             "id": "mp_2",
@@ -119,7 +120,8 @@
               "vendas"
             ],
             "acao": "ir",
-            "targetId": "b73fcce1-2ad1-4d8c-b714-3bf8625de2ba"
+            "targetId": "b73fcce1-2ad1-4d8c-b714-3bf8625de2ba",
+            "setor": "Comercial"
           },
           {
             "id": "mp_3",
@@ -134,7 +136,8 @@
               "faturamento"
             ],
             "acao": "ir",
-            "targetId": "d7a24e07-b890-4521-a5c3-925cf8f05660"
+            "targetId": "d7a24e07-b890-4521-a5c3-925cf8f05660",
+            "setor": "Financeiro"
           },
           {
             "id": "mp_4",
@@ -279,7 +282,8 @@
               "errado"
             ],
             "acao": "ir",
-            "targetId": "c385b84c-a900-4fae-a36b-085dfcc7fcc2"
+            "targetId": "c385b84c-a900-4fae-a36b-085dfcc7fcc2",
+            "limparCnpj": true
           },
           {
             "id": "res_3",

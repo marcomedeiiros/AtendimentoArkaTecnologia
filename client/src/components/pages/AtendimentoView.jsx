@@ -142,51 +142,50 @@ function semAcento(s) {
   return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
-// Setores que a Central sinaliza no cartao. `setor` casa com os cargos que o
-// back-end aceita (Técnico / Financeiro / Comercial), para que a badge combine
-// com o roteamento por setor que ja existe em conversa.service.js.
+// Setores que a Central sinaliza no cartao. `setor` casa caractere por
+// caractere com o que o back-end grava (shared/helpers/setor.helper.js), porque
+// e o mesmo valor que decide quem enxerga qual conversa.
 //
-// `explicito` = o cliente nomeou o setor ("quero falar com o financeiro").
-// `assunto`   = ele nao nomeou, mas o assunto entrega o setor ("meu boleto").
-// O explicito e checado primeiro: nomear vale mais do que deduzir.
+// AQUI NAO SE ADIVINHA SETOR. Existia nesta lista um par de dicionarios
+// (`explicito` / `assunto`) que lia as mensagens do cliente e chutava o setor
+// por palavra-chave. O efeito: uma conversa NOVA, em que o cliente apenas
+// escreveu "meu computador travou", ja aparecia com a badge ATENDENTE TÉCNICO
+// -- antes de o menu ser respondido, e sem ninguem ter escolhido nada. Pior: o
+// palpite era so da tela, entao a Central dizia "Técnico" enquanto o Dashboard
+// e os Feedbacks, que leem o campo gravado, diziam "Geral".
+//
+// A badge agora e um espelho do banco: o setor so muda quando o cliente escolhe
+// uma opcao do menu, e o motor grava (chatbot.engine.aplicarOpcao).
 const SETORES = [
   {
     id: 'tecnico',
     setor: 'Técnico',
-    label: 'ATENDENTE TÉCNICO',
+    label: 'SETOR TÉCNICO',
     classe: 'bg-blue-500/15 border-blue-500/30 text-blue-300',
-    explicito: ['tecnico', 'tecnica'],
-    assunto: [
-      'nao funciona', 'nao esta funcionando', 'parou de funcionar', 'deu erro',
-      'erro no', 'travou', 'travando', 'lento', 'sem sinal', 'sem internet',
-      'sem conexao', 'configurar', 'configuracao', 'instalacao', 'instalar',
-      'manutencao', 'defeito', 'suporte',
-    ],
   },
   {
     id: 'financeiro',
     setor: 'Financeiro',
-    label: 'FINANCEIRO',
+    label: 'ADM/FINANCEIRO',
     classe: 'bg-espera/15 border-espera/30 text-espera-400',
-    explicito: ['financeiro', 'financeira'],
-    assunto: [
-      'boleto', 'fatura', 'segunda via', '2 via', 'pagamento', 'pagar',
-      'cobranca', 'cobrado', 'mensalidade', 'nota fiscal', 'pix', 'estorno',
-      'reembolso', 'vencimento', 'em atraso', 'debito',
-    ],
   },
   {
     id: 'comercial',
     setor: 'Comercial',
     label: 'COMERCIAL',
     classe: 'bg-purple-500/15 border-purple-500/30 text-purple-300',
-    explicito: ['comercial', 'vendas', 'vendedor'],
-    assunto: [
-      'orcamento', 'proposta', 'contratar', 'quanto custa', 'preco', 'valor',
-      'plano', 'assinar', 'upgrade', 'revenda', 'parceria', 'tabela de preco',
-    ],
   },
 ];
+
+// Conversa ainda nao triada. No banco isso e "Geral" (o setor que todo mundo
+// enxerga); na tela o nome honesto e "sem setor" -- ninguem escolheu nada
+// ainda. E o estado de TODA conversa nova, ate o cliente responder o menu.
+const SEM_SETOR = {
+  id: 'geral',
+  setor: 'Geral',
+  label: 'SEM SETOR',
+  classe: 'bg-slate-700/50 border-linha-forte text-slate-300',
+};
 
 /**
  * Nome da empresa do cliente, para exibição.
@@ -242,30 +241,17 @@ function chipDoCliente(c, parceiros = []) {
       };
 }
 
-// Qual setor o cliente pediu nesta conversa. Devolve null quando nada indica
-// setor -- ai o cartao nao mostra badge, em vez de chutar um.
+/**
+ * Setor da conversa -- LIDO do banco, nunca deduzido.
+ *
+ * Uma unica fonte: o campo `setor` que o servidor gravou quando o cliente
+ * escolheu uma opcao do menu. Sem escolha ainda, "SEM SETOR".
+ *
+ * Sempre devolve uma badge (nunca null): "sem setor" e uma informacao que quem
+ * atende precisa ver -- essa conversa ainda nao foi triada.
+ */
 function setorDaConversa(c) {
-  // 1) Roteamento explicito ganha do palpite: se o setor da conversa ja foi
-  //    definido (PATCH /conversas/:id/setor), e ele que vale.
-  const doCadastro = SETORES.find(s => semAcento(s.setor) === semAcento(c.setor));
-  if (doCadastro) return doCadastro;
-
-  // 2) Senao, le o que o CLIENTE escreveu, do mais recente para o mais antigo:
-  //    quem trocou de assunto no meio da conversa quer o setor novo.
-  const falas = (c.mensagens || [])
-    .filter(m => m.de === 'cliente' && m.texto)
-    .map(m => semAcento(m.texto))
-    .reverse();
-
-  for (const t of falas) {
-    const achou = SETORES.find(s => s.explicito.some(p => t.includes(p)));
-    if (achou) return achou;
-  }
-  for (const t of falas) {
-    const achou = SETORES.find(s => s.assunto.some(p => t.includes(p)));
-    if (achou) return achou;
-  }
-  return null;
+  return SETORES.find(s => semAcento(s.setor) === semAcento(c?.setor)) || SEM_SETOR;
 }
 
 // Metadados visuais dos 3 status (🟢 Aberta / 🟡 Pendente / 🔴 Fechada).
@@ -281,7 +267,9 @@ const STATUS_META = {
 // (shared/helpers/setor.helper.js) -- e ela que decide quem ve qual conversa,
 // entao os nomes precisam bater caractere por caractere.
 const SETORES_ATENDIMENTO = [
-  { id: 'Geral',      desc: 'Ainda sem triagem todo mundo vê.' },
+  // 'Geral' e o valor gravado no banco; na tela ele se chama 'Sem Setor',
+  // que e o que ele significa: ninguem escolheu setor ainda.
+  { id: 'Geral',      label: 'Sem Setor',  desc: 'Ainda sem triagem todo mundo vê.' },
   { id: 'Técnico',    desc: 'Suporte, instalação, defeito.' },
   { id: 'Financeiro', desc: 'Boleto, fatura, cobrança.' },
   { id: 'Comercial',  desc: 'Orçamento, proposta, novo contrato.' },
@@ -594,7 +582,7 @@ function ModalNovaConversa({ onFechar, onEnviar, enviando, erro, inicial }) {
                     }`}
                   >
                     <div className={`text-[11px] font-bold ${ativo ? 'text-acao-200' : 'text-slate-300'}`}>
-                      {s.id}
+                      {s.label || s.id}
                     </div>
                     <div className="text-[10px] text-slate-500 leading-snug mt-0.5">{s.desc}</div>
                   </button>
@@ -740,7 +728,7 @@ function PainelTv({ pendentes, abertas, parceiros, onFechar }) {
           </span>
           {setor && (
             <span className={`inline-flex items-center text-sm 2xl:text-base font-bold px-2.5 py-0.5 rounded-lg border ${setor.classe}`}
-              title={`Cliente quer o setor ${setor.setor}`}>
+              title={setor.id === 'geral' ? 'Ainda sem triagem: o cliente nao escolheu setor no menu' : `Setor escolhido pelo cliente: ${setor.setor}`}>
               {setor.label}
             </span>
           )}
@@ -1402,7 +1390,7 @@ const CardConversa = React.memo(function CardConversa({
             </span>
             {setor && (
               <span className={`shrink-0 inline-flex items-center text-[9px] font-bold px-1.5 py-px rounded-md border ${setor.classe}`}
-                title={`Cliente quer o setor ${setor.setor}`}>
+                title={setor.id === 'geral' ? 'Ainda sem triagem: o cliente nao escolheu setor no menu' : `Setor escolhido pelo cliente: ${setor.setor}`}>
                 {setor.label}
               </span>
             )}
@@ -1931,7 +1919,7 @@ function PainelChat({
                 sendo o motivo pelo qual o cliente chamou. */}
             {setorPedido && (
               <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border ${setorPedido.classe}`}
-                title={`Cliente quer o setor ${setorPedido.setor}`}>
+                title={setorPedido.id === 'geral' ? 'Ainda sem triagem: o cliente nao escolheu setor no menu' : `Setor escolhido pelo cliente: ${setorPedido.setor}`}>
                 {setorPedido.label}
               </span>
             )}

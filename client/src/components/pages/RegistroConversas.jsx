@@ -51,67 +51,22 @@ function rotuloAvaliacao(c) {
   return { texto: '-', titulo: 'Sem pesquisa de satisfação', cls: 'text-slate-500' };
 }
 
-// Normaliza para comparar palavra-chave (minusculo, sem acento).
-function semAcento(s) {
-  return String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-}
-
-// Mesmas palavras-chave do badge da Central: o que o cliente escreveu revela o
-// setor. `explicito` (ele nomeou o setor) vale mais que `assunto` (deduzido).
-const GATILHOS_SETOR = [
-  {
-    setor: 'Técnico',
-    explicito: ['tecnico', 'tecnica'],
-    assunto: [
-      'nao funciona', 'nao esta funcionando', 'parou de funcionar', 'deu erro',
-      'erro no', 'travou', 'travando', 'lento', 'sem sinal', 'sem internet',
-      'sem conexao', 'configurar', 'configuracao', 'instalacao', 'instalar',
-      'manutencao', 'defeito', 'suporte',
-    ],
-  },
-  {
-    setor: 'Financeiro',
-    explicito: ['financeiro', 'financeira'],
-    assunto: [
-      'boleto', 'fatura', 'segunda via', '2 via', 'pagamento', 'pagar',
-      'cobranca', 'cobrado', 'mensalidade', 'nota fiscal', 'pix', 'estorno',
-      'reembolso', 'vencimento', 'em atraso', 'debito',
-    ],
-  },
-  {
-    setor: 'Comercial',
-    explicito: ['comercial', 'vendas', 'vendedor'],
-    assunto: [
-      'orcamento', 'proposta', 'contratar', 'quanto custa', 'preco', 'valor',
-      'plano', 'assinar', 'upgrade', 'revenda', 'parceria', 'tabela de preco',
-    ],
-  },
-];
-
 const SETORES_CONHECIDOS = ['Financeiro', 'Técnico', 'Comercial'];
 
-// Setor "efetivo" mostrado no Registro: o que o CLIENTE escolheu.
-//   1) se a conversa ja tem um setor especifico gravado, usa ele;
-//   2) senao, deduz pelo que o cliente escreveu (explicito > assunto), lendo
-//      da fala mais recente para a mais antiga;
-//   3) senao, "Geral".
+/**
+ * Setor da conversa no Registro -- LIDO do banco, nunca deduzido.
+ *
+ * Havia aqui uma segunda copia do dicionario de palavras-chave da Central, que
+ * lia as mensagens do cliente e chutava o setor ("boleto" -> Financeiro). Eram
+ * duas copias da mesma adivinhacao em duas telas, e uma terceira no servidor:
+ * o Registro mostrava "Técnico" onde o Dashboard -- que le o campo gravado --
+ * mostrava "Geral", e nenhum dos dois estava lendo uma escolha real do cliente.
+ *
+ * Fonte unica agora: `c.setor`, gravado pelo motor no instante em que o cliente
+ * escolhe a opcao do menu. Sem escolha, "Sem Setor".
+ */
 function setorEfetivo(c) {
-  if (SETORES_CONHECIDOS.includes(c.setor)) return c.setor;
-
-  const falas = (c.mensagens || [])
-    .filter((m) => m.de === 'cliente' && m.texto)
-    .map((m) => semAcento(m.texto))
-    .reverse();
-
-  for (const t of falas) {
-    const achou = GATILHOS_SETOR.find((g) => g.explicito.some((p) => t.includes(p)));
-    if (achou) return achou.setor;
-  }
-  for (const t of falas) {
-    const achou = GATILHOS_SETOR.find((g) => g.assunto.some((p) => t.includes(p)));
-    if (achou) return achou.setor;
-  }
-  return 'Geral';
+  return SETORES_CONHECIDOS.includes(c?.setor) ? c.setor : 'Sem Setor';
 }
 
 function baixar(nome, conteudo, tipo = 'text/plain;charset=utf-8;') {

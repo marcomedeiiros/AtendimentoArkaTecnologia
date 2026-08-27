@@ -15,9 +15,9 @@ const { comLock } = require("../../shared/helpers/lock.helper");
 // PARAMETROS DA AUTOMACAO: quem manda e o FLUXO, nao o codigo. Ver
 // fluxos/fluxo.automacao.js -- todo texto, tentativa e prazo do bot sai de la.
 const { paramsCnpj, paramsAvaliacao, paramsTempos } = require("../fluxos/fluxo.automacao");
-// Setor do atendimento deduzido do que o cliente pediu, quando o fluxo nao
-// informa um explicitamente (ver setorDetectado.helper).
-const { resolverSetor } = require("../../shared/helpers/setorDetectado.helper");
+// Setor do atendimento: so por DECLARACAO (opcao escolhida no menu, mapa de
+// filas, ou o que a conversa ja tem). Nunca deduzido do texto -- ver setor.helper.
+const { resolverSetorDeclarado } = require("../../shared/helpers/setor.helper");
 const { mapConversa } = require("../../shared/helpers/mapper.helper");
 const configuracaoService = require("../configuracoes/configuracao.service");
 const n8nClient = require("../../infrastructure/external/n8n.client");
@@ -586,15 +586,35 @@ class ChatbotEngine {
     const cfg = paramsCnpj(passo);
     if (!cfg.memoria) return pedirNormal;
     try {
-      const anterior = await this.deps.conversaRepository.ultimoCnpjDoTelefone(
-        conversa.telefone,
-        conversa.id
-      );
+      // POR QUE A CONVERSA ATUAL CONTA COMO MEMORIA.
+      //
+      // Esta consulta nasceu quando CADA atendimento criava uma linha de
+      // conversa nova: o CNPJ ficava na linha ANTIGA, e passar `conversa.id`
+      // como `ignorarConversaId` apenas evitava a auto-referencia.
+      //
+      // Com "uma conversa por cliente", o fio e reaproveitado entre
+      // atendimentos -- o CNPJ do atendimento anterior mora NA MESMA LINHA. O
+      // `ignorarConversaId` deixou de proteger contra auto-referencia e passou
+      // a filtrar a unica memoria existente: a consulta devolvia sempre null e
+      // o bot nunca perguntava "o CNPJ continua sendo este?".
+      //
+      // Entao a memoria e, nesta ordem: o CNPJ da PROPRIA conversa (o caso
+      // normal hoje) e, como rede de seguranca, o de outra conversa do mesmo
+      // telefone (outra instancia, ou duplicata ainda nao consolidada).
+      const daPropriaConversa =
+        conversa.cnpjVerificado && conversa.cnpj
+          ? { cnpj: conversa.cnpj, empresa: conversa.empresa }
+          : null;
+      const anterior =
+        daPropriaConversa ||
+        (await this.deps.conversaRepository.ultimoCnpjDoTelefone(conversa.telefone));
       if (!anterior?.cnpj) return pedirNormal;
 
       const parceiro = await this.deps.parceiroRepository.findAtivoByCnpj(anterior.cnpj);
       const cnpjFmt = mascararCnpj(anterior.cnpj);
-      const empresaNome = parceiro?.razaoSocial || "";
+      // `anterior.empresa` e a razao social gravada quando o CNPJ foi
+      // identificado: ela sobrevive mesmo se a empresa sair do cadastro depois.
+      const empresaNome = parceiro?.razaoSocial || anterior.empresa || "";
 
       // Dois modelos porque a pergunta muda: com razao social conhecida se
       // confirma A EMPRESA; sem ela, so resta mostrar o numero.
@@ -614,6 +634,40 @@ class ChatbotEngine {
       logger.warn("Falha ao consultar CNPJ anterior do contato", { message: e.message });
       return pedirNormal;
     }
+  }
+
+  /**
+   * DESASSOCIAR o CNPJ DESTA CONVERSA -- e so isto.
+   *
+   * O cliente disse que o CNPJ oferecido nao e o dele. A conversa volta para
+   * "CNPJ pendente" e o bot pede outro.
+   *
+   * O QUE ESTE METODO NAO FAZ, de proposito: apagar a empresa do cadastro de
+   * Clientes, ou mexer no CNPJ de qualquer OUTRA conversa. O historico daquele
+   * CNPJ continua inteiro no banco -- "nao e o meu CNPJ" e uma correcao de
+   * vinculo, nunca uma exclusao de cliente.
+   *
+   * E o unico caminho de desassociacao do sistema: a acao manual equivalente
+   * (o "X" na tela Clientes/CNPJ) foi removida justamente para que isto
+   * acontecesse so aqui, dentro da etapa do fluxo que pergunta.
+   */
+  async _desassociarCnpj(conversa) {
+    if (!conversa?.cnpj && !conversa?.cnpjVerificado) return false;
+    await this.deps.conversaRepository.update(conversa.id, {
+      cnpj: null,
+      empresa: null,
+      cnpjVerificado: false,
+    });
+    // O objeto em memoria segue sendo usado no resto do passo: sem isto, a
+    // consulta da memoria logo adiante reofereceria o CNPJ recem-recusado.
+    conversa.cnpj = null;
+    conversa.empresa = null;
+    conversa.cnpjVerificado = false;
+    await this._emitirConversa(conversa.id);
+    logger.info("CNPJ desassociado da conversa (cadastro preservado)", {
+      conversaId: conversa.id,
+    });
+    return true;
   }
 
   /**
@@ -695,10 +749,7 @@ class ChatbotEngine {
   async transferirParaHumano(
     // eslint-disable-next-line no-unused-vars
     ctx,
-    // `rotuloOpcao`: o texto da opcao que o cliente escolheu no menu ("1,tecnico,
-    // suporte tecnico"). E o sinal mais confiavel do setor -- no menu o cliente
-    // digita so "1", entao a fala dele nao diz nada, mas a opcao diz.
-    { avisar = true, motivo = "solicitado", setor = null, filaId = null, rotuloOpcao = null } = {}
+    { avisar = true, motivo = "solicitado", setor = null, filaId = null } = {}
   ) {
     const { conversa, telefone, instanciaId, instanceName } = ctx;
 
@@ -707,19 +758,20 @@ class ChatbotEngine {
 
     const dados = { statusAtendimento: "pendente", lido: false };
 
-    // SETOR DO ATENDIMENTO -- gravado, nao adivinhado depois por cada tela.
+    // SETOR DO ATENDIMENTO -- gravado, nunca adivinhado.
     //
-    // `filaId` vem do editor de origem (queueId: 33, 35...) e so vira setor se
-    // alguem tiver preenchido o mapa em Configuracoes. Com o mapa vazio, o setor
-    // ficava nulo e TODA conversa era gravada como "Geral" -- o que fazia a aba
-    // de Feedbacks classificar tudo como "Atendimento Geral". Agora, sem setor
-    // explicito nem mapa, deduzimos do que o cliente escolheu/escreveu e
-    // gravamos: Conversa, OS e Feedback passam a ler o mesmo valor.
-    const setorFinal = resolverSetor({
+    // Este metodo e alcancado por caminhos que NAO sao escolha do cliente: menu
+    // sem gatilho, timeout de "cliente nao respondeu", ramificacao sem destino.
+    // Deduzir o setor do texto aqui era o que fazia uma conversa nova -- em que
+    // o cliente so disse "meu computador travou" -- nascer como Tecnico sem
+    // ninguem ter escolhido nada.
+    //
+    // `setorAtual` preserva o que o cliente JA escolheu no menu: um handoff no
+    // meio do caminho nao pode rebaixar a conversa de volta para "sem setor".
+    const setorFinal = resolverSetorDeclarado({
       setorExplicito: setor,
       setorDaFila: null,
-      conversa,
-      rotuloOpcao,
+      setorAtual: conversa.setor,
     });
     dados.setor = setorFinal;
 
@@ -1508,6 +1560,38 @@ class ChatbotEngine {
     const { conversa, telefone, instanceName, fluxo } = contexto;
     const globais = this.configuracoesGlobais(fluxo);
 
+    // ---------------------------------------------------------------------
+    // AQUI, E SO AQUI, O CLIENTE DEFINE O SETOR.
+    //
+    // `opcao.setor` vem do JSON do fluxo ("1 - Setor Tecnico" -> "Tecnico").
+    // Antes disto, nenhuma opcao carregava setor: a escolha do menu nao gravava
+    // nada e o setor so aparecia no handoff, deduzido do texto. Agora a escolha
+    // e persistida no instante em que acontece -- e como Conversa, OS e
+    // Feedback leem esse mesmo campo, as tres telas concordam sem F5.
+    // ---------------------------------------------------------------------
+    if (opcao.setor) {
+      const setorEscolhido = resolverSetorDeclarado({ setorExplicito: opcao.setor });
+      if (conversa.setor !== setorEscolhido) {
+        await this.deps.conversaRepository.update(conversa.id, { setor: setorEscolhido });
+        await this.deps.conversaRepository.atualizarAtendimentoAtual(conversa.id, {
+          setor: setorEscolhido,
+        });
+        conversa.setor = setorEscolhido;
+        await this._emitirConversa(conversa.id);
+        logger.info("Setor definido pela escolha do cliente", {
+          conversaId: conversa.id,
+          opcao: opcao.id,
+          setor: setorEscolhido,
+        });
+      }
+    }
+
+    // "INFORMAR OUTRO CNPJ": o cliente esta dizendo que o CNPJ vinculado nao
+    // serve. Mesma acao do "NAO" na confirmacao -- desassocia a conversa, sem
+    // tocar no cadastro da empresa -- e por isso reusa o mesmo metodo. Sem
+    // isto, a etapa de CNPJ ofereceria de volta exatamente o CNPJ recusado.
+    if (opcao.limparCnpj) await this._desassociarCnpj(conversa);
+
     if (opcao.acao === "encerrar") {
       const despedida = opcao.mensagemEncerramento || globais?.farewellMessage?.message || null;
       return this.encerrarAtendimento(
@@ -1531,13 +1615,10 @@ class ChatbotEngine {
         const mapa = await this.deps.configuracaoService.filasParaSetor();
         setor = mapa[String(filaId)] || null;
       }
-      // O rotulo da opcao vai junto: e o que permite deduzir o setor quando nao
-      // ha setor explicito nem mapa de filas configurado.
       return this.transferirParaHumano(contexto, {
         motivo: "fluxo_transferiu",
         setor,
         filaId,
-        rotuloOpcao: opcao.rotulo || opcao.label || null,
       });
     }
 
@@ -1667,15 +1748,8 @@ class ChatbotEngine {
 
       // "nao" (ou sugestao invalida): o CNPJ oferecido nao serve.
       // Desvincula o que estiver na conversa -- ela volta para "CNPJ pendente"
-      // na Central -- e pede o correto.
-      if (conversa.cnpj || conversa.cnpjVerificado) {
-        await this.deps.conversaRepository.update(conversa.id, {
-          cnpj: null,
-          empresa: null,
-          cnpjVerificado: false,
-        });
-        await this._emitirConversa(conversa.id);
-      }
+      // na Central -- e pede o correto. O cadastro da empresa NAO e tocado.
+      await this._desassociarCnpj(conversa);
       await this.enviarBot(
         conversa.id,
         telefone,

@@ -1,7 +1,7 @@
 const parceiroRepository = require("../../infrastructure/repositories/parceiro.repository");
 const conversaRepository = require("../../infrastructure/repositories/conversa.repository");
 const logger = require("../../config/logger");
-const { mapParceiro, mapConversa } = require("../../shared/helpers/mapper.helper");
+const { mapParceiro } = require("../../shared/helpers/mapper.helper");
 const bus = require("../../shared/events/event-bus");
 const { limparCnpj, cnpjValido } = require("../../shared/helpers/cnpj.helper");
 const { TIPOS_CONTRATO } = require("./parceiro.dto");
@@ -35,39 +35,17 @@ class ParceiroService {
     }));
   }
 
-  // Desmarca um contato desta empresa: limpa o CNPJ das conversas daquele
-  // telefone (o vinculo vem justamente dali). As conversas voltam para "CNPJ
-  // pendente" -- util quando a pessoa informou o CNPJ errado.
-  async desvincularContato(cnpj, telefone) {
-    const cnpjLimpo = limparCnpj(cnpj);
-    const tel = String(telefone || "").replace(/\D/g, "");
-    if (!cnpjValido(cnpjLimpo)) throw new AppError("CNPJ invalido", 400, "INVALID_CNPJ");
-    if (!tel) throw new AppError("Telefone invalido", 400, "TELEFONE_INVALIDO");
-
-    const ids = await conversaRepository.limparCnpjDoContato(tel, cnpjLimpo);
-    // Empurra cada conversa afetada pelo SSE. Sem isto, a Central continuava
-    // mostrando a empresa antiga ate alguem apertar F5: a escrita acontecia por
-    // updateMany, fora dos caminhos que emitem.
-    await this._emitirConversas(ids);
-    bus.emitRecurso("parceiros");
-    logger.info("Contato desvinculado do CNPJ", {
-      cnpj: cnpjLimpo,
-      telefone: tel,
-      afetadas: ids.length,
-    });
-    return { desvinculado: true, conversasAfetadas: ids.length };
-  }
-
-  async _emitirConversas(ids) {
-    for (const id of ids) {
-      try {
-        const conversa = await conversaRepository.findById(id);
-        if (conversa) bus.emitConversa(mapConversa(conversa));
-      } catch (e) {
-        logger.warn("Falha ao emitir conversa apos mudanca de CNPJ", { id, message: e.message });
-      }
-    }
-  }
+  // NAO HA `desvincularContato` AQUI, e isso e a regra de negocio.
+  //
+  // Ele desmarcava um contato da empresa a mao (o "X" da tela Clientes/CNPJ),
+  // limpando o CNPJ de todas as conversas daquele telefone. Quem sabe se o CNPJ
+  // esta certo e o proprio cliente, e ele ja responde isso no fluxo do bot -- o
+  // "NAO" em "o CNPJ continua sendo este?" desassocia a conversa dele, e so a
+  // dele (chatbot.engine._desassociarCnpj). Ter as duas portas significava duas
+  // regras disputando o mesmo vinculo, uma delas sem contexto nenhum.
+  //
+  // A listagem acima continua mostrando os contatos: saber QUEM fala pela
+  // empresa e informacao util; poder apagar esse vinculo a mao e que nao era.
 
   async criar({ cnpj, razaoSocial, email, telefones, cidades, contratos, status = "ativo" }) {
     const cnpjLimpo = limparCnpj(cnpj);

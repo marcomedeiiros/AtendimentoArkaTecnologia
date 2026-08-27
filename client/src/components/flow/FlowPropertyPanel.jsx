@@ -496,6 +496,31 @@ export function FlowPropertyPanel({
                     <div className="text-[10px] text-slate-400 flex items-center gap-1">
                       <span className="text-blue-400">→</span> {descreverDestino(op)}
                     </div>
+                    {/* O QUE ESTA OPCAO DECIDE, alem de para onde ela vai.
+                        Setor e desassociacao de CNPJ sao regras do fluxo, e nao
+                        do codigo -- entao precisam ser legiveis aqui, senao a
+                        unica forma de saber que "1" define o Setor Técnico
+                        seria abrir o JSON. */}
+                    {(op.setor || op.limparCnpj) && (
+                      <div className="flex flex-wrap gap-1">
+                        {op.setor && (
+                          <span
+                            title="Ao escolher esta opção, a conversa passa a ser deste setor"
+                            className="text-[9px] px-1.5 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/30 text-blue-300 font-bold"
+                          >
+                            define setor: {op.setor}
+                          </span>
+                        )}
+                        {op.limparCnpj && (
+                          <span
+                            title="Desassocia o CNPJ desta conversa (o cadastro da empresa não é tocado) e pede outro"
+                            className="text-[9px] px-1.5 py-0.5 rounded-md bg-espera/10 border border-espera/30 text-espera-400 font-bold"
+                          >
+                            desassocia CNPJ
+                          </span>
+                        )}
+                      </div>
+                    )}
                     {op.mensagemEncerramento && (
                       <div className="text-[10px] text-slate-500 italic line-clamp-2 break-words">
                         “{op.mensagemEncerramento}”
