@@ -24,7 +24,7 @@ import { usePreferencia } from '../../hooks/usePreferencia';
 import { contatoCombina, normalizarBusca, telefoneComparavel } from '../../utils/busca';
 import { FUSO_BR } from '../../utils/data';
 import { mesclarConversa, registrarApagada, desfazerApagada } from '../../utils/mesclarConversa';
-import { formatarComAssinatura } from '../../utils/assinatura';
+import { formatarComAssinatura, formatarLegendaComAssinatura } from '../../utils/assinatura';
 import { CATEGORIAS_EMOJI, TODOS_EMOJIS } from './emojis';
 
 // O responsavel pelo atendimento agora vem do banco (conversa.atendenteNome /
@@ -1743,7 +1743,7 @@ function PainelChat({
     // WhatsApp (o servidor zera `caption` para áudio, em enviarMidia). Assinar
     // ali só criaria uma legenda que ninguém vê.
     const ehAudio = anexo.tipo === 'audio';
-    const legenda = ehAudio ? '' : formatarComAssinatura(texto, assinar, assinaturaNome);
+    const legenda = ehAudio ? '' : formatarLegendaComAssinatura(texto, assinar, assinaturaNome);
     const payload = {
       tipo: anexo.tipo,
       media,

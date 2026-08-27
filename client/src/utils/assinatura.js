@@ -14,6 +14,25 @@
  * criaria um texto que ninguém veria.
  */
 
+/**
+ * Assinatura da LEGENDA de uma mídia.
+ *
+ * Difere de `formatarComAssinatura` num ponto só, e é justamente o caso comum:
+ * **mídia sem texto**. Mandar um print sem escrever nada é normal -- e era aí
+ * que a assinatura sumia, porque texto vazio devolve vazio (numa mensagem de
+ * texto, "só o nome" seria uma mensagem sem conteúdo; numa foto, é a legenda
+ * correta). Quem manda a foto continua sendo alguém, e o cliente precisa saber
+ * com quem está falando.
+ *
+ * Não se aplica a áudio: áudio não tem legenda no WhatsApp -- ver o cabeçalho.
+ */
+export function formatarLegendaComAssinatura(texto, assinar, nome) {
+  const comTexto = formatarComAssinatura(texto, assinar, nome);
+  if (comTexto) return comTexto;
+  const nomeLimpo = typeof nome === 'string' ? nome.trim() : '';
+  return assinar && nomeLimpo ? `*${nomeLimpo}*` : '';
+}
+
 export function formatarComAssinatura(texto, assinar, nome) {
   if (typeof texto !== 'string') return '';
   const limpo = texto.trim();
