@@ -668,12 +668,41 @@ export const ConversasAPI = {
   remover: (id) => request(`/conversas/${id}`, { method: 'DELETE' }),
   // Ticket de uso unico para autenticar o EventSource (SSE) sem JWT na URL.
   streamTicket: () => request('/conversas/stream-ticket', { method: 'POST' }),
-  // Envio de midia via XHR: expoe progresso de upload e permite cancelar.
-  // Retorna { promise, cancel }.
-  // Este caminho e XHR (e nao `request`) porque precisa de progresso de upload
-  // e de cancelamento -- entao a renovacao de sessao tambem tem que existir
-  // aqui. Um video de 20MB pode atravessar o vencimento do token: sem isto, o
-  // envio morria com 401 e a tela parecia dizer que midia nao funciona.
+  /**
+   * Envio de midia via XHR. Retorna { promise, cancel }.
+   *
+   * ── POR QUE ESTE CAMINHO NAO USA `request` ────────────────────────────────
+   *
+   * Porque precisa de duas coisas que `fetch` nao da: PROGRESSO de upload e
+   * CANCELAMENTO. Um vídeo de 20MB sem barra de progresso parece travado.
+   *
+   * ── E POR QUE ELE PRECISA DOS MESMOS CABECALHOS ───────────────────────────
+   *
+   * Ser um caminho separado foi exatamente o problema. Quando a sessao passou
+   * para cookie HttpOnly, `request` ganhou o `X-CSRF-Token` e ESTA funcao ficou
+   * para tras -- ela montava os cabecalhos a mao, com `Content-Type` e um
+   * `Authorization` que, depois da migracao, nem existe mais (o token antigo do
+   * localStorage foi apagado).
+   *
+   * O resultado: o XHR chegava ao servidor COM o cookie de sessao (o navegador
+   * o manda sozinho), SEM Bearer e SEM o header de CSRF. E exatamente o caso
+   * que o guard de double submit recusa:
+   *
+   *     403 "Requisicao sem confirmacao de origem. Recarregue a pagina."
+   *
+   * que a tela exibia como "Falha ao enviar mídia: ...". Valia para IMAGEM,
+   * VIDEO, AUDIO, DOCUMENTO e LOCALIZACAO de uma vez -- todos saem por aqui, e
+   * a requisicao morria no middleware, antes de qualquer codigo de mídia rodar.
+   * Nao eram cinco defeitos: era um, na porta.
+   *
+   * A correcao e usar `cabecalhosDeSessao()`, a MESMA funcao do `request`. Isso
+   * nao e so consertar: e impedir que aconteca de novo. Cabecalho de sessao
+   * novo passa a valer aqui automaticamente, em vez de depender de alguem
+   * lembrar deste arquivo.
+   *
+   * Os cabecalhos sao montados DENTRO de `disparar` de propósito: depois de uma
+   * renovacao o `arka_csrf` e outro, e reenviar com o valor antigo levaria 403.
+   */
   enviarMidia: (id, payload, onProgress) => {
     let xhrAtual = null;
     let cancelado = false;
@@ -682,9 +711,9 @@ export const ConversasAPI = {
       const xhr = new XMLHttpRequest();
       xhrAtual = xhr;
       xhr.open('POST', `${API_BASE}/conversas/${id}/midia`);
-      xhr.setRequestHeader('Content-Type', 'application/json');
-      const token = getToken();
-      if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      for (const [nome, valor] of Object.entries(cabecalhosDeSessao())) {
+        xhr.setRequestHeader(nome, valor);
+      }
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
       };
@@ -698,7 +727,10 @@ export const ConversasAPI = {
         // zero -- nao ha envio parcial para retomar -- e por isso a barra de
         // progresso volta ao inicio.
         if (xhr.status === 401 && !jaRenovou && !cancelado) {
-          return renovarSessao(token).then(
+          // `getToken()` e null no modo cookie -- e `renovarSessao` conta com
+          // isso: sem token guardado, quem identifica a sessao e o proprio
+          // cookie de renovacao.
+          return renovarSessao(getToken()).then(
             (novo) => (novo ? disparar(true).then(resolve, reject) : reject(new Error('Sua sessão expirou. Entre novamente para enviar.'))),
             () => reject(new Error('Sua sessão expirou. Entre novamente para enviar.'))
           );
