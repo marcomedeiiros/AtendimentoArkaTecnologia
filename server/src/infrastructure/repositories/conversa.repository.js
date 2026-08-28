@@ -659,6 +659,22 @@ class ConversaRepository {
     return !!msg;
   }
 
+  /**
+   * A BOLHA QUE FALHOU, para a tentativa seguinte reaproveitar.
+   *
+   * Sem isto, cada retentativa criaria uma mensagem nova: numa indisponibilidade
+   * de meia hora, a varredura de 60s empilharia 30 bolhas identicas com
+   * `status: "erro"` na conversa do cliente. Reaproveitando a linha, o operador
+   * ve UMA mensagem que vira "enviada" quando o envio finalmente passa.
+   */
+  ultimaMensagemBotComErro(conversaId, texto) {
+    return prisma.mensagem.findFirst({
+      where: { conversaId, origem: "bot", status: "erro", texto },
+      orderBy: { criadoEm: "desc" },
+      select: { id: true },
+    });
+  }
+
   // Usado para descartar webhooks reentregues pela Evolution API.
   existeMensagemWa(waMessageId) {
     if (!waMessageId) return Promise.resolve(null);

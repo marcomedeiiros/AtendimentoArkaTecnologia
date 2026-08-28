@@ -743,15 +743,29 @@ class ChatbotEngine {
    * Central sabe que NAO deve tocar o som de mensagem nova nem contar como
    * atividade do cliente quando o proprio bot pede a avaliacao.
    */
-  async enviarBot(conversaId, telefone, texto, instanceName) {
-    const msg = await this.deps.conversaRepository.addMensagem(
-      conversaId,
-      "bot",
-      texto,
-      { automacao: true },
-      null,
-      { status: "enviando" }
-    );
+  async enviarBot(conversaId, telefone, texto, instanceName, { reaproveitarFalha = false } = {}) {
+    // RETENTATIVA REAPROVEITA A BOLHA QUE FALHOU.
+    //
+    // Quem se importa com o desfecho do envio (o aviso de espera na fila) tenta
+    // de novo na varredura seguinte. Sem reaproveitar a linha, cada tentativa
+    // criaria uma bolha nova: numa queda de meia hora, 30 mensagens identicas
+    // com `status: "erro"` na conversa do cliente.
+    let msg = null;
+    if (reaproveitarFalha && this.deps.conversaRepository.ultimaMensagemBotComErro) {
+      msg = await this.deps.conversaRepository.ultimaMensagemBotComErro(conversaId, texto);
+    }
+    if (!msg) {
+      msg = await this.deps.conversaRepository.addMensagem(
+        conversaId,
+        "bot",
+        texto,
+        { automacao: true },
+        null,
+        { status: "enviando" }
+      );
+    }
+
+    let enviada = false;
     try {
       const r = await this.deps.evolutionApi.sendText(
         telefone,
@@ -761,12 +775,16 @@ class ChatbotEngine {
       // Guardar o id da Evolution e o que permite os ACKs de entrega/leitura
       // (messages.update) encontrarem esta mensagem depois.
       await this.deps.conversaRepository.vincularWaMessageId(msg.id, r?.key?.id || null, "enviada");
+      enviada = true;
     } catch (error) {
       logger.warn("Falha ao enviar WhatsApp", { telefone, message: error.message });
       await this.deps.conversaRepository.vincularWaMessageId(msg.id, null, "erro");
     }
     await this._emitirConversa(conversaId);
-    return texto;
+    // O retorno passou a dizer SE FOI. Antes era so o texto, e quem chamava nao
+    // tinha como saber que o envio falhou -- foi o que fez o aviso de espera na
+    // fila ser marcado como "ja enviado" depois de uma falha.
+    return { texto, enviada, mensagemId: msg.id };
   }
 
   // Valor que o clique de um botao/linha "digita" para o motor: o numero da
@@ -1602,7 +1620,30 @@ class ChatbotEngine {
     if (Date.now() - base < cfg.minutos * 60 * 1000) return false;
 
     const texto = this.interpolar(cfg.mensagem, { conversa });
-    await this.enviarBot(conversa.id, conversa.telefone, texto, instanceName);
+    const envio = await this.enviarBot(conversa.id, conversa.telefone, texto, instanceName, {
+      reaproveitarFalha: true,
+    });
+
+    // ENVIO QUE FALHOU NAO CONTA COMO ENVIADO.
+    //
+    // Aqui o `avisoEsperaEm` era estampado logo depois do `enviarBot`, sem olhar
+    // o resultado -- e `enviarBot` nunca lanca, ele engole a falha e marca a
+    // mensagem como "erro". Com `repetir: false`, o guard la em cima
+    // (`if (os.avisoEsperaEm && !cfg.repetir) return false`) passava a bloquear
+    // para sempre: uma falha de um segundo (a Evolution fora do ar, o container
+    // reiniciando no meio de um deploy) matava o aviso daquele atendimento
+    // definitivamente. Foi exatamente o que aconteceu em 2026-08-28 19:19.
+    //
+    // Sem a marca, a proxima varredura (60s) tenta de novo, reaproveitando a
+    // mesma bolha em vez de empilhar uma nova.
+    if (!envio.enviada) {
+      logger.warn("Aviso de espera na fila NAO enviado; sera tentado de novo", {
+        conversaId: conversa.id,
+        atendimentoId: os.id,
+      });
+      return false;
+    }
+
     await this.deps.conversaRepository.atualizarAtendimento(os.id, { avisoEsperaEm: new Date() });
 
     logger.info("Aviso de espera na fila enviado", {

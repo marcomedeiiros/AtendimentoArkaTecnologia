@@ -74,24 +74,42 @@ function ambiente(fluxo) {
       findByTelefoneParaMotor: async () => est.conversa,
       create: async () => est.conversa,
       existeMensagemWa: async () => false,
-      addMensagem: async (_id, origem, texto) => {
-        const msg = { origem, texto, criadoEm: new Date() };
+      addMensagem: async (_id, origem, texto, _meta, _wa, extras = {}) => {
+        const msg = {
+          id: `m${est.conversa.mensagens.length + 1}`,
+          origem,
+          texto,
+          criadoEm: new Date(),
+          status: extras.status || null,
+        };
         est.conversa.mensagens.push(msg);
         if (origem === "bot") doBot.push(texto);
-        return { id: `m${est.conversa.mensagens.length}` };
+        return msg;
       },
+      // Mesmo contrato de producao: a retentativa reaproveita a bolha que falhou.
+      ultimaMensagemBotComErro: async (_id, texto) =>
+        [...est.conversa.mensagens]
+          .reverse()
+          .find((m) => m.origem === "bot" && m.status === "erro" && m.texto === texto) || null,
       // Mesmo contrato do repositorio real: "chegou mensagem do CLIENTE depois
       // de `desde`?". E a condicao 4 do plano.
       respondeuDepoisDe: async (_id, desde) =>
         est.conversa.mensagens.some(
           (m) => m.origem === "cliente" && m.criadoEm > new Date(desde)
         ),
-      vincularWaMessageId: async () => {},
+      vincularWaMessageId: async (id, waId, status) => {
+        const m = est.conversa.mensagens.find((x) => x.id === id);
+        if (m) { m.status = status; m.waMessageId = waId; }
+      },
       update: async (_id, d) => Object.assign(est.conversa, d),
       garantirAtendimento: async () => null,
       garantirAtendimentoAberto: async () => ({ atendimento: est.conversa.atendimentos[0], nova: false }),
       atualizarAtendimentoAtual: async () => null,
-      atualizarAtendimento: async () => null,
+      atualizarAtendimento: async (id, dados) => {
+        const os = est.conversa.atendimentos.find((x) => x.id === id);
+        if (os) Object.assign(os, dados);
+        return os || null;
+      },
       ultimoCnpjDoTelefone: async () => null,
     },
     sessaoRepository: {
@@ -134,7 +152,12 @@ function ambiente(fluxo) {
       gerarBoleto: async () => ({ mensagem: "x", linhaDigitavel: "", pixCopiaCola: "", vencimento: "" }),
     },
     evolutionApi: {
-      sendText: async () => ({ key: { id: "w" } }),
+      // `est.falharEnvio` simula a Evolution fora do ar -- o caso de 19:19,
+      // quando o container reiniciou no meio de um deploy.
+      sendText: async () => {
+        if (est.falharEnvio) throw new Error("Evolution API indisponivel");
+        return { key: { id: "w" } };
+      },
       sendButtons: async () => ({ key: { id: "w" } }),
       sendList: async () => ({ key: { id: "w" } }),
       fetchProfilePictureUrl: async () => null,
@@ -527,6 +550,47 @@ async function rodarAteConcluir(a) {
     b.est.conversa.sessao = null;
     const avisou3 = await b.engine.aplicarEsperaFila(b.est.conversa, fluxo, { instanceName: "arka" });
     check(avisou3 === true, "sem sessao, o relogio continua sendo a abertura da OS");
+  }
+
+  // ── Teste 13: envio que falha nao conta como enviado ──────────────────────
+  //
+  // 2026-08-28 19:19: o aviso de espera na fila saiu com `status: "erro"` (o
+  // container reiniciando no meio de um deploy). O `avisoEsperaEm` era estampado
+  // de qualquer forma, e com `repetir: false` o aviso daquele atendimento nunca
+  // mais era tentado. O cliente nunca recebeu.
+  console.log("\n[13] aviso de espera: falha no envio nao marca como enviado");
+  {
+    const a = ambiente(fluxo);
+    a.est.sessao = { id: "s", concluidoEm: new Date(Date.now() - 15 * MIN), aguardando: AGUARDANDO.HUMANO, ativo: true };
+    a.est.conversa.sessao = a.est.sessao;
+
+    // Primeira tentativa: o WhatsApp recusa.
+    a.est.falharEnvio = true;
+    const t1 = await a.engine.aplicarEsperaFila(a.est.conversa, fluxo, { instanceName: "arka" });
+    check(t1 === false, "a tentativa que falhou devolveu false");
+    check(
+      a.est.conversa.atendimentos[0].avisoEsperaEm == null,
+      "NAO estampou avisoEsperaEm: o envio nao aconteceu"
+    );
+    // Nenhuma conversa rodou neste teste, entao toda bolha do bot aqui e o aviso.
+    const bolhas = () => a.est.conversa.mensagens.filter((m) => m.origem === "bot");
+    check(bolhas().length === 1, `a bolha da falha ficou registrada uma vez (${bolhas().length})`);
+    check(bolhas()[0].status === "erro", `com status "erro" (veio ${bolhas()[0].status})`);
+
+    // Segunda varredura, com o WhatsApp de volta: tem de tentar de novo.
+    a.est.falharEnvio = false;
+    const t2 = await a.engine.aplicarEsperaFila(a.est.conversa, fluxo, { instanceName: "arka" });
+    check(t2 === true, "a varredura seguinte reenviou");
+    check(!!a.est.conversa.atendimentos[0].avisoEsperaEm, "agora sim estampou avisoEsperaEm");
+    check(
+      bolhas().length === 1,
+      `reaproveitou a bolha em vez de empilhar outra (${bolhas().length} bolha(s))`
+    );
+    check(bolhas()[0].status === "enviada", `a bolha virou "enviada" (veio ${bolhas()[0].status})`);
+
+    // Terceira varredura: nao repete (repetir: false + avisoEsperaEm).
+    const t3 = await a.engine.aplicarEsperaFila(a.est.conversa, fluxo, { instanceName: "arka" });
+    check(t3 === false, "nao avisou de novo depois de ter conseguido");
   }
 
   // ── PARTE B: a varredura real, com Prisma ────────────────────────────────
