@@ -159,7 +159,15 @@ function ModalEditarRelato({ relato, onSalvar, onFechar, salvando, erro }) {
   return (
     <Portal>
       <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/80 p-3 backdrop-blur-sm sm:items-center sm:p-4">
-        <div className="glass-panel my-auto flex max-h-[calc(100dvh-1.5rem)] w-full max-w-lg flex-col rounded-2xl border border-linha shadow-2xl sm:max-h-[90vh]">
+        {/* `onPaste` no PAINEL, e nao na textarea: o evento de colar nasce em
+            quem tem o foco e SOBE. No painel, ele e capturado com o foco em
+            qualquer campo do modal -- descricao, prioridade ou os proprios
+            anexos -- em vez de so quando o cursor esta no texto.
+            (Mesma amarracao do ReportarBug.jsx, que ja funcionava.) */}
+        <div
+          onPaste={aoColar}
+          className="glass-panel my-auto flex max-h-[calc(100dvh-1.5rem)] w-full max-w-lg flex-col rounded-2xl border border-linha shadow-2xl sm:max-h-[90vh]"
+        >
           <div className="flex shrink-0 items-center justify-between gap-2 rounded-t-2xl border-b border-linha bg-grafite-600 p-4">
             <div className="flex min-w-0 items-center gap-2 text-sm font-bold text-white">
               <Pencil size={15} className="shrink-0 text-acao-200" />
