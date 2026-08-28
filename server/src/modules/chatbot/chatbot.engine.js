@@ -346,6 +346,97 @@ class ChatbotEngine {
     });
   }
 
+  /**
+   * A opcao e uma ESCOLHA que o cliente pode fazer?
+   *
+   * Menu de verdade: tem palavras-chave que o cliente digita ("1", "tecnico").
+   * Curinga: `palavrasChave` vazio -- casa com qualquer coisa (o "resposta livre"
+   * dos fluxos importados). `esperaEscolha` entra como segunda pista porque
+   * fluxos montados a mao podem trazer o flag sem as palavras.
+   */
+  _opcaoEhEscolha(opcao) {
+    if (opcao?.esperaEscolha === true) return true;
+    return (opcao?.palavrasChave || []).some((k) => String(k || "").trim());
+  }
+
+  /**
+   * ESTE PASSO PRECISA MESMO DA RESPOSTA DO CLIENTE?
+   *
+   * Um passo com `config.opcoes` estacionava o fluxo SEMPRE. Isso vale quando a
+   * resposta muda algo -- e nao vale no desenho que causou o defeito relatado:
+   *
+   *   [13] mensagem "CHAMADO ABERTO"   opcoes: [transferir, sem destino, curinga]
+   *        texto: "✅ Chamado aberto com sucesso ... um tecnico dara continuidade"
+   *
+   * A unica opcao e um CURINGA cuja acao e `transferir`: qualquer coisa que o
+   * cliente responda -- ou nao responda -- termina no mesmo lugar, a fila do
+   * atendente. Esperar por essa resposta nao tem funcao nenhuma, e era isso que
+   * mantinha a sessao em "aguardando: opcao" depois de o bot anunciar que o
+   * chamado estava aberto. Dois minutos depois, a inatividade fechava a OS.
+   *
+   * O criterio e a TOPOLOGIA, nunca o texto do passo (que pode ser reescrito a
+   * qualquer momento no editor):
+   *
+   *   - alguma opcao e uma ESCOLHA (tem palavra-chave) -> estaciona COBRANDO a
+   *     resposta. E um menu: sem escolha o fluxo nao anda.
+   *   - alguma opcao ROTEIA (`acao: "ir"` para um passo que existe) -> estaciona
+   *     COBRANDO. A resposta decide o caminho.
+   *   - nenhuma opcao tem saida -> nao estaciona: fim do fluxo (entrega a fila).
+   *   - todas as opcoes sao curinga e TODAS transferem -> estaciona SEM COBRAR.
+   *
+   * O ultimo caso e o do relato, e merece explicacao. Por que estacionar e nao
+   * transferir na hora? Porque a topologia NAO distingue um no que confirma de
+   * um no que pergunta:
+   *
+   *   [13] "✅ Chamado aberto com sucesso..."     curinga -> transferir  (confirma)
+   *   [ 7] "AGORA DESCREVA SUA SOLICITACAO"       curinga -> transferir  (pergunta)
+   *
+   * Transferir na hora quebraria o segundo: o bot pediria a descricao e entregaria
+   * a conversa antes de o cliente escrever, e o tecnico receberia um chamado sem
+   * problema nenhum descrito. Foi o que o `verificar-tudo.js` pegou.
+   *
+   * Entao o passo continua estacionado -- se o cliente escrever, a transferencia
+   * acontece com a mensagem dele, exatamente como antes. O que muda e que essa
+   * espera NAO E COBRADA: qualquer coisa que o cliente responda (ou nao responda)
+   * termina no mesmo lugar, a fila do atendente. Cobrar uma resposta que nao muda
+   * o desfecho -- e ENCERRAR o chamado por falta dela -- e o defeito.
+   *
+   * Consequencia assumida: um no que seja pergunta E curinga-que-transfere deixa
+   * de expirar por inatividade. Na duvida entre fechar um chamado indevidamente e
+   * deixar uma conversa esperando um atendente, a segunda e a opcao certa. Menus
+   * e perguntas que roteiam (a maioria) continuam expirando normalmente.
+   *
+   * @returns {{estaciona: boolean, cobraResposta: boolean, opcao: object|null}}
+   */
+  decidirEsperaDoPasso(passo, passos = []) {
+    const opcoes = this.opcoesDoPasso(passo);
+    if (!opcoes.length) return { estaciona: false, cobraResposta: false, opcao: null };
+
+    // Menu: ha o que escolher.
+    if (opcoes.some((o) => this._opcaoEhEscolha(o))) {
+      return { estaciona: true, cobraResposta: true, opcao: null };
+    }
+
+    // A resposta roteia o fluxo para outro passo.
+    const roteia = opcoes.some(
+      (o) => o.acao !== "transferir" && o.acao !== "encerrar" && o.targetId && passos.some((p) => p.id === o.targetId)
+    );
+    if (roteia) return { estaciona: true, cobraResposta: true, opcao: null };
+
+    // Sem saida nenhuma: fim do fluxo.
+    if (!this.temSaidaAcionavel(passo, passos)) {
+      return { estaciona: false, cobraResposta: false, opcao: null };
+    }
+
+    // Todas curinga e todas transferem: o desfecho ja esta decidido, a resposta
+    // nao muda nada. Espera sem cobranca.
+    if (opcoes.every((o) => o.acao === "transferir")) {
+      return { estaciona: true, cobraResposta: false, opcao: null };
+    }
+
+    return { estaciona: true, cobraResposta: true, opcao: null };
+  }
+
   // Um passo de mensagem pode pedir CNPJ explicitamente via config.aguardar.
   // A heuristica pelo texto existe so para os fluxos criados antes disso.
   passoAguardaCnpj(passo) {
@@ -435,10 +526,16 @@ class ChatbotEngine {
    * @param {object} [opcoes]
    * @param {boolean} [opcoes.concluido=false] a automacao chegou a um desfecho?
    */
-  _marcasDeEspera(aguardando, { concluido = false } = {}) {
+  _marcasDeEspera(aguardando, { concluido = false, cobraResposta = true } = {}) {
     const agora = new Date();
+    // `aguardandoDesde` e o RELOGIO DA COBRANCA, nao "quando a sessao mudou".
+    // Fica null quando a espera nao cobra resposta -- e sem relogio nao existe
+    // inatividade a aplicar (ver aplicarInatividade). E assim que um passo de
+    // confirmacao ("Chamado aberto com sucesso") pode ficar estacionado sem
+    // nunca ser encerrado por falta de resposta.
+    const cobra = cobraResposta && AGUARDA_RESPOSTA_DO_CLIENTE.includes(aguardando);
     return {
-      aguardandoDesde: AGUARDA_RESPOSTA_DO_CLIENTE.includes(aguardando) ? agora : null,
+      aguardandoDesde: cobra ? agora : null,
       concluidoEm: concluido ? agora : null,
       inatividadeEm: null,
     };
@@ -505,12 +602,23 @@ class ChatbotEngine {
     // `notResponseMessage` que os fluxos exportados ja trazem (ver paramsTempos).
     const cfg = paramsTempos(fluxo).semResposta;
 
-    // (5) O prazo conta desde a PERGUNTA, nao desde o ultimo toque na linha.
+    // (3b) EXISTE PERGUNTA COBRAVEL?
     //
-    // `atualizadoEm` fica como fallback para as sessoes que existiam antes desta
-    // coluna: sem ele, nenhuma delas expiraria nunca e a automacao ficaria
-    // silenciosamente desligada para quem estava no meio de um fluxo no deploy.
-    const desde = new Date(sessao.aguardandoDesde || sessao.atualizadoEm || sessao.criadoEm);
+    // `aguardandoDesde` e gravado so quando o bot pede algo cuja resposta MUDA o
+    // rumo (menu, roteamento, CNPJ). Sem ele, a sessao esta estacionada mas nao
+    // ha resposta a cobrar -- e o caso do passo de confirmacao cuja unica opcao
+    // e um curinga que transfere: qualquer coisa que o cliente diga termina na
+    // mesma fila (ver decidirEsperaDoPasso).
+    //
+    // Aqui existia um fallback para `atualizadoEm`, pensado para as sessoes
+    // anteriores a esta coluna. Ele tinha de sair: `atualizadoEm` volta a cada
+    // escrita na linha e nao distingue pergunta de confirmacao -- era por ele que
+    // o encerramento indevido continuava passando. Sessoes antigas simplesmente
+    // nao expiram por inatividade; elas saem pelo TTL da sessao (30 min).
+    if (!sessao.aguardandoDesde) return null;
+
+    // (5) O prazo conta desde a PERGUNTA, nao desde o ultimo toque na linha.
+    const desde = new Date(sessao.aguardandoDesde);
     if (Date.now() - desde.getTime() < cfg.minutos * 60 * 1000) return null;
 
     // (4) O CLIENTE RESPONDEU ESTA PERGUNTA?
@@ -1659,6 +1767,11 @@ class ChatbotEngine {
     // O passo tem opcoes, mas nenhuma leva a lugar nenhum: o fluxo TERMINA aqui,
     // e nao fica esperando uma resposta que ninguem tem por que dar.
     let fimDoFluxo = false;
+    // Quando o fluxo termina EXECUTANDO uma opcao (curinga que so transfere), e
+    // ela que carrega setor, fila e o texto do handoff.
+    let opcaoFinal = null;
+    // A espera deste passo COBRA resposta do cliente? Ver decidirEsperaDoPasso.
+    let cobraResposta = true;
 
     switch (passo.tipo) {
       case "gatilho":
@@ -1707,10 +1820,16 @@ class ChatbotEngine {
         // o motor seguiria o targetId na hora e o cliente receberia o fluxo
         // inteiro de uma vez, sem chance de escolher nada.
         if (this.opcoesDoPasso(passo).length) {
-          // ...mas so para se houver escolha a fazer. Opcoes sem saida = fim do
-          // fluxo, nao pergunta em aberto (ver temSaidaAcionavel).
-          if (this.temSaidaAcionavel(passo, fluxo.passos)) aguardando = AGUARDANDO.OPCAO;
-          else fimDoFluxo = true;
+          // Estaciona -- mas so COBRA a resposta quando ela muda algo. Ver
+          // decidirEsperaDoPasso.
+          const espera = this.decidirEsperaDoPasso(passo, fluxo.passos);
+          if (espera.estaciona) {
+            aguardando = AGUARDANDO.OPCAO;
+            cobraResposta = espera.cobraResposta;
+          } else {
+            fimDoFluxo = true;
+            opcaoFinal = espera.opcao;
+          }
         } else if (this.passoAguardaCnpj(passo) && !contexto.cnpjValidacao?.valido) {
           // Contato recorrente: oferece o CNPJ ja usado antes (ver memoria).
           const pedido = await this._pedirOuConfirmarCnpj(conversa, resposta, passo);
@@ -1777,8 +1896,14 @@ class ChatbotEngine {
           resposta = this.textoDoPasso(passo, contexto);
         }
         if (this.opcoesDoPasso(passo).length) {
-          if (this.temSaidaAcionavel(passo, fluxo.passos)) aguardando = AGUARDANDO.OPCAO;
-          else fimDoFluxo = true;
+          const espera = this.decidirEsperaDoPasso(passo, fluxo.passos);
+          if (espera.estaciona) {
+            aguardando = AGUARDANDO.OPCAO;
+            cobraResposta = espera.cobraResposta;
+          } else {
+            fimDoFluxo = true;
+            opcaoFinal = espera.opcao;
+          }
         } else proximo = this.proximoPasso(fluxo.passos, passo);
         break;
       }
@@ -1800,7 +1925,7 @@ class ChatbotEngine {
 
     await this.registrarLog(instanciaId, fluxo.id, passo, conversa.id, resposta, true, inicio);
 
-    return { proximo, aguardando, contextoSessao, fimDoFluxo };
+    return { proximo, aguardando, contextoSessao, fimDoFluxo, opcaoFinal, cobraResposta };
   }
 
   /**
@@ -1825,8 +1950,27 @@ class ChatbotEngine {
    * Idempotente: e um upsert de sessao + `garantirAtendimentoAberto`. Reprocessar
    * o passo final nao cria OS nem timer duplicado.
    */
-  async _entregarNoFimDoFluxo(contexto) {
-    return this.transferirParaHumano(contexto, { avisar: false, motivo: "fim_do_fluxo" });
+  async _entregarNoFimDoFluxo(contexto, opcao = null) {
+    // A opcao curinga que transfere pode trazer setor e fila do proprio no; sem
+    // isso a conversa cairia na fila geral, perdendo a triagem que o desenho do
+    // fluxo ja fazia. Mesmo tratamento que `aplicarOpcao` da a `acao:
+    // "transferir"` -- incluindo o mapa queueId -> setor de Configuracoes.
+    let setor = opcao?.setor || null;
+    const filaId = opcao?.filaId ?? null;
+    if (!setor && filaId != null) {
+      const mapa = await this.deps.configuracaoService.filasParaSetor();
+      setor = mapa[String(filaId)] || null;
+    }
+    // `avisar: false`: o passo acabou de falar (tipicamente a confirmacao de que
+    // o chamado foi aberto). Duas mensagens seguidas dizendo a mesma coisa
+    // confundem mais do que uma.
+    return this.transferirParaHumano(contexto, {
+      avisar: false,
+      motivo: "fim_do_fluxo",
+      setor,
+      filaId,
+      opcao,
+    });
   }
 
   // Percorre os passos com dois freios: um teto de passos e um conjunto de
@@ -1869,7 +2013,12 @@ class ChatbotEngine {
         // Fica parado no passo que pediu a informacao; a resposta do cliente
         // e que faz avancar. `contextoSessao` carrega o que esse passo precisa
         // guardar (ex.: a config da pesquisa de satisfacao).
-        return { passoAtual, aguardando, contextoSessao: resultado.contextoSessao || null };
+        return {
+          passoAtual,
+          aguardando,
+          contextoSessao: resultado.contextoSessao || null,
+          cobraResposta: resultado.cobraResposta !== false,
+        };
       }
 
       // O passo falou e nao tem saida: fim do fluxo. Sai avisando o chamador,
@@ -1881,7 +2030,7 @@ class ChatbotEngine {
           passoId: passoAtual.id,
           passoTitulo: passoAtual.titulo,
         });
-        return { passoAtual: null, aguardando: null, contextoSessao: null, fimDoFluxo: true };
+        return { passoAtual: null, aguardando: null, contextoSessao: null, fimDoFluxo: true, opcaoFinal: resultado.opcaoFinal || null };
       }
 
       passoAtual = resultado.proximo;
@@ -1901,12 +2050,10 @@ class ChatbotEngine {
       ...contextoExtra,
     };
 
-    const { passoAtual, aguardando, contextoSessao, fimDoFluxo } = await this.percorrer(
-      passos[0] || null,
-      contexto
-    );
+    const { passoAtual, aguardando, contextoSessao, fimDoFluxo, opcaoFinal, cobraResposta } =
+      await this.percorrer(passos[0] || null, contexto);
     if (fimDoFluxo) {
-      return { fluxoId: fluxo.id, ...(await this._entregarNoFimDoFluxo(contexto)) };
+      return { fluxoId: fluxo.id, ...(await this._entregarNoFimDoFluxo(contexto, opcaoFinal)) };
     }
 
     await this.deps.sessaoRepository.upsert(instanciaId, conversa.id, telefone, {
@@ -1916,7 +2063,7 @@ class ChatbotEngine {
       ativo: !!aguardando,
       // Sem `aguardando`, o fluxo andou ate o fim sem pedir nada: e desfecho.
       // Com `aguardando`, o bot acabou de perguntar -- o prazo comeca agora.
-      ...this._marcasDeEspera(aguardando, { concluido: !aguardando }),
+      ...this._marcasDeEspera(aguardando, { concluido: !aguardando, cobraResposta }),
       contexto: contextoSessao || { tentativasCnpj: 0, tentativasOpcao: 0 },
     });
 
@@ -2015,14 +2162,14 @@ class ChatbotEngine {
 
     const resultado = await this.percorrer(destino, contexto);
     if (resultado.fimDoFluxo) {
-      return { fluxoId: fluxo.id, ...(await this._entregarNoFimDoFluxo(contexto)) };
+      return { fluxoId: fluxo.id, ...(await this._entregarNoFimDoFluxo(contexto, resultado.opcaoFinal)) };
     }
 
     await this.deps.sessaoRepository.update(sessao.id, {
       passoAtualId: resultado.passoAtual?.id || null,
       aguardando: resultado.aguardando,
       ativo: !!resultado.aguardando,
-      ...this._marcasDeEspera(resultado.aguardando, { concluido: !resultado.aguardando }),
+      ...this._marcasDeEspera(resultado.aguardando, { concluido: !resultado.aguardando, cobraResposta: resultado.cobraResposta !== false }),
       contexto: resultado.contextoSessao || { ...(sessao.contexto || {}), tentativasOpcao: 0, tentativasCnpj: 0 },
     });
 
@@ -2118,13 +2265,13 @@ class ChatbotEngine {
           const seguinte = passoAtual ? this.proximoPasso(passos, passoAtual) : null;
           const resultado = await this.percorrer(seguinte, contexto);
           if (resultado.fimDoFluxo) {
-            return { fluxoId: fluxo.id, ...(await this._entregarNoFimDoFluxo(contexto)) };
+            return { fluxoId: fluxo.id, ...(await this._entregarNoFimDoFluxo(contexto, resultado.opcaoFinal)) };
           }
           await this.deps.sessaoRepository.update(sessao.id, {
             passoAtualId: resultado.passoAtual?.id || null,
             aguardando: resultado.aguardando,
             ativo: !!resultado.aguardando,
-            ...this._marcasDeEspera(resultado.aguardando, { concluido: !resultado.aguardando }),
+            ...this._marcasDeEspera(resultado.aguardando, { concluido: !resultado.aguardando, cobraResposta: resultado.cobraResposta !== false }),
             contexto: resultado.contextoSessao || { tentativasCnpj: 0, tentativasOpcao: 0 },
           });
           return {
@@ -2261,14 +2408,14 @@ class ChatbotEngine {
 
     const resultado = await this.percorrer(passoAtual, contexto);
     if (resultado.fimDoFluxo) {
-      return { fluxoId: fluxo.id, ...(await this._entregarNoFimDoFluxo(contexto)) };
+      return { fluxoId: fluxo.id, ...(await this._entregarNoFimDoFluxo(contexto, resultado.opcaoFinal)) };
     }
 
     await this.deps.sessaoRepository.update(sessao.id, {
       passoAtualId: resultado.passoAtual?.id || null,
       aguardando: resultado.aguardando,
       ativo: !!resultado.aguardando,
-      ...this._marcasDeEspera(resultado.aguardando, { concluido: !resultado.aguardando }),
+      ...this._marcasDeEspera(resultado.aguardando, { concluido: !resultado.aguardando, cobraResposta: resultado.cobraResposta !== false }),
       contexto: resultado.contextoSessao || { ...(sessao.contexto || {}), tentativasCnpj: 0, tentativasOpcao: 0 },
     });
 

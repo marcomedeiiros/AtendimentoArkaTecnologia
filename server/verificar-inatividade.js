@@ -384,16 +384,18 @@ async function rodarAteConcluir(a) {
     check(a.est.conversa.statusAtendimento === "pendente", "a conversa segue Pendente para o tecnico");
   }
 
-  // ── Teste 9: pergunta aberta legitima CONTINUA expirando ──────────────────
+  // ── Teste 9: curinga que so transfere -- estaciona, mas NAO cobra ─────────
   //
-  // O contraponto do Teste 8, e o que impede a correcao de virar "desligar a
-  // inatividade": a unica opcao deste no e livre TAMBEM, mas ela TEM saida
-  // (`acao: "transferir"`) -- e o no esta de fato perguntando. Igual ao
-  // "AGORA DESCREVA SUA SOLICITACAO" do fluxo da ARKA.
-  console.log("\n[9] pergunta aberta com saida (acao transferir) continua expirando");
+  // A unica opcao e curinga com `acao: "transferir"`: qualquer coisa que o
+  // cliente responda termina na mesma fila. O passo CONTINUA estacionado (se o
+  // cliente escrever, a transferencia acontece com a mensagem dele, como sempre
+  // -- e o que preserva o "AGORA DESCREVA SUA SOLICITACAO" do fluxo antigo), mas
+  // a espera nao e cobrada: `aguardandoDesde` fica null e a inatividade nao se
+  // aplica. Ver decidirEsperaDoPasso.
+  console.log("\n[9] curinga que so transfere: estaciona sem cobrar resposta");
   {
-    const PERGUNTA_ABERTA = {
-      id: "f-aberta", nome: "pergunta aberta", gatilho: "*", ativo: true,
+    const SO_TRANSFERE = {
+      id: "f-aberta", nome: "curinga que transfere", gatilho: "*", ativo: true,
       passos: [
         { id: "q0", tipo: "gatilho", titulo: "Inicio", ordem: 0, targetId: "q1", config: null },
         { id: "q1", tipo: "mensagem", titulo: "Descreva", ordem: 1, targetId: null,
@@ -403,14 +405,97 @@ async function rodarAteConcluir(a) {
           config: { modo: "sem_resposta", minutos: 2, mensagem: "Não entendemos a sua demanda. Por favor, abra um chamado novamente.", acao: "encerrar" } },
       ],
     };
-    const a = ambiente(PERGUNTA_ABERTA);
+    const a = ambiente(SO_TRANSFERE);
     await a.cliente("oi");
-    check(a.est.sessao?.aguardando === AGUARDANDO.OPCAO, `estacionou esperando a resposta (veio ${a.est.sessao?.aguardando})`);
-    check(!a.est.sessao?.concluidoEm, "NAO marcou como concluida: a pergunta esta em aberto");
+    check(a.est.sessao?.aguardando === AGUARDANDO.OPCAO, `continuou estacionado (veio ${a.est.sessao?.aguardando})`);
+    check(!a.est.sessao?.aguardandoDesde, "NAO gravou relogio de cobranca (aguardandoDesde null)");
+    a.envelhecer(10);
+    const v = await a.varrer();
+    check(v.agiu === false, "nao encerrou: nao havia resposta a cobrar");
+    check(a.inatividadesEnviadas() === 0, "nenhuma mensagem de inatividade enviada");
+    // E a resposta do cliente ainda transfere, como antes da correcao.
+    const r = await a.cliente("minha impressora parou");
+    check(r?.transferido === true, `a resposta do cliente ainda transfere (motivo: ${r?.motivo})`);
+  }
+
+  // ── Teste 10: o fluxo REAL de producao (relato de 2026-08-28, 18:46) ──────
+  //
+  // Estrutura lida do banco da VM:
+  //
+  //   [6]  mensagem "IDENTIFICA PROBLEMA"  opcoes: ir/c214a4c7   <- pergunta
+  //   [13] mensagem "CHAMADO ABERTO"       opcoes: transferir/NULO <- confirmacao
+  //
+  // O no 13 mandava "✅ Chamado aberto com sucesso" e ESTACIONAVA em
+  // `aguardando: opcao`, porque `transferir` conta como saida acionavel. Como
+  // qualquer resposta (ou nenhuma) termina na mesma fila, esperar nao tem funcao
+  // -- e dois minutos depois a inatividade fechava a OS.
+  console.log("\n[10] fluxo de producao: no de confirmacao com opcao curinga que transfere");
+  {
+    const PRODUCAO = {
+      id: "f-prod", nome: "ARKA producao", gatilho: "*", ativo: true,
+      passos: [
+        { id: "n0", tipo: "gatilho", titulo: "Início", ordem: 0, targetId: "n6", config: null },
+        { id: "n6", tipo: "mensagem", titulo: "IDENTIFICA PROBLEMA", ordem: 6, targetId: "n13",
+          texto: "📝 *Descreva sua solicitação*\n\nConte brevemente o que você precisa.",
+          config: { opcoes: [{ id: "livre", ordem: 0, esperaEscolha: false, rotulo: "resposta livre", palavrasChave: [], acao: "ir", targetId: "n13" }] } },
+        { id: "n13", tipo: "mensagem", titulo: "CHAMADO ABERTO", ordem: 13, targetId: null,
+          texto: "✅ *Chamado aberto com sucesso*\n\nSua solicitação foi registrada e encaminhada para a equipe técnica.\n\nUm de nossos técnicos dará continuidade ao atendimento por aqui.",
+          config: { opcoes: [{ id: "tr", ordem: 0, esperaEscolha: false, rotulo: "transferir", palavrasChave: [], acao: "transferir", targetId: null, setor: "Técnico" }] } },
+        { id: "n11", tipo: "espera", titulo: "Sem resposta", ordem: 11, targetId: null,
+          config: { modo: "sem_resposta", minutos: 2, mensagem: "Não entendemos a sua demanda. Por favor, abra um chamado novamente.", acao: "encerrar" } },
+      ],
+    };
+    const a = ambiente(PRODUCAO);
+    await a.cliente("oi");
+    check(a.est.sessao?.aguardando === AGUARDANDO.OPCAO, "no 6 (a pergunta) estaciona esperando a resposta");
+    check(!!a.est.sessao?.aguardandoDesde, "no 6 COBRA a resposta: a pergunta roteia o fluxo");
+    await a.cliente("Impressora parou de funcionar");
+    check(
+      a.doBot.filter((t) => /Chamado aberto com sucesso/.test(String(t))).length === 1,
+      "o no 13 mandou a confirmacao"
+    );
+    check(!a.est.sessao?.aguardandoDesde, "no 13 NAO cobra resposta (aguardandoDesde null)");
+    // O relato: tres minutos depois, com prazo de dois.
+    a.envelhecer(3);
+    const v = await a.varrer();
+    check(v.agiu === false, `nao encerrou por inatividade (motivo: ${v.fora || "-"})`);
+    check(a.inatividadesEnviadas() === 0, "nenhuma mensagem de inatividade enviada");
+    check(a.est.conversa.statusAtendimento === "pendente", "a conversa segue Pendente para o tecnico");
+    check(
+      a.doBot.filter((t) => /encerrado por inatividade|abra um chamado novamente/i.test(String(t))).length === 0,
+      "o cliente nao recebeu nada depois do 'Chamado aberto com sucesso'"
+    );
+  }
+
+  // ── Teste 11: a pergunta do no 6, sem resposta, CONTINUA encerrando ───────
+  console.log("\n[11] a pergunta que rotea o fluxo continua expirando sem resposta");
+  {
+    const PRODUCAO = {
+      id: "f-prod2", nome: "ARKA producao", gatilho: "*", ativo: true,
+      passos: [
+        { id: "m0", tipo: "gatilho", titulo: "Início", ordem: 0, targetId: "m6", config: null },
+        { id: "m6", tipo: "mensagem", titulo: "IDENTIFICA PROBLEMA", ordem: 6, targetId: "m13",
+          texto: "📝 *Descreva sua solicitação*",
+          config: { opcoes: [{ id: "livre", ordem: 0, esperaEscolha: false, rotulo: "resposta livre", palavrasChave: [], acao: "ir", targetId: "m13" }] } },
+        { id: "m13", tipo: "mensagem", titulo: "CHAMADO ABERTO", ordem: 13, targetId: null,
+          texto: "✅ *Chamado aberto com sucesso*",
+          config: { opcoes: [{ id: "tr", ordem: 0, esperaEscolha: false, rotulo: "transferir", palavrasChave: [], acao: "transferir", targetId: null }] } },
+        { id: "m11", tipo: "espera", titulo: "Sem resposta", ordem: 11, targetId: null,
+          config: { modo: "sem_resposta", minutos: 2, mensagem: "Não entendemos a sua demanda. Por favor, abra um chamado novamente.", acao: "encerrar" } },
+      ],
+    };
+    const a = ambiente(PRODUCAO);
+    await a.cliente("oi"); // recebe "Descreva sua solicitacao" e para
+    check(a.est.sessao?.aguardando === AGUARDANDO.OPCAO, "estacionou na pergunta");
+    check(!a.est.sessao?.concluidoEm, "NAO marcou como concluida: ha pergunta em aberto");
     a.envelhecer(3);
     const v = await a.varrer();
     check(v.agiu === true, "encerrou por inatividade, como deve");
     check(a.inatividadesEnviadas() === 1, "enviou a mensagem do bloco de espera");
+    check(
+      a.doBot.filter((t) => /Chamado aberto/.test(String(t))).length === 0,
+      "nao mandou a confirmacao de chamado aberto para quem nao respondeu"
+    );
   }
 
   // ── PARTE B: a varredura real, com Prisma ────────────────────────────────

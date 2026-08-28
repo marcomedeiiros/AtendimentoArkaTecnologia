@@ -343,16 +343,19 @@ function mostrar(titulo, r) {
     bus: { emitConversa: () => {} },
   });
 
-  // SESSAO ANTIGA, SEM `aguardandoDesde` -- e de proposito.
+  // O RELOGIO E `aguardandoDesde`, e so ele.
   //
-  // Este e o retrato das linhas que ja existiam no banco quando as colunas de
-  // espera foram criadas. O fallback para `atualizadoEm` tem de valer, senao
-  // nenhuma delas expiraria nunca e a automacao ficaria silenciosamente
-  // desligada para quem estava no meio de um fluxo no momento do deploy.
+  // `aguardandoDesde` e gravado quando o bot pede algo cuja resposta MUDA o rumo
+  // (menu, roteamento, CNPJ). Um passo que so confirma -- cuja unica opcao e um
+  // curinga que transfere -- estaciona sem gravar o relogio, e por isso nao pode
+  // ser encerrado por falta de resposta. Ver ChatbotEngine.decidirEsperaDoPasso
+  // e .planning/phases/08-inatividade/.
+  const desdeAPerguntaVelha = new Date(Date.now() - 11 * 60 * 1000);
   const sessaoVelha = {
     id: "s9", ativo: true, fluxoAtualId: fluxo.id, telefone: "551188",
     aguardando: "opcao",
-    atualizadoEm: new Date(Date.now() - 11 * 60 * 1000),
+    aguardandoDesde: desdeAPerguntaVelha,
+    atualizadoEm: desdeAPerguntaVelha,
   };
   sessaoAtual = sessaoVelha;
   const resInat = await engineInat.aplicarInatividade(sessaoVelha, {
@@ -408,6 +411,26 @@ function mostrar(titulo, r) {
   );
   console.log(`  automacao concluida -> ${resConcluida ? "agiu (ERRADO)" : "nada (ok)"}`);
   check(resConcluida === null, "encerrou por inatividade uma automacao JA CONCLUIDA");
+
+  // SEM RELOGIO DE COBRANCA, SEM INATIVIDADE.
+  //
+  // E o caso do passo que so confirma ("Chamado aberto com sucesso", cuja unica
+  // opcao e um curinga que transfere): a sessao fica estacionada, mas
+  // `aguardandoDesde` e null porque nao ha resposta a cobrar -- qualquer coisa
+  // que o cliente diga termina na mesma fila. Tambem cobre as sessoes anteriores
+  // a essa coluna, que saem pelo TTL da sessao em vez de por inatividade.
+  const sessaoSemRelogio = {
+    ...sessaoVelha,
+    aguardandoDesde: null,
+    atualizadoEm: new Date(Date.now() - 60 * 60 * 1000),
+  };
+  sessaoAtual = sessaoSemRelogio;
+  const resSemRelogio = await engineInat.aplicarInatividade(
+    sessaoSemRelogio,
+    { conversa: conversaInat, instanciaId: "i1", instanceName: "arka" }
+  );
+  console.log(`  parada 1h sem relogio de cobranca -> ${resSemRelogio ? "agiu (ERRADO)" : "nada (ok)"}`);
+  check(resSemRelogio === null, "encerrou uma espera que nao cobra resposta");
 
   // Allowlist positiva: sem pergunta em aberto (`aguardando: null`) nao ha o que
   // cobrar. Antes o criterio era `aguardando !== "humano"`, e `null` passava.
