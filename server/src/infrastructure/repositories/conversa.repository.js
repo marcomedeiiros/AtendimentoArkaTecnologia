@@ -635,6 +635,30 @@ class ConversaRepository {
     });
   }
 
+  /**
+   * O CLIENTE FALOU DEPOIS DE `desde`?
+   *
+   * Existe para uma pergunta so, e ela e a do encerramento por inatividade: "o
+   * cliente respondeu A PERGUNTA que o bot fez?" -- e nao "o cliente ja mandou
+   * alguma mensagem alguma vez". A diferenca e o bug: a decisao era tomada em
+   * cima de `sessoes_chatbot.atualizado_em`, um carimbo da linha da sessao, e
+   * nenhum caminho de resposta era obrigado a toca-lo.
+   *
+   * `origem: "cliente"` de proposito: mensagem do bot ("automacao") e do
+   * atendente ("equipe") nao contam como resposta do cliente.
+   *
+   * Roda no instante de agir, e nao quando a espera comecou -- por isso fecha a
+   * corrida entre a resposta que acabou de chegar e o timeout que ia disparar.
+   */
+  async respondeuDepoisDe(conversaId, desde) {
+    if (!conversaId || !desde) return false;
+    const msg = await prisma.mensagem.findFirst({
+      where: { conversaId, origem: "cliente", criadoEm: { gt: new Date(desde) } },
+      select: { id: true },
+    });
+    return !!msg;
+  }
+
   // Usado para descartar webhooks reentregues pela Evolution API.
   existeMensagemWa(waMessageId) {
     if (!waMessageId) return Promise.resolve(null);

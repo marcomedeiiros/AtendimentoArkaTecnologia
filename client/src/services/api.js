@@ -661,7 +661,7 @@ export const ConversasAPI = {
    * Para quem dá para transferir.
    *
    * NÃO usa `EquipeAPI.listar()` de propósito. Aquela rota exige o módulo
-   * "equipe" — o da tela de Gestão da Equipe — que na matriz de permissões só o
+   * "equipe" o da tela de Gestão da Equipe que na matriz de permissões só o
    * Comercial tem por padrão. Técnico e Financeiro levavam 403 ali, e o
    * AppContext converte promessa rejeitada em lista vazia: o seletor aparecia
    * com "Nenhum outro operador com conta", de base cheia.

@@ -2985,14 +2985,14 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
    * ── PARA QUEM TRANSFERIR ──────────────────────────────────────────────────
    *
    * Esta lista vinha de `equipe`, a lista global do AppContext, que é carregada
-   * de `GET /api/equipe`. Aquela rota exige o módulo "equipe" — o da tela de
-   * GESTÃO DA EQUIPE — e na matriz de permissões esse módulo é do grupo A: só o
+   * de `GET /api/equipe`. Aquela rota exige o módulo "equipe" o da tela de
+   * GESTÃO DA EQUIPE e na matriz de permissões esse módulo é do grupo A: só o
    * Comercial o tem por padrão.
    *
    * Então Técnico e Financeiro levavam 403. E o erro não aparecia em lugar
    * nenhum: o AppContext carrega tudo com `Promise.allSettled` e transforma
    * promessa rejeitada em lista vazia. O resultado na tela era "Nenhum outro
-   * operador com conta" — com a base cheia de operadores.
+   * operador com conta" com a base cheia de operadores.
    *
    * Agora a lista vem de uma rota de ATENDIMENTO, que é o módulo que a pessoa
    * já precisa ter para estar nesta tela. Carregada ao abrir o modal (e não no
@@ -3013,8 +3013,8 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       .then(lista => { if (vivo) setDestinos(Array.isArray(lista) ? lista : []); })
       .catch(e => {
         // Falha aqui NÃO pode virar "nenhum operador com conta": era exatamente
-        // essa confusão — entre "a lista está vazia" e "não consegui carregar a
-        // lista" — que fazia o Técnico acreditar que não havia mais ninguém na
+        // essa confusão entre "a lista está vazia" e "não consegui carregar a
+        // lista" que fazia o Técnico acreditar que não havia mais ninguém na
         // plataforma.
         if (!vivo) return;
         setDestinos([]);

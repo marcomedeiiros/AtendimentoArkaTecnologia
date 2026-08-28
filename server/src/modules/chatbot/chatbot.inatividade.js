@@ -24,6 +24,7 @@ const instanciaRepository = require("../../infrastructure/repositories/instancia
 const chatbotEngine = require("./chatbot.engine");
 const fluxoRepository = require("../../infrastructure/repositories/fluxo.repository");
 const configuracaoService = require("../configuracoes/configuracao.service");
+const { comLock } = require("../../shared/helpers/lock.helper");
 const logger = require("../../config/logger");
 
 const INTERVALO_MS = Number(process.env.CHATBOT_INATIVIDADE_INTERVALO_MS) || 60 * 1000;
@@ -50,47 +51,25 @@ async function varrer() {
 
     for (const sessao of sessoes) {
       try {
-        const conversa = await conversaRepository.findById(sessao.conversaId);
-        if (!conversa) continue;
-
-        // FLUXO PAUSADO = NENHUMA ACAO AUTOMATICA.
+        // ── A MESMA FILA DO WEBHOOK ────────────────────────────────────────
         //
-        // A checagem e feita AQUI, no instante de executar, e nao quando a
-        // espera comecou: pausar o fluxo durante os 5 minutos tem de valer. Sem
-        // isto, uma pesquisa disparada antes da pausa continuaria cobrando
-        // resposta de um bot que a tela mostra desligado.
-        const fluxo = await fluxoRepository.findById(sessao.fluxoAtualId);
-        if (!fluxo || !fluxo.ativo) {
-          logger.debug("Acao automatica ignorada: fluxo pausado ou removido", {
-            sessaoId: sessao.id,
-            fluxoId: sessao.fluxoAtualId,
-          });
-          continue;
-        }
-
-        const instancia = await instanciaRepository.findById(sessao.instanciaId);
-
-        // ESPERA PELA AVALIACAO: a conversa aqui esta FECHADA (a pesquisa fecha
-        // desde ja), entao ela nao passa pelo filtro de "pendente" abaixo.
-        if (chatbotEngine.aguardandoAvaliacao(sessao)) {
-          const tratou = await chatbotEngine.aplicarTimeoutAvaliacao(sessao, {
-            conversa,
-            instanciaId: sessao.instanciaId,
-            instanceName: instancia?.nome,
-          });
-          if (tratou) tratadas += 1;
-          continue;
-        }
-
-        // Atendente ja assumiu: nao e mais conversa do bot.
-        if (conversa.statusAtendimento !== "pendente") continue;
-
-        const resultado = await chatbotEngine.aplicarInatividade(sessao, {
-          conversa,
-          instanciaId: sessao.instanciaId,
-          instanceName: instancia?.nome,
-        });
-        if (resultado) tratadas += 1;
+        // Este era o unico escritor de automacao FORA da fila
+        // `instancia:telefone`: o recebimento de mensagem toma essa fila
+        // (chatbot.engine:processarMensagemEntrada) e o disparo da pesquisa
+        // tambem (conversa.service:_dispararPesquisaSatisfacao), mas a varredura
+        // agia em paralelo com as duas. Resultado: a resposta do cliente que
+        // chegasse junto do timeout podia ser sobrescrita pelo encerramento --
+        // exatamente a corrida do relato.
+        //
+        // A fila e tomada AQUI, e nao dentro do motor: `encerrarAtendimento` e
+        // `transferirParaHumano` tambem sao chamados pelo caminho do fluxo, que
+        // JA roda dentro dela -- pedir a mesma chave duas vezes travaria a
+        // conversa para sempre.
+        const tratadasNaSessao = await comLock(
+          `${sessao.instanciaId}:${sessao.telefone}`,
+          () => tratarSessao(sessao)
+        );
+        tratadas += tratadasNaSessao;
       } catch (error) {
         // Uma sessao problematica nao pode parar a varredura das outras.
         logger.warn("Falha ao aplicar inatividade na sessao", {
@@ -114,6 +93,73 @@ async function varrer() {
 
   if (tratadas) logger.info("Varredura de inatividade", { tratadas });
   return { tratadas };
+}
+
+/**
+ * Uma sessao, dentro da fila do cliente. Devolve quantas acoes foram aplicadas
+ * (0 ou 1).
+ *
+ * A sessao e RELIDA aqui dentro: a que veio da consulta pode ter minutos de
+ * idade (a varredura processa ate 200 por vez, e cada uma espera a sua vez na
+ * fila). Agir sobre o retrato antigo era decidir com estado vencido -- e o
+ * `aguardandoDesde`/`concluidoEm` do relato aparecem justamente nesse intervalo.
+ */
+async function tratarSessao(sessaoLida) {
+  const sessao = await prisma.sessaoChatbot.findUnique({ where: { id: sessaoLida.id } });
+  if (!sessao?.ativo || !sessao.fluxoAtualId) return 0;
+
+  const conversa = await conversaRepository.findById(sessao.conversaId);
+  if (!conversa) return 0;
+
+  // FLUXO PAUSADO = NENHUMA ACAO AUTOMATICA.
+  //
+  // A checagem e feita AQUI, no instante de executar, e nao quando a espera
+  // comecou: pausar o fluxo durante os 5 minutos tem de valer. Sem isto, uma
+  // pesquisa disparada antes da pausa continuaria cobrando resposta de um bot
+  // que a tela mostra desligado.
+  const fluxo = await fluxoRepository.findById(sessao.fluxoAtualId);
+  if (!fluxo || !fluxo.ativo) {
+    logger.debug("Acao automatica ignorada: fluxo pausado ou removido", {
+      sessaoId: sessao.id,
+      fluxoId: sessao.fluxoAtualId,
+    });
+    return 0;
+  }
+
+  const instancia = await instanciaRepository.findById(sessao.instanciaId);
+
+  // ESPERA PELA AVALIACAO: a conversa aqui esta FECHADA (a pesquisa fecha
+  // desde ja), entao ela nao passa pelo filtro de "pendente" abaixo.
+  if (chatbotEngine.aguardandoAvaliacao(sessao)) {
+    const tratou = await chatbotEngine.aplicarTimeoutAvaliacao(sessao, {
+      conversa,
+      instanciaId: sessao.instanciaId,
+      instanceName: instancia?.nome,
+    });
+    return tratou ? 1 : 0;
+  }
+
+  // Atendente ja assumiu: nao e mais conversa do bot.
+  if (conversa.statusAtendimento !== "pendente") return 0;
+
+  // A AUTOMACAO JA TERMINOU? Nao ha inatividade a cobrar de quem cumpriu a sua
+  // parte. A checagem tambem existe dentro de `aplicarInatividade` (que e
+  // publico); aqui ela economiza o resto da varredura e deixa o motivo no log.
+  if (sessao.concluidoEm) {
+    logger.debug("Inatividade ignorada: automacao ja concluida", {
+      sessaoId: sessao.id,
+      conversaId: conversa.id,
+      concluidoEm: sessao.concluidoEm,
+    });
+    return 0;
+  }
+
+  const resultado = await chatbotEngine.aplicarInatividade(sessao, {
+    conversa,
+    instanciaId: sessao.instanciaId,
+    instanceName: instancia?.nome,
+  });
+  return resultado ? 1 : 0;
 }
 
 /**

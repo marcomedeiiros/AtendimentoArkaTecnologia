@@ -79,6 +79,27 @@ const AGUARDANDO = {
   AVALIACAO_COMENTARIO: "avaliacao_comentario",
 };
 
+// ── OS ESTADOS QUE ADMITEM "ENCERRADO POR INATIVIDADE" ────────────────────────
+//
+// Allowlist POSITIVA, e nao uma lista de excecoes. `aplicarInatividade` pedia
+// apenas `aguardando !== "humano"`: qualquer outro valor servia, `null`
+// inclusive. Ou seja, o encerramento era decidido por EXCLUSAO -- e sobrava para
+// estados que nao tem pergunta nenhuma em aberto.
+//
+// Aqui estao so os estados em que o bot FEZ UMA PERGUNTA e a proxima mensagem do
+// cliente e a resposta dela. Fora da lista, de proposito:
+//
+//   humano               -> nao e pergunta; a conversa esta na fila do atendente;
+//   avaliacao_nota/coment -> tem prazo, texto e desfecho proprios
+//                            (`aplicarTimeoutAvaliacao`);
+//   null                 -> nao ha pergunta; nao ha o que cobrar.
+const AGUARDA_RESPOSTA_DO_CLIENTE = [
+  AGUARDANDO.CNPJ,
+  AGUARDANDO.CNPJ_CONFIRMA,
+  AGUARDANDO.MENU,
+  AGUARDANDO.OPCAO,
+];
+
 // Gatilho que casa com qualquer primeira mensagem (fluxo de boas-vindas).
 const GATILHO_CURINGA = "*";
 
@@ -357,15 +378,92 @@ class ChatbotEngine {
   //
   // Quem precisa do valor efetivo chama `paramsTempos(fluxo).semResposta`.
 
-  // Aplica o timeout de inatividade em uma sessao que ficou parada esperando
-  // resposta do cliente. Devolve null quando ainda nao deu o tempo.
+  /**
+   * AS MARCAS DE ESPERA -- gravadas em todo write que mexe em `aguardando`.
+   *
+   * `aguardando` diz QUE o bot espera algo. Nao dizia QUANDO ele perguntou, e o
+   * prazo de inatividade corria sobre `atualizadoEm` -- um `@updatedAt` da linha,
+   * que qualquer escrita reinicia e que nenhum caminho de resposta era obrigado
+   * a tocar. Duas consequencias reais:
+   *
+   *   - o cliente respondia, o bot repetia a pergunta e o relogio NAO voltava ao
+   *     zero (os caminhos de "resposta invalida" nao gravavam nada na sessao);
+   *   - concluir a automacao era representado por AUSENCIA (`ativo: false`,
+   *     `fluxoAtualId: null`), e ausencia nao sobrevive a um reset de TTL.
+   *
+   * Regra: `aguardandoDesde` e o instante em que o bot **(re)perguntou**. Toda vez
+   * que ele pergunta de novo, o prazo comeca de novo. `concluidoEm` marca o
+   * desfecho -- dali em diante nao existe inatividade a cobrar. E qualquer
+   * transicao limpa `inatividadeEm`, para a espera NOVA poder ser encerrada uma
+   * vez (a reivindicacao antiga nao vale para a pergunta seguinte).
+   *
+   * @param {string|null} aguardando  estado resultante da transicao
+   * @param {object} [opcoes]
+   * @param {boolean} [opcoes.concluido=false] a automacao chegou a um desfecho?
+   */
+  _marcasDeEspera(aguardando, { concluido = false } = {}) {
+    const agora = new Date();
+    return {
+      aguardandoDesde: AGUARDA_RESPOSTA_DO_CLIENTE.includes(aguardando) ? agora : null,
+      concluidoEm: concluido ? agora : null,
+      inatividadeEm: null,
+    };
+  }
+
+  // O bot acabou de REPETIR a pergunta (opcao invalida, CNPJ que nao casou,
+  // "nem sim nem nao"). O cliente respondeu -- so nao respondeu o que foi pedido
+  // -- e portanto o prazo recomeca daqui. Sem isto, quem erra a resposta uma vez
+  // continua correndo contra o relogio da PERGUNTA ANTERIOR.
+  _marcasDeReperguntar() {
+    return { aguardandoDesde: new Date(), inatividadeEm: null };
+  }
+
+  /**
+   * ENCERRAR POR INATIVIDADE -- so com prova de que existe pergunta em aberto.
+   *
+   * O criterio antigo era por EXCLUSAO: sessao ativa + fluxo + `aguardando !==
+   * "humano"` + conversa pendente + `atualizadoEm` velho. Nada ali afirmava que o
+   * bot tinha perguntado algo, e por isso o encerramento pegava conversas em que
+   * a automacao JA HAVIA TERMINADO -- o cliente recebia "Chamado aberto com
+   * sucesso" e, depois, "Atendimento encerrado por inatividade".
+   *
+   * Agora sao sete condicoes, todas afirmativas (ver
+   * .planning/phases/08-inatividade/PLAN.md):
+   *
+   *   1. conversa elegivel (fluxo ativo, pendente, sem atendente);
+   *   2. a automacao esta esperando resposta (`ativo` + `aguardando`);
+   *   3. o estado e um dos que PEDEM resposta (allowlist positiva);
+   *   4. o cliente NAO respondeu aquela pergunta (consulta fresca no historico);
+   *   5. o prazo do fluxo estourou, contado desde a PERGUNTA;
+   *   6. a automacao nao foi concluida (`concluidoEm`);
+   *   7. nada mudou desde a leitura -- releitura + UPDATE condicional.
+   *
+   * Devolve null quando nao se aplica.
+   */
   async aplicarInatividade(sessao, { conversa, instanciaId, instanceName }) {
+    // (2) A automacao esta parada esperando alguma coisa?
     if (!sessao?.ativo || !sessao.fluxoAtualId) return null;
-    // Conversa com atendente humano nao e problema do bot.
-    if (sessao.aguardando === AGUARDANDO.HUMANO) return null;
+
+    // (3) ...e essa coisa e uma RESPOSTA DO CLIENTE?
+    //
+    // Aqui havia `if (sessao.aguardando === AGUARDANDO.HUMANO) return null` -- a
+    // unica excecao. Trocada por allowlist: fora dela nao ha pergunta em aberto,
+    // e "encerrado por inatividade" nao tem sentido.
+    if (!AGUARDA_RESPOSTA_DO_CLIENTE.includes(sessao.aguardando)) return null;
+
+    // (6) A AUTOMACAO JA TERMINOU?
+    //
+    // O caso do relato: o cliente respondeu tudo, o bot abriu o chamado e
+    // entregou para a equipe. `concluidoEm` preenchido significa "o cliente
+    // cumpriu a sua parte" -- nao ha inatividade a cobrar, por mais tempo que
+    // passe e por mais que a conversa siga em Pendentes.
+    if (sessao.concluidoEm) return null;
+
+    // (7a) IDEMPOTENCIA: esta espera ja foi encerrada uma vez.
+    if (sessao.inatividadeEm) return null;
 
     const fluxo = await this.deps.fluxoRepository.findById(sessao.fluxoAtualId);
-    // FLUXO PAUSADO = SEM AUTOMACAO (defesa em profundidade: o varredor ja
+    // (1) FLUXO PAUSADO = SEM AUTOMACAO (defesa em profundidade: o varredor ja
     // confere, mas este metodo e publico e nao pode depender de quem chama).
     if (!fluxo || !fluxo.ativo) return null;
 
@@ -373,10 +471,32 @@ class ChatbotEngine {
     // `notResponseMessage` que os fluxos exportados ja trazem (ver paramsTempos).
     const cfg = paramsTempos(fluxo).semResposta;
 
-    const parado = Date.now() - new Date(sessao.atualizadoEm || sessao.criadoEm).getTime();
-    if (parado < cfg.minutos * 60 * 1000) return null;
+    // (5) O prazo conta desde a PERGUNTA, nao desde o ultimo toque na linha.
+    //
+    // `atualizadoEm` fica como fallback para as sessoes que existiam antes desta
+    // coluna: sem ele, nenhuma delas expiraria nunca e a automacao ficaria
+    // silenciosamente desligada para quem estava no meio de um fluxo no deploy.
+    const desde = new Date(sessao.aguardandoDesde || sessao.atualizadoEm || sessao.criadoEm);
+    if (Date.now() - desde.getTime() < cfg.minutos * 60 * 1000) return null;
 
-    // O ESTADO MUDOU ENQUANTO O RELOGIO CORRIA?
+    // (4) O CLIENTE RESPONDEU ESTA PERGUNTA?
+    //
+    // A pergunta e "chegou mensagem do cliente DEPOIS do pedido do bot?" -- e nao
+    // "o cliente ja mandou alguma mensagem alguma vez". Consulta fresca no
+    // historico, feita no instante de agir: e o que fecha a corrida do §13 sem
+    // depender de nenhum caminho de escrita ter lembrado de tocar a sessao.
+    if (this.deps.conversaRepository.respondeuDepoisDe) {
+      const respondeu = await this.deps.conversaRepository.respondeuDepoisDe(conversa.id, desde);
+      if (respondeu) {
+        logger.debug("Inatividade ignorada: o cliente respondeu a pergunta", {
+          conversaId: conversa.id,
+          desde: desde.toISOString(),
+        });
+        return null;
+      }
+    }
+
+    // (7b) O ESTADO MUDOU ENQUANTO O RELOGIO CORRIA?
     //
     // A varredura le a sessao e so entao age. Entre uma coisa e outra o cliente
     // pode ter respondido, o atendente pode ter assumido, ou a conversa pode ter
@@ -385,10 +505,31 @@ class ChatbotEngine {
     // alguem que acabou de ser atendido.
     const agora = await this.deps.sessaoRepository.findByConversa(conversa.id);
     if (!agora?.ativo || agora.aguardando !== sessao.aguardando) return null;
+    if (agora.concluidoEm || agora.inatividadeEm) return null;
     if (new Date(agora.atualizadoEm).getTime() !== new Date(sessao.atualizadoEm).getTime()) return null;
     const convAgora = await this.deps.conversaRepository.findById(conversa.id);
     if (!convAgora || convAgora.statusAtendimento !== "pendente") return null;
     if (convAgora.atendenteId) return null;
+
+    // (7c) REIVINDICA A ESPERA -- UPDATE condicional, uma vez so.
+    //
+    // As checagens acima sao leituras: entre a ultima delas e o envio ainda cabe
+    // uma segunda varredura (restart, replica, varredura anterior demorada). Este
+    // UPDATE e o unico ponto em que a decisao se torna exclusiva: quem conseguir
+    // marcar `inatividadeEm` age; quem receber `count: 0` sai calado.
+    if (this.deps.sessaoRepository.reivindicarInatividade) {
+      const claim = await this.deps.sessaoRepository.reivindicarInatividade(
+        agora.id,
+        agora.aguardandoDesde ?? null
+      );
+      if (!claim?.count) {
+        logger.debug("Inatividade ignorada: outra varredura ja tratou esta espera", {
+          conversaId: conversa.id,
+          sessaoId: agora.id,
+        });
+        return null;
+      }
+    }
 
     // `fluxo` viaja junto: e dele que sai o texto da confirmacao de
     // encaminhamento quando `acao` e "fila" (ver paramsHandoff).
@@ -893,6 +1034,13 @@ class ChatbotEngine {
       passoAtualId: null,
       aguardando: AGUARDANDO.HUMANO,
       ativo: true,
+      // ENTREGAR PARA A EQUIPE E UM DESFECHO -- e e por isso que `concluidoEm`
+      // e gravado aqui. Este e o ponto exato do relato: o cliente respondeu tudo,
+      // o bot mandou "Chamado aberto com sucesso" e a conversa ficou em
+      // Pendentes esperando o tecnico. Antes, a unica marca disso era
+      // `aguardando: "humano"` -- que o TTL da sessao apagava algumas horas
+      // depois, e dali em diante a conversa era indistinguivel de uma nova.
+      ...this._marcasDeEspera(AGUARDANDO.HUMANO, { concluido: true }),
       // `fluxoOrigemId` fica guardado porque `fluxoAtualId` e zerado aqui (o bot
       // parou de conduzir). Sem essa pista, a varredura nao saberia de QUAL
       // fluxo vem a regra de espera na fila -- nem se ele esta pausado.
@@ -978,6 +1126,7 @@ class ChatbotEngine {
       passoAtualId: null,
       aguardando: null,
       ativo: false,
+      ...this._marcasDeEspera(null, { concluido: true }),
       contexto: {},
     });
 
@@ -1094,6 +1243,10 @@ class ChatbotEngine {
       passoAtualId: null,
       aguardando: AGUARDANDO.AVALIACAO_NOTA,
       ativo: true,
+      // A pesquisa NAO entra na allowlist de inatividade: ela tem prazo, texto e
+      // desfecho proprios (`aplicarTimeoutAvaliacao`). `aguardandoDesde` fica
+      // null de proposito -- quem cobra esta espera e o outro caminho.
+      ...this._marcasDeEspera(AGUARDANDO.AVALIACAO_NOTA),
       contexto: { pesquisa: true, pesquisaCfg: cfg, tentativasAval: 0, osAvaliada },
     });
     // A OS passa a constar como "aguardando" a nota -- diferente de "sem nota".
@@ -1164,6 +1317,7 @@ class ChatbotEngine {
           passoAtualId: null,
           aguardando: null,
           ativo: false,
+          ...this._marcasDeEspera(null, { concluido: true }),
           contexto: {},
         });
         await this._emitirConversa(alvo);
@@ -1356,6 +1510,7 @@ class ChatbotEngine {
       passoAtualId: null,
       aguardando: null,
       ativo: false,
+      ...this._marcasDeEspera(null, { concluido: true }),
       contexto: {},
     });
 
@@ -1411,6 +1566,7 @@ class ChatbotEngine {
       passoAtualId: null,
       aguardando: null,
       ativo: false,
+      ...this._marcasDeEspera(null, { concluido: true }),
       contexto: {},
     });
     const atual = await this.deps.conversaRepository.findById(conversa.id);
@@ -1447,6 +1603,7 @@ class ChatbotEngine {
       passoAtualId: null,
       aguardando: null,
       ativo: false,
+      ...this._marcasDeEspera(null, { concluido: true }),
       contexto: {},
     });
 
@@ -1671,6 +1828,9 @@ class ChatbotEngine {
       passoAtualId: passoAtual?.id || null,
       aguardando,
       ativo: !!aguardando,
+      // Sem `aguardando`, o fluxo andou ate o fim sem pedir nada: e desfecho.
+      // Com `aguardando`, o bot acabou de perguntar -- o prazo comeca agora.
+      ...this._marcasDeEspera(aguardando, { concluido: !aguardando }),
       contexto: contextoSessao || { tentativasCnpj: 0, tentativasOpcao: 0 },
     });
 
@@ -1773,6 +1933,7 @@ class ChatbotEngine {
       passoAtualId: resultado.passoAtual?.id || null,
       aguardando: resultado.aguardando,
       ativo: !!resultado.aguardando,
+      ...this._marcasDeEspera(resultado.aguardando, { concluido: !resultado.aguardando }),
       contexto: resultado.contextoSessao || { ...(sessao.contexto || {}), tentativasOpcao: 0, tentativasCnpj: 0 },
     });
 
@@ -1831,6 +1992,9 @@ class ChatbotEngine {
 
         await this.deps.sessaoRepository.update(sessao.id, {
           contexto: { ...(sessao.contexto || {}), tentativasOpcao: tentativas },
+          // O bot acabou de repetir o menu: o prazo recomeca daqui, e nao da
+          // pergunta anterior. O cliente respondeu -- so nao acertou a opcao.
+          ...this._marcasDeReperguntar(),
         });
 
         return { fluxoId: fluxo.id, conversaId: conversa.id, aguardando: AGUARDANDO.OPCAO };
@@ -1868,6 +2032,7 @@ class ChatbotEngine {
             passoAtualId: resultado.passoAtual?.id || null,
             aguardando: resultado.aguardando,
             ativo: !!resultado.aguardando,
+            ...this._marcasDeEspera(resultado.aguardando, { concluido: !resultado.aguardando }),
             contexto: resultado.contextoSessao || { tentativasCnpj: 0, tentativasOpcao: 0 },
           });
           return {
@@ -1886,6 +2051,9 @@ class ChatbotEngine {
           paramsCnpj(passoAtual).mensagemRespostaInvalida,
           instanceName
         );
+        // Este caminho tambem nao escrevia nada na sessao (ver o de CNPJ, mais
+        // abaixo): o bot repetiu a pergunta, entao o prazo recomeca daqui.
+        await this.deps.sessaoRepository.update(sessao.id, this._marcasDeReperguntar());
         return { conversaId: conversa.id, aguardando: AGUARDANDO.CNPJ_CONFIRMA };
       }
 
@@ -1902,6 +2070,8 @@ class ChatbotEngine {
       await this.deps.sessaoRepository.update(sessao.id, {
         aguardando: AGUARDANDO.CNPJ,
         ativo: true,
+        // Pergunta NOVA (o CNPJ digitado, em vez do confirmado): prazo do zero.
+        ...this._marcasDeEspera(AGUARDANDO.CNPJ),
         contexto: { ...(sessao.contexto || {}), cnpjSugerido: null, tentativasCnpj: 0 },
       });
       return { conversaId: conversa.id, aguardando: AGUARDANDO.CNPJ };
@@ -1920,6 +2090,13 @@ class ChatbotEngine {
         // do fluxo.
         if (cnpjValidacao.estado === "resposta_invalida") {
           await this.enviarBot(conversa.id, telefone, cnpjValidacao.mensagem, instanceName);
+          // ESTE CAMINHO NAO ESCREVIA NADA NA SESSAO.
+          //
+          // O cliente respondeu, o bot repetiu a pergunta -- e o relogio da
+          // inatividade continuava correndo desde o pedido ANTERIOR. Quem
+          // perguntasse outra coisa no meio do caminho podia ser encerrado por
+          // "falta de resposta" segundos depois de ter escrito.
+          await this.deps.sessaoRepository.update(sessao.id, this._marcasDeReperguntar());
           return { conversaId: conversa.id, aguardando: AGUARDANDO.CNPJ };
         }
 
@@ -1968,6 +2145,8 @@ class ChatbotEngine {
 
         await this.deps.sessaoRepository.update(sessao.id, {
           contexto: { ...(sessao.contexto || {}), tentativasCnpj: tentativas },
+          // O bot acabou de pedir o CNPJ de novo: prazo do zero.
+          ...this._marcasDeReperguntar(),
         });
 
         return { conversaId: conversa.id, aguardando: AGUARDANDO.CNPJ };
@@ -1994,6 +2173,7 @@ class ChatbotEngine {
       passoAtualId: resultado.passoAtual?.id || null,
       aguardando: resultado.aguardando,
       ativo: !!resultado.aguardando,
+      ...this._marcasDeEspera(resultado.aguardando, { concluido: !resultado.aguardando }),
       contexto: resultado.contextoSessao || { ...(sessao.contexto || {}), tentativasCnpj: 0, tentativasOpcao: 0 },
     });
 
@@ -2048,6 +2228,8 @@ class ChatbotEngine {
     // "Atendente" das avaliacoes dizer "Bot" mesmo em atendimento humano, e ainda
     // deixava uma conversa-fantasma na lista de Fechadas a cada avaliacao.
     let conversa = null;
+    // Esta mensagem abriu um CICLO NOVO no fio (a conversa estava fechada)?
+    let cicloReaberto = false;
     const sessaoAberta = await this.deps.sessaoRepository.findByTelefone(instanciaId, telefone);
     const respondendoPesquisa =
       sessaoAberta?.ativo &&
@@ -2101,6 +2283,11 @@ class ChatbotEngine {
       // A resposta da PESQUISA DE SATISFACAO e a excecao: ela pertence ao ciclo
       // que acabou de fechar, entao nao abre atendimento nenhum.
       if (!respondendoPesquisa && conversa.statusAtendimento === "fechada") {
+        // Marca o CICLO NOVO. E o que distingue "o cliente voltou com um chamado
+        // novo" (aqui o fluxo deve rodar de novo) de "o cliente ainda espera o
+        // tecnico do chamado anterior" (aqui o fluxo NAO deve rodar). Usado mais
+        // abaixo, na expiracao da sessao.
+        cicloReaberto = true;
         // CHAMADO NOVO COMECA SEM SETOR -- a triagem e do CICLO, nao do fio.
         //
         // O fio e permanente e o setor mora nele, entao o ciclo novo herdava o
@@ -2261,10 +2448,54 @@ class ChatbotEngine {
 
     let sessao = await this.deps.sessaoRepository.findByTelefone(instanciaId, telefone);
     if (sessao && this.sessaoExpirada(sessao)) {
+      // ── QUEM ESTA NA FILA DO TECNICO NAO VOLTA PARA O INICIO DO BOT ────────
+      //
+      // Era daqui que saia o "Atendimento encerrado por inatividade" depois de
+      // "Chamado aberto com sucesso" -- a causa-raiz do relato:
+      //
+      //   1. o cliente respondeu tudo, o bot abriu o chamado e entregou para a
+      //      equipe (`aguardando: "humano"`), conversa em Pendentes;
+      //   2. o tecnico demorou mais que o TTL humano (240 min -- uma fila que
+      //      atravessa a noite passa disso sozinha);
+      //   3. o cliente perguntou "alguma novidade?";
+      //   4. a sessao expirava, `aguardando: "humano"` era APAGADO, e como a
+      //      conversa segue `pendente` (nao `aberta`), o motor caia no gatilho
+      //      curinga e REEXECUTAVA o fluxo do zero -- reenviando o menu de boas
+      //      vindas para quem so queria um status;
+      //   5. cinco minutos de silencio depois, a inatividade encerrava a OS que
+      //      o tecnico ainda nao tinha visto.
+      //
+      // O TTL existe para nao deixar ninguem preso no meio de um fluxo antigo.
+      // Uma conversa na FILA nao esta no meio de fluxo nenhum: ela esta esperando
+      // uma pessoa, e esse estado nao expira -- ele termina quando alguem assume
+      // (`statusAtendimento: "aberta"`) ou quando o ciclo fecha.
+      //
+      // `cicloReaberto` preserva o caminho oposto: cliente que volta com um
+      // chamado NOVO (conversa estava fechada) continua sendo atendido pelo bot.
+      const naFilaDoAtendente =
+        sessao.aguardando === AGUARDANDO.HUMANO &&
+        !cicloReaberto &&
+        conversa.statusAtendimento === "pendente" &&
+        !conversa.atendenteId;
+
+      if (naFilaDoAtendente) {
+        logger.info("Sessao expirada, mas a conversa segue na fila: bot nao reinicia o fluxo", {
+          conversaId: conversa.id,
+          telefone,
+        });
+        // Mesmo desfecho do branch `aguardando_atendente` mais abaixo: a mensagem
+        // ja esta registrada e na tela do atendente; o bot nao responde.
+        return { processado: false, motivo: "aguardando_atendente", conversaId: conversa.id };
+      }
+
       await this.deps.sessaoRepository.update(sessao.id, {
         ativo: false,
         aguardando: null,
         passoAtualId: null,
+        // Nao ha mais pergunta em aberto nem reivindicacao de inatividade
+        // valida: a espera morreu com a sessao.
+        aguardandoDesde: null,
+        inatividadeEm: null,
         contexto: {},
       });
       logger.info("Sessao do chatbot expirada", { conversaId: conversa.id, telefone });

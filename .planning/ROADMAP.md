@@ -120,3 +120,23 @@ Plans:
 | 5. Midia WhatsApp | 2/2 | Complete | 2026-08-28 |
 | 6. CAPTCHA | 1/1 | Complete | 2026-08-28 |
 | 7. Validacao | 1/1 | Complete | 2026-08-28 |
+
+---
+
+## Marco adicional -- Fase 8
+
+- [x] **Phase 8: Inatividade** - "Atendimento encerrado por inatividade" so com
+      pergunta em aberto
+
+### Phase 8: Inatividade
+**Goal**: O encerramento por inatividade passa a exigir prova de que o bot
+perguntou e o cliente nao respondeu -- em vez de decidir por exclusao (status
+Pendente + tempo).
+**Success Criteria**:
+  1. Automacao concluida ("Chamado aberto com sucesso") nunca recebe o
+     encerramento por inatividade, por mais que a conversa siga Pendente.
+  2. Pergunta em aberto sem resposta continua sendo encerrada no prazo do fluxo.
+  3. Resposta do cliente proxima do timeout impede o encerramento.
+  4. Duas varreduras sobrepostas nao geram duas mensagens.
+**Artefatos**: `.planning/phases/08-inatividade/{FINDINGS,PLAN,VERIFICATION}.md`
+**Prova**: `server/verificar-inatividade.js`

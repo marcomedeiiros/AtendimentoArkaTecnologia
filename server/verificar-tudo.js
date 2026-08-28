@@ -310,6 +310,8 @@ function mostrar(titulo, r) {
   // precisa desse `findByConversa` -- sem ele o metodo estourava
   // "findByConversa is not a function" e este bloco inteiro nunca rodava.
   let sessaoAtual = null;
+  // Carimbos das mensagens do CLIENTE nesta conversa de teste.
+  let mensagensDoCliente = [];
   const engineInat = new ChatbotEngine({
     fluxoRepository: { findById: async () => fluxo, createLog: async () => {} },
     conversaRepository: {
@@ -320,16 +322,33 @@ function mostrar(titulo, r) {
       atualizarAtendimentoAtual: async () => null,
       atualizarAtendimento: async () => null,
       garantirAtendimentoAberto: async () => ({ atendimento: null, nova: false }),
+      // Condicao "o cliente respondeu A PERGUNTA do bot": o motor consulta o
+      // historico no instante de agir. `mensagensDoCliente` e controlada por
+      // cada caso abaixo.
+      respondeuDepoisDe: async (_i, desde) =>
+        mensagensDoCliente.some((m) => m > new Date(desde)),
     },
     sessaoRepository: {
       findByConversa: async () => sessaoAtual,
       upsert: async () => ({}),
       update: async () => ({}),
+      // UPDATE condicional que reivindica a inatividade: uma vez por espera.
+      reivindicarInatividade: async () => {
+        if (!sessaoAtual || sessaoAtual.inatividadeEm) return { count: 0 };
+        sessaoAtual.inatividadeEm = new Date();
+        return { count: 1 };
+      },
     },
     evolutionApi: { sendText: async () => ({ key: { id: "x" } }) },
     bus: { emitConversa: () => {} },
   });
 
+  // SESSAO ANTIGA, SEM `aguardandoDesde` -- e de proposito.
+  //
+  // Este e o retrato das linhas que ja existiam no banco quando as colunas de
+  // espera foram criadas. O fallback para `atualizadoEm` tem de valer, senao
+  // nenhuma delas expiraria nunca e a automacao ficaria silenciosamente
+  // desligada para quem estava no meio de um fluxo no momento do deploy.
   const sessaoVelha = {
     id: "s9", ativo: true, fluxoAtualId: fluxo.id, telefone: "551188",
     aguardando: "opcao",
@@ -367,6 +386,52 @@ function mostrar(titulo, r) {
     { conversa: conversaInat, instanciaId: "i1", instanceName: "arka" }
   );
   check(resHumano === null, "mexeu numa conversa que ja estava com atendente");
+
+  // ── O CASO DO RELATO: AUTOMACAO CONCLUIDA ──────────────────────────────────
+  //
+  // Cliente respondeu tudo, o bot abriu o chamado ("Chamado aberto com
+  // sucesso") e a conversa ficou em Pendentes esperando o tecnico. Por mais
+  // tempo que passe, nao ha inatividade a cobrar. Ver
+  // .planning/phases/08-inatividade/. A prova completa dos sete cenarios esta
+  // em verificar-inatividade.js.
+  conversaInat.statusAtendimento = "pendente";
+  const sessaoConcluida = {
+    ...sessaoVelha,
+    aguardando: "opcao",
+    aguardandoDesde: new Date(Date.now() - 60 * 60 * 1000),
+    concluidoEm: new Date(Date.now() - 50 * 60 * 1000),
+  };
+  sessaoAtual = sessaoConcluida;
+  const resConcluida = await engineInat.aplicarInatividade(
+    sessaoConcluida,
+    { conversa: conversaInat, instanciaId: "i1", instanceName: "arka" }
+  );
+  console.log(`  automacao concluida -> ${resConcluida ? "agiu (ERRADO)" : "nada (ok)"}`);
+  check(resConcluida === null, "encerrou por inatividade uma automacao JA CONCLUIDA");
+
+  // Allowlist positiva: sem pergunta em aberto (`aguardando: null`) nao ha o que
+  // cobrar. Antes o criterio era `aguardando !== "humano"`, e `null` passava.
+  const sessaoSemPergunta = { ...sessaoVelha, aguardando: null };
+  sessaoAtual = sessaoSemPergunta;
+  const resSemPergunta = await engineInat.aplicarInatividade(
+    sessaoSemPergunta,
+    { conversa: conversaInat, instanciaId: "i1", instanceName: "arka" }
+  );
+  check(resSemPergunta === null, "encerrou uma sessao sem pergunta em aberto (aguardando null)");
+
+  // O cliente respondeu a pergunta depois de ela ter sido feita: o prazo nao
+  // vale mais, mesmo que a linha da sessao nao tenha sido tocada.
+  const desdeAPergunta = new Date(Date.now() - 11 * 60 * 1000);
+  const sessaoRespondida = { ...sessaoVelha, aguardandoDesde: desdeAPergunta };
+  sessaoAtual = sessaoRespondida;
+  mensagensDoCliente = [new Date(Date.now() - 60 * 1000)]; // respondeu 1 min atras
+  const resRespondida = await engineInat.aplicarInatividade(
+    sessaoRespondida,
+    { conversa: conversaInat, instanciaId: "i1", instanceName: "arka" }
+  );
+  console.log(`  cliente respondeu ha 1min -> ${resRespondida ? "agiu (ERRADO)" : "nada (ok)"}`);
+  check(resRespondida === null, "encerrou por inatividade quem acabou de responder");
+  mensagensDoCliente = [];
 
   console.log(
     "\n" + (erros.length ? `FALHAS (${erros.length}):\n  ` + erros.join("\n  ") : "TODAS AS VERIFICACOES PASSARAM")

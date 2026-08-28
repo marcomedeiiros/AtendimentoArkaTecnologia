@@ -438,6 +438,29 @@ model SessaoChatbot {
   contexto     Json?
   aguardando   String?
   ativo        Boolean  @default(true)
+
+  // ── ESTADO DA ESPERA -- e por causa destas tres colunas que o bot sabe a
+  // diferenca entre "o cliente sumiu" e "a automacao acabou". Ver
+  // .planning/phases/08-inatividade/FINDINGS.md.
+  //
+  // `aguardando` sozinho nao bastava: ele diz QUE o bot espera algo, nao QUANDO
+  // perguntou nem se o cliente ja respondeu. O prazo de inatividade corria
+  // sobre `atualizadoEm` -- um @updatedAt generico, que qualquer escrita na linha
+  // reinicia e que nenhum caminho de resposta era obrigado a tocar.
+
+  /// Instante em que o bot fez a pergunta que esta em aberto. Null quando nao ha
+  /// pergunta nenhuma pendente. E o relogio da inatividade, e ele volta ao zero
+  /// a cada vez que o bot (re)pergunta.
+  aguardandoDesde DateTime? @map("aguardando_desde")
+  /// Instante em que a automacao chegou a um desfecho (entregue ao atendente,
+  /// encerrada, pesquisa finalizada). Enquanto isto esta preenchido, nao existe
+  /// inatividade a cobrar: o cliente cumpriu a sua parte.
+  concluidoEm     DateTime? @map("concluido_em")
+  /// Reivindicacao de "esta espera JA foi encerrada por inatividade". A garantia
+  /// de mensagem unica vive aqui, no banco, e nao numa flag em memoria: assim ela
+  /// sobrevive a restart e a duas varreduras sobrepostas.
+  inatividadeEm   DateTime? @map("inatividade_em")
+
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 

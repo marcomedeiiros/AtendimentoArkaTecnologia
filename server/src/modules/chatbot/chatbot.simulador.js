@@ -58,10 +58,18 @@ function criarAmbiente({ fluxo, nomeCliente, horario, filas, agora, pesquisaAtiv
       create: async () => estado.conversa,
       existeMensagemWa: async () => false,
       addMensagem: async (_id, origem, texto) => {
-        estado.conversa.mensagens.push({ origem, texto });
+        // `criadoEm` existe para o mesmo contrato de producao: e por ele que
+        // `respondeuDepoisDe` sabe se o cliente respondeu a pergunta do bot.
+        estado.conversa.mensagens.push({ origem, texto, criadoEm: new Date(agoraMs()) });
         if (origem === "bot") respostas.push(texto);
         return { id: `sim-msg-${estado.conversa.mensagens.length}` };
       },
+      // Mesma pergunta que o motor faz em producao antes de encerrar por
+      // inatividade: "chegou mensagem do cliente depois do pedido do bot?".
+      respondeuDepoisDe: async (_id, desde) =>
+        estado.conversa.mensagens.some(
+          (m) => m.origem === "cliente" && m.criadoEm && m.criadoEm > new Date(desde)
+        ),
       vincularWaMessageId: async () => {},
       update: async (_id, dados) => Object.assign(estado.conversa, dados),
       // OS (Atendimento): no simulador nao ha banco nem historico para manter --
@@ -94,6 +102,14 @@ function criarAmbiente({ fluxo, nomeCliente, horario, filas, agora, pesquisaAtiv
       update: async (_id, dados) => {
         estado.sessao = { ...estado.sessao, ...dados, atualizadoEm: new Date(agoraMs()) };
         return estado.sessao;
+      },
+      // UPDATE condicional de producao: aqui a sessao e unica e nao ha varredura
+      // concorrente, entao a reivindicacao sempre sucede -- o que importa e o
+      // metodo existir com o mesmo contrato ({ count }).
+      reivindicarInatividade: async () => {
+        if (!estado.sessao || estado.sessao.inatividadeEm) return { count: 0 };
+        estado.sessao.inatividadeEm = new Date(agoraMs());
+        return { count: 1 };
       },
     },
     // Sem consulta de parceiro nem ERP na simulacao: o teste e do desenho do

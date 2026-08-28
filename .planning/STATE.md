@@ -2,10 +2,10 @@
 gsd_state_version: '1.0'
 status: complete
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 13
-  completed_plans: 13
+  total_phases: 8
+  completed_phases: 8
+  total_plans: 14
+  completed_plans: 14
   percent: 100
 ---
 
@@ -20,9 +20,10 @@ See: .planning/PROJECT.md (updated 2026-08-28)
 
 ## Current Position
 
-Phase: 7 of 7 (Validacao)
+Phase: 8 of 8 (Inatividade)
 Status: Complete
-Last activity: 2026-08-28 -- suite completa verde (17 scripts), build do front OK.
+Last activity: 2026-08-28 -- inatividade so com pergunta em aberto;
+`verificar-inatividade.js` 24/24 e `verificar-tudo.js` sem regressao.
 
 Progress: [██████████] 100%
 
@@ -34,6 +35,14 @@ Progress: [██████████] 100%
 - D3: transferencia com UPDATE condicional; duplo-clique e idempotente, corrida real da 409.
 - D4: CSRF no XHR de midia via `cabecalhosDeSessao()` -- conserta e previne a proxima deriva.
 - D5: Turnstile desenhado no cadastro; o guard da rota nao foi tocado.
+- D6: inatividade decidida por EVIDENCIA (allowlist de estados + `aguardandoDesde`
+  + `concluidoEm` + resposta do cliente posterior a pergunta), nao por exclusao.
+  Status da conversa e estado da automacao passam a ser coisas separadas.
+- D7: conversa na FILA do atendente nao expira com o TTL da sessao -- o bot nao
+  reinicia o fluxo de quem esta esperando um tecnico.
+- D8: a varredura entra na mesma fila `comLock(instancia:telefone)` do webhook, e
+  a mensagem unica e garantida por UPDATE condicional no banco (`inatividadeEm`),
+  nao por flag em memoria.
 
 ### Provas criadas
 | Script | Cobre |
@@ -42,6 +51,7 @@ Progress: [██████████] 100%
 | `verificar-transferencia.js` | dono x nao-dono x admin, duplo-clique, corrida, setor |
 | `verificar-midia.js` | CSRF fechado/aberto, os 5 tipos, gravacao em disco, validacao |
 | `verificar-cadastro-turnstile.js` | sem/ com/ forjado/ repetido, e a tela produzindo o token |
+| `verificar-inatividade.js` | os 7 cenarios do relato + a varredura real contra o banco |
 
 ### Blockers/Concerns
 - A entrega no WhatsApp em si (Evolution API) nao roda no ambiente de teste: a
