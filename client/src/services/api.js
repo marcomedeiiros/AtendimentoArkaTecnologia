@@ -1,5 +1,40 @@
 const API_BASE = '/api';
 
+// ── ONDE A SESSAO MORA ─────────────────────────────────────────────────────
+//
+// Ela mora em COOKIE HttpOnly, gravado pelo servidor. Isso significa que este
+// arquivo NAO consegue le-la -- e esse e exatamente o ponto: se o JavaScript
+// desta pagina nao le, o JavaScript de um XSS tambem nao. Antes a sessao ficava
+// em `localStorage`, ao alcance de qualquer script injetado, e um unico XSS
+// levava a credencial inteira embora.
+//
+// O que sobrou aqui e o necessario para conversar com esse esquema:
+//
+//   `arka_csrf`   cookie LEGIVEL de proposito. Copiado para o header
+//                 `X-CSRF-Token` a cada escrita: um site externo consegue fazer
+//                 o navegador ENVIAR nossos cookies, mas nao consegue LE-LOS, e
+//                 por isso nao monta este header. Serve tambem como a resposta
+//                 para "ha sessao neste navegador?", ja que os outros cookies
+//                 sao invisiveis daqui.
+//
+//   as chaves de localStorage abaixo continuam existindo SO PARA MIGRAR quem ja
+//   estava logado quando isto subiu. A primeira renovacao troca por cookies e
+//   apaga o que havia. Ver `apagarLegado`.
+const CSRF_COOKIE = 'arka_csrf';
+
+function lerCookie(nome) {
+  const alvo = `${nome}=`;
+  for (const parte of String(document.cookie || '').split(';')) {
+    const c = parte.trim();
+    if (c.startsWith(alvo)) return decodeURIComponent(c.slice(alvo.length));
+  }
+  return '';
+}
+
+// Marca legivel que acompanha a sessao. Nao E a sessao -- e so o sinal de que
+// existe uma, e o valor que prova que a requisicao partiu daqui.
+const marcaSessao = () => lerCookie(CSRF_COOKIE);
+
 const TOKEN_KEY = 'arka_token';
 // Token de renovacao: mora junto com o de acesso, e sob a mesma regra do
 // "Lembrar-me". Ele e que faz a sessao atravessar o vencimento do JWT sem
@@ -93,6 +128,47 @@ function limparSessaoLocal() {
   localStorage.removeItem(INATIVIDADE_KEY);
   sessionStorage.removeItem(INATIVIDADE_KEY);
 }
+
+/**
+ * Apaga os tokens antigos do navegador.
+ *
+ * Chamado assim que o servidor confirma uma sessao em COOKIE. E o fim da
+ * migracao: quem ja estava logado quando isto subiu tinha a sessao em
+ * `localStorage`, e ela continuaria la, legivel por qualquer script, mesmo com
+ * os cookies novos funcionando. Deixar os dois seria ficar com a porta velha
+ * aberta ao lado da porta nova.
+ *
+ * Nao mexe na janela de inatividade nem no e-mail lembrado: aquilo e preferencia
+ * de tela, nao credencial.
+ */
+function apagarLegado() {
+  localStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_KEY);
+  sessionStorage.removeItem(REFRESH_KEY);
+}
+
+/**
+ * Cabecalhos de toda requisicao autenticada.
+ *
+ * `X-CSRF-Token` devolve o valor do cookie legivel. Um site externo consegue
+ * fazer o navegador ENVIAR nossos cookies, mas nao consegue LE-LOS -- entao nao
+ * tem como montar este header. E o "double submit" que o servidor confere.
+ *
+ * `Authorization` so aparece enquanto houver token antigo guardado: e a ponte
+ * para quem ainda nao migrou. Depois do primeiro login/renovacao com cookie ele
+ * some, e a sessao passa a viajar so em cookie HttpOnly.
+ */
+function cabecalhosDeSessao(extra = {}) {
+  const csrf = marcaSessao();
+  const antigo = getToken();
+  return {
+    'Content-Type': 'application/json',
+    ...(csrf ? { 'X-CSRF-Token': csrf } : {}),
+    ...(antigo ? { Authorization: `Bearer ${antigo}` } : {}),
+    ...extra,
+  };
+}
 function encerrarSessao() {
   limparSessaoLocal();
   window.dispatchEvent(new CustomEvent(SEM_SESSAO));
@@ -117,10 +193,18 @@ async function lerErro(response) {
   return erro;
 }
 
+// `credentials: 'same-origin'` e o que faz o navegador MANDAR os cookies de
+// sessao -- e tambem receber os que o servidor grava no login. Sem isso, o
+// login responderia 200, os cookies seriam descartados em silencio, e a proxima
+// requisicao chegaria deslogada sem nenhum erro visivel.
+//
+// `same-origin` e nao `include`: painel e API saem do mesmo host (o nginx),
+// entao nao ha motivo para mandar credencial para qualquer outra origem.
 async function publico(endpoint, body) {
   const response = await fetch(`${API_BASE}${endpoint}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    headers: cabecalhosDeSessao(),
     body: JSON.stringify(body),
   });
   if (!response.ok) throw await lerErro(response);
@@ -167,8 +251,16 @@ async function renovarSessao(tokenQueFalhou = null) {
         const atual = getToken();
         if (tokenQueFalhou && atual && atual !== tokenQueFalhou) return atual;
 
+        // O refresh pode vir de DOIS lugares, e nesta ordem de preferencia:
+        //   - o cookie `arka_renovacao` (HttpOnly, invisivel daqui): entao nao
+        //     ha o que mandar no corpo, e a presenca do cookie legivel de CSRF
+        //     e o unico sinal de que existe sessao neste navegador;
+        //   - o `localStorage`, para quem ainda nao migrou.
+        // Sem a primeira condicao, a renovacao desistiria sempre no modo novo --
+        // e a sessao cairia no login a cada vencimento do token de acesso.
         const refreshToken = getRefreshToken();
-        if (!refreshToken) return null;
+        const marcaAntes = marcaSessao();
+        if (!refreshToken && !marcaAntes) return null;
         // Ninguem na frente da tela pelo tempo do limite: nao renova. A aba
         // esquecida aberta por dias cai no login. (Um F5 zera esse relogio de
         // proposito -- recarregar e alguem ali; e voltar depois de fechar o
@@ -177,13 +269,25 @@ async function renovarSessao(tokenQueFalhou = null) {
 
         const lembrar = lembrarAtual();
         try {
-          const data = await publico('/auth/renovar', { refreshToken });
-          setToken(data.token, lembrar, data.refreshToken);
+          // Corpo com o token antigo SO enquanto ele existir. Com cookie, o
+          // corpo vai vazio e quem identifica a sessao e o proprio cookie.
+          const data = await publico('/auth/renovar', refreshToken ? { refreshToken } : {});
+          if (data?.csrfToken) {
+            // O servidor gravou cookies: a sessao mudou de lugar e o que estava
+            // no navegador vira lixo perigoso. Fim da migracao para esta aba.
+            apagarLegado();
+          } else {
+            setToken(data.token, lembrar, data.refreshToken);
+          }
           guardarSessao(data.sessao, lembrar);
-          return data.token;
+          return data.token || marcaSessao() || 'ok';
         } catch {
-          // Falhou: se outra aba renovou no meio disso, a sessao esta viva e o
-          // token dela serve. Senao, nao ha o que renovar.
+          // Falhou: se OUTRA ABA renovou no meio disso, a sessao esta viva e
+          // nao ha o que fazer alem de aproveitar. No modo antigo isso se via
+          // pelo token guardado; no modo cookie, pela marca de CSRF ter mudado
+          // -- o servidor emite uma nova a cada renovacao.
+          const marcaAgora = marcaSessao();
+          if (marcaAgora && marcaAgora !== marcaAntes) return marcaAgora;
           const depois = getToken();
           return depois && depois !== tokenQueFalhou && depois !== atual ? depois : null;
         }
@@ -200,12 +304,9 @@ async function request(endpoint, options = {}, jaRenovou = false) {
   const token = getToken();
 
   const config = {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
+    credentials: 'same-origin',
     ...options,
+    headers: cabecalhosDeSessao(options.headers),
   };
 
   const response = await fetch(`${API_BASE}${endpoint}`, config);
@@ -241,9 +342,15 @@ export const AuthAPI = {
     const data = await publico('/auth/login', {
       email,
       senha,
+      lembrar,
       ...(turnstileToken ? { turnstileToken } : {}),
     });
-    setToken(data.token, lembrar, data.refreshToken);
+    // Se o servidor gravou cookies (`csrfToken` na resposta), a sessao mora
+    // neles e NADA e guardado aqui -- e o ponto da mudanca: o que este arquivo
+    // nao guarda, um XSS nao rouba. O `else` cobre uma API antiga durante um
+    // deploy pela metade, para o login nao quebrar por causa disso.
+    if (data?.csrfToken) apagarLegado();
+    else setToken(data.token, lembrar, data.refreshToken);
     guardarSessao(data.sessao, lembrar);
     // Digitar e-mail e senha e, por definicao, alguem ali: e o unico ponto
     // automatico que pode zerar o relogio de inatividade.
@@ -301,9 +408,17 @@ export const AuthAPI = {
   sair: async () => {
     const refreshToken = getRefreshToken();
     try {
-      if (refreshToken) await publico('/auth/sair', { refreshToken });
+      // Chama o servidor SEMPRE que houver qualquer sinal de sessao -- e nao so
+      // quando existe token guardado. Com a sessao em cookie nao ha nada
+      // guardado aqui, e a condicao antiga faria o "Sair" apenas limpar a tela:
+      // a sessao continuaria VIVA no servidor e os cookies no navegador, de
+      // volta ao primeiro F5. Quem revoga e o servidor; isto aqui e so o pedido.
+      if (refreshToken || marcaSessao()) {
+        await publico('/auth/sair', refreshToken ? { refreshToken } : {});
+      }
     } catch { /* offline ou sessao ja morta: limpa localmente do mesmo jeito */ }
     limparSessaoLocal();
+    apagarLegado();
   },
   /**
    * SAIR DE TODOS OS DISPOSITIVOS.
@@ -327,7 +442,16 @@ export const AuthAPI = {
   },
   // Ha sessao guardada neste navegador? Basta o refresh token: o token de acesso
   // pode ter vencido, e nesse caso a primeira chamada o renova sozinha.
-  temSessaoGuardada: () => !!getToken() || !!getRefreshToken(),
+  // Ha sessao neste navegador?
+  //
+  // Nao da mais para responder olhando o token: ele esta num cookie HttpOnly,
+  // invisivel daqui -- e e essa invisibilidade que protege a sessao. Quem
+  // responde e a MARCA legivel (`arka_csrf`), que o servidor grava junto. Ela
+  // nao autentica nada; so diz "existe uma sessao aqui", que e o suficiente
+  // para o painel decidir entre tentar carregar e mandar para o login.
+  //
+  // Os tokens antigos continuam contando enquanto houver quem nao migrou.
+  temSessaoGuardada: () => !!marcaSessao() || !!getToken() || !!getRefreshToken(),
   EVENTO_SEM_SESSAO: SEM_SESSAO,
 };
 

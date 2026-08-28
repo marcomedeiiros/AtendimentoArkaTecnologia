@@ -96,6 +96,45 @@ const env = {
   trustProxy: Math.max(0, Number(process.env.TRUST_PROXY ?? 2)),
 
   corsOrigin: process.env.CORS_ORIGIN || "http://localhost:5173",
+
+  /**
+   * As origens aceitas, como LISTA.
+   *
+   * `corsOrigin` continua existindo (e uma string, e e o que o middleware de
+   * CORS recebe). Esta e a mesma coisa em formato de lista, para o guard de
+   * CSRF conseguir perguntar "esta origem esta entre as nossas?" -- e para o
+   * dia em que o painel e a API ficarem em hosts diferentes.
+   */
+  get corsOrigins() {
+    return String(process.env.CORS_ORIGIN || "http://localhost:5173")
+      .split(",")
+      .map((o) => o.trim().replace(/\/$/, ""))
+      .filter(Boolean);
+  },
+
+  /**
+   * COOKIES DE SESSAO. Ver shared/helpers/sessaoCookie.helper.js.
+   *
+   * `secure` acompanha o ambiente: em producao ha HTTPS (a Cloudflare termina
+   * na frente), e em desenvolvimento o http://localhost precisa funcionar --
+   * um cookie `Secure` simplesmente nao e gravado sobre HTTP, e o login local
+   * pararia sem nenhuma mensagem de erro.
+   *
+   * `sameSite: lax` e a primeira camada anti-CSRF: o navegador ja se recusa a
+   * mandar o cookie num POST vindo de outro site.
+   */
+  cookie: {
+    nomeAcesso: "arka_sessao",
+    nomeRefresh: "arka_renovacao",
+    nomeCsrf: "arka_csrf",
+    secure:
+      process.env.SESSAO_COOKIE_SECURE != null
+        ? process.env.SESSAO_COOKIE_SECURE === "true"
+        : ehProducao,
+    sameSite: process.env.SESSAO_COOKIE_SAMESITE || "lax",
+    // Vazio = o proprio host. So preencha para compartilhar entre subdominios.
+    dominio: process.env.SESSAO_COOKIE_DOMINIO || undefined,
+  },
   evolutionApi: {
     url: process.env.EVOLUTION_API_URL || "http://localhost:8080",
     key: process.env.EVOLUTION_API_KEY || "",

@@ -49,8 +49,16 @@ const trocarSenhaSchema = z.object({
 // Renovacao e logout recebem SO o refresh token. Sem `min(1)` um corpo vazio
 // chegaria como string vazia ao service; sem `max` um corpo gigante viraria um
 // hash SHA-256 inutil por requisicao.
+// O refresh token agora chega pelo COOKIE (`arka_renovacao`). No corpo ele
+// virou opcional porque e o caminho de MIGRACAO -- painel antigo e integracoes
+// sem navegador ainda o mandam ali.
+//
+// Tornar opcional NAO afrouxa nada: quem recusa a sessao e o servico, que joga
+// 401 quando o token nao vem, nao existe, esta revogado ou ja foi usado. Se a
+// exigencia continuasse aqui, o painel novo -- que manda o corpo vazio e o
+// cookie no lugar -- levaria 400 antes de alguem olhar o cookie.
 const refreshSchema = z.object({
-  refreshToken: z.string().min(1, "Sessao invalida").max(500),
+  refreshToken: z.string().min(1, "Sessao invalida").max(500).optional(),
 });
 
 // No logout o token e opcional: a tela precisa conseguir sair mesmo quando ja

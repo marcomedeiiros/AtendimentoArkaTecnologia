@@ -3,6 +3,39 @@ const { success } = require("../../shared/helpers/response.helper");
 const env = require("../../config/env");
 const bloqueio = require("../../shared/middlewares/bloqueioProgressivo.middleware");
 const seg = require("../../shared/helpers/seguranca.helper");
+const cookies = require("../../shared/helpers/sessaoCookie.helper");
+
+/**
+ * A SESSAO VAI NO COOKIE -- e tambem no corpo, por enquanto.
+ *
+ * O cookie e a via segura: `HttpOnly` significa que nenhum script da pagina
+ * consegue ler a sessao. Guardada em `localStorage`, ela e legivel por qualquer
+ * script -- um XSS nao rouba uma requisicao, rouba a credencial inteira e vai
+ * embora com ela.
+ *
+ * O corpo continua carregando os tokens durante a TRANSICAO, por dois motivos:
+ * o painel antigo (que le do corpo e guarda em localStorage) nao pode quebrar
+ * no instante do deploy, e integracoes sem navegador nao tem cookie.
+ *
+ * O painel novo ignora os tokens do corpo -- ele nao guarda nada e deixa o
+ * navegador cuidar dos cookies. Quando nao houver mais cliente antigo em
+ * circulacao, a linha abaixo vira `false` e a transicao termina, sem tocar em
+ * mais nada.
+ */
+const incluirTokensNoCorpo = true;
+
+function responderSessao(req, res, data, lembrar = true) {
+  // O valor de CSRF volta no corpo TAMBEM porque o painel precisa dele na
+  // primeira resposta; nas seguintes ele le do cookie `arka_csrf`, que e
+  // legivel de proposito (ver csrf.middleware).
+  const csrf = cookies.definirSessao(res, data, lembrar);
+  const corpo = { ...data, csrfToken: csrf };
+  if (!incluirTokensNoCorpo) {
+    delete corpo.token;
+    delete corpo.refreshToken;
+  }
+  return success(res, corpo);
+}
 
 class AuthController {
   /**
@@ -21,7 +54,9 @@ class AuthController {
       const data = await authService.login(req.body);
       bloqueio.registrarSucesso(req, email);
       seg.registrar(seg.EVENTOS.LOGIN_OK, req, { conta: seg.marcaDe(email) });
-      return success(res, data);
+      // "Lembrar-me" decide so a VALIDADE do cookie de renovacao. Quem manda na
+      // sessao continua sendo o servidor (rotacao, revogacao, teto absoluto).
+      return responderSessao(req, res, data, req.body?.lembrar !== false);
     } catch (e) {
       // Só conta como falha o que é ERRO DE CREDENCIAL. Conta desativada,
       // Turnstile recusado ou banco fora do ar nao sao tentativa de adivinhar
@@ -37,13 +72,24 @@ class AuthController {
     }
   }
 
+  /**
+   * Renovacao. O refresh vem do COOKIE; o corpo so e lido quando o cookie nao
+   * existe -- e esse caminho e a MIGRACAO: o painel antigo manda o token que
+   * tinha em localStorage, recebe cookies de volta e apaga o que guardava.
+   * Sem isso, o deploy deslogaria todo mundo que estivesse com a aba aberta.
+   */
   async renovar(req, res) {
-    const data = await authService.renovar(req.body.refreshToken);
-    return success(res, data);
+    const refresh = cookies.refreshDoCookie(req) || req.body?.refreshToken;
+    const data = await authService.renovar(refresh);
+    return responderSessao(req, res, data, true);
   }
 
   async sair(req, res) {
-    const data = await authService.sair(req.body.refreshToken);
+    const refresh = cookies.refreshDoCookie(req) || req.body?.refreshToken;
+    const data = await authService.sair(refresh);
+    // Limpa SEMPRE, mesmo se o servidor nao reconheceu o token: sair tem de
+    // sair. Deixar o cookie para tras faria o painel voltar sozinho no F5.
+    cookies.limparSessao(res);
     return success(res, data);
   }
 
@@ -58,6 +104,10 @@ class AuthController {
    */
   async sairDeTodos(req, res) {
     const data = await authService.sairDeTodos(req.user.sub);
+    // "Inclusive neste" tambem no navegador: as familias ja foram revogadas no
+    // servidor, mas deixar os cookies aqui faria a tela tentar seguir logada e
+    // so descobrir no proximo 401.
+    cookies.limparSessao(res);
     return success(res, data);
   }
 

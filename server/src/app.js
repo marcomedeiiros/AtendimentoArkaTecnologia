@@ -3,6 +3,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
+const cookieParser = require("cookie-parser");
 const swaggerUi = require("swagger-ui-express");
 
 const env = require("./config/env");
@@ -10,6 +11,7 @@ const logger = require("./config/logger");
 const swaggerSpec = require("./config/swagger");
 const errorMiddleware = require("./shared/middlewares/error.middleware");
 const { apiLimiter } = require("./shared/middlewares/rateLimit.middleware");
+const { csrfMiddleware } = require("./shared/middlewares/csrf.middleware");
 
 const authRoutes = require("./modules/auth/auth.routes");
 const equipeRoutes = require("./modules/equipe/equipe.routes");
@@ -126,9 +128,27 @@ function createApp() {
     })
   );
 
-  app.use(cors({ origin: env.corsOrigin }));
+  // `credentials: true` e obrigatorio agora que a sessao vai em cookie: sem
+  // ele o navegador simplesmente NAO manda o cookie numa requisicao de outra
+  // origem, e o painel apareceria deslogado sem nenhum erro no servidor.
+  // Em producao painel e API saem do mesmo host (o nginx), entao isto so
+  // importa em desenvolvimento -- que e justamente onde o engano custaria uma
+  // tarde de procura.
+  app.use(cors({ origin: env.corsOrigin, credentials: true }));
+
+  // Precisa vir ANTES de qualquer coisa que leia sessao: sem o parser,
+  // `req.cookies` e indefinido e tanto o authMiddleware quanto o CSRF
+  // concluiriam "nao ha cookie" -- caindo em silencio para o modo antigo.
+  app.use(cookieParser());
+
   app.use(express.json({ limit: "30mb" })); // mídia enviada em base64 passa de 2mb
   app.use(apiLimiter);
+
+  // CSRF: so morde requisicao que autenticou POR COOKIE (ver o middleware).
+  // Quem usa `Authorization: Bearer` passa direto -- ali nao existe o vetor,
+  // porque o atacante teria de LER o token para montar o header. E isso que
+  // deixa o painel antigo seguir funcionando durante o deploy.
+  app.use(csrfMiddleware);
 
   app.get("/health", (req, res) => {
     res.json({ success: true, data: { status: "ok", env: env.nodeEnv } });

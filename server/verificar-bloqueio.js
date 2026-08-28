@@ -128,6 +128,44 @@ async function tentar(email, senha, ip) {
     check(depois.status === 200, `e continua entrando depois -> ${depois.status}`);
 
     // ─────────────────────────────────────────────────────────────────────
+    titulo("5b. O ESCRITORIO: varios tecnicos saindo pelo MESMO IP");
+    //
+    // O caso que decide se isto e utilizavel na pratica. Numa empresa a equipe
+    // inteira sai por um IP so (NAT), e o contador e por IP -- entao o erro de
+    // um poderia, em tese, travar a entrada dos outros.
+    //
+    // O que impede isso: SUCESSO APAGA O CONTADOR DO IP. Em um escritorio real
+    // as pessoas entram o tempo todo, e cada entrada limpa o balde. Para o
+    // bloqueio acontecer seria preciso 8 erros SEGUIDOS, sem nenhum acerto no
+    // meio, dentro de 15 minutos.
+    bloqueio._zerar();
+    const IP_ESCRITORIO = "203.0.113.200";
+
+    // Manha tipica: alguem erra a senha algumas vezes, outra pessoa entra.
+    await tentar(usuario.email, "errada", IP_ESCRITORIO);
+    await tentar(usuario.email, "errada", IP_ESCRITORIO);
+    const colega = await tentar(vitima.email, SENHA, IP_ESCRITORIO);
+    check(colega.status === 200, `o colega entra apesar dos erros do outro -> ${colega.status}`);
+
+    // E o acerto do colega LIMPOU o balde do IP: quem errou volta a ter as
+    // tentativas cheias, e nao fica pendurado no que errou antes.
+    for (let i = 0; i < 5; i++) await tentar(usuario.email, "errada", IP_ESCRITORIO);
+    const depoisDeLimpar = await tentar(usuario.email, SENHA, IP_ESCRITORIO);
+    check(depoisDeLimpar.status === 200,
+      `5 erros apos o acerto ainda nao bloqueiam (o contador zerou) -> ${depoisDeLimpar.status}`);
+
+    // ─────────────────────────────────────────────────────────────────────
+    titulo("5c. Entrar de VARIOS lugares ao mesmo tempo continua valendo");
+    // Celular, casa e escritorio: nada aqui limita a quantidade de lugares nem
+    // exige uma lista de IPs autorizados.
+    bloqueio._zerar();
+    const lugares = ["203.0.113.11", "198.51.100.22", "192.0.2.33", "203.0.113.44"];
+    const entradas = [];
+    for (const ip of lugares) entradas.push((await tentar(usuario.email, SENHA, ip)).status);
+    check(entradas.every((s) => s === 200),
+      `a mesma conta entra de ${lugares.length} lugares diferentes -> ${entradas.join(", ")}`);
+
+    // ─────────────────────────────────────────────────────────────────────
     titulo("6. O atraso tem TETO (senao a defesa vira DoS em nos mesmos)");
     // Cada requisicao presa segura um socket. Sem teto, o proprio mecanismo
     // derruba o servidor -- o atacante nem precisa acertar a senha.
