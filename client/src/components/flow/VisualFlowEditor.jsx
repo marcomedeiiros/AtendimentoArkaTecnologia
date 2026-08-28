@@ -148,11 +148,6 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
   const [mouseCanvasPos, setMouseCanvasPos] = useState({ x: 0, y: 0 });
   const [marquee, setMarquee] = useState(null);
 
-  // ── Posição da sidebar flutuante ──────────────────────────────────────────
-  const [sidebarPos, setSidebarPos] = useState({ x: 12, y: 60 });
-  const [isDraggingSidebar, setIsDraggingSidebar] = useState(false);
-  const sidebarDragStart = useRef({ mx: 0, my: 0, sx: 0, sy: 0 });
-  const sidebarRef = useRef(null);
 
   const [history, setHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -471,26 +466,6 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
     window.addEventListener('keyup', handleKeyUp);
     return () => { window.removeEventListener('keydown', handleKeyDown); window.removeEventListener('keyup', handleKeyUp); };
   }, [selectedNodeIds, nodes, clipboard, historyIndex, history]);
-
-  const handleSidebarDragStart = (e) => {
-    if (e.button !== 0) return;
-    e.stopPropagation();
-    e.preventDefault();
-    sidebarDragStart.current = { mx: e.clientX, my: e.clientY, sx: sidebarPos.x, sy: sidebarPos.y };
-    setIsDraggingSidebar(true);
-    const onMove = (me) => {
-      const dx = me.clientX - sidebarDragStart.current.mx;
-      const dy = me.clientY - sidebarDragStart.current.my;
-      setSidebarPos({ x: sidebarDragStart.current.sx + dx, y: sidebarDragStart.current.sy + dy });
-    };
-    const onUp = () => {
-      setIsDraggingSidebar(false);
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-  };
 
   const handleWheel = (e) => {
     e.preventDefault();
