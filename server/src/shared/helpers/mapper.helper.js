@@ -293,6 +293,8 @@ module.exports = {
   mapParceiro,
   mapContato,
   mapFluxo,
+  // Exportado desde que existe a leitura de UM bloco (GET /fluxos/:id/passos/:passoId).
+  mapPasso,
   mapRelatoBug,
   mapMensagemRapida,
   mapCompromisso,

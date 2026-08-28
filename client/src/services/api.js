@@ -490,6 +490,30 @@ export const FluxosAPI = {
   // tem desfazer, e a exclusão individual acima cobre o uso legítimo.
   // Retrato de TODAS as regras do bot, fluxo a fluxo (painel Automacoes do BOT).
   automacoes: () => request('/fluxos/automacoes/resumo'),
+
+  // ── BLOCOS ───────────────────────────────────────────────────────────────
+  //
+  // `atualizar` acima continua sendo o "salvar o desenho inteiro" (mover bloco,
+  // ligar fio, importar JSON). O que vem abaixo é a edição PONTUAL de um bloco,
+  // que o botão Salvar do painel de propriedades usa.
+  //
+  // A diferença que justifica as duas existirem não é o tamanho do corpo: é que
+  // mandando o fluxo inteiro, duas abas editando blocos DIFERENTES do mesmo
+  // fluxo se sobrescreviam — cada PUT levava junto a versão antiga do bloco da
+  // outra. Tocando só a própria linha, as duas edições sobrevivem.
+  //
+  // Todas devolvem o FLUXO inteiro, e não só o bloco: o editor precisa
+  // reconciliar ligações e ordem, e uma resposta parcial o obrigaria a
+  // adivinhar o resto.
+  criarPasso: (fluxoId, passo) =>
+    request(`/fluxos/${fluxoId}/passos`, { method: 'POST', body: JSON.stringify(passo) }),
+  obterPasso: (fluxoId, passoId) => request(`/fluxos/${fluxoId}/passos/${passoId}`),
+  atualizarPasso: (fluxoId, passoId, campos) =>
+    request(`/fluxos/${fluxoId}/passos/${passoId}`, { method: 'PATCH', body: JSON.stringify(campos) }),
+  removerPasso: (fluxoId, passoId) =>
+    request(`/fluxos/${fluxoId}/passos/${passoId}`, { method: 'DELETE' }),
+  reordenarPassos: (fluxoId, ids) =>
+    request(`/fluxos/${fluxoId}/passos/ordem`, { method: 'PATCH', body: JSON.stringify({ ids }) }),
 };
 
 // ── Chatbot API ──

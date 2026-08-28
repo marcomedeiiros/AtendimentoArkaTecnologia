@@ -3,7 +3,13 @@ const fluxoController = require("./fluxo.controller");
 const validate = require("../../shared/middlewares/validate.middleware");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
 const { exigirModulo } = require("../permissoes/modulo.middleware");
-const { fluxoSchema, atualizarFluxoSchema } = require("./fluxo.dto");
+const {
+  fluxoSchema,
+  atualizarFluxoSchema,
+  criarPassoSchema,
+  atualizarPassoSchema,
+  reordenarPassosSchema,
+} = require("./fluxo.dto");
 
 // Fluxo de Automacoes: controlado pela matriz (modulo "fluxos").
 router.use(authMiddleware, exigirModulo("fluxos"));
@@ -25,5 +31,35 @@ router.put("/:id", validate(atualizarFluxoSchema), (req, res, next) => fluxoCont
 // tem lixeira nem historico para desfazer. A remocao individual abaixo cobre o
 // caso legitimo; apagar tudo virou operacao de script, com alguem no console.
 router.delete("/:id", (req, res, next) => fluxoController.remover(req, res).catch(next));
+
+// ── BLOCOS (passos) ────────────────────────────────────────────────────────
+//
+// O `PUT /:id` acima continua sendo o "salvar o desenho inteiro" -- e o que o
+// canvas usa ao mover blocos, ligar fios e importar. Estas rotas sao a edicao
+// PONTUAL, que o botao "Salvar" do painel de propriedades usa.
+//
+// A diferenca que justifica as duas existirem nao e o tamanho do corpo, e sim a
+// CONVIVENCIA: mandando o fluxo inteiro, duas abas editando blocos diferentes
+// se sobrescreviam (cada PUT levava junto a versao antiga do bloco da outra).
+// Tocando so a propria linha, as duas edicoes sobrevivem.
+//
+// `/passos/ordem` vem ANTES de `/passos/:passoId`, senao "ordem" seria lido
+// como um id de bloco -- o mesmo motivo de "/automacoes/resumo" vir antes de
+// "/:id" la em cima.
+router.post("/:id/passos", validate(criarPassoSchema), (req, res, next) =>
+  fluxoController.criarPasso(req, res).catch(next)
+);
+router.patch("/:id/passos/ordem", validate(reordenarPassosSchema), (req, res, next) =>
+  fluxoController.reordenarPassos(req, res).catch(next)
+);
+router.get("/:id/passos/:passoId", (req, res, next) =>
+  fluxoController.obterPasso(req, res).catch(next)
+);
+router.patch("/:id/passos/:passoId", validate(atualizarPassoSchema), (req, res, next) =>
+  fluxoController.atualizarPasso(req, res).catch(next)
+);
+router.delete("/:id/passos/:passoId", (req, res, next) =>
+  fluxoController.removerPasso(req, res).catch(next)
+);
 
 module.exports = router;
