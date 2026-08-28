@@ -31,3 +31,8 @@ server/prisma/dev.db-wal
 # ponto de retorno.
 server/prisma/dev.db.corrompido-*
 server/prisma/dev.db.bak-*
+
+# Destino do backup fora da VM. Fica de fora porque costuma carregar endereco
+# de servidor, bucket ou caminho de credencial. O modelo versionado e o
+# deploy/enviar-backup.exemplo.sh.
+deploy/enviar-backup.sh
