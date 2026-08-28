@@ -167,6 +167,58 @@ async function pedir(caminho, { metodo = "GET", corpo, token } = {}) {
     check(depois.atendenteId === donoId, "responder nao ROUBA a conversa de quem ja atende");
 
     // ─────────────────────────────────────────────────────────────────────
+    titulo("5b. RESPONDER: o colega envia numa conversa que NAO e dele");
+    //
+    // O pedido da equipe: "todos do mesmo cargo conseguem responder". Ler ja
+    // estava provado acima; falta a ESCRITA, que e o que importa no dia a dia.
+    //
+    // O envio nao chega a sair daqui: falar com a Evolution exige WhatsApp
+    // conectado, e num teste isso nao existe. Mas o que se quer medir acontece
+    // ANTES: se a autorizacao recusasse, a resposta seria 403 (setor) ou 409
+    // (conversa nao aberta / ja atendida). Qualquer outro desfecho significa que
+    // a requisicao PASSOU pelos guards e morreu no envio externo -- que e
+    // exatamente o que se quer saber.
+    const envio = await pedir(`/api/conversas/${conversa.id}/mensagens`, {
+      metodo: "POST", token: tokenOutro, corpo: { texto: "posso ajudar aqui?" },
+    });
+    const recusadoPorAutorizacao = envio.status === 403 || envio.status === 409;
+    check(!recusadoPorAutorizacao,
+      `nao foi barrado por ser de outro (status ${envio.status}${
+        recusadoPorAutorizacao ? " -- BARRADO: " + (envio.json?.error?.message || "") : " -- passou os guards"
+      })`);
+
+    // E o dono NAO muda por causa disso: ajudar nao e tomar a conversa.
+    const aposEnvio = await conversaRepository.findById(conversa.id);
+    check(aposEnvio.atendenteId === donoId, "e o responsavel continua sendo quem assumiu");
+
+    // ─────────────────────────────────────────────────────────────────────
+    titulo("5c. Conversa PENDENTE: e preciso assumir antes de responder");
+    //
+    // Isto NAO e sobre quem: qualquer Tecnico pode clicar em Atender. E sobre o
+    // ESTADO da conversa -- ninguem responde um chamado que ainda esta na fila
+    // sem tira-lo da fila, senao o cliente recebe resposta de uma conversa que
+    // continua aparecendo como "nao atendida" para o resto da equipe.
+    const naFila = await prisma.conversa.create({
+      data: { instanciaId: instancia.id, telefone: "5511900000003", cliente: `${MARCA}-cliente3`,
+        setor: "Técnico", statusAtendimento: "pendente", atendenteId: null },
+    });
+    criados.conversas.push(naFila.id);
+
+    const semAssumir = await pedir(`/api/conversas/${naFila.id}/mensagens`, {
+      metodo: "POST", token: tokenOutro, corpo: { texto: "oi" },
+    });
+    check(semAssumir.status === 409,
+      `responder sem assumir -> ${semAssumir.status} ("${(semAssumir.json?.error?.message || "").slice(0, 45)}")`);
+
+    // Mas assumir esta liberado para QUALQUER Tecnico -- inclusive o que nao
+    // "descobriu" a conversa primeiro.
+    const qualquerUmAssume = await pedir(`/api/conversas/${naFila.id}/atender`, {
+      metodo: "POST", token: tokenOutro,
+    });
+    check(qualquerUmAssume.status === 200,
+      `qualquer Tecnico consegue assumir uma da fila -> ${qualquerUmAssume.status}`);
+
+    // ─────────────────────────────────────────────────────────────────────
     titulo("6. Conversa sem dono: quem responde primeiro vira o atendente");
     const solta = await prisma.conversa.create({
       data: { instanciaId: instancia.id, telefone: "5511900000002", cliente: `${MARCA}-cliente2`,
