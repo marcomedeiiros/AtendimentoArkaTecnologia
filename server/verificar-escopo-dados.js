@@ -368,6 +368,47 @@ async function criarUsuario(cargo) {
       check(true, `mover a propria conversa de setor -> ${empurrou.status} (recusado, tambem aceitavel)`);
     }
 
+    // ── 5e. O CAMINHO INTEIRO DA TRIAGEM ───────────────────────────────────
+    //
+    // Os testes acima olham momentos soltos. Este segue a conversa do inicio ao
+    // fim, que e como ela acontece de verdade:
+    //
+    //   1. chega sem setor            -> o Tecnico ve (e so ele, alem do admin)
+    //   2. o cliente escolhe no menu  -> a conversa ganha setor
+    //   3. se foi para o Comercial    -> o Tecnico PERDE, o Comercial GANHA
+    //
+    // O passo 3 e o que fecha a regra. Sem ele, "Tecnico ve as sem setor"
+    // poderia virar "Tecnico ve tudo que um dia passou pela triagem" -- e a
+    // diferenca entre as duas coisas so aparece depois que o cliente escolhe.
+    titulo("5e. Triagem: sem setor -> cliente escolhe -> so o setor escolhido ve");
+    {
+      const sessaoTec = await logar(tecnico.email, tecnico.senha, "203.0.113.9");
+      const triagem = iscas["Geral/pendente"];
+
+      const antesTec = await pedir(`/api/conversas/${triagem.id}`, { sessao: sessaoTec });
+      check(antesTec.status === 200, `1) sem setor: o Tecnico ve -> ${antesTec.status}`);
+      const antesCom = await pedir(`/api/conversas/${triagem.id}`, { sessao: sessaoCom });
+      check(antesCom.status === 403, `1) sem setor: o Comercial NAO ve -> ${antesCom.status}`);
+
+      // 2) o que o menu do bot faz quando o cliente escolhe: grava o setor.
+      await prisma.conversa.update({ where: { id: triagem.id }, data: { setor: "Comercial" } });
+
+      const depoisTec = await pedir(`/api/conversas/${triagem.id}`, { sessao: sessaoTec });
+      check(depoisTec.status === 403, `3) escolheu Comercial: o Tecnico PERDE -> ${depoisTec.status}`);
+      const depoisCom = await pedir(`/api/conversas/${triagem.id}`, { sessao: sessaoCom });
+      check(depoisCom.status === 200, `3) escolheu Comercial: o Comercial GANHA -> ${depoisCom.status}`);
+
+      // E o caminho oposto: escolheu Suporte Tecnico, fica com o Tecnico.
+      await prisma.conversa.update({ where: { id: triagem.id }, data: { setor: "Técnico" } });
+      const tecFica = await pedir(`/api/conversas/${triagem.id}`, { sessao: sessaoTec });
+      const comSai = await pedir(`/api/conversas/${triagem.id}`, { sessao: sessaoCom });
+      check(tecFica.status === 200 && comSai.status === 403,
+        `3b) escolheu Suporte Tecnico: fica com o Tecnico (${tecFica.status}) e o Comercial nao ve (${comSai.status})`);
+
+      // devolve para "Geral", que e como os blocos seguintes esperam a isca
+      await prisma.conversa.update({ where: { id: triagem.id }, data: { setor: "Geral" } });
+    }
+
     // ── 6. SIMETRIA ENTRE OS TRES SETORES ──────────────────────────────────
     titulo("6. Simetria: cada setor so o proprio");
     const sessoes = {
