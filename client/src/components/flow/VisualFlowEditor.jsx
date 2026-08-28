@@ -36,6 +36,86 @@ const BLOCK_META = {
 };
 
 
+/**
+ * O QUE O CARD DO BLOCO MOSTRA -- e por que isto nao pode ser so `node.desc`.
+ *
+ * ── O DEFEITO ─────────────────────────────────────────────────────────────
+ *
+ * O card lia UM campo (`desc`) e, na falta dele, escrevia "Clique para
+ * configurar...". Só que o MOTOR nunca concordou com essa definicao de
+ * conteudo. Ele le quatro campos, em ordem (chatbot.engine.textoDoPasso):
+ *
+ *     passo.texto || passo.config?.mensagem || passo.descricao || passo.titulo
+ *
+ * Entao um bloco com `texto` preenchido e `desc` vazio TEM conteudo, o bot o
+ * envia ao cliente -- e o desenho dizia que ele estava por configurar.
+ *
+ * Nao e caso de canto: esta no fluxo de producao. No `docs/fluxo-arka.json`, o
+ * passo "COMERCIAL" tem `desc: ""` e a mensagem inteira em `texto`. E e o
+ * caminho NORMAL do importador: `sanitizarPassosImportados` trata os dois
+ * campos como independentes, copiando `texto` so quando ele existe.
+ *
+ * ── E A FORMA GERAL, QUE E PIOR ───────────────────────────────────────────
+ *
+ * Os tipos cujo conteudo mora em `config` -- avaliacao (as mensagens da
+ * pesquisa), espera (modo/minutos/mensagem), condicao (as mensagens de CNPJ) --
+ * nascem com `desc: ''` no `addNode`. O operador configurava o bloco INTEIRO
+ * pelo painel e o card continuava dizendo "Clique para configurar...", porque
+ * nada daquilo passa por `desc`. Por isso os tipos abaixo ganham um resumo do
+ * que esta configurado, em vez de um campo so.
+ *
+ * O placeholder continua existindo -- e util, e orientacao de tela. Ele so nao
+ * pode mais aparecer no lugar de dado que existe. Nada disto e gravado: e
+ * leitura, e a fonte continua sendo o que veio do banco.
+ */
+function previaDoBloco(node) {
+  const limpo = (v) => (typeof v === 'string' ? v.trim() : '');
+  const cfg = node.config || {};
+
+  // Mesma precedencia do motor. `titulo` fica de fora de proposito: ele ja
+  // aparece em cima, em negrito, e repeti-lo faria todo bloco parecer
+  // configurado.
+  const doMotor = limpo(node.texto) || limpo(cfg.mensagem) || limpo(node.descricao) || limpo(node.desc);
+  if (doMotor) return doMotor;
+
+  // Sem texto proprio: resume o que ESTE tipo guarda no config.
+  if (node.tipo === 'espera') {
+    const min = Number(cfg.minutos) || (cfg.modo === 'fila' ? 10 : 5);
+    const alvo = cfg.modo === 'fila' ? 'na fila' : 'sem responder';
+    const acao = cfg.acao === 'transferir' ? 'transfere' : 'encerra';
+    return `Após ${min} min ${alvo}, ${acao}.`;
+  }
+  if (node.tipo === 'avaliacao') {
+    return limpo(cfg.mensagemNota) || 'Pede nota de 1 a 5 e comentário.';
+  }
+  if (node.tipo === 'condicao') {
+    const t = Number(cfg.maxTentativasCnpj) || 2;
+    const fim = cfg.aoEsgotarTentativasCnpj === 'avulso' ? 'segue como avulso' : 'transfere';
+    return `Valida o CNPJ (${t} tentativas; ao esgotar, ${fim}).`;
+  }
+  if (node.tipo === 'delay') {
+    // `config.ms` e o campo que o motor le de verdade. Ver o editor de Delay
+    // no FlowPropertyPanel.
+    const ms = Number(cfg.ms);
+    return ms > 0 ? `Espera ${(ms / 1000).toFixed(1).replace(/\.0$/, '')}s antes de seguir.` : '';
+  }
+  if (node.tipo === 'acao' && cfg.acao) {
+    return `Ação: ${cfg.acao}.`;
+  }
+  if (node.tipo === 'comentario' && cfg.configuracoesGlobais) {
+    const n = Object.keys(cfg.configuracoesGlobais).length;
+    return n === 1 ? '1 configuração global do bot.' : `${n} configurações globais do bot.`;
+  }
+
+  // Menu sem texto proprio: as opcoes ja sao listadas logo abaixo no card, mas
+  // dizer que ELAS sao o conteudo evita o placeholder mentiroso.
+  if (Array.isArray(cfg.opcoes) && cfg.opcoes.length) {
+    return `${cfg.opcoes.length} ${cfg.opcoes.length === 1 ? 'opção' : 'opções'} de menu.`;
+  }
+
+  return '';
+}
+
 function formatNodesPositions(passos = []) {
   // Fluxos antigos (seed) chegam sem targetId nenhum e dependem do
   // encadeamento automatico abaixo. Fluxos com ligacao explicita - inclusive os
@@ -738,6 +818,11 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
           acao: 'encerrar',
         },
       } : {}),
+      // Mesma ideia para o Delay: nasce com a pausa padrão ESCRITA, e não
+      // implícita. O motor já usava 1000ms quando `config.ms` faltava, mas esse
+      // valor vivia só dentro dele -- o bloco parecia não ter configuração
+      // nenhuma, e o campo do painel mostrava um número que não estava gravado.
+      ...(tipo === 'delay' ? { config: { ms: 1500 } } : {}),
     };
     const updated = [...nodes];
     // Espera e anotação NÃO entram na corrente da conversa: são regras sobre
@@ -1578,12 +1663,9 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                       </div>
                       {isExecuted && <CheckCircle2 size={14} className="text-ativo-400 shrink-0" />}
                     </div>
-                    {node.desc && (
-                      <p className="text-[11px] text-slate-300 leading-snug line-clamp-2">{node.desc}</p>
-                    )}
-                    {!node.desc && (
-                      <p className="text-[11px] text-slate-500 italic">Clique para configurar...</p>
-                    )}
+                    {previaDoBloco(node)
+                      ? <p className="text-[11px] text-slate-300 leading-snug line-clamp-2">{previaDoBloco(node)}</p>
+                      : <p className="text-[11px] text-slate-500 italic">Clique para configurar...</p>}
 
                     {/* Opcoes do menu (fluxos importados): sem elas o bloco fica
                         so com o texto e a ramificacao vira invisivel no card. */}

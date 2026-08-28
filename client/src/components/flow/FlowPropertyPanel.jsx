@@ -291,12 +291,42 @@ export function FlowPropertyPanel({
             {node.tipo === 'delay' && (
               <div className="p-3.5 rounded-xl bg-slate-900 border border-linha space-y-2">
                 <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">⏳ Tempo de Espera (segundos)</label>
+                {/* ── ESTE CAMPO ERA DECORATIVO ──────────────────────────────
+                    Ele escrevia em `node.delaySeconds`, que nao existia em
+                    lugar nenhum do resto do projeto:
+
+                      - o `passoSchema` nao o declara, e o `validate` troca
+                        `req.body` pelo resultado do Zod -- o valor morria na
+                        borda, sem chegar ao banco;
+                      - nao ha coluna para ele, nem no `mapPasso`, entao o campo
+                        relia o padrao 1.5 a cada abertura;
+                      - e o motor le OUTRA coisa, em OUTRA unidade:
+                        `Number(passo.config?.ms) || 1000` (chatbot.engine).
+
+                    Lugar, nome e unidade divergentes ao mesmo tempo. Digitar
+                    aqui nao gravava nada e nao mudava o comportamento do bot.
+
+                    Agora o campo escreve em `config.ms`, que e o que o motor
+                    de fato usa. A tela continua em SEGUNDOS porque e assim que
+                    se pensa uma pausa de conversa; a conversao mora aqui.
+
+                    (O painel ja tinha a cicatriz do mesmo defeito num outro
+                    campo -- ver o comentario do gatilho acima. O Delay ficou
+                    de fora naquela vez.) */}
                 <input
                   type="number" step="0.5" min="0.5"
-                  value={node.delaySeconds || 1.5}
-                  onChange={e => onChangeNode({ ...node, delaySeconds: parseFloat(e.target.value) || 1 })}
+                  value={((Number(node.config?.ms) || 1000) / 1000)}
+                  onChange={e => {
+                    const seg = parseFloat(e.target.value);
+                    const ms = Math.round((Number.isFinite(seg) && seg > 0 ? seg : 1) * 1000);
+                    onChangeNode({ ...node, config: { ...(node.config || {}), ms } });
+                  }}
                   className="w-full bg-grafite-700 border border-linha rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none"
                 />
+                <p className="text-[10px] text-slate-400 leading-relaxed">
+                  Pausa antes de seguir para o próximo bloco. O servidor limita o
+                  valor máximo, então um número muito grande é reduzido ao teto.
+                </p>
               </div>
             )}
 
