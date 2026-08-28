@@ -131,19 +131,84 @@ export function FormattedMessage({ text }) {
   return <span>{renderRico(text)}</span>;
 }
 
-// Renderiza *negrito* (sintaxe do WhatsApp) e preserva quebras de linha. E o que
-// faz a assinatura "*Nome*\nmensagem" aparecer com o nome em negrito em cima e a
-// mensagem embaixo -- igual ao que o cliente ve no WhatsApp.
-function renderRico(texto) {
-  const linhas = String(texto).split('\n');
-  return linhas.map((linha, li) => (
-    <span key={li}>
+/**
+ * Renderiza a MARCAÇÃO DO WHATSAPP na tela do painel.
+ *
+ * O painel mostra o mesmo texto que sai para o cliente, então precisa desenhar
+ * a marcação do mesmo jeito -- senão o atendente lê `> *Marco*` cru enquanto o
+ * cliente vê a assinatura formatada, e ninguém consegue conferir como a
+ * mensagem realmente chegou.
+ *
+ *   `*negrito*`   um asterisco de cada lado (não é Markdown: dois não valem)
+ *   `> citação`   vira a BARRA VERTICAL à esquerda, como no WhatsApp
+ *
+ * A barra é um elemento próprio (e não `border-left`) porque assim dá para
+ * baixar só a opacidade DELA. Um `border-current` com opacidade apagaria o
+ * texto junto. `bg-current` faz a barra herdar a cor do texto da bolha, então
+ * ela funciona na bolha clara e na escura sem receber tema por parâmetro.
+ */
+function renderLinha(linha, chave, ehUltima) {
+  return (
+    <span key={chave}>
       {linha.split(/(\*[^*\n]+\*)/g).map((parte, pi) =>
         /^\*[^*\n]+\*$/.test(parte)
           ? <strong key={pi} className="font-bold">{parte.slice(1, -1)}</strong>
           : <span key={pi}>{parte}</span>
       )}
-      {li < linhas.length - 1 && <br />}
+      {!ehUltima && <br />}
     </span>
-  ));
+  );
+}
+
+// Uma linha citada é `>` seguido de espaço opcional. O WhatsApp aceita as duas
+// formas, e o histórico tem as duas.
+const EH_CITACAO = /^>\s?/;
+
+function renderRico(texto) {
+  const linhas = String(texto).split('\n');
+
+  // Linhas citadas CONSECUTIVAS formam um bloco só -- uma barra contínua, e não
+  // uma barrinha por linha, que é como o WhatsApp desenha.
+  const blocos = [];
+  for (const linha of linhas) {
+    const citada = EH_CITACAO.test(linha);
+    const anterior = blocos[blocos.length - 1];
+    if (anterior && anterior.citada === citada) anterior.linhas.push(linha);
+    else blocos.push({ citada, linhas: [linha] });
+  }
+
+  return blocos.map((bloco, bi) => {
+    if (!bloco.citada) {
+      return (
+        <span key={bi}>
+          {bloco.linhas.map((l, i) =>
+            renderLinha(l, i, i === bloco.linhas.length - 1 && bi === blocos.length - 1)
+          )}
+        </span>
+      );
+    }
+
+    // O `>` sai do texto: quem indica a citação passa a ser a barra.
+    const conteudo = bloco.linhas.map((l) => l.replace(EH_CITACAO, ''));
+    return (
+      <span key={bi} className="flex gap-1.5 my-0.5">
+        <span aria-hidden="true" className="w-[3px] shrink-0 rounded-full bg-current opacity-30" />
+        <span className="min-w-0 flex-1">
+          {conteudo.map((l, i) => renderLinha(l, i, i === conteudo.length - 1))}
+        </span>
+      </span>
+    );
+  });
+}
+
+/**
+ * Mesma renderização, para a LEGENDA de mídia.
+ *
+ * A legenda também recebe assinatura (ver utils/assinatura), então sem isto a
+ * foto enviada mostraria `> *Marco*` cru embaixo dela enquanto o texto puro
+ * aparece formatado -- duas aparências para a mesma coisa, na mesma tela.
+ */
+export function TextoFormatado({ texto }) {
+  if (!texto) return null;
+  return <>{renderRico(texto)}</>;
 }

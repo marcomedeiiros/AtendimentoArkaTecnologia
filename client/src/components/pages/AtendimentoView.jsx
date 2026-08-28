@@ -11,7 +11,7 @@ import {
   ZoomIn, ZoomOut, Maximize2, Download, CornerUpLeft, CornerUpRight, Share2, Pencil, MoreHorizontal, Mic, Tag, PenLine,
   Sun, Moon, Bot
 } from 'lucide-react';
-import { EmojiIcon, FormattedMessage } from './EmojiIcon';
+import { EmojiIcon, FormattedMessage, TextoFormatado } from './EmojiIcon';
 import { useMensagensRapidas } from './MensagensRapidas';
 import Avatar from '../Avatar';
 import Portal from '../Portal';
@@ -1238,7 +1238,10 @@ function BolhaVideo({ src, caption, escuro }) {
       </div>
       {caption && (
         <div className={`text-[11px] leading-relaxed whitespace-pre-wrap break-words ${escuro ? 'text-slate-200' : 'text-slate-900'}`}>
-          {caption}
+          {/* A legenda também recebe assinatura, então precisa desenhar a
+              marcação igual ao texto puro -- senão a mesma coisa apareceria de
+              dois jeitos na mesma tela. */}
+          <TextoFormatado texto={caption} />
         </div>
       )}
     </div>
@@ -1286,7 +1289,7 @@ function MensagemMidia({ m, escuro, onAbrirImagem }) {
         />
         {md.caption && (
           <div className={`text-[11px] leading-relaxed whitespace-pre-wrap break-words ${escuro ? 'text-slate-200' : 'text-slate-900'}`}>
-            {md.caption}
+            <TextoFormatado texto={md.caption} />
           </div>
         )}
       </div>
@@ -1311,7 +1314,7 @@ function MensagemMidia({ m, escuro, onAbrirImagem }) {
         </a>
         {md.caption && (
           <div className={`text-[11px] leading-relaxed whitespace-pre-wrap break-words ${escuro ? 'text-slate-200' : 'text-slate-900'}`}>
-            {md.caption}
+            <TextoFormatado texto={md.caption} />
           </div>
         )}
       </div>
