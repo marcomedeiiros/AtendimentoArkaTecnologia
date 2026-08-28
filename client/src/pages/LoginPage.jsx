@@ -4,7 +4,6 @@ import { Loader2, LogIn, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getEmailLembrado } from '../services/api';
 import AcessoLayout, { Campo, LinkAcesso } from '../components/layout/AcessoLayout';
-import Turnstile from '../components/Turnstile';
 
 export default function LoginPage() {
   const { usuario, entrar } = useAuth();
@@ -29,10 +28,7 @@ export default function LoginPage() {
   const [lembrar, setLembrar] = useState(!!emailLembrado);
   const [erro, setErro] = useState(null);
   const [enviando, setEnviando] = useState(false);
-  // Token do desafio. Fica no estado e vai junto no login -- quem valida e o
-  // servidor; aqui ele e so um campo do formulario.
-  const [turnstileToken, setTurnstileToken] = useState(null);
-
+  
   // Quem ja tem sessao nao volta para o login pela URL.
   if (usuario) return <Navigate to="/atendimento" replace />;
 
@@ -41,19 +37,12 @@ export default function LoginPage() {
     setErro(null);
     setEnviando(true);
     try {
-      await entrar(email, senha, lembrar, turnstileToken);
+      await entrar(email, senha, lembrar);
       // Devolve a pessoa para onde ela tentou ir antes de ser barrada.
       navigate(local.state?.de || '/atendimento', { replace: true });
     } catch (err) {
       setErro(err.message);
       setEnviando(false);
-      // O token do Turnstile vale UMA vez. Depois de uma tentativa (mesmo
-      // recusada por senha errada) ele já foi gasto: reapresentá-lo faria a
-      // Cloudflare responder `timeout-or-duplicate` e o servidor recusaria por
-      // replay a pessoa veria "não foi possível confirmar" em vez do erro
-      // real. Zerar aqui faz o widget emitir um token novo para a próxima.
-      setTurnstileToken(null);
-      if (window.turnstile) { try { window.turnstile.reset(); } catch { /* sem widget */ } }
     }
   }
 
@@ -114,10 +103,6 @@ export default function LoginPage() {
             <p className="text-xs leading-relaxed text-texto">{erro}</p>
           </div>
         )}
-
-        {/* Não renderiza nada enquanto o Turnstile não estiver configurado no
-            servidor as duas pontas ficam desligadas juntas. */}
-        <Turnstile onToken={setTurnstileToken} />
 
         <button
           type="submit" disabled={enviando}
