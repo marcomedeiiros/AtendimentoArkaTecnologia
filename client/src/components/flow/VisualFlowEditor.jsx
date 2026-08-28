@@ -3,7 +3,7 @@ import {
   Zap, CheckCircle2, Plus, Trash2,
   Play, RotateCcw, ZoomIn, ZoomOut, Maximize2, LayoutGrid,
   Sparkles, Layers, RefreshCw, X, ChevronUp, ChevronDown,
-  Settings, AlertCircle, Pencil, Flame, Download, Upload, MessageSquare,
+  Settings, AlertCircle, Pencil, Download, Upload, MessageSquare,
   Power, PowerOff, MoreHorizontal
 } from 'lucide-react';
 import { FluxosAPI } from '../../services/api';
@@ -171,7 +171,6 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
   const [showLogsConsole, setShowLogsConsole] = useState(false);
   const [showSequencePanel, setShowSequencePanel] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
   const [dragOverCanvas, setDragOverCanvas] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
@@ -204,9 +203,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
       setNodes(formatted);
       setSelectedNodeIds([]);
       setActivePropertyNodeId(null);
-      setShowDeleteConfirm(false);
-      setShowDeleteAllConfirm(false);
-      pushHistory(formatted);
+      setShowDeleteConfirm(false);      pushHistory(formatted);
     }
   }, [flow?.id]);
 
@@ -291,16 +288,6 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
     setShowDeleteConfirm(false);
     try {
       if (targetId) await FluxosAPI.remover(targetId);
-    } catch {}
-  };
-
-  const handleDeleteAllFlows = async () => {
-    setFluxos([]);
-    setSelectedFlowId(null);
-    setNodes([]);
-    setShowDeleteAllConfirm(false);
-    try {
-      await FluxosAPI.removerTodos();
     } catch {}
   };
 
@@ -756,16 +743,14 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
       setShowFlowMenu(false);
       // As confirmacoes moram dentro do menu: se ficarem armadas, reabrir cai
       // direto no "Excluir" sem a pessoa ter pedido isso de novo.
-      setShowDeleteConfirm(false);
-      setShowDeleteAllConfirm(false);
-    };
+      setShowDeleteConfirm(false);    };
     document.addEventListener('mousedown', foraDoMenu);
     document.addEventListener('keydown', aoTeclar);
     return () => {
       document.removeEventListener('mousedown', foraDoMenu);
       document.removeEventListener('keydown', aoTeclar);
     };
-  }, [showFlowMenu, setShowDeleteConfirm, setShowDeleteAllConfirm]);
+  }, [showFlowMenu, setShowDeleteConfirm]);
   const alternarAtivoFluxo = async () => {
     if (!flow || alternandoAtivo) return;
     const novo = !(flow.ativo !== false);
@@ -1036,7 +1021,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                   {!showDeleteConfirm ? (
                     <button
                       role="menuitem"
-                      onClick={() => { setShowDeleteAllConfirm(false); setShowDeleteConfirm(true); }}
+                      onClick={() => setShowDeleteConfirm(true)}
                       disabled={!flow}
                       className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold text-falha-400 hover:bg-falha/15 disabled:opacity-50 transition-colors text-left"
                     >
@@ -1067,35 +1052,11 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                     </div>
                   )}
 
-                  {!showDeleteAllConfirm ? (
-                    <button
-                      role="menuitem"
-                      onClick={() => { setShowDeleteConfirm(false); setShowDeleteAllConfirm(true); }}
-                      className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold text-falha-400 hover:bg-falha/15 transition-colors text-left"
-                    >
-                      <Flame size={13} className="shrink-0" /> Apagar todos os fluxos
-                    </button>
-                  ) : (
-                    <div className="rounded-lg bg-falha/15 border border-falha/50 p-2.5 flex flex-col gap-2">
-                      <p className="text-[11px] text-falha-400 font-bold leading-snug">
-                        Apagar TODOS os {fluxos.length} fluxos? O bot fica sem nenhuma automação.
-                      </p>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => { setShowFlowMenu(false); handleDeleteAllFlows(); }}
-                          className="flex-1 px-2 py-1 rounded-lg bg-falha hover:bg-falha-400 text-white text-[11px] font-extrabold transition-colors"
-                        >
-                          Apagar tudo
-                        </button>
-                        <button
-                          onClick={() => setShowDeleteAllConfirm(false)}
-                          className="flex-1 px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold transition-colors"
-                        >
-                          Cancelar
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                  {/* "Apagar todos os fluxos" foi removido daqui. Era um item de
+                      menu a um clique de deixar o bot sem nenhuma automação, sem
+                      lixeira e sem desfazer. A exclusão individual acima
+                      continua, e "Pausado" na barra cala o bot sem perder nada.
+                      A rota `DELETE /api/fluxos` que ele chamava também saiu. */}
                 </div>
               )}
             </div>

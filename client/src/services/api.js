@@ -341,7 +341,9 @@ export const FluxosAPI = {
   criar: (dados) => request('/fluxos', { method: 'POST', body: JSON.stringify(dados) }),
   atualizar: (id, dados) => request(`/fluxos/${id}`, { method: 'PUT', body: JSON.stringify(dados) }),
   remover: (id) => request(`/fluxos/${id}`, { method: 'DELETE' }),
-  removerTodos: () => request('/fluxos', { method: 'DELETE' }),
+  // `removerTodos` saiu daqui junto com o botão "Apagar todos os fluxos" e com
+  // a rota `DELETE /api/fluxos`. Apagar toda a automação do bot de uma vez não
+  // tem desfazer, e a exclusão individual acima cobre o uso legítimo.
   // Retrato de TODAS as regras do bot, fluxo a fluxo (painel Automacoes do BOT).
   automacoes: () => request('/fluxos/automacoes/resumo'),
 };

@@ -17,7 +17,13 @@ router.get("/automacoes/resumo", (req, res, next) =>
 router.get("/:id", (req, res, next) => fluxoController.obter(req, res).catch(next));
 router.post("/", validate(fluxoSchema), (req, res, next) => fluxoController.criar(req, res).catch(next));
 router.put("/:id", validate(atualizarFluxoSchema), (req, res, next) => fluxoController.atualizar(req, res).catch(next));
-router.delete("/", (req, res, next) => fluxoController.removerTodos(req, res).catch(next));
+// NAO EXISTE EXCLUSAO EM MASSA POR HTTP.
+//
+// Havia um `DELETE /api/fluxos` (sem id) que apagava TODOS os fluxos de uma vez,
+// atras do botao "Apagar todos os fluxos" no editor. Um clique errado -- ou uma
+// chamada direta a esta rota -- levava junto toda a automacao do bot, que nao
+// tem lixeira nem historico para desfazer. A remocao individual abaixo cobre o
+// caso legitimo; apagar tudo virou operacao de script, com alguem no console.
 router.delete("/:id", (req, res, next) => fluxoController.remover(req, res).catch(next));
 
 module.exports = router;

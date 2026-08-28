@@ -27,9 +27,6 @@ class FluxoController {
     return fluxoService.remover(req.params.id).then((data) => success(res, data));
   }
 
-  removerTodos(req, res) {
-    return fluxoService.removerTodos().then((data) => success(res, data));
-  }
 }
 
 module.exports = new FluxoController();

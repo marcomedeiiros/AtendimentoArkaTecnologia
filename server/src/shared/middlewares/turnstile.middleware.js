@@ -26,7 +26,7 @@ function exigirTurnstile(req, res, next) {
       // limite da protecao.
       return next(
         new AppError(
-          "Nao foi possivel confirmar que voce nao e um robo. Recarregue a pagina e tente de novo.",
+          "Não foi possivel confirmar que voce nao e um robo recarregue a pagina e tente de novo.",
           403,
           "TURNSTILE_INVALIDO"
         )

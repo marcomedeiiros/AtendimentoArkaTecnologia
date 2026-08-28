@@ -109,6 +109,10 @@ class FluxoRepository {
     return prisma.fluxo.delete({ where: { id } });
   }
 
+  // SEM ROTA HTTP. O `DELETE /api/fluxos` e o botao "Apagar todos os fluxos" do
+  // editor foram removidos: apagar toda a automacao do bot nao pode ser um
+  // clique numa tela. Fica aqui para script de reset/seed rodado no console,
+  // onde existe alguem confirmando -- nao reexponha por uma rota.
   deleteAll() {
     return prisma.fluxo.deleteMany({});
   }
