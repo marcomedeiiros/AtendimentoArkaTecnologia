@@ -151,6 +151,15 @@ class ConversaController {
     return conversaService.atualizarSetor(req.params.id, req.body.setor, req.user?.cargo).then((data) => success(res, data));
   }
 
+  // Para quem da para transferir. `conversaId` e opcional: com ele, cada
+  // operador vem marcado com `podeVerConversa`, para a tela avisar antes de
+  // mandar a conversa para alguem de outro setor.
+  listarAtendentes(req, res) {
+    return conversaService
+      .listarAtendentes(req.query.conversaId || null, req.user?.cargo)
+      .then((data) => success(res, data));
+  }
+
   // `req.user.sub` -- de quem esta PEDINDO -- nao vinha, e sem ele o service nao
   // tinha como conferir se quem transfere e mesmo o responsavel pela conversa.
   // Vem do token, nunca do corpo: id de atendente mandado pelo cliente e so um

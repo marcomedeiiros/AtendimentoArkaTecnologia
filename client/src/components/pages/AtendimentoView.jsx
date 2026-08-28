@@ -2522,7 +2522,13 @@ const ItemContatoAgenda = React.memo(function ItemContatoAgenda({ contato, onAbr
   );
 });
 
-export default function AtendimentoView({ conversas, setConversas, fluxos, parceiros, equipe = [] }) {
+// `equipe` saiu da lista de props: era usada SO pelo seletor de transferência,
+// que agora carrega os destinos de `/conversas/atendentes` ao abrir o modal
+// (ver o comentário lá embaixo). Deixá-la aqui sem uso faria o próximo leitor
+// achar que a lista global ainda alimenta a transferência -- que é justamente
+// de onde vinha o defeito do Técnico. O nome do responsável nunca veio dali:
+// vem da própria conversa (`atendenteDaConversa`).
+export default function AtendimentoView({ conversas, setConversas, fluxos, parceiros }) {
   const { whatsAppConectado, carregando, historico = [], marcarNotificacoesLidas, limparHistorico, sinalContatos } = useAppContext();
   const { usuario, assinaturaNome, tema, alternarTema } = useAuth();
   // Nome usado ao assinar mensagens: vem do perfil (personalizavel no menu de
@@ -2903,6 +2909,49 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   // "Transferindo…" na linha certa da lista.
   const emCursoRef = useRef(false);
   const [transferindoId, setTransferindoId] = useState(null);
+
+  /**
+   * ── PARA QUEM TRANSFERIR ──────────────────────────────────────────────────
+   *
+   * Esta lista vinha de `equipe`, a lista global do AppContext, que é carregada
+   * de `GET /api/equipe`. Aquela rota exige o módulo "equipe" — o da tela de
+   * GESTÃO DA EQUIPE — e na matriz de permissões esse módulo é do grupo A: só o
+   * Comercial o tem por padrão.
+   *
+   * Então Técnico e Financeiro levavam 403. E o erro não aparecia em lugar
+   * nenhum: o AppContext carrega tudo com `Promise.allSettled` e transforma
+   * promessa rejeitada em lista vazia. O resultado na tela era "Nenhum outro
+   * operador com conta" — com a base cheia de operadores.
+   *
+   * Agora a lista vem de uma rota de ATENDIMENTO, que é o módulo que a pessoa
+   * já precisa ter para estar nesta tela. Carregada ao abrir o modal (e não no
+   * boot) porque depende da conversa: cada operador vem marcado com
+   * `podeVerConversa`, para avisar antes de mandar a conversa para um colega de
+   * outro setor, que não conseguiria abri-la.
+   */
+  const [destinos, setDestinos] = useState([]);
+  const [carregandoDestinos, setCarregandoDestinos] = useState(false);
+  const [erroDestinos, setErroDestinos] = useState(null);
+
+  useEffect(() => {
+    if (!transferindo) return undefined;
+    let vivo = true;
+    setCarregandoDestinos(true);
+    setErroDestinos(null);
+    ConversasAPI.atendentesParaTransferir(transferindo.id)
+      .then(lista => { if (vivo) setDestinos(Array.isArray(lista) ? lista : []); })
+      .catch(e => {
+        // Falha aqui NÃO pode virar "nenhum operador com conta": era exatamente
+        // essa confusão — entre "a lista está vazia" e "não consegui carregar a
+        // lista" — que fazia o Técnico acreditar que não havia mais ninguém na
+        // plataforma.
+        if (!vivo) return;
+        setDestinos([]);
+        setErroDestinos(e.message || 'Não foi possível carregar os atendentes.');
+      })
+      .finally(() => { if (vivo) setCarregandoDestinos(false); });
+    return () => { vivo = false; };
+  }, [transferindo]);
 
   const trocarAtendente = useCallback(async (conv, membroId, rotuloErro) => {
     // Guarda em ref, e não no estado: `disabled` só vale depois do re-render, e
@@ -3588,14 +3637,32 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
 
             <div className="p-4 flex-1 overflow-y-auto min-h-0 space-y-2">
               <p className="text-xs text-slate-400 mb-1">Escolha o atendente que vai assumir esta conversa:</p>
-              {equipe.length === 0 && (
+
+              {carregandoDestinos && (
+                <div className="text-center text-slate-400 text-xs py-8 flex items-center justify-center gap-2">
+                  <Loader2 size={14} className="animate-spin" /> Carregando atendentes...
+                </div>
+              )}
+
+              {/* "Não consegui carregar" e "não há ninguém" são coisas
+                  diferentes, e tratá-las igual foi o que fez o Técnico acreditar
+                  que estava sozinho na plataforma. */}
+              {!carregandoDestinos && erroDestinos && (
+                <div className="text-center text-xs py-8 space-y-2">
+                  <AlertCircle size={26} className="text-falha-400 mx-auto" />
+                  <p className="text-falha-400 font-semibold">Não foi possível carregar os atendentes.</p>
+                  <p className="text-slate-500">{erroDestinos}</p>
+                </div>
+              )}
+
+              {!carregandoDestinos && !erroDestinos && destinos.length === 0 && (
                 <div className="text-center text-slate-400 text-xs py-8 space-y-2">
                   <Users size={26} className="text-slate-600 mx-auto" />
                   <p>Nenhum outro operador com conta.</p>
                   <p className="text-slate-500">Quem cria conta em <strong className="text-slate-300">/cadastrar</strong> aparece aqui.</p>
                 </div>
               )}
-              {equipe.map(m => {
+              {destinos.map(m => {
                 const atual = transferindo.atendenteId === m.id;
                 // Um pedido no ar desabilita a LISTA INTEIRA, e não só a linha
                 // clicada: enquanto a primeira transferência não volta, clicar
@@ -3621,6 +3688,17 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                     <div className="min-w-0 flex-1">
                       <div className="text-xs font-bold text-white truncate">{m.nome}</div>
                       <div className="text-[11px] text-slate-400 truncate">{m.cargo || 'Atendimento'}</div>
+                      {/* Aviso, e não bloqueio. O servidor decide quem LÊ cada
+                          setor; transferir para fora dele entrega a conversa a
+                          alguém que não consegue abri-la. Quem atende continua
+                          podendo fazer isso (às vezes é o certo, e um admin
+                          resolve depois) -- só não mais sem saber. */}
+                      {m.podeVerConversa === false && (
+                        <div className="text-[10px] text-espera-400 truncate flex items-center gap-1 mt-0.5">
+                          <AlertCircle size={9} className="shrink-0" />
+                          Não enxerga o setor desta conversa
+                        </div>
+                      )}
                     </div>
                     {transferindoId === m.id ? (
                       <span className="text-[10px] px-2 py-0.5 rounded-full border font-semibold shrink-0 bg-purple-500/15 text-purple-300 border-purple-500/30 flex items-center gap-1">

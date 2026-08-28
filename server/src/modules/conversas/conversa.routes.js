@@ -36,6 +36,24 @@ router.use(exigirModulo("atendimento"));
 
 router.post("/stream-ticket", (req, res) => conversaStream.criarTicket(req, res));
 router.get("/", (req, res, next) => conversaController.listar(req, res).catch(next));
+
+// PARA QUEM DA PARA TRANSFERIR -- e ANTES de "/:id", senao "atendentes" seria
+// lido como um id de conversa.
+//
+// Vive aqui, e nao em /api/equipe, de proposito. O seletor de transferencia
+// usava a lista da equipe, que exige o modulo "equipe" (a tela de GESTAO). Na
+// matriz de permissoes esse modulo e do grupo A -- so o Comercial o tem por
+// padrao -- entao Tecnico e Financeiro levavam 403 e o seletor aparecia vazio
+// ("Nenhum outro operador com conta"), com a base cheia de operadores.
+//
+// A correcao nao podia ser dar "equipe" ao Tecnico: isso abriria a tela de
+// gestao junto. Transferir e atendimento, e o guard aqui e o `exigirModulo
+// ("atendimento")` la de cima -- o mesmo que ele ja precisa ter para abrir
+// esta tela. O payload traz so o que serve para escolher (id, nome, cargo,
+// presenca): sem e-mail, sem nada de gestao.
+router.get("/atendentes", (req, res, next) =>
+  conversaController.listarAtendentes(req, res).catch(next)
+);
 // ANTES de "/:id": em Express a primeira rota que casa vence, e "/iniciar"
 // casaria com "/:id" se viesse depois.
 router.post("/iniciar", validate(iniciarConversaSchema), (req, res, next) =>

@@ -657,6 +657,21 @@ export const ConversasAPI = {
   atualizarSetor: (id, setor) => request(`/conversas/${id}/setor`, { method: 'PATCH', body: JSON.stringify({ setor }) }),
   // Define/limpa o responsavel (compartilhado). atendenteId null = remover.
   definirAtendente: (id, atendenteId) => request(`/conversas/${id}/atendente`, { method: 'PATCH', body: JSON.stringify({ atendenteId }) }),
+  /**
+   * Para quem dá para transferir.
+   *
+   * NÃO usa `EquipeAPI.listar()` de propósito. Aquela rota exige o módulo
+   * "equipe" — o da tela de Gestão da Equipe — que na matriz de permissões só o
+   * Comercial tem por padrão. Técnico e Financeiro levavam 403 ali, e o
+   * AppContext converte promessa rejeitada em lista vazia: o seletor aparecia
+   * com "Nenhum outro operador com conta", de base cheia.
+   *
+   * Esta rota vive sob o módulo `atendimento`, que é o que a pessoa já precisa
+   * ter para estar nesta tela, e devolve só o necessário para escolher um
+   * destino. Com `conversaId`, cada operador vem com `podeVerConversa`.
+   */
+  atendentesParaTransferir: (conversaId = null) =>
+    request(`/conversas/atendentes${conversaId ? `?conversaId=${encodeURIComponent(conversaId)}` : ''}`),
   avaliarAtendimento: (id, avaliacao, feedback) => request(`/conversas/${id}/avaliacao`, { method: 'POST', body: JSON.stringify({ avaliacao, feedback }) }),
   // Atalhos de status (os 3 estados da Central).
   pendente: (id) => request(`/conversas/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'pendente' }) }),

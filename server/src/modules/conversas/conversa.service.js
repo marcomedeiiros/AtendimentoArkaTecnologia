@@ -8,6 +8,10 @@ const { mapConversa, mapAtendimento } = require("../../shared/helpers/mapper.hel
 // digitos -- o que confirma a identificacao e a razao social.
 const { limparCnpj, cnpjValido, normalizarTelefoneBr } = require("../../shared/helpers/cnpj.helper");
 const { normalizarSetor, podeAcessarSetor } = require("../../shared/helpers/setor.helper");
+// So a janela de presenca: a Central precisa dizer quem esta online no seletor
+// de transferencia, e duas janelas diferentes fariam as duas telas discordarem
+// sobre a mesma pessoa.
+const { JANELA_ONLINE_MS } = require("../equipe/equipe.service");
 const parceiroRepository = require("../../infrastructure/repositories/parceiro.repository");
 const usuarioRepository = require("../../infrastructure/repositories/usuario.repository");
 const bus = require("../../shared/events/event-bus");
@@ -906,6 +910,70 @@ class ConversaService {
         instanceName: null,
       })
     );
+  }
+
+  /**
+   * PARA QUEM DA PARA TRANSFERIR ESTA CONVERSA.
+   *
+   * ── POR QUE ISTO EXISTE, EM VEZ DE REUSAR /api/equipe ─────────────────────
+   *
+   * O seletor de transferencia usava a lista global da equipe, que vem de
+   * `GET /api/equipe`. Essa rota e guardada por `exigirModulo("equipe")` -- o
+   * modulo da tela de GESTAO DA EQUIPE, que na matriz de permissoes e do grupo
+   * A e, por padrao, so o Comercial tem.
+   *
+   * Resultado: Tecnico e Financeiro levavam 403. E o erro nao aparecia, porque
+   * o AppContext carrega tudo com `Promise.allSettled` e transforma promessa
+   * rejeitada em lista vazia. Na tela: "Nenhum outro operador com conta" -- com
+   * a base cheia de operadores.
+   *
+   * A consulta nunca foi o problema: `equipe.service.listar()` nao filtra cargo
+   * nenhum. O problema era a PORTA. Transferir uma conversa tinha passado a
+   * depender do modulo de ADMINISTRAR a equipe, que e outra coisa: quem atende
+   * precisa saber para quem mandar, nao precisa da tela de gestao.
+   *
+   * Por isso a correcao NAO e dar o modulo "equipe" ao Tecnico -- isso abriria
+   * a tela de gestao junto, e com ela a listagem de e-mails da equipe. E esta
+   * rota, sob `atendimento` (o modulo que ele ja precisa ter para estar nesta
+   * tela), devolvendo SO o que serve para escolher um destino: id, nome, cargo
+   * e presenca. Sem e-mail, sem data de criacao, sem nada de gestao.
+   *
+   * `conversaId` e opcional. Quando vem, cada operador recebe tambem
+   * `podeVerConversa`: e o mesmo `podeAcessarSetor` que decide a leitura, e
+   * serve para a tela avisar antes que transferir para um colega de outro setor
+   * manda a conversa para alguem que nao vai conseguir abri-la. Ninguem e
+   * ESCONDIDO por isso -- a decisao continua sendo de quem atende.
+   */
+  async listarAtendentes(conversaId = null, userCargo = null) {
+    let setor = null;
+    if (conversaId) {
+      const conversa = await conversaRepository.findById(conversaId);
+      if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
+      // Quem nao enxerga a conversa nao tem por que saber para quem ela poderia
+      // ir: o guard de setor vale aqui pela mesma razao que vale na leitura.
+      exigirAcessoSetor(userCargo, conversa.setor);
+      setor = conversa.setor;
+    }
+
+    const usuarios = await usuarioRepository.listarTodos();
+    const agora = Date.now();
+
+    return usuarios
+      // Conta desativada nao pode receber conversa: ela nao entra no painel
+      // para atender. Este e o unico filtro -- e ele nao e sobre cargo.
+      .filter((u) => u.ativo)
+      .map((u) => {
+        const visto = u.ultimoAcessoEm ? new Date(u.ultimoAcessoEm).getTime() : 0;
+        return {
+          id: u.id,
+          nome: u.nome,
+          cargo: u.cargo,
+          // Mesmo vocabulario e mesma janela que a Gestao da Equipe usa, para
+          // as duas telas nao discordarem sobre quem esta online.
+          status: agora - visto < JANELA_ONLINE_MS ? "online" : "offline",
+          ...(setor !== null ? { podeVerConversa: podeAcessarSetor(u.cargo, setor) } : {}),
+        };
+      });
   }
 
   /**

@@ -189,4 +189,10 @@ class EquipeService {
   }
 }
 
-module.exports = new EquipeService();
+const equipeService = new EquipeService();
+
+// `JANELA_ONLINE_MS` sai junto porque a Central tambem precisa dizer quem esta
+// online (no seletor de transferencia). Duas janelas diferentes fariam as duas
+// telas discordarem sobre a mesma pessoa.
+module.exports = equipeService;
+module.exports.JANELA_ONLINE_MS = JANELA_ONLINE_MS;
