@@ -229,11 +229,49 @@ titulo("6. As classes de apoio existem de fato");
 
 const css = fs.readFileSync(path.join(RAIZ, "index.css"), "utf8");
 const faltando = [
-  "altura-app", "altura-app-min", "seguro-topo", "seguro-baixo",
-  "seguro-lados", "seguro-esquerda", "modal-cabe",
+  "altura-app", "altura-app-min", "seguro-barra", "seguro-cabecalho", "modal-cabe",
 ].filter((c) => !new RegExp(`\\.${c}\\s*[{,\\s]`).test(css))
   .map((c) => `.${c} não está em index.css`);
 check("index.css define as classes usadas", faltando);
+
+// ---------------------------------------------------------------------------
+titulo("7. Ajuste de celular não pode vazar para o computador");
+
+// A REGRA DA CASA: o computador fica como estava. Quem pede responsividade pede
+// para o celular parar de quebrar, não para a tela grande mudar.
+//
+// E o vazamento é silencioso. `env(safe-area-inset-top)` vale 0 no monitor, mas
+// `padding-top: 0` continua sendo um `padding-top` -- e ele VENCE o `py-12` do
+// Tailwind na cascata. Foi assim que o formulário de login perdeu os 48px de
+// respiro no computador, onde não havia nada a corrigir.
+//
+// Por isso toda classe que existe por causa do celular precisa morar dentro de
+// um `@media (max-width: ...)`. Fora dele, ela alcança quem não pediu.
+//
+// `altura-app` fica de fora da exigência, e com motivo medido: ela é
+// `height:100vh` seguido de `height:100dvh`, e no computador as duas valem o
+// mesmo (medido: 800px numa janela de 800px). Não há o que vazar.
+const SO_NO_CELULAR = ["seguro-barra", "seguro-cabecalho", "modal-cabe"];
+const vazando = [];
+for (const c of SO_NO_CELULAR) {
+  const i = css.search(new RegExp(`\\.${c}\\s*[{,\\s]`));
+  if (i < 0) continue;                       // ausência já é acusada na seção 6
+  // A regra está dentro de um `@media` ainda ABERTO neste ponto do arquivo?
+  const inicioMedia = css.lastIndexOf("@media", i);
+  let dentroDeMedia = false;
+  if (inicioMedia >= 0) {
+    let nivel = 0;
+    for (const ch of css.slice(inicioMedia, i)) {
+      if (ch === "{") nivel++;
+      else if (ch === "}") nivel--;
+    }
+    dentroDeMedia = nivel > 0 && /@media[^{]*max-width/.test(css.slice(inicioMedia, inicioMedia + 60));
+  }
+  if (!dentroDeMedia) {
+    vazando.push(`.${c} está fora de @media (max-width: ...) -- alcança o computador`);
+  }
+}
+check("classe de celular fica dentro de @media max-width", vazando);
 
 // Sem `viewport-fit=cover` no HTML, todo `env(safe-area-inset-*)` vale 0 e as
 // classes `seguro-*` viram enfeite silencioso.

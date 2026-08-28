@@ -136,7 +136,7 @@ function Sidebar({ aberto, onClose }) {
          que falta é altura -- com o menu inteiro visível, ninguém precisa rolar
          a barra para achar um item. */
       className={`w-[17rem] shrink-0 bg-grafite-800 border-r border-linha flex flex-col p-4 baixa:lg:p-3 altura-app select-none overflow-y-auto
-        seguro-topo seguro-baixo seguro-esquerda
+        seguro-barra
         fixed inset-y-0 left-0 z-50 transition-transform duration-300 lg:static lg:translate-x-0
         ${aberto ? 'translate-x-0 shadow-2xl shadow-black/50' : '-translate-x-full'}`}
     >
@@ -265,9 +265,9 @@ export default function AppLayout() {
           embaixo da barra de endereco do celular, e o atendente perde o campo
           de resposta -- ver o comentario em index.css. */}
       <div className="flex-1 min-w-0 flex flex-col altura-app">
-        {/* `seguro-topo` afasta o botao do menu do entalhe do iPhone; sem ele o
+        {/* `seguro-cabecalho` afasta o botao do menu do entalhe do iPhone; sem ele o
             dedo cai na barra de status em vez de abrir a barra lateral. */}
-        <header className="lg:hidden flex items-center gap-3 h-14 px-4 seguro-topo box-content bg-grafite-800 border-b border-linha shrink-0 sticky top-0 z-30">
+        <header className="lg:hidden flex items-center gap-3 h-14 px-4 seguro-cabecalho box-content bg-grafite-800 border-b border-linha shrink-0 sticky top-0 z-30">
           <button
             onClick={() => setMenuAberto(true)}
             className="p-2 -ml-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"

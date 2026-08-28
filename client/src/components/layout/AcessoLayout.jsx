@@ -92,7 +92,7 @@ export default function AcessoLayout({ titulo, subtitulo, children, rodape }) {
       </section>
 
       {/* ── Formulário ──────────────────────────────────────────────────── */}
-      <section className="relative flex altura-app-min items-center justify-center px-5 py-12 sm:px-10 seguro-lados seguro-topo seguro-baixo">
+      <section className="relative flex altura-app-min items-center justify-center px-5 py-12 sm:px-10">
         <div className="grade-tecnica pointer-events-none absolute inset-0 lg:hidden" />
 
         <div className="relative w-full max-w-sm">

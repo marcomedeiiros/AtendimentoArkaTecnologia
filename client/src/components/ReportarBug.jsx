@@ -173,7 +173,7 @@ export default function ReportarBug() {
       {aberto && (
         <Portal>
           <div
-            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 seguro-baixo seguro-lados sm:items-center"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center"
             onClick={fechar}
           >
             <form

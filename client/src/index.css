@@ -398,22 +398,44 @@
     min-height: 100vh;
     min-height: 100dvh;
   }
-  .seguro-topo    { padding-top: env(safe-area-inset-top); }
-  .seguro-baixo   { padding-bottom: env(safe-area-inset-bottom); }
-  .seguro-esquerda{ padding-left: env(safe-area-inset-left); }
-  .seguro-lados {
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
+  /* ÁREA SEGURA -- duas regras, aprendidas errando.
+
+     1. SÓ NO CELULAR. `env(safe-area-inset-*)` vale 0 no computador, mas a
+        DECLARAÇÃO não é inofensiva: `padding-top: 0` continua sendo um
+        `padding-top`, e ele vence o `py-12` do Tailwind na cascata. Foi o que
+        aconteceu -- o formulário de login perdeu os 48px de respiro no monitor,
+        onde não havia nada para corrigir. Fora do celular, a regra não existe.
+
+     2. SEMPRE SOMANDO. O recuo do entalhe se ACRESCENTA ao espaçamento que o
+        componente já tem; não o substitui. Por isso a base aparece no `calc` --
+        e por isso cada classe é feita para UM lugar, com a base daquele lugar,
+        em vez de uma classe genérica que não tem como saber o que está
+        sobrescrevendo. */
+  @media (max-width: 1023px) {
+    /* Barra lateral: base `p-4` (1rem). Encosta na esquerda, no topo e embaixo. */
+    .seguro-barra {
+      padding-top: calc(1rem + env(safe-area-inset-top));
+      padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+      padding-left: calc(1rem + env(safe-area-inset-left));
+    }
+    /* Cabeçalho do celular: a altura vem do `h-14`, não de padding. O recuo
+       entra puro, com `box-content` para somar à altura em vez de comer dela. */
+    .seguro-cabecalho { padding-top: env(safe-area-inset-top); }
   }
 
   /* Painel de modal que CABE na tela do celular.
      Um formulário de 5 campos passa de 667px de altura (iPhone SE) com folga.
      Centralizado e sem limite, ele transborda para os dois lados e o botão
      "Salvar" fica fora do alcance -- sem rolagem, porque o fundo é `fixed`.
-     O `4rem` desconta o respiro de `p-4` do fundo (2rem) mais a área segura. */
-  .modal-cabe {
-    max-height: calc(100dvh - 4rem);
-    overflow-y: auto;
-    overscroll-behavior: contain;
+     O `4rem` desconta o respiro de `p-4` do fundo (2rem) mais a área segura.
+
+     Vale só até 639px, e não é descuido: acima disso o modal cabia, e pôr teto
+     onde não havia mudaria a tela de quem usa no computador. */
+  @media (max-width: 639px) {
+    .modal-cabe {
+      max-height: calc(100dvh - 4rem);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
   }
 }

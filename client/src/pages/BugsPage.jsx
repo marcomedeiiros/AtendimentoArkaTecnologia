@@ -630,7 +630,7 @@ export default function BugsPage() {
             src={ampliada}
             alt="Print ampliado"
             onClick={e => e.stopPropagation()}
-            className="max-h-[85dvh] max-w-full rounded-lg object-contain shadow-2xl"
+            className="max-h-[85dvh] sm:max-h-[90vh] max-w-full rounded-lg object-contain shadow-2xl"
           />
         </div>
       )}
