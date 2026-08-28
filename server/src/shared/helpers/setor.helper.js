@@ -24,14 +24,36 @@ function setorValido(valor) {
 // vivo o que a leitura esconde. `userCargo` vem do token ja validado.
 //
 //   - sem cargo / Administrador: ve tudo
-//   - "Geral": setor de quem ainda nao foi triado; todos veem
-//   - Financeiro/Tecnico/Comercial: so o proprio setor (e Tecnico nunca ve
-//     Financeiro, nem por engano de normalizacao)
+//   - Financeiro/Tecnico/Comercial: so o proprio setor, e mais nada
+//
+// ── POR QUE "GERAL" NAO E PASSE LIVRE ──────────────────────────────────────
+//
+// Havia aqui um `if (setorNorm === SETOR_PADRAO) return true;`. A intencao era
+// boa: conversa ainda nao triada nao pertence a ninguem, entao que todos vejam.
+// O efeito real era outro.
+//
+// `normalizarSetor` devolve "Geral" para QUALQUER coisa que nao seja um dos tres
+// setores -- inclusive `null`. E conversa nova nasce SEM setor, de proposito:
+// quem escolhe o setor e o cliente, no menu do bot. Somando as duas coisas, toda
+// conversa nova de cliente ficava legivel por toda a equipe ate alguem escolher
+// o setor -- e continuava assim depois de FECHADA, se ninguem escolheu.
+//
+// Nao era um caso de canto: era o caminho normal de toda conversa. Um Tecnico
+// lia negociacao do Comercial e cobranca do Financeiro so por chegarem antes da
+// triagem. A varredura em verificar-escopo-dados.js acusava 15 vazamentos por
+// tres caminhos independentes: a listagem, o acesso direto por ID e o histórico
+// de chamados fechados.
+//
+// Agora "Geral" e um setor como os outros: nao pertence a Comercial, nem a
+// Financeiro, nem a Tecnico, entao nenhum dos tres o enxerga. Administrador
+// continua vendo tudo -- e e por ele que uma conversa sem setor e distribuida.
+//
+// A linha "Tecnico nunca ve Financeiro" tambem saiu: nao era protecao extra,
+// era um caso particular do `setorNorm === userCargo` logo abaixo, que ja o
+// cobre. Duas regras dizendo a mesma coisa so criam a duvida de qual vale.
 function podeAcessarSetor(userCargo, setorConversa) {
   if (!userCargo || userCargo === "Administrador") return true;
   const setorNorm = normalizarSetor(setorConversa);
-  if (setorNorm === SETOR_PADRAO) return true;
-  if (setorNorm === "Financeiro" && userCargo === "Técnico") return false;
   if (["Financeiro", "Técnico", "Comercial"].includes(userCargo)) {
     return setorNorm === userCargo;
   }
