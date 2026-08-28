@@ -3,6 +3,7 @@ const authController = require("./auth.controller");
 const validate = require("../../shared/middlewares/validate.middleware");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
 const { authLimiter } = require("../../shared/middlewares/rateLimit.middleware");
+const { exigirTurnstile } = require("../../shared/middlewares/turnstile.middleware");
 const { loginSchema, cadastroSchema, atualizarPerfilSchema, trocarSenhaSchema, refreshSchema, sairSchema } = require("./auth.dto");
 
 /**
@@ -25,7 +26,7 @@ const { loginSchema, cadastroSchema, atualizarPerfilSchema, trocarSenhaSchema, r
  *       200:
  *         description: Token JWT
  */
-router.post("/login", authLimiter, validate(loginSchema), (req, res, next) =>
+router.post("/login", authLimiter, validate(loginSchema), exigirTurnstile, (req, res, next) =>
   authController.login(req, res).catch(next)
 );
 
@@ -91,7 +92,7 @@ router.post("/sair", authLimiter, validate(sairSchema), (req, res, next) =>
  *       201: { description: "Conta criada. Devolve apenas os dados do usuario; o token sai do /login" }
  *       409: { description: E-mail ja cadastrado }
  */
-router.post("/cadastrar", authLimiter, validate(cadastroSchema), (req, res, next) =>
+router.post("/cadastrar", authLimiter, validate(cadastroSchema), exigirTurnstile, (req, res, next) =>
   authController.cadastrar(req, res).catch(next)
 );
 
@@ -102,6 +103,8 @@ router.post("/cadastrar", authLimiter, validate(cadastroSchema), (req, res, next
  *     tags: [Auth]
  *     summary: Diz se o cadastro exige codigo de convite
  */
+router.get("/turnstile", (req, res) => authController.turnstileConfig(req, res));
+
 router.get("/registro-info", (req, res) => authController.registroInfo(req, res));
 
 /**

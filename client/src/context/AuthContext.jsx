@@ -149,8 +149,10 @@ export function AuthProvider({ children }) {
     setUsuario((u) => (u ? { ...u, ...parcial } : u));
   }, []);
 
-  const entrar = useCallback(async (email, senha, lembrar = true) => {
-    const eu = await AuthAPI.entrar(email, senha, lembrar);
+  // `turnstileToken` atravessa daqui ate a API sem ser interpretado: quem o
+  // valida e o servidor, contra a Cloudflare.
+  const entrar = useCallback(async (email, senha, lembrar = true, turnstileToken = null) => {
+    const eu = await AuthAPI.entrar(email, senha, lembrar, turnstileToken);
     setUsuario(eu);
     // Saudacao curta: primeiro + ultimo nome (2 nomes, incluindo o sobrenome),
     // nao o nome inteiro nem so o primeiro. Nome de uma palavra so aparece ele.

@@ -6,9 +6,15 @@ const { z } = require("zod");
 // conseguir entrar com ele.
 const email = z.string().trim().toLowerCase().email("E-mail invalido");
 
+// O token do Turnstile precisa estar DECLARADO em todo schema de rota que o
+// exige: o `validate` troca `req.body` pelo resultado do Zod, e o Zod descarta
+// chave que o schema nao conhece -- sem isto o middleware nunca veria o token.
+const turnstileToken = z.string().max(4096).optional();
+
 const loginSchema = z.object({
   email,
   senha: z.string().min(6),
+  turnstileToken,
 });
 
 const cadastroSchema = z.object({
@@ -24,6 +30,7 @@ const cadastroSchema = z.object({
   // pelo resultado do zod, e o zod descarta chave que o schema nao conhece.
   // Fora daqui, o codigo de convite nunca chegaria ao service.
   codigo: z.string().optional(),
+  turnstileToken,
 });
 
 // Edicao do proprio perfil. So o nome -- nunca cargo/ativo/email (email e chave
