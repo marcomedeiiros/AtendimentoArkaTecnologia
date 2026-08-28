@@ -53,8 +53,24 @@ function createApp() {
     res.json({ success: true, data: { status: "ok", env: env.nodeEnv } });
   });
 
-  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-  app.get("/api-docs.json", (req, res) => res.json(swaggerSpec));
+  // DOCUMENTACAO DA API -- fechada em producao.
+  //
+  // O Swagger lista TODA a superficie do sistema: cada rota, cada parametro,
+  // cada formato de corpo esperado. Para quem desenvolve, e comodidade. Para
+  // quem ataca, e o mapa pronto -- poupa justamente a parte demorada, que e
+  // descobrir o que existe. E o nginx publica `/api-docs` para a internet
+  // (client/nginx.conf), entao nao havia nada entre ele e o mundo.
+  //
+  // Nao e segredo que impede invasao: a protecao de verdade e a autorizacao de
+  // cada rota. Mas nao ha motivo para entregar o indice.
+  //
+  // `API_DOCS=1` reabre em producao, para quando alguem precisar de propósito --
+  // uma decisao consciente, e nao o padrao.
+  const mostrarDocs = env.nodeEnv !== "production" || process.env.API_DOCS === "1";
+  if (mostrarDocs) {
+    app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+    app.get("/api-docs.json", (req, res) => res.json(swaggerSpec));
+  }
 
   app.use("/api/auth", authRoutes);
   app.use("/api/equipe", equipeRoutes);
