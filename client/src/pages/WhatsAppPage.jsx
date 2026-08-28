@@ -231,15 +231,19 @@ export default function WhatsAppPage() {
           <h3 className="font-bold text-sm text-white font-display mb-1">QR Code de Autenticação</h3>
           <p className="text-xs text-slate-400 mb-4">Escaneie no app do WhatsApp: Dispositivos Conectados</p>
 
-          <div className="p-4 bg-white rounded-2xl shadow-lg mb-4 inline-block">
+          {/* `qr-cartao` (index.css) fixa branco/preto literais nos dois temas.
+              Não trocar por `bg-white`/`text-slate-*`: aqui esses nomes são
+              tokens de tema — no claro viram quase-preto e quase-branco, e o QR
+              deixa de ser legível por câmera. */}
+          <div className="qr-cartao p-4 rounded-2xl shadow-lg mb-4 inline-block">
             {carregandoQr ? (
               <div className="w-40 h-40 flex items-center justify-center">
-                <Loader2 size={40} className="text-slate-950 animate-spin" />
+                <Loader2 size={40} className="animate-spin" />
               </div>
             ) : qrcode ? (
               <img src={qrcode} alt="QR Code de autenticação" className="w-40 h-40 object-contain" />
             ) : (
-              <QrCode size={160} className={conectado ? 'text-slate-300' : 'text-slate-950'} />
+              <QrCode size={160} className={conectado ? 'opacity-25' : ''} />
             )}
           </div>
 

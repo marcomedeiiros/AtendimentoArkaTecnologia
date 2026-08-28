@@ -212,6 +212,34 @@
   filter: brightness(0);
 }
 
+/* ===== QR Code da integracao com o WhatsApp =====
+   FORA DO TEMA, DE PROPOSITO.
+
+   Um QR e lido por uma camera, nao pelo olho: ele exige zona clara em volta e
+   modulos escuros. Isso e requisito de LEITURA, nao preferencia visual -- e por
+   isso estas cores sao literais e iguais nos dois temas.
+
+   O cartao usava `bg-white` e o icone `text-slate-950`, que neste projeto NAO
+   sao branco e preto: sao TOKENS. No tema claro `--c-white` vale 17 27 33
+   (quase preto) e a escala slate e invertida, entao `slate-950` vira quase
+   branco. O resultado era o cartao PRETO com o QR escuro por cima -- sem zona
+   clara, nenhum celular lia -- e o icone de espera sumindo no proprio fundo.
+
+   Vale para o QR renovado a cada 25s e para o estado de carregamento: e o mesmo
+   cartao, entao nao ha um segundo caminho para consertar depois. */
+.qr-cartao {
+  background: #FFFFFF;
+  border: 1px solid #D1D7DB;
+  /* Placeholder e spinner desenham com `currentColor`. */
+  color: #111B21;
+}
+/* A imagem vem da Evolution e pode ter fundo transparente: o branco do cartao e
+   que faz a zona de silencio. Nada de filtro nem inversao aqui -- inverter um
+   QR o torna ilegivel para a maioria dos leitores. */
+.qr-cartao img {
+  background: #FFFFFF;
+}
+
 .glass-panel {
   background: rgb(var(--grafite-700) / var(--glass-alpha));
   backdrop-filter: blur(16px);
