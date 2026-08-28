@@ -238,7 +238,7 @@ export default function WhatsAppPage() {
           {/* O desenho de espera NÃO é esmaecido quando já está conectado: ele
               usa o preto cheio que `.qr-cartao` define. Em opacidade reduzida
               virava um cinza claro que parecia falha de carregamento, e não
-              "você já está pareado" — quem diz isso é a etiqueta verde abaixo. */}
+              "você já está pareado" quem diz isso é a etiqueta verde abaixo. */}
           <div className="qr-cartao p-4 rounded-2xl shadow-lg mb-4 inline-block">
             {carregandoQr ? (
               <div className="w-40 h-40 flex items-center justify-center">
