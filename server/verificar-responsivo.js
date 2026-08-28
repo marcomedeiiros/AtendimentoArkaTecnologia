@@ -175,7 +175,12 @@ titulo("4. Grade: colunas que sabem virar uma só");
 const GRADES_LIBERADAS = new Map([
   ["components/pages/Agenda.jsx:173", "cabeçalho dom..sáb"],
   ["components/pages/Agenda.jsx:178", "dias do mês"],
-  ["components/pages/AtendimentoView.jsx:1556", "seletor de emoji"],
+  // A chave e arquivo:LINHA, entao ela ANDA quando alguem edita algo acima. Foi
+  // o que aconteceu aqui: o seletor de emoji nao mudou uma virgula, so desceu
+  // de 1556 para 1621 quando o cabecalho da conversa e o modal de
+  // transferencia cresceram. Se este teste acusar uma grade que voce nao
+  // escreveu, confira primeiro se e so a linha que mudou.
+  ["components/pages/AtendimentoView.jsx:1621", "seletor de emoji"],
   ["components/ReportarBug.jsx:237", "miniaturas dos anexos"],
   // MEDIDO, não presumido: reproduzido com o CSS compilado numa tela de 320px,
   // a linha precisa de 286px e tem 286px -- inclusive com os números de uma
