@@ -89,6 +89,29 @@ const env = {
   // codigo no cadastro -- o formulario mostra o campo sozinho quando isso
   // estiver ativo.
   registroCodigo: process.env.REGISTRO_CODIGO || "",
+
+  /**
+   * CLOUDFLARE TURNSTILE.
+   *
+   * A SECRET vive SO aqui, no servidor. A site key e publica por natureza (vai
+   * no HTML), e por isso e servida por uma rota da API em vez de embutida no
+   * bundle: assim trocar a chave nao exige rebuild do front, e nao existe
+   * NENHUMA variavel do Turnstile do lado do cliente.
+   *
+   * Sem as duas chaves configuradas o desafio fica DESLIGADO e o login segue
+   * normal -- a alternativa (fechar) transformaria "esqueci de preencher o
+   * .env" em "ninguem entra no painel". Configuradas, a validacao passa a ser
+   * obrigatoria e falha FECHADO.
+   */
+  turnstile: {
+    siteKey: process.env.TURNSTILE_SITE_KEY || "",
+    secretKey: process.env.TURNSTILE_SECRET_KEY || "",
+    // Hostname esperado no retorno da Cloudflare. Vazio = nao confere.
+    hostname: process.env.TURNSTILE_HOSTNAME || "",
+    get ativo() {
+      return !!(this.siteKey && this.secretKey);
+    },
+  },
 };
 
 module.exports = env;

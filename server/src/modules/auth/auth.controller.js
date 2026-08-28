@@ -1,5 +1,6 @@
 const authService = require("./auth.service");
 const { success } = require("../../shared/helpers/response.helper");
+const env = require("../../config/env");
 
 class AuthController {
   async login(req, res) {
@@ -24,6 +25,22 @@ class AuthController {
 
   registroInfo(req, res) {
     return success(res, authService.registroInfo());
+  }
+
+  /**
+   * Configuracao PUBLICA do Turnstile: so a site key, que por definicao aparece
+   * no HTML de quem usa o widget. A SECRET nao passa por aqui em hipotese
+   * nenhuma -- ela existe so no processo do servidor.
+   *
+   * Servida por rota (e nao embutida no bundle com VITE_*) para trocar a chave
+   * nao exigir rebuild do front, e para nao existir nenhuma variavel de
+   * ambiente do Turnstile do lado do cliente.
+   */
+  turnstileConfig(req, res) {
+    return success(res, {
+      ativo: env.turnstile.ativo,
+      siteKey: env.turnstile.siteKey || null,
+    });
   }
 
   async me(req, res) {

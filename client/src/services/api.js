@@ -257,6 +257,29 @@ export const AuthAPI = {
     if (!r.ok) return { exigeCodigo: false };
     return (await r.json()).data;
   },
+
+  /**
+   * Configuração pública do Turnstile, vinda do SERVIDOR.
+   *
+   * A site key não está no bundle de propósito: assim não existe nenhuma
+   * variável de ambiente do Turnstile do lado do cliente, e trocar a chave na
+   * Cloudflare não exige rebuild do front. A secret nunca passa por aqui — ela
+   * só existe no processo do servidor.
+   *
+   * Falha silenciosa devolvendo `ativo: false`: se esta chamada quebrar, o
+   * widget simplesmente não aparece e o login segue funcionando. O contrário
+   * (derrubar a tela de login porque uma consulta de configuração falhou) foi
+   * exatamente o incidente que motivou trazer isto por inteiro.
+   */
+  turnstile: async () => {
+    try {
+      const r = await fetch(`${API_BASE}/auth/turnstile`);
+      if (!r.ok) return { ativo: false, siteKey: null };
+      return (await r.json()).data;
+    } catch {
+      return { ativo: false, siteKey: null };
+    }
+  },
   // Sair de verdade: avisa o servidor para revogar a sessao (a familia inteira
   // do refresh token) e SO DEPOIS limpa o navegador. Antes, "sair" apagava o
   // token daqui e pronto -- quem tivesse uma copia seguia com a sessao viva.
