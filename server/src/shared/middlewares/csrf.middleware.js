@@ -43,23 +43,52 @@ function iguaisEmTempoConstante(a, b) {
   return x.length > 0 && x.length === y.length && crypto.timingSafeEqual(x, y);
 }
 
+/**
+ * A origem da requisicao e uma das nossas?
+ *
+ * ── COMPARA-SE O HOST, E NAO O ESQUEMA ────────────────────────────────────
+ *
+ * A primeira versao comparava `esquema://host` e RECUSAVA TODO LOGIN em
+ * producao. O motivo e a topologia: quem termina o HTTPS e a Cloudflare, e o
+ * nginx repassa `X-Forwarded-Proto $scheme` -- que ali dentro vale `http`,
+ * porque o trecho Cloudflare->nginx e HTTP puro. Entao o servidor comparava
+ * `http://chat.exemplo.com` com a origem real `https://chat.exemplo.com` e
+ * concluia que era um site estranho. Resultado na tela: "Origem nao permitida",
+ * e ninguem entrava.
+ *
+ * O esquema nao e a parte que protege. Quem protege e o HOST: o site de um
+ * atacante tem outro nome de dominio, e isso nenhum proxy reescreve. Comparar
+ * so o host mantem a defesa e para de depender de um cabecalho que a
+ * infraestrutura muda por conta propria.
+ */
+function hostDe(valor) {
+  try {
+    return new URL(valor).host.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
 function origemPermitida(req) {
   const bruta = req.headers.origin || req.headers.referer;
   // Sem Origin nem Referer: cliente nao-navegador (curl, integracao). Estes nao
   // sao vitimas de CSRF -- ninguem "engana" um script para mandar cookie que
   // ele nao tem. O double submit abaixo continua valendo e e o que decide.
   if (!bruta) return true;
-  try {
-    const origem = new URL(bruta).origin;
-    if (env.corsOrigins.includes(origem)) return true;
-    // Mesma origem da propria API (painel servido pelo mesmo nginx): o host
-    // que o proxy encaminhou e a referencia.
-    const host = req.headers["x-forwarded-host"] || req.headers.host;
-    const proto = req.headers["x-forwarded-proto"] || req.protocol;
-    return host ? origem === `${proto}://${host}` : false;
-  } catch {
-    return false;
-  }
+
+  const origem = hostDe(bruta);
+  if (!origem) return false;
+
+  // Configuradas explicitamente (CORS_ORIGIN).
+  if (env.corsOrigins.some((o) => hostDe(o) === origem)) return true;
+
+  // Mesmo host da propria requisicao: e o caso normal em producao, onde o nginx
+  // serve o painel e faz o proxy de /api sob o mesmo dominio.
+  const host = String(req.headers["x-forwarded-host"] || req.headers.host || "")
+    .split(",")[0]
+    .trim()
+    .toLowerCase();
+  return !!host && host === origem;
 }
 
 /**

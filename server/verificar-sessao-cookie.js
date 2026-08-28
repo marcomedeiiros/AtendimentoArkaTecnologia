@@ -62,12 +62,20 @@ function lerCookies(r) {
 const comoHeader = (mapa) =>
   Object.entries(mapa).map(([k, v]) => `${k}=${v.valor}`).join("; ");
 
-async function pedir(caminho, { metodo = "GET", corpo, cookies, bearer, csrf, origem } = {}) {
+async function pedir(caminho, { metodo = "GET", corpo, cookies, bearer, csrf, origem, comoProducao } = {}) {
   const h = { "Content-Type": "application/json", "X-Forwarded-For": "203.0.113.9, 10.0.0.1" };
   if (cookies) h.Cookie = comoHeader(cookies);
   if (bearer) h.Authorization = `Bearer ${bearer}`;
   if (csrf) h["X-CSRF-Token"] = csrf;
   if (origem) h.Origin = origem;
+  // Reproduz a cadeia REAL de producao: a Cloudflare termina o HTTPS e fala
+  // HTTP com o nginx, que repassa `X-Forwarded-Proto: http`. O navegador, do
+  // outro lado, manda `Origin: https://...`.
+  if (comoProducao) {
+    h.Host = comoProducao;
+    h["X-Forwarded-Host"] = comoProducao;
+    h["X-Forwarded-Proto"] = "http";
+  }
   const r = await fetch(base + caminho, {
     method: metodo, headers: h,
     ...(corpo !== undefined ? { body: JSON.stringify(corpo) } : {}),
@@ -202,6 +210,45 @@ async function pedir(caminho, { metodo = "GET", corpo, cookies, bearer, csrf, or
     });
     check(entradaDeFora.status === 403,
       `mas a entrada vinda de origem externa e recusada -> ${entradaDeFora.status}`);
+
+    // ─────────────────────────────────────────────────────────────────────
+    titulo("4c. Atras da Cloudflare: HTTPS fora, HTTP dentro");
+    //
+    // DEFEITO QUE CHEGOU AO USUARIO: a primeira versao comparava
+    // `esquema://host` e recusava TODO login em producao com "Origem nao
+    // permitida". A Cloudflare termina o HTTPS e fala HTTP com o nginx, que
+    // repassa `X-Forwarded-Proto: http`; o navegador manda `Origin: https://...`.
+    // O servidor comparava `http://dominio` com `https://dominio` e concluia
+    // que era um site estranho.
+    //
+    // O esquema nao e a parte que protege -- o HOST e. Site de atacante tem
+    // outro dominio, e isso nenhum proxy reescreve.
+    const DOMINIO = "chat.exemplo.com";
+
+    const comoNaVm = await pedir("/api/auth/login", {
+      metodo: "POST", comoProducao: DOMINIO, origem: `https://${DOMINIO}`,
+      corpo: { email: usuario.email, senha: SENHA },
+    });
+    check(comoNaVm.status === 200,
+      `login com Origin https e X-Forwarded-Proto http -> ${comoNaVm.status}`);
+
+    // E uma ESCRITA autenticada, no mesmo arranjo.
+    const cookiesVm = comoNaVm.cookies;
+    const escritaVm = await pedir("/api/auth/perfil", {
+      metodo: "PATCH", comoProducao: DOMINIO, origem: `https://${DOMINIO}`,
+      cookies: cookiesVm, csrf: cookiesVm[nomes.nomeCsrf]?.valor,
+      corpo: { nome: "Teste Cookie" },
+    });
+    check(escritaVm.status === 200, `escrita autenticada atras do proxy -> ${escritaVm.status}`);
+
+    // A defesa continua de pe: outro DOMINIO e recusado, mesmo com tudo o mais
+    // parecendo certo.
+    const outroDominio = await pedir("/api/auth/perfil", {
+      metodo: "PATCH", comoProducao: DOMINIO, origem: "https://site-do-atacante.example",
+      cookies: cookiesVm, csrf: cookiesVm[nomes.nomeCsrf]?.valor,
+      corpo: { nome: "Invasor" },
+    });
+    check(outroDominio.status === 403, `dominio diferente continua barrado -> ${outroDominio.status}`);
 
     // ─────────────────────────────────────────────────────────────────────
     titulo("5. Renovar pelo cookie, sem mandar token no corpo");
