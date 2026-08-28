@@ -7,7 +7,14 @@ const { mapConversa, mapAtendimento } = require("../../shared/helpers/mapper.hel
 // `mascararCnpj` saiu daqui: nenhuma mensagem deste service imprime mais os 14
 // digitos -- o que confirma a identificacao e a razao social.
 const { limparCnpj, cnpjValido, normalizarTelefoneBr } = require("../../shared/helpers/cnpj.helper");
-const { normalizarSetor, podeAcessarSetor } = require("../../shared/helpers/setor.helper");
+const {
+  normalizarSetor,
+  podeAcessarSetor,
+  // `acharSetor` devolve o setor canonico que um valor representa, ou null. E o
+  // que traduz CARGO em SETOR na transferencia -- os dois usam as mesmas strings
+  // ("Tecnico", "Comercial", "Financeiro"), e "Administrador" nao e setor nenhum.
+  acharSetor,
+} = require("../../shared/helpers/setor.helper");
 // So a janela de presenca: a Central precisa dizer quem esta online no seletor
 // de transferencia, e duas janelas diferentes fariam as duas telas discordarem
 // sobre a mesma pessoa.
@@ -1042,11 +1049,28 @@ class ConversaService {
 
     let novoId = null;
     let nome = null;
+    // O SETOR VAI COM A CONVERSA.
+    //
+    // Transferir para alguem de outro setor entregava a conversa a quem nao
+    // conseguia abri-la: `podeAcessarSetor` deixa cada cargo ver so o proprio
+    // setor, e a conversa continuava no setor antigo. O modal avisava
+    // ("nao enxerga o setor desta conversa") e o operador transferia mesmo
+    // assim, porque era o certo a fazer -- so que o destinatario ficava sem ver.
+    //
+    // Agora a conversa MUDA de setor junto. Isso nao contraria "setor so por
+    // escolha" (o bot nunca adivinha setor): uma transferencia feita por uma
+    // pessoa E uma escolha explicita, do mesmo tipo que a do cliente no menu.
+    //
+    // `acharSetor` do CARGO: as strings sao as mesmas ("Tecnico", "Comercial",
+    // "Financeiro"). Devolve null para "Administrador" -- que nao tem setor e
+    // portanto nao move a conversa para lugar nenhum.
+    let setorDestino = null;
     if (typeof atendenteId === "string" && atendenteId.trim()) {
       const usuario = await usuarioRepository.findById(atendenteId.trim());
       if (!usuario) throw new AppError("Atendente nao encontrado", 400, "ATENDENTE_INVALIDO");
       novoId = usuario.id;
       nome = usuario.nome;
+      setorDestino = acharSetor(usuario.cargo);
     }
 
     // IDEMPOTENCIA. Transferir para quem ja e o dono nao e erro -- e um clique
@@ -1084,10 +1108,29 @@ class ConversaService {
       );
     }
 
-    // A OS em curso acompanha a transferencia: e ela que o historico mostra.
+    // A conversa muda de setor quando o destino e de outro setor. `null` em
+    // `setorDestino` (Administrador, ou remocao da atribuicao) nao move nada --
+    // tirar o setor de uma conversa por causa de um escalonamento seria perder
+    // triagem que alguem ja fez.
+    const setorAtual = normalizarSetor(conversa.setor);
+    const setorNovo = setorDestino && setorDestino !== setorAtual ? setorDestino : null;
+    if (setorNovo) {
+      await conversaRepository.update(id, { setor: setorNovo });
+      logger.info("Setor da conversa alterado pela transferencia", {
+        conversaId: id,
+        de: setorAtual,
+        para: setorNovo,
+        porUsuarioId: autorId || null,
+      });
+    }
+
+    // A OS em curso acompanha a transferencia: e ela que o historico mostra. O
+    // setor vai junto pelo mesmo motivo -- Conversa, OS e Feedback leem o mesmo
+    // campo, e as tres telas precisam concordar sem F5.
     await conversaRepository.atualizarAtendimentoAtual(id, {
       atendenteId: novoId,
       ...(nome ? { atendenteNome: nome } : {}),
+      ...(setorNovo ? { setor: setorNovo } : {}),
     });
 
     // QUEM FEZ A TROCA entra no registro.
@@ -1128,6 +1171,10 @@ class ConversaService {
       let texto = `Conversa transferida para ${nome}`;
       if (autorNome && novoId === autorId) texto = `Conversa assumida por ${autorNome}`;
       else if (autorNome) texto = `Conversa transferida para ${nome} por ${autorNome}`;
+      // A mudanca de setor entra na MESMA linha, e nao numa segunda mensagem:
+      // e um acontecimento so, e duas linhas seguidas sobre a mesma troca
+      // poluem o historico.
+      if (setorNovo) texto += ` (setor ${setorAtual} -> ${setorNovo})`;
       await conversaRepository.addMensagem(id, "sistema", texto);
     }
 

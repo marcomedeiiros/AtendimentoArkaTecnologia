@@ -307,7 +307,90 @@ async function main() {
   check(r.json?.error?.code === "FORBIDDEN_SECTOR", "e o 403 de SETOR, nao o de dono");
 
   // ─────────────────────────────────────────────────────────────────────────
-  titulo("9. Sem sessao nao passa");
+  titulo("9. TRANSFERIR PARA OUTRO SETOR move a conversa (e e o que a faz ser vista)");
+
+  // O problema: `podeAcessarSetor` deixa cada cargo ver so o proprio setor.
+  // Transferir uma conversa do Tecnico para o Comercial entregava a conversa a
+  // quem nao conseguia abri-la -- o modal avisava "nao enxerga o setor desta
+  // conversa" e o operador transferia mesmo assim, porque era o certo a fazer.
+  //
+  // Agora a conversa vai com o destinatario. Isso E escolha explicita de uma
+  // pessoa, diferente do bot adivinhar setor por palavra-chave.
+  const comercial = await criarUsuario("com", "Comercial");
+  const tCom = await logar(comercial.email);
+
+  const paraComercial = await criarConversa(alice, "Técnico");
+  // Antes: o Comercial nao ve a conversa do Tecnico.
+  r = await pedir(`/api/conversas/${paraComercial.id}`, { token: tCom });
+  check(r.status === 403, `antes da transferencia, o Comercial NAO le a conversa -> ${r.status}`);
+
+  r = await pedir(`/api/conversas/${paraComercial.id}/atendente`, {
+    metodo: "PATCH", corpo: { atendenteId: comercial.id }, token: tAlice,
+  });
+  check(r.status === 200, `Alice (Tecnico) transfere para o Comercial -> ${r.status}`);
+
+  noBanco = await prisma.conversa.findUnique({ where: { id: paraComercial.id } });
+  check(noBanco.setor === "Comercial", `o setor da conversa virou Comercial (veio ${noBanco.setor})`);
+  check(noBanco.atendenteId === comercial.id, "e o responsavel e o Comercial");
+
+  // A OS acompanha: Conversa, OS e Feedback leem o mesmo campo.
+  const osDaConversa = await prisma.atendimento.findUnique({
+    where: { id: noBanco.atendimentoAtualId },
+  });
+  check(osDaConversa?.setor === "Comercial", `a OS tambem foi para Comercial (veio ${osDaConversa?.setor})`);
+
+  // Depois: o Comercial ve. E era este o pedido.
+  r = await pedir(`/api/conversas/${paraComercial.id}`, { token: tCom });
+  check(r.status === 200, `depois da transferencia, o Comercial LE a conversa -> ${r.status}`);
+
+  // O outro lado da moeda, para ficar dito: quem transferiu sai do setor e
+  // perde a conversa de vista. E o efeito pretendido, nao um bug.
+  r = await pedir(`/api/conversas/${paraComercial.id}`, { token: tAlice });
+  check(r.status === 403, `e a Alice (Tecnico) deixa de ver -> ${r.status} (efeito esperado)`);
+
+  const avisoSetor = await prisma.mensagem.findFirst({
+    where: { conversaId: paraComercial.id, origem: "sistema", texto: { contains: "onversa" } },
+    orderBy: { criadoEm: "desc" },
+  });
+  check(
+    /setor Técnico -> Comercial/.test(avisoSetor?.texto || ""),
+    `o historico registra a troca de setor: ${JSON.stringify(avisoSetor?.texto)}`
+  );
+
+  // ADMINISTRADOR NAO TEM SETOR: escalonar nao pode apagar a triagem.
+  const paraAdmin = await criarConversa(alice, "Técnico");
+  r = await pedir(`/api/conversas/${paraAdmin.id}/atendente`, {
+    metodo: "PATCH", corpo: { atendenteId: admin.id }, token: tAlice,
+  });
+  check(r.status === 200, `transferir para Administrador -> ${r.status}`);
+  noBanco = await prisma.conversa.findUnique({ where: { id: paraAdmin.id } });
+  check(noBanco.setor === "Técnico", `o setor NAO mudou (veio ${noBanco.setor})`);
+
+  // REMOVER A ATRIBUICAO tambem nao mexe no setor.
+  r = await pedir(`/api/conversas/${paraAdmin.id}/atendente`, {
+    metodo: "PATCH", corpo: { atendenteId: null }, token: tAlice,
+  });
+  check(r.status === 200, `remover a atribuicao -> ${r.status}`);
+  noBanco = await prisma.conversa.findUnique({ where: { id: paraAdmin.id } });
+  check(noBanco.setor === "Técnico", `o setor continua Técnico (veio ${noBanco.setor})`);
+
+  // MESMO SETOR: nada a mover, e nada de aviso de setor no historico.
+  const mesmoSetor = await criarConversa(alice, "Técnico");
+  r = await pedir(`/api/conversas/${mesmoSetor.id}/atendente`, {
+    metodo: "PATCH", corpo: { atendenteId: carla.id }, token: tAlice,
+  });
+  check(r.status === 200, `transferir dentro do mesmo setor -> ${r.status}`);
+  const avisoMesmo = await prisma.mensagem.findFirst({
+    where: { conversaId: mesmoSetor.id, origem: "sistema", texto: { contains: "onversa" } },
+    orderBy: { criadoEm: "desc" },
+  });
+  check(
+    !/setor/.test(avisoMesmo?.texto || ""),
+    `sem mencao a setor quando nada muda: ${JSON.stringify(avisoMesmo?.texto)}`
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────
+  titulo("10. Sem sessao nao passa");
 
   r = await pedir(`/api/conversas/${conversa.id}/atendente`, {
     metodo: "PATCH", corpo: { atendenteId: alice.id },

@@ -319,6 +319,23 @@ function setorDaConversa(c) {
   return SETORES.find(s => semAcento(s.setor) === semAcento(c?.setor)) || SEM_SETOR;
 }
 
+/**
+ * Setor de um MEMBRO da equipe, a partir do cargo dele.
+ *
+ * Cargo e setor usam as mesmas strings ("Técnico", "Comercial", "Financeiro") --
+ * e e exatamente por isso que `podeAcessarSetor`, no servidor, consegue decidir
+ * quem ve qual conversa comparando um com o outro.
+ *
+ * Devolve `null` para quem NAO tem setor (Administrador, que ve tudo). Null aqui
+ * significa "nao mostra badge de setor e nao move a conversa", e nao "Geral" --
+ * a diferenca importa: escalonar para um admin nao pode apagar a triagem que
+ * alguem ja fez.
+ */
+function setorDoCargo(cargo) {
+  if (!cargo) return null;
+  return SETORES.find(s => semAcento(s.setor) === semAcento(cargo)) || null;
+}
+
 // Metadados visuais dos 3 status (🟢 Aberta / 🟡 Pendente / 🔴 Fechada).
 const STATUS_META = {
   pendente: { label: 'Pendente', dot: 'bg-espera-400',   chip: 'bg-espera/20 text-espera-400 border-espera/30' },
@@ -3740,6 +3757,14 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                 // num segundo atendente é pedir duas trocas de dono para a
                 // mesma conversa.
                 const ocupado = transferindoId !== null;
+                const setorDoMembro = setorDoCargo(m.cargo);
+                // A transferência move a conversa quando o destino é de OUTRO
+                // setor. Mesma comparação que o servidor faz (por setor
+                // canônico, sem acento) -- se as duas discordarem, a tela promete
+                // uma coisa e o banco grava outra.
+                const vaiMudarSetor =
+                  !!setorDoMembro &&
+                  semAcento(setorDoMembro.setor) !== semAcento(setorDaConversa(transferindo).setor);
                 return (
                   <button
                     key={m.id}
@@ -3758,14 +3783,38 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="text-xs font-bold text-white truncate">{m.nome}</div>
-                      <div className="text-[11px] text-slate-400 truncate">{m.cargo || 'Atendimento'}</div>
-                      {/* Aviso, e não bloqueio. O servidor decide quem LÊ cada
-                          setor; transferir para fora dele entrega a conversa a
-                          alguém que não consegue abri-la. Quem atende continua
-                          podendo fazer isso (às vezes é o certo, e um admin
-                          resolve depois) -- só não mais sem saber. */}
-                      {m.podeVerConversa === false && (
-                        <div className="text-[10px] text-espera-400 truncate flex items-center gap-1 mt-0.5">
+                      {/* BADGE DE SETOR, e não o cargo em texto cinza.
+                          A mesma badge (mesmas cores) que o cabeçalho da
+                          conversa usa, para "SETOR TÉCNICO" significar a mesma
+                          coisa nos dois lugares. Quem não tem setor
+                          (Administrador) mostra o cargo, porque não há setor
+                          para mostrar. */}
+                      <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+                        {setorDoMembro ? (
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border shrink-0 ${setorDoMembro.classe}`}>
+                            {setorDoMembro.label}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-slate-400 truncate">{m.cargo || 'Atendimento'}</span>
+                        )}
+                      </div>
+                      {/* O QUE VAI ACONTECER, e não um aviso de problema.
+                          Aqui dizia "não enxerga o setor desta conversa": era
+                          verdade quando a conversa ficava no setor antigo e o
+                          destinatário não conseguia abri-la. Agora a conversa
+                          MUDA de setor junto com a transferência, então o que o
+                          operador precisa saber é o destino dela. */}
+                      {vaiMudarSetor && (
+                        <div className="text-[10px] text-slate-400 truncate flex items-center gap-1 mt-1">
+                          <ArrowRightLeft size={9} className="shrink-0" />
+                          A conversa passa para o setor <strong className="text-slate-300">{setorDoMembro.setor}</strong>
+                        </div>
+                      )}
+                      {/* Só sobra para quem não tem setor: escalonar para um
+                          admin não move a conversa, então ela continua onde
+                          está -- e isso é justamente o que precisa ficar dito. */}
+                      {!setorDoMembro && m.podeVerConversa === false && (
+                        <div className="text-[10px] text-espera-400 truncate flex items-center gap-1 mt-1">
                           <AlertCircle size={9} className="shrink-0" />
                           Não enxerga o setor desta conversa
                         </div>
