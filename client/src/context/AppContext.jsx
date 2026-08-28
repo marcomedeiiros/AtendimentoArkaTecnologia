@@ -165,6 +165,21 @@ export function AppProvider({ children }) {
       setSinalConversas(n => n + 1);
       return;
     }
+    // A conversa foi TRANSFERIDA PARA OUTRO SETOR e este operador não a vê mais.
+    //
+    // Chega do stream no lugar do `conversa:update` que o filtro de setor
+    // descartou. Sem isto, a conversa ficava na lista congelada no estado antigo
+    // até um F5 -- transferir do Comercial para o Técnico não tirava nada da tela
+    // de ninguém.
+    //
+    // NÃO mexe em `sinalConversas` de propósito: aquilo é sinal de atividade
+    // NOVA, e usá-lo aqui tocaria o som de notificação para uma conversa que
+    // está justamente saindo. Também não é `conversa:delete`: a conversa
+    // continua existindo, só não é mais deste setor.
+    if (evt.type === 'conversa:saiu-do-setor' && evt.id) {
+      setConversas(prev => (prev.some(c => c.id === evt.id) ? prev.filter(c => c.id !== evt.id) : prev));
+      return;
+    }
     if (evt.type === 'conversa:update' && evt.conversa?.id) {
       setSinalConversas(n => n + 1);
       setConversas(prev => {

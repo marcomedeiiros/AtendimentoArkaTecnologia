@@ -1179,7 +1179,12 @@ class ConversaService {
     }
 
     // Recarrega para o DTO/stream ja saírem com o aviso incluido.
-    return this._emitir(await conversaRepository.findById(id));
+    //
+    // `setorAnterior` viaja QUANDO o setor mudou: e o que faz a conversa SAIR da
+    // tela de quem ficou no setor de origem, em vez de congelar la (ver
+    // conversa.stream). Sem isto, transferir do Comercial para o Tecnico deixava
+    // a conversa parada na lista do Comercial ate alguem apertar F5.
+    return this._emitir(await conversaRepository.findById(id), { setorAnterior: setorNovo ? setorAtual : null });
   }
 
   // Favoritar / fixar / arquivar / ocultar. Nenhuma delas apaga a conversa:
@@ -1336,14 +1341,16 @@ class ConversaService {
    * Quem serve o historico e a LEITURA (`obter`/`listar`), que segue completa:
    * e de la que a Central carrega a conversa e a busca varre as mensagens.
    */
-  _emitir(conversa, { completo = false } = {}) {
+  _emitir(conversa, { completo = false, setorAnterior = null } = {}) {
     if (!conversa) return null;
     const dto = mapConversa(
       completo
         ? conversa
         : { ...conversa, mensagens: (conversa.mensagens || []).slice(-CAUDA_EVENTO), __parcial: true }
     );
-    bus.emitConversa(dto);
+    // `setorAnterior` so viaja quando ESTA emissao mudou o setor: e por ele que o
+    // stream avisa quem perdeu o acesso a tirar a conversa da tela.
+    bus.emitConversa(dto, { setorAnterior });
     return dto;
   }
 

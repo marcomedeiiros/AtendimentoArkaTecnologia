@@ -77,6 +77,66 @@ async function pedir(caminho, { metodo = "GET", corpo, token } = {}) {
   return { status: r.status, json };
 }
 
+/**
+ * ABRE O STREAM SSE COMO UM OPERADOR e acumula os eventos recebidos.
+ *
+ * O EventSource do navegador nao manda header Authorization, entao o stream
+ * autentica por um ticket de uso unico -- e o ticket guarda o CARGO de quem
+ * pediu, que e o que o filtro de setor usa. Aqui reproduzimos os dois passos.
+ *
+ * `esperar(predicado)` resolve com o primeiro evento que casar, ou `null` no
+ * timeout: um teste que trava esperando um evento que nunca vem e pior que um
+ * teste que falha. `fechar()` aborta a conexao -- sem isso o SSE (que por
+ * natureza nao termina) seguraria o processo no fim da suite.
+ */
+async function abrirStream(token) {
+  const t = await pedir("/api/conversas/stream-ticket", { metodo: "POST", token });
+  const ticket = t.json?.data?.ticket;
+  if (!ticket) throw new Error(`nao consegui ticket de stream (status ${t.status})`);
+
+  const ctrl = new AbortController();
+  const resp = await fetch(`${base}/api/conversas/stream?ticket=${encodeURIComponent(ticket)}`, {
+    headers: { Accept: "text/event-stream" },
+    signal: ctrl.signal,
+  });
+  if (!resp.ok) throw new Error(`stream respondeu ${resp.status}`);
+
+  const eventos = [];
+  const dec = new TextDecoder();
+  let buffer = "";
+  (async () => {
+    try {
+      for await (const pedaco of resp.body) {
+        buffer += dec.decode(pedaco, { stream: true });
+        // Frame SSE termina em linha vazia; o resto fica no buffer para o
+        // proximo pedaco (um JSON pode chegar partido em dois chunks).
+        const frames = buffer.split("\n\n");
+        buffer = frames.pop() ?? "";
+        for (const frame of frames) {
+          for (const linha of frame.split("\n")) {
+            if (!linha.startsWith("data: ")) continue;
+            try { eventos.push(JSON.parse(linha.slice(6))); } catch { /* ready/ping */ }
+          }
+        }
+      }
+    } catch { /* abort no fim do teste */ }
+  })();
+
+  return {
+    eventos,
+    async esperar(predicado, timeoutMs = 2500) {
+      const limite = Date.now() + timeoutMs;
+      while (Date.now() < limite) {
+        const achado = eventos.find(predicado);
+        if (achado) return achado;
+        await new Promise((r) => setTimeout(r, 25));
+      }
+      return null;
+    },
+    fechar: () => ctrl.abort(),
+  };
+}
+
 async function criarUsuario(sufixo, cargo) {
   return prisma.usuario.create({
     data: {
@@ -390,7 +450,64 @@ async function main() {
   );
 
   // ─────────────────────────────────────────────────────────────────────────
-  titulo("10. Sem sessao nao passa");
+  titulo("10. AO VIVO: a conversa SAI da tela de quem perdeu o setor");
+
+  // O buraco que faltava. O filtro de setor do SSE descartava o
+  // `conversa:update` de quem nao pode ver o setor novo -- correto para nao
+  // vazar, e insuficiente: quem JA tinha a conversa na lista continuava com ela
+  // ali, congelada no estado antigo, ate um F5. No banco a transferencia
+  // funcionava; na tela do Comercial nada saia.
+  //
+  // Este e o primeiro teste de SSE do projeto (verificar-escopo-dados pula as
+  // rotas de stream, por serem "conexao que nao termina"). Le o stream com
+  // AbortController para a conexao nao segurar o processo no fim.
+  const streamCom = await abrirStream(tCom);
+  const conversaViva = await criarConversa(comercial, "Comercial");
+
+  // Alice e Tecnico: a conversa esta em Comercial, entao ela nao a ve. O admin
+  // faz a transferencia (ele ve tudo) para Comercial -> Tecnico.
+  r = await pedir(`/api/conversas/${conversaViva.id}/atendente`, {
+    metodo: "PATCH", corpo: { atendenteId: alice.id }, token: tAdmin,
+  });
+  check(r.status === 200, `admin transfere Comercial -> Tecnico -> ${r.status}`);
+
+  const saida = await streamCom.esperar(
+    (e) => e.type === "conversa:saiu-do-setor" && e.id === conversaViva.id
+  );
+  check(!!saida, "o Comercial recebeu 'conversa:saiu-do-setor' ao vivo");
+  check(saida?.setor === "Técnico", `o evento diz para onde ela foi (veio ${saida?.setor})`);
+
+  // E o evento NAO carrega a conversa: quem perdeu o acesso nao recebe conteudo.
+  check(
+    saida && !("conversa" in saida) && !("mensagens" in saida),
+    "o evento leva so o id e o setor -- nenhum conteudo da conversa"
+  );
+
+  // O outro lado: o Tecnico recebe a conversa ao vivo, com conteudo.
+  const streamTec = await abrirStream(tAlice);
+  r = await pedir(`/api/conversas/${conversaViva.id}/atendente`, {
+    metodo: "PATCH", corpo: { atendenteId: carla.id }, token: tAlice,
+  });
+  check(r.status === 200, `Alice transfere dentro do Tecnico -> ${r.status}`);
+  const chegada = await streamTec.esperar(
+    (e) => e.type === "conversa:update" && e.conversa?.id === conversaViva.id
+  );
+  check(!!chegada, "o Tecnico recebe a conversa ao vivo (update normal)");
+
+  // Update de outro setor NAO gera remocao para quem nunca teve a conversa:
+  // senao todo evento do Comercial viraria trafego na tela do Tecnico.
+  const soDoComercial = await criarConversa(comercial, "Comercial");
+  await pedir(`/api/conversas/${soDoComercial.id}/atendente`, {
+    metodo: "PATCH", corpo: { atendenteId: comercial.id }, token: tAdmin,
+  });
+  const ruido = await streamTec.esperar((e) => e.id === soDoComercial.id, 700);
+  check(!ruido, "conversa de outro setor nao gera evento nenhum para o Tecnico");
+
+  streamCom.fechar();
+  streamTec.fechar();
+
+  // ─────────────────────────────────────────────────────────────────────────
+  titulo("11. Sem sessao nao passa");
 
   r = await pedir(`/api/conversas/${conversa.id}/atendente`, {
     metodo: "PATCH", corpo: { atendenteId: alice.id },

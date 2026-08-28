@@ -32,9 +32,26 @@ class EventBus extends EventEmitter {
     this.emit("conversa", evento, json);
   }
 
-  emitConversa(conversa) {
+  /**
+   * @param {object} conversa DTO da conversa
+   * @param {object} [opcoes]
+   * @param {string|null} [opcoes.setorAnterior] setor de ONDE a conversa saiu,
+   *   quando esta emissao muda o setor dela.
+   *
+   * `setorAnterior` existe para o stream conseguir avisar quem PERDEU o acesso.
+   * O filtro de setor do SSE descarta o evento de quem nao pode ver o setor
+   * novo -- correto para nao vazar, mas insuficiente: a conversa ficava
+   * congelada na tela de quem ja a tinha, em vez de sair dela. Com o setor de
+   * origem, o stream sabe distinguir "nunca pode ver isso" de "podia ver e
+   * acabou de perder", e no segundo caso manda remover. Ver conversa.stream.
+   */
+  emitConversa(conversa, { setorAnterior = null } = {}) {
     if (!conversa?.id) return;
-    this._publicar({ type: "conversa:update", conversa });
+    this._publicar({
+      type: "conversa:update",
+      conversa,
+      ...(setorAnterior ? { setorAnterior } : {}),
+    });
   }
 
   /**

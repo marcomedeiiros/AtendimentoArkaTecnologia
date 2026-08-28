@@ -64,6 +64,32 @@ class ConversaStreamController {
       // "Geral" -- que todo mundo ve -- e o stream entregava AO VIVO conversas
       // de setores que a listagem esconde daquele cargo.
       if (evento?.type === "conversa:update" && !podeAcessarSetor(cargo, evento.conversa?.setor)) {
+        // ── PERDEU O ACESSO AGORA? ENTAO A CONVERSA TEM DE SAIR DA TELA ──────
+        //
+        // Descartar o evento em silencio protege o sigilo, mas nao termina o
+        // trabalho: quem JA tinha a conversa na lista continuava com ela ali,
+        // congelada no estado antigo, ate um F5. Transferir do Comercial para o
+        // Tecnico "funcionava" no banco e nao aparecia na tela de ninguem.
+        //
+        // `setorAnterior` so vem quando a emissao MUDOU o setor. Se este cargo
+        // via o setor de origem e nao ve o de destino, ele acabou de perder a
+        // conversa -- e recebe uma remocao, com o id e nada mais. Sem
+        // `setorAnterior` (a esmagadora maioria dos eventos), segue o descarte
+        // silencioso de antes: nao da para mandar remocao de conversa que a
+        // pessoa nunca teve, senao todo update de outro setor viraria trafego.
+        if (evento.setorAnterior && podeAcessarSetor(cargo, evento.setorAnterior)) {
+          try {
+            res.write(
+              `data: ${JSON.stringify({
+                type: "conversa:saiu-do-setor",
+                id: evento.conversa?.id,
+                setor: evento.conversa?.setor || null,
+              })}\n\n`
+            );
+          } catch (err) {
+            logger.warn("Falha ao avisar saida de setor no stream SSE", { message: err.message });
+          }
+        }
         return;
       }
       // O patch de status carrega o setor no proprio evento (nao ha conversa
