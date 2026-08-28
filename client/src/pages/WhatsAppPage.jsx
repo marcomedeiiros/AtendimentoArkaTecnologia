@@ -233,7 +233,7 @@ export default function WhatsAppPage() {
 
           {/* `qr-cartao` (index.css) fixa branco/preto literais nos dois temas.
               Não trocar por `bg-white`/`text-slate-*`: aqui esses nomes são
-              tokens de tema — no claro viram quase-preto e quase-branco, e o QR
+              tokens de tema no claro viram quase-preto e quase-branco, e o QR
               deixa de ser legível por câmera. */}
           <div className="qr-cartao p-4 rounded-2xl shadow-lg mb-4 inline-block">
             {carregandoQr ? (

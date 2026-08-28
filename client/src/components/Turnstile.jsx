@@ -7,7 +7,7 @@ import { AuthAPI } from '../services/api';
  * O QUE ESTE COMPONENTE **NÃO** É: uma proteção. Ele só produz um token. Quem
  * decide se a operação passa é o servidor, que pergunta à Cloudflare se aquele
  * token é autêntico (ver turnstile.client.js). Um atacante pode não renderizar
- * este widget, apagá-lo do DOM ou mandar `turnstileToken: "sim"` no curl — e
+ * este widget, apagá-lo do DOM ou mandar `turnstileToken: "sim"` no curl e
  * nada disso o aproxima de entrar, porque a verificação não acontece aqui.
  *
  * A SITE KEY vem da API, não do bundle. Isso é deliberado: assim não existe
@@ -16,7 +16,7 @@ import { AuthAPI } from '../services/api';
  * secret, evidentemente, nunca chega até aqui.
  *
  * Sem chaves configuradas, `ativo` volta false, o componente não renderiza nada
- * e o formulário segue funcionando — o servidor também estará com o desafio
+ * e o formulário segue funcionando o servidor também estará com o desafio
  * desligado, então as duas pontas concordam.
  */
 const URL_SCRIPT = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
@@ -39,7 +39,7 @@ function carregarScript() {
 
 /**
  * @param {(token: string|null) => void} onToken recebe o token, ou null quando
- *   o desafio expira/falha — o formulário deve limpar o que tinha guardado.
+ *   o desafio expira/falha o formulário deve limpar o que tinha guardado.
  * @param {string} [tema] 'auto' | 'light' | 'dark'
  */
 export default function Turnstile({ onToken, tema = 'auto' }) {
@@ -48,7 +48,7 @@ export default function Turnstile({ onToken, tema = 'auto' }) {
   const [config, setConfig] = useState(null);
   const [falhou, setFalhou] = useState(false);
   // `onToken` numa ref para o efeito não re-renderizar o widget a cada render
-  // do formulário — remontar o desafio invalidaria o token recém-obtido.
+  // do formulário remontar o desafio invalidaria o token recém-obtido.
   const cb = useRef(onToken);
   cb.current = onToken;
 

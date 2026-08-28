@@ -49,7 +49,7 @@ export default function LoginPage() {
       // O token do Turnstile vale UMA vez. Depois de uma tentativa (mesmo
       // recusada por senha errada) ele já foi gasto: reapresentá-lo faria a
       // Cloudflare responder `timeout-or-duplicate` e o servidor recusaria por
-      // replay — a pessoa veria "não foi possível confirmar" em vez do erro
+      // replay a pessoa veria "não foi possível confirmar" em vez do erro
       // real. Zerar aqui faz o widget emitir um token novo para a próxima.
       setTurnstileToken(null);
       if (window.turnstile) { try { window.turnstile.reset(); } catch { /* sem widget */ } }
@@ -115,7 +115,7 @@ export default function LoginPage() {
         )}
 
         {/* Não renderiza nada enquanto o Turnstile não estiver configurado no
-            servidor — as duas pontas ficam desligadas juntas. */}
+            servidor as duas pontas ficam desligadas juntas. */}
         <Turnstile onToken={setTurnstileToken} />
 
         <button

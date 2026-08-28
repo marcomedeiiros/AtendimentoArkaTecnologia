@@ -23,3 +23,5 @@ backups/
 # Logs
 *.log
 npm-debug.log*
+server/prisma/dev.db-shm
+server/prisma/dev.db-wal
