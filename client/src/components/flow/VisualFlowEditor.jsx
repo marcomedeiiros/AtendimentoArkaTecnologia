@@ -211,15 +211,143 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
     });
   };
 
-  const syncFlowToParent = useCallback(async (updatedNodes) => {
+  // ── GRAVAÇÃO DO DESENHO INTEIRO ──────────────────────────────────────────
+  //
+  // Todo caminho que muda o canvas (arrastar, adicionar, apagar, reordenar,
+  // desfazer, organizar, importar) passa por aqui. Três coisas precisavam
+  // mudar, e a primeira é a que fazia o editor MENTIR:
+  //
+  //  1. ERRO VISÍVEL. Isto terminava em `catch {}`. Como o estado local já
+  //     tinha sido atualizado de forma otimista, uma gravação recusada ficava
+  //     idêntica a uma gravação bem-sucedida — a alteração aparecia na tela e
+  //     só o F5 contava que ela nunca existiu. Engolir o erro não era um
+  //     detalhe: era o que transformava um 400 num "some tudo amanhã".
+  //
+  //  2. UMA GRAVAÇÃO POR VEZ. Cada `onChange` disparava um PUT próprio, sem
+  //     ordem garantida de chegada. Como cada PUT reescreve TODOS os passos, a
+  //     resposta que chegasse por último vencia — e podia ser a mais velha.
+  //     Aqui vira fila de um: enquanto uma está no ar, as que chegam colapsam
+  //     na ÚLTIMA. Gravar o estado mais novo uma vez vale por gravar cinco
+  //     estados intermediários em ordem incerta.
+  //
+  //  3. ADOTAR OS IDs DO SERVIDOR. Bloco recém-criado nasce com um id local
+  //     (`p_<timestamp>`) que o banco não conhece — quem dá id é o banco. Sem
+  //     adotar o id real, o botão Salvar do painel bateria numa linha que não
+  //     existe, e a gravação seguinte recriaria o bloco de novo.
+  const filaSalvamento = useRef({ emCurso: null, pendente: null });
+  // 'ocioso' | 'salvando' | 'salvo' | 'erro' — o chip da barra lê isto.
+  const [estadoSalvamento, setEstadoSalvamento] = useState('ocioso');
+
+  const syncFlowToParent = useCallback((updatedNodes) => {
     setNodes(updatedNodes);
     setFluxos(fluxos.map(f => f.id === selectedFlowId ? { ...f, passos: updatedNodes } : f));
-    try {
-      if (selectedFlowId) {
-        await FluxosAPI.atualizar(selectedFlowId, { passos: updatedNodes });
+    if (!selectedFlowId) return Promise.resolve();
+
+    const fila = filaSalvamento.current;
+    fila.pendente = updatedNodes;
+    if (fila.emCurso) return fila.emCurso;
+
+    fila.emCurso = (async () => {
+      try {
+        while (fila.pendente) {
+          const alvo = fila.pendente;
+          fila.pendente = null;
+          setEstadoSalvamento('salvando');
+          // `ordem: index` carimbado na saída: é o que garante que a lista que
+          // volta (o servidor ordena por `ordem`) esteja na MESMA ordem que a
+          // que foi enviada — sem isso não dá para casar bloco enviado com
+          // bloco gravado, e a adoção de id abaixo seria um chute.
+          const enviados = alvo.map((n, i) => ({ ...n, ordem: i }));
+          const salvo = await FluxosAPI.atualizar(selectedFlowId, { passos: enviados });
+
+          // Só adota quando os ids REALMENTE mudaram (bloco novo, import). No
+          // caso comum nada é adotado, e uma resposta que chegue no meio de um
+          // arraste não tem como puxar os blocos de volta.
+          const voltaram = salvo?.passos || [];
+          const idsIguais = voltaram.length === enviados.length
+            && enviados.every((n, i) => n.id === voltaram[i].id);
+          if (!fila.pendente && !idsIguais && voltaram.length) {
+            const adotados = formatNodesPositions(voltaram);
+            setNodes(adotados);
+            setFluxos(prev => prev.map(f => f.id === selectedFlowId ? { ...f, passos: adotados } : f));
+          }
+        }
+        setEstadoSalvamento('salvo');
+        return { ok: true };
+      } catch (e) {
+        setEstadoSalvamento('erro');
+        mostrarAvisoJson('erro', `Não foi possível salvar: ${e.message}`);
+        // Resolve com o resultado em vez de rejeitar: a maioria dos chamadores
+        // (arrastar, apagar, desfazer) não espera a promessa, e uma rejeição
+        // sem dono vira "unhandled rejection" no console. Quem PRECISA saber
+        // — o botão Salvar do painel — lê o `ok`.
+        return { ok: false, erro: e };
+      } finally {
+        fila.emCurso = null;
       }
-    } catch {}
+    })();
+    return fila.emCurso;
   }, [fluxos, selectedFlowId, setFluxos]);
+
+  // O chip "Salvo" não fica na tela para sempre — só o tempo de a pessoa ver
+  // que a gravação terminou. O de erro FICA, porque erro que some sozinho é
+  // erro que ninguém leu.
+  useEffect(() => {
+    if (estadoSalvamento !== 'salvo') return undefined;
+    const t = setTimeout(() => setEstadoSalvamento('ocioso'), 2000);
+    return () => clearTimeout(t);
+  }, [estadoSalvamento]);
+
+  /**
+   * GRAVA UM BLOCO SÓ — o que o botão Salvar do painel de propriedades chama.
+   *
+   * Usa `PATCH /fluxos/:id/passos/:passoId`, e não o PUT do fluxo inteiro. A
+   * diferença não é o tamanho do corpo: mandando o fluxo inteiro, duas abas
+   * editando blocos DIFERENTES se sobrescreviam, porque cada uma carregava
+   * junto a versão antiga do bloco da outra.
+   *
+   * Deixa o erro SUBIR de propósito — quem o mostra é o painel, colado no
+   * botão que a pessoa acabou de apertar.
+   */
+  const salvarBloco = useCallback(async (bloco) => {
+    if (!selectedFlowId) throw new Error('Nenhum fluxo selecionado.');
+
+    // Bloco que ainda não existe no banco (acabou de ser criado no canvas e a
+    // gravação do desenho ainda não voltou com o id real) não tem linha para o
+    // PATCH acertar. Nesse caso o caminho certo é o desenho inteiro, que cria a
+    // linha e devolve o id de verdade.
+    const noServidor = (flow?.passos || []).some(p => p.id === bloco.id);
+    if (!noServidor) {
+      const nn = latestNodesRef.current.map(n => (n.id === bloco.id ? bloco : n));
+      setNodes(nn);
+      const r = await syncFlowToParent(nn);
+      if (r && r.ok === false) throw r.erro;
+      return;
+    }
+
+    const salvo = await FluxosAPI.atualizarPasso(selectedFlowId, bloco.id, {
+      titulo: bloco.titulo,
+      desc: bloco.desc ?? null,
+      texto: bloco.texto ?? null,
+      config: bloco.config ?? null,
+      x: bloco.x ?? null,
+      y: bloco.y ?? null,
+      w: bloco.w ?? null,
+      h: bloco.h ?? null,
+      targetId: bloco.targetId ?? null,
+    });
+
+    // Adota o que o servidor confirmou, e não o que foi enviado: se ele
+    // normalizou alguma coisa, é a versão dele que está gravada — e é ela que
+    // a tela precisa mostrar para o F5 não trazer surpresa.
+    const passos = salvo?.passos || [];
+    if (passos.length) {
+      const atualizados = formatNodesPositions(passos);
+      setNodes(atualizados);
+      setFluxos(prev => prev.map(f => (f.id === selectedFlowId ? { ...f, passos: atualizados } : f)));
+      pushHistory(atualizados);
+    }
+  }, [selectedFlowId, flow, setFluxos, syncFlowToParent]);
 
   const handleUndo = () => {
     if (historyIndex > 0) {
@@ -268,14 +396,22 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
   const salvarGatilhoFluxo = async (novoGatilho) => {
     const gatilho = String(novoGatilho || '').trim();
     if (!selectedFlowId || !gatilhoValido(gatilho) || gatilho === flow?.gatilho) return;
+    const anterior = flow?.gatilho;
     setFluxos(fluxos.map(f => f.id === selectedFlowId ? { ...f, gatilho } : f));
     try {
       await FluxosAPI.atualizar(selectedFlowId, { gatilho });
-    } catch {}
+    } catch (e) {
+      // Desfaz o otimismo: o gatilho é o que faz o motor escolher este fluxo
+      // quando a mensagem do cliente chega. Deixar na tela um gatilho que o
+      // banco não tem é dizer que o bot responde a uma palavra que ele ignora.
+      setFluxos(prev => prev.map(f => f.id === selectedFlowId ? { ...f, gatilho: anterior } : f));
+      mostrarAvisoJson('erro', `Não foi possível salvar o gatilho: ${e.message}`);
+    }
   };
 
   const handleDeleteFlow = async () => {
     const targetId = selectedFlowId;
+    const anteriores = fluxos;
     const remaining = fluxos.filter(f => f.id !== targetId);
     setFluxos(remaining);
     if (remaining.length > 0) setSelectedFlowId(remaining[0].id);
@@ -283,18 +419,28 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
     setShowDeleteConfirm(false);
     try {
       if (targetId) await FluxosAPI.remover(targetId);
-    } catch {}
+    } catch (e) {
+      // O fluxo continua vivo no servidor: devolvê-lo à lista é o único jeito
+      // de a tela parar de afirmar uma exclusão que não aconteceu.
+      setFluxos(anteriores);
+      setSelectedFlowId(targetId);
+      mostrarAvisoJson('erro', `Não foi possível apagar o fluxo: ${e.message}`);
+    }
   };
 
   // ── Import / Export JSON ──────────────────────────────────────────────────
-  // O editor engole erros de API com `catch {}` em todo lugar, mas aqui o
-  // usuario precisa saber o que aconteceu: um arquivo invalido nao pode falhar
-  // em silencio. Dai o chip de aviso na propria barra (mesmo padrao visual dos
-  // confirmadores de exclusao), que se apaga sozinho.
+  // Este chip começou aqui, no import, porque um arquivo inválido não podia
+  // falhar em silêncio. Hoje ele é o canal de erro de TODO o editor: as outras
+  // chamadas de API terminavam em `catch {}`, e uma gravação recusada ficava
+  // idêntica a uma bem-sucedida até o próximo F5.
+  // O aviso de SUCESSO se apaga sozinho; o de ERRO fica até alguém fechar.
+  // Erro que some sozinho é erro que ninguém leu — e aqui ele costuma dizer
+  // que a alteração na tela não está no banco, que é exatamente o que a pessoa
+  // precisa saber antes de fechar a aba.
   const mostrarAvisoJson = (tipo, msg) => {
     setAvisoJson({ tipo, msg });
     clearTimeout(avisoTimerRef.current);
-    avisoTimerRef.current = setTimeout(() => setAvisoJson(null), 5000);
+    if (tipo === 'ok') avisoTimerRef.current = setTimeout(() => setAvisoJson(null), 5000);
   };
 
   useEffect(() => () => clearTimeout(avisoTimerRef.current), []);
@@ -933,7 +1079,15 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                 const criado = await FluxosAPI.criar({ nome, gatilho, ativo: true, passos: [] });
                 setFluxos(prev => prev.map(f => (f.id === tempId ? criado : f)));
                 setSelectedFlowId(criado.id);
-              } catch {}
+              } catch (e) {
+                // Falhou: o fluxo local com `tempId` NÃO pode ficar. Ele parece
+                // um fluxo de verdade, aceita blocos, e todo save subsequente
+                // bate num id que o servidor nunca viu — a pessoa desenharia um
+                // fluxo inteiro dentro de algo que não existe.
+                setFluxos(prev => prev.filter(f => f.id !== tempId));
+                setSelectedFlowId(prev => (prev === tempId ? (fluxos[0]?.id ?? null) : prev));
+                mostrarAvisoJson('erro', `Não foi possível criar o fluxo: ${e.message}`);
+              }
             }}
             title="Criar um novo fluxo"
             className="px-2 py-1 rounded-lg bg-acao/15 hover:bg-acao/25 text-acao-200 text-xs font-semibold border border-acao/30 flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap"
@@ -1114,6 +1268,31 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
             {avisoJson.tipo === 'ok' ? <CheckCircle2 size={13} className="shrink-0" /> : <AlertCircle size={13} className="shrink-0" />}
             <span className="font-semibold truncate">{avisoJson.msg}</span>
             <button onClick={() => setAvisoJson(null)} className="opacity-60 hover:opacity-100 shrink-0" aria-label="Fechar aviso"><X size={12} /></button>
+          </div>
+        )}
+
+        {/* Estado da gravação do desenho. Antes não havia nada: o editor
+            gravava (ou não) em silêncio, e uma gravação recusada era
+            indistinguível de uma bem-sucedida. Fica no canto para não competir
+            com o aviso acima, e só aparece quando há o que dizer. */}
+        {estadoSalvamento !== 'ocioso' && (
+          <div
+            role="status"
+            aria-live="polite"
+            className={`absolute bottom-3 right-3 z-40 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] border shadow-xl backdrop-blur-md fade-in ${
+              estadoSalvamento === 'erro'
+                ? 'bg-grafite-800/95 border-falha/40 text-falha-400'
+                : estadoSalvamento === 'salvo'
+                  ? 'bg-grafite-800/95 border-ativo/40 text-ativo-400'
+                  : 'bg-grafite-800/95 border-linha text-slate-300'
+            }`}
+          >
+            {estadoSalvamento === 'salvando' && <RefreshCw size={11} className="animate-spin shrink-0" />}
+            {estadoSalvamento === 'salvo' && <CheckCircle2 size={11} className="shrink-0" />}
+            {estadoSalvamento === 'erro' && <AlertCircle size={11} className="shrink-0" />}
+            <span className="font-semibold">
+              {estadoSalvamento === 'salvando' ? 'Salvando…' : estadoSalvamento === 'salvo' ? 'Salvo' : 'Não salvo'}
+            </span>
           </div>
         )}
 
@@ -1461,11 +1640,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
             gatilhoFluxo={flow?.gatilho || ''}
             onChangeGatilhoFluxo={salvarGatilhoFluxo}
             onClose={() => setActivePropertyNodeId(null)}
-            onChangeNode={(updated) => {
-              const nn = nodes.map(n => n.id === updated.id ? updated : n);
-              setNodes(nn);
-              syncFlowToParent(nn);
-            }}
+            onSalvarNode={salvarBloco}
             onDeleteNode={(id) => {
               setSelectedNodeIds([id]);
               deleteSelectedNodes();

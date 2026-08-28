@@ -1,5 +1,5 @@
-import { useRef, useState, useEffect } from 'react';
-import { X, Play, HelpCircle, Trash2, Variable, GitBranch } from 'lucide-react';
+import { useRef, useState, useEffect, useCallback } from 'react';
+import { X, Play, HelpCircle, Trash2, Variable, GitBranch, Save, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 const BLOCK_META = {
   gatilho:    { emoji: '⚡', label: 'Gatilho'     },
@@ -86,13 +86,34 @@ function RichTextEditor({ value, onChange, rows = 4, placeholder }) {
 }
 
 
+/**
+ * ── O PAINEL AGORA EDITA UM RASCUNHO, E SALVAR É UM ATO ────────────────────
+ *
+ * Antes, cada `onChange` deste painel subia direto: digitar "Bom dia" mandava
+ * sete gravações do FLUXO INTEIRO ao servidor, uma por tecla, sem ordem
+ * garantida de chegada. E como cada gravação reescrevia todos os passos, a
+ * resposta que chegasse por último vencia — podendo ser a mais velha.
+ *
+ * O que muda aqui é só ONDE a digitação mora. O corpo do painel continua
+ * chamando `onChangeNode({ ...node, campo: valor })` exatamente como antes; o
+ * que ele altera passa a ser o RASCUNHO local (`node`, o estado abaixo), e não
+ * mais o servidor. Foi de propósito: manter a assinatura interna evita mexer
+ * nas dezenas de campos do painel só para trocar o destino do dado.
+ *
+ * Quem sobe é o botão Salvar, uma vez, com o bloco inteiro — e ele diz o que
+ * aconteceu. Se falhar, o rascunho FICA: perder o texto que a pessoa acabou de
+ * escrever porque a rede piscou seria trocar um problema por outro pior.
+ *
+ * `onChangeGatilhoFluxo` continua fora disso: o gatilho é do FLUXO, não deste
+ * bloco, e já tinha o próprio rascunho.
+ */
 export function FlowPropertyPanel({
-  node,
+  node: nodeSalvo,
   nodes = [],
   gatilhoFluxo = '',
   onChangeGatilhoFluxo,
   onClose,
-  onChangeNode,
+  onSalvarNode,
   onDeleteNode,
   onTestSingleNode,
 }) {
@@ -101,7 +122,70 @@ export function FlowPropertyPanel({
   const [gatilhoDraft, setGatilhoDraft] = useState(gatilhoFluxo);
   useEffect(() => { setGatilhoDraft(gatilhoFluxo); }, [gatilhoFluxo]);
 
-  if (!node) return null;
+  // O rascunho do BLOCO. Todos os hooks ficam antes do early return.
+  const [rascunho, setRascunho] = useState(nodeSalvo);
+  const [sujo, setSujo] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [resultado, setResultado] = useState(null); // { tipo: 'ok'|'erro', msg }
+
+  // Troca de bloco (outro id) recomeça o rascunho. Depende do ID e não do
+  // objeto: o pai recria os nós a cada render, e observar o objeto apagaria o
+  // que a pessoa está digitando a cada atualização da tela.
+  useEffect(() => {
+    setRascunho(nodeSalvo);
+    setSujo(false);
+    setResultado(null);
+  }, [nodeSalvo?.id]);
+
+  // O corpo do painel inteiro segue escrevendo em `node` via `onChangeNode`.
+  // A diferença é o destino: rascunho, não servidor.
+  const onChangeNode = useCallback((atualizado) => {
+    setRascunho(atualizado);
+    setSujo(true);
+    setResultado(null);
+  }, []);
+
+  const salvarBloco = useCallback(async () => {
+    // A trava é esta linha, e não o `disabled` do botão: `disabled` some com um
+    // duplo-clique rápido (o segundo clique chega antes do re-render) e não
+    // existe para quem dispara pelo teclado. Duas gravações do mesmo bloco não
+    // corrompem nada, mas a segunda pode chegar antes da primeira e regravar a
+    // versão anterior por cima.
+    if (salvando) return;
+    const titulo = String(rascunho?.titulo || '').trim();
+    if (!titulo) {
+      setResultado({ tipo: 'erro', msg: 'O bloco precisa de um título.' });
+      return;
+    }
+    setSalvando(true);
+    setResultado(null);
+    try {
+      await onSalvarNode({ ...rascunho, titulo });
+      setSujo(false);
+      setResultado({ tipo: 'ok', msg: 'Bloco salvo.' });
+    } catch (e) {
+      // O rascunho NÃO é descartado: a pessoa tenta de novo sem redigitar.
+      setResultado({ tipo: 'erro', msg: e.message || 'Não foi possível salvar o bloco.' });
+    } finally {
+      setSalvando(false);
+    }
+  }, [salvando, rascunho, onSalvarNode]);
+
+  // Fechar com alteração pendente avisa. Sem isto, o X do canto vira um
+  // "descartar" silencioso — e o painel acabou de deixar de salvar sozinho.
+  const fechar = useCallback(() => {
+    if (sujo && !window.confirm('Este bloco tem alterações não salvas. Descartar?')) return;
+    onClose();
+  }, [sujo, onClose]);
+
+  useEffect(() => {
+    if (resultado?.tipo !== 'ok') return undefined;
+    const t = setTimeout(() => setResultado(null), 2500);
+    return () => clearTimeout(t);
+  }, [resultado]);
+
+  if (!nodeSalvo) return null;
+  const node = rascunho || nodeSalvo;
 
   const isComment = node.tipo === 'comentario';
   const meta = BLOCK_META[node.tipo] || BLOCK_META.mensagem;
@@ -129,11 +213,14 @@ export function FlowPropertyPanel({
         <div className="flex items-center gap-2.5">
           <span className="text-2xl leading-none">{meta.emoji}</span>
           <div>
-            <h3 className="font-bold text-sm text-white font-display leading-tight">{node.titulo || 'Configurar Bloco'}</h3>
+            <h3 className="font-bold text-sm text-white font-display leading-tight">
+              {node.titulo || 'Configurar Bloco'}
+              {sujo && <span className="ml-1.5 text-espera-400" title="Alterações não salvas">•</span>}
+            </h3>
             <span className="text-[10px] text-slate-500 font-mono">ID: {node.id} · {meta.label}</span>
           </div>
         </div>
-        <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
+        <button onClick={fechar} className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
           <X size={16} />
         </button>
       </div>
@@ -644,21 +731,64 @@ export function FlowPropertyPanel({
         )}
       </div>
 
-      <div className="p-4 bg-grafite-600 border-t border-linha flex items-center justify-between gap-2">
-        <button
-          onClick={() => onDeleteNode(node.id)}
-          className="px-3 py-2 rounded-xl bg-falha/10 hover:bg-falha/20 text-falha-400 text-xs font-semibold border border-falha/30 flex items-center gap-1.5 transition-colors"
-        >
-          <Trash2 size={13} /> Excluir Bloco
-        </button>
-        {!isComment && (
-          <button
-            onClick={() => onTestSingleNode(node)}
-            className="px-3 py-2 rounded-xl bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-acao/20 transition-all"
+      {/* ── SALVAR ────────────────────────────────────────────────────────
+          O botão fica no rodapé, largo e sozinho na primeira linha: é a ação
+          principal do painel desde que a digitação parou de subir sozinha.
+
+          Ele mostra os três estados que importam — pendente, salvando, salvo —
+          e o erro aparece AQUI, colado nele, e não num aviso qualquer no canto
+          da tela. Uma falha de gravação que a pessoa não lê é a mesma coisa que
+          o `catch {}` que existia antes. */}
+      <div className="p-4 bg-grafite-600 border-t border-linha space-y-2">
+        {resultado && (
+          <div
+            role="status"
+            aria-live="polite"
+            className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-[11px] border ${
+              resultado.tipo === 'ok'
+                ? 'bg-ativo/10 border-ativo/30 text-ativo-400'
+                : 'bg-falha/10 border-falha/30 text-falha-400'
+            }`}
           >
-            <Play size={13} /> Testar Bloco
-          </button>
+            {resultado.tipo === 'ok'
+              ? <CheckCircle2 size={12} className="shrink-0" />
+              : <AlertCircle size={12} className="shrink-0" />}
+            <span className="font-semibold break-words">{resultado.msg}</span>
+          </div>
         )}
+
+        <button
+          onClick={salvarBloco}
+          disabled={salvando || !sujo}
+          title={sujo ? 'Gravar as alterações deste bloco' : 'Nada para salvar'}
+          className={`w-full px-3 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+            salvando || !sujo
+              ? 'bg-grafite-700 text-slate-500 border border-linha cursor-not-allowed'
+              : 'bg-ativo hover:bg-ativo-400 text-slate-950 shadow-md shadow-ativo/20'
+          }`}
+        >
+          {salvando
+            ? <><RefreshCw size={13} className="animate-spin" /> Salvando…</>
+            : <><Save size={13} /> {sujo ? 'Salvar Bloco' : 'Salvo'}</>}
+        </button>
+
+        <div className="flex items-center justify-between gap-2">
+          <button
+            onClick={() => onDeleteNode(node.id)}
+            disabled={salvando}
+            className="px-3 py-2 rounded-xl bg-falha/10 hover:bg-falha/20 disabled:opacity-40 text-falha-400 text-xs font-semibold border border-falha/30 flex items-center gap-1.5 transition-colors"
+          >
+            <Trash2 size={13} /> Excluir Bloco
+          </button>
+          {!isComment && (
+            <button
+              onClick={() => onTestSingleNode(node)}
+              className="px-3 py-2 rounded-xl bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-acao/20 transition-all"
+            >
+              <Play size={13} /> Testar Bloco
+            </button>
+          )}
+        </div>
       </div>
     </aside>
   );
