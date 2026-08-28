@@ -397,7 +397,7 @@ function resumoAutomacoes(fluxo) {
           : "fila geral";
       entregas.push({
         rotulo: `"${passo.titulo || op.rotulo || op.id}" entrega para`,
-        valor: `${destino} — "${paramsHandoff(fluxo, op)}"`,
+        valor: `${destino} - "${paramsHandoff(fluxo, op)}"`,
       });
     }
   }
