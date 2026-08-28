@@ -148,34 +148,64 @@ async function main() {
   check(noBanco.atendenteId === carla.id, "o banco registra Carla como responsavel");
 
   // ─────────────────────────────────────────────────────────────────────────
-  titulo("2. QUEM NAO E O RESPONSAVEL nao transfere (o defeito relatado)");
+  titulo("2. QUALQUER PESSOA DO SETOR transfere -- inclusive puxando para si");
 
+  // REVERSAO DELIBERADA (2026-08-28, pedido da operacao).
+  //
+  // Por algumas horas esta secao cobrou 403 de quem nao era o dono. A intencao
+  // era boa -- ninguem tira do colega a conversa que ele esta atendendo -- mas
+  // travou o uso normal: assumir a conversa de um colega que saiu para almocar
+  // exigia um Administrador. Agora a autorizacao e o SETOR (ver secao 7), e a
+  // autoria de quem transferiu passa a ficar registrada no historico.
   conversa = await criarConversa(alice);
   r = await pedir(`/api/conversas/${conversa.id}/atendente`, {
     metodo: "PATCH", corpo: { atendenteId: bruno.id }, token: tBruno,
   });
-  check(r.status === 403, `Bruno tenta puxar para si a conversa da Alice -> ${r.status} (esperado 403)`);
-  check(r.json?.error?.code === "NAO_E_O_RESPONSAVEL", "o codigo do erro diz o motivo");
+  check(r.status === 200, `Bruno PUXA PARA SI a conversa da Alice -> ${r.status} (esperado 200)`);
   noBanco = await prisma.conversa.findUnique({ where: { id: conversa.id } });
-  check(noBanco.atendenteId === alice.id, "a conversa continua com a Alice");
+  check(noBanco.atendenteId === bruno.id, "o banco registra Bruno como responsavel");
 
-  // O mesmo, mas transferindo para uma TERCEIRA pessoa -- nao e so "roubar para
-  // si" que estava aberto, era mexer na atribuicao alheia em geral.
+  // O historico diz de quem partiu a troca -- sem a trava de dono, nao havia
+  // como deduzir isso. Puxar para si e "assumida por", nao "transferida para X
+  // por X", que era o que saia e nao se entende lendo depois.
+  const ultimoAviso = async (conversaId) =>
+    (
+      await prisma.mensagem.findFirst({
+        where: { conversaId, origem: "sistema", texto: { contains: "onversa" } },
+        orderBy: { criadoEm: "desc" },
+      })
+    )?.texto || "";
+
+  let aviso = await ultimoAviso(conversa.id);
+  check(
+    aviso === `Conversa assumida por ${bruno.nome}`,
+    `puxar para si registra "assumida por": ${JSON.stringify(aviso)}`
+  );
+
+  // Transferir a conversa alheia para uma TERCEIRA pessoa tambem passa.
   r = await pedir(`/api/conversas/${conversa.id}/atendente`, {
-    metodo: "PATCH", corpo: { atendenteId: carla.id }, token: tBruno,
+    metodo: "PATCH", corpo: { atendenteId: carla.id }, token: tAlice,
   });
-  check(r.status === 403, `Bruno tenta transferir para Carla a conversa da Alice -> ${r.status}`);
+  check(r.status === 200, `Alice transfere para Carla a conversa que estava com Bruno -> ${r.status}`);
+  aviso = await ultimoAviso(conversa.id);
+  check(
+    aviso === `Conversa transferida para ${carla.nome} por ${alice.nome}`,
+    `transferir a de outro registra autor e destino: ${JSON.stringify(aviso)}`
+  );
 
-  // E limpar a atribuicao alheia tambem e transferir.
+  // E limpar a atribuicao alheia tambem.
   r = await pedir(`/api/conversas/${conversa.id}/atendente`, {
     metodo: "PATCH", corpo: { atendenteId: null }, token: tBruno,
   });
-  check(r.status === 403, `Bruno tenta REMOVER a atribuicao da Alice -> ${r.status}`);
+  check(r.status === 200, `Bruno REMOVE a atribuicao da Carla -> ${r.status}`);
   noBanco = await prisma.conversa.findUnique({ where: { id: conversa.id } });
-  check(noBanco.atendenteId === alice.id, "depois das tres tentativas, a conversa segue com a Alice");
+  check(noBanco.atendenteId === null, "a conversa ficou sem responsavel");
 
   // ─────────────────────────────────────────────────────────────────────────
   titulo("3. Bruno continua podendo o que sempre pode -- nada foi trancado a mais");
+
+  // A conversa da secao 2 ficou sem dono; esta secao precisa de uma com dono.
+  conversa = await criarConversa(alice);
 
   const conversaLivre = await criarConversa(null);
   r = await pedir(`/api/conversas/${conversaLivre.id}/atendente`, {

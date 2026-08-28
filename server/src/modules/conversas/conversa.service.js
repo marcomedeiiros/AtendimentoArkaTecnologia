@@ -984,30 +984,39 @@ class ConversaService {
   /**
    * DEFINE (OU LIMPA) O RESPONSAVEL PELA CONVERSA.
    *
-   * ── QUEM PODE TRANSFERIR ──────────────────────────────────────────────────
+   * ── QUEM PODE TRANSFERIR: QUALQUER PESSOA COM ACESSO AO SETOR ─────────────
    *
-   * A regra antiga era so uma: `exigirAcessoSetor`. Ou seja, "voce e do setor
-   * desta conversa?". Isso deixava QUALQUER Tecnico tirar de qualquer outro
-   * Tecnico a conversa que ele estava atendendo -- e o controller nem repassava
-   * o id de quem pedia, entao nao havia como conferir dono nem se alguem
-   * quisesse. Pela API, com um curl, era a mesma coisa: escondendo o botao na
-   * tela nada mudava.
+   * Regra atual, e ela e uma so: `exigirAcessoSetor`. Quem enxerga a conversa
+   * pode trocar o responsavel dela -- para um colega, para si mesmo (o "puxar
+   * para si"), ou remover a atribuicao.
    *
-   * A regra passa a ser, nesta ordem:
+   * ISTO E UMA REVERSAO DELIBERADA, pedida pela operacao em 2026-08-28.
    *
-   *   1. acesso ao SETOR da conversa (o guard que ja existia, mantido);
-   *   2. e uma destas:
-   *        - a conversa NAO tem dono -> quem tem acesso ao setor pode atribuir
-   *          (e o caso da fila; barrar aqui quebraria o uso normal);
-   *        - o dono e voce                     -> voce passa adiante o que e seu;
-   *        - voce e Administrador              -> escalonamento e destravar
-   *          conversa de quem saiu de ferias continuam possiveis.
+   * Por algumas horas a regra exigiu tambem ser o dono (ou Administrador). A
+   * intencao era boa -- ninguem tira do colega a conversa que ele esta
+   * atendendo. Na pratica travou o uso normal: quem precisava assumir uma
+   * conversa que estava com outra pessoa (o colega saiu para almocar, entrou em
+   * reuniao, atendeu no lugar errado) batia em 403 e nao tinha o que fazer sem
+   * chamar um Administrador. Numa equipe pequena isso custa mais do que o
+   * problema que resolvia.
    *
-   * Fora disso: 403. Nao e "o botao some" -- e a rota recusando.
+   * O QUE SEGUE VALENDO, de proposito:
    *
-   * O detalhe que faz isso valer alguma coisa: `autorId` vem do TOKEN
-   * (req.user.sub), nunca do corpo. Um id de atendente mandado pelo cliente e
-   * so um campo JSON que qualquer um digita.
+   *   - `exigirAcessoSetor`: alguem do Financeiro nao mexe em conversa do
+   *     Tecnico. Isso e escopo de DADOS, nao etiqueta de equipe -- a pessoa nem
+   *     deveria ver a conversa. Se um dia precisar cair, e outro pedido.
+   *   - a troca ATOMICA e o 409: duas pessoas transferindo ao mesmo tempo para
+   *     destinos diferentes continuam nao sobrescrevendo uma a outra em
+   *     silencio (ver abaixo). Agora que qualquer um transfere, isso importa
+   *     MAIS, nao menos.
+   *   - o registro de QUEM transferiu: com a trava de dono, o autor era sempre
+   *     o dono ou um admin e dava para deduzir. Sem ela, nao da -- entao o aviso
+   *     no historico passa a dizer quem fez a troca quando a conversa muda de
+   *     mao, e o log guarda autor e destino.
+   *
+   * `autorId` continua vindo do TOKEN (req.user.sub), nunca do corpo: ele
+   * alimenta o registro de autoria, e id mandado pelo cliente e so um campo
+   * JSON que qualquer um digita.
    *
    * ── E POR QUE A TROCA E ATOMICA ───────────────────────────────────────────
    *
@@ -1023,15 +1032,13 @@ class ConversaService {
     exigirAcessoSetor(userCargo, conversa.setor);
 
     const donoAtual = conversa.atendenteId || null;
-    // `autorId` nulo = chamada interna (bot, n8n, script), que nao tem dono a
-    // conferir -- o mesmo criterio ja usado por `exigirAcessoSetor`.
-    if (autorId && donoAtual && donoAtual !== autorId && userCargo !== "Administrador") {
-      throw new AppError(
-        "Esta conversa esta com outro atendente. So quem responde por ela pode transferi-la.",
-        403,
-        "NAO_E_O_RESPONSAVEL"
-      );
-    }
+
+    // AQUI EXISTIA O 403 "NAO_E_O_RESPONSAVEL".
+    //
+    // Ele exigia ser o dono da conversa (ou Administrador) para trocar o
+    // responsavel. Removido a pedido da operacao: travava quem precisava assumir
+    // uma conversa que estava com um colega ausente. Ver o cabecalho deste
+    // metodo. O guard de SETOR, acima, continua sendo a autorizacao real.
 
     let novoId = null;
     let nome = null;
@@ -1083,10 +1090,45 @@ class ConversaService {
       ...(nome ? { atendenteNome: nome } : {}),
     });
 
+    // QUEM FEZ A TROCA entra no registro.
+    //
+    // Com a trava de dono, o autor era necessariamente o dono anterior ou um
+    // Administrador -- dava para deduzir de quem partiu. Agora que qualquer
+    // pessoa do setor transfere, nao da: sem isto, uma conversa mudava de mao e
+    // o historico nao dizia por ordem de quem.
+    //
+    // So aparece quando a conversa TINHA dono e ele mudou. Atribuir uma conversa
+    // da fila (o caso comum) segue com o aviso curto de antes.
+    let autorNome = null;
+    if (autorId && donoAtual && donoAtual !== autorId) {
+      const autor = await usuarioRepository.findById(autorId).catch(() => null);
+      autorNome = autor?.nome || null;
+    }
+
+    logger.info("Responsavel da conversa alterado", {
+      conversaId: id,
+      de: donoAtual,
+      para: novoId,
+      porUsuarioId: autorId || null,
+    });
+
     // Aviso de sistema no chat quando ha um novo responsavel. Fica so no
     // historico interno -- nao vai para o WhatsApp do cliente.
+    //
+    // Tres frases, porque sao tres acontecimentos diferentes:
+    //
+    //   "Conversa transferida para Carla"            -> saiu da fila (sem dono antes)
+    //   "Conversa transferida para Carla por Alice"  -> Alice passou a de outra pessoa
+    //   "Conversa assumida por Bruno"                -> Bruno puxou para si
+    //
+    // A terceira existe porque "transferida para Bruno por Bruno" e o que sai
+    // quando alguem assume a conversa de um colega -- redundante e confuso para
+    // quem le o historico depois.
     if (novoId) {
-      await conversaRepository.addMensagem(id, "sistema", `Conversa transferida para ${nome}`);
+      let texto = `Conversa transferida para ${nome}`;
+      if (autorNome && novoId === autorId) texto = `Conversa assumida por ${autorNome}`;
+      else if (autorNome) texto = `Conversa transferida para ${nome} por ${autorNome}`;
+      await conversaRepository.addMensagem(id, "sistema", texto);
     }
 
     // Recarrega para o DTO/stream ja saírem com o aviso incluido.
