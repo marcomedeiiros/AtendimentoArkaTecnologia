@@ -2,6 +2,7 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
 const swaggerUi = require("swagger-ui-express");
 
 const env = require("./config/env");
@@ -44,6 +45,86 @@ function createApp() {
   // vira uma cota global, alem de o express-rate-limit avisar em cada chamada.
   // Numero exato de hops, nunca `true` (ver env.trustProxy).
   app.set("trust proxy", env.trustProxy);
+
+  // ── CABECALHOS DE SEGURANCA ───────────────────────────────────────────────
+  //
+  // Ate aqui o app nao mandava NENHUM: sem CSP, sem HSTS, sem protecao contra
+  // enquadramento. O nginx tambem nao repunha (client/nginx.conf so tem
+  // Cache-Control), entao nao havia nada.
+  //
+  // A CSP e escrita para ESTE app, e nao a padrao do helmet -- a padrao
+  // quebraria o Google Fonts e o Turnstile. Cada permissao abaixo existe por um
+  // motivo concreto, e esta anotada: permissao de CSP sem justificativa vira
+  // permissao para sempre, porque ninguem depois sabe se pode tirar.
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        useDefaults: false,
+        directives: {
+          defaultSrc: ["'self'"],
+
+          // SEM 'unsafe-inline' e SEM 'unsafe-eval'. E esta linha que faz a CSP
+          // valer alguma coisa contra XSS -- as outras sao consequencia. O
+          // painel e um bundle do Vite, nao ha script inline para acomodar.
+          //
+          // O Turnstile precisa estar aqui, e nao so em `frameSrc`: ele carrega
+          // `challenges.cloudflare.com/turnstile/v0/api.js` como SCRIPT (ver
+          // components/Turnstile.jsx). Declarar so o frame derrubaria o desafio
+          // na tela de login, em producao.
+          scriptSrc: ["'self'", "https://challenges.cloudflare.com"],
+
+          // Estilo precisa de 'unsafe-inline': o Google Fonts injeta um <style>,
+          // e o editor de fluxos posiciona os nos com `style=""`. E menos grave
+          // que no script -- estilo nao executa codigo.
+          styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+          fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+
+          // `https:` liberado para IMAGEM, e nao por preguica: a foto de perfil
+          // do cliente e uma URL da propria WhatsApp (`fotoUrl`, vinda do
+          // `profilePictureUrl` da Evolution), o dominio muda sem aviso, e
+          // travar isso apagaria o avatar de TODA conversa do painel. Imagem nao
+          // executa nada; a protecao contra XSS mora no `scriptSrc` acima.
+          // `data:`/`blob:` sao a midia local: preview antes do envio, audio
+          // gravado no navegador e o QR Code em base64.
+          imgSrc: ["'self'", "data:", "blob:", "https:"],
+          mediaSrc: ["'self'", "data:", "blob:"],
+
+          // Mesma origem cobre o SSE e o fetch da API -- o nginx serve o painel
+          // e faz proxy de /api. O Turnstile conversa com a Cloudflare durante
+          // o desafio.
+          connectSrc: ["'self'", "https://challenges.cloudflare.com"],
+
+          workerSrc: ["'self'", "blob:"],
+          manifestSrc: ["'self'"],
+          objectSrc: ["'none'"],
+          baseUri: ["'self'"],
+          formAction: ["'self'"],
+
+          // CLICKJACKING: o painel nao pode ser embutido em lugar nenhum. Sem
+          // isto, alguem enquadra a Central num site isca e colhe cliques reais.
+          frameAncestors: ["'none'"],
+          // O desafio do Turnstile roda num iframe da Cloudflare.
+          frameSrc: ["'self'", "https://challenges.cloudflare.com"],
+
+          ...(env.nodeEnv === "production" ? { upgradeInsecureRequests: [] } : {}),
+        },
+      },
+
+      // HSTS so faz sentido sob HTTPS, e em producao ha a Cloudflare na frente.
+      // Em desenvolvimento ficaria gravado no navegador e quebraria o
+      // http://localhost de quem trabalha no projeto -- por isso, desligado.
+      hsts: env.nodeEnv === "production" ? { maxAge: 15552000, includeSubDomains: true } : false,
+
+      // A API serve midia das conversas. `same-origin` bloquearia o <img> do
+      // painel se um dia ele passar a rodar noutra origem. Isto e sobre RECURSO,
+      // nao sobre credencial: quem entra continua sendo decidido pelo token.
+      crossOriginResourcePolicy: { policy: "cross-origin" },
+      // Desligado: bloquearia o iframe do Turnstile e as fontes do Google.
+      crossOriginEmbedderPolicy: false,
+
+      referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+    })
+  );
 
   app.use(cors({ origin: env.corsOrigin }));
   app.use(express.json({ limit: "30mb" })); // mídia enviada em base64 passa de 2mb

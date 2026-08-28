@@ -14,10 +14,26 @@ bash deploy/backup.sh
 echo "==> Baixando o codigo novo"
 git pull --ff-only
 
-echo "==> Rebuildando e subindo"
+echo "==> Rebuildando"
+$COMPOSE build
+
+# CONFERE A CONFIGURACAO DO NGINX ANTES DE TROCAR O CONTAINER.
+#
+# O nginx serve o painel inteiro. Um ponto-e-virgula faltando derruba TUDO: o
+# container novo nao sobe, o antigo ja foi embora, e o site fica fora do ar ate
+# alguem descobrir o erro de digitacao. `nginx -t` custa um segundo e transforma
+# esse acidente numa mensagem antes de qualquer coisa ser trocada.
+echo "==> Conferindo a configuracao do nginx"
+if ! $COMPOSE run --rm --no-deps --entrypoint nginx web -t; then
+  echo "ERRO: a configuracao do nginx nao passou no teste." >&2
+  echo "      Nada foi trocado -- o painel continua no ar com a versao atual." >&2
+  exit 1
+fi
+
+echo "==> Subindo"
 # O entrypoint da API aplica sozinho as mudancas de schema (prisma db push)
 # quando o container novo sobe.
-$COMPOSE up -d --build
+$COMPOSE up -d
 
 echo "==> Limpando imagens antigas"
 docker image prune -f
