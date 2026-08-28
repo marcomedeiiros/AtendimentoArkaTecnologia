@@ -2888,26 +2888,60 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     ));
   }, [setConversas]);
 
-  // Define o responsavel pela conversa no banco (compartilhado com a equipe).
-  // membro.id e o id do usuario (vem de equipe.listar).
-  const transferirConversa = useCallback(async (conv, membro) => {
+  // ── TRANSFERÊNCIA ────────────────────────────────────────────────────────
+  //
+  // O modal ficava clicável durante a requisição e só fechava DEPOIS do await.
+  // Numa rede lenta isso é uma janela aberta: dá para clicar duas vezes no
+  // mesmo atendente, ou clicar num segundo enquanto o primeiro está no ar.
+  //
+  // A trava de verdade é do servidor — a troca de dono é um UPDATE condicional,
+  // e a segunda tentativa recebe 409 em vez de sobrescrever. O que está aqui é
+  // a metade da tela: nem sequer disparar o segundo pedido, e dizer o que está
+  // acontecendo enquanto o primeiro não volta.
+  //
+  // `transferindoId` guarda o id do membro em curso: é ele que desenha o
+  // "Transferindo…" na linha certa da lista.
+  const emCursoRef = useRef(false);
+  const [transferindoId, setTransferindoId] = useState(null);
+
+  const trocarAtendente = useCallback(async (conv, membroId, rotuloErro) => {
+    // Guarda em ref, e não no estado: `disabled` só vale depois do re-render, e
+    // um duplo-clique rápido chega antes disso. A ref muda no mesmo instante.
+    if (emCursoRef.current) return;
+    emCursoRef.current = true;
+    setTransferindoId(membroId ?? 'remover');
     try {
-      aplicarConversa(await ConversasAPI.definirAtendente(conv.id, membro.id));
+      aplicarConversa(await ConversasAPI.definirAtendente(conv.id, membroId));
+      setTransferindo(null);
     } catch (e) {
-      window.alert('Não foi possível transferir: ' + e.message);
+      // O modal FICA aberto no erro: fechá-lo esconderia a lista onde a pessoa
+      // acabou de agir, e um 409 ("outra pessoa transferiu") precisa ser lido
+      // com a conversa ainda à vista.
+      window.alert(`${rotuloErro}: ${e.message}`);
+      if (e.status === 409 || e.codigo === 'TRANSFERENCIA_CONFLITO') {
+        // Perdeu a corrida: busca o estado real em vez de deixar na tela a
+        // atribuição que não aconteceu.
+        try { aplicarConversa(await ConversasAPI.obter(conv.id)); } catch { /* offline */ }
+        setTransferindo(null);
+      }
+    } finally {
+      emCursoRef.current = false;
+      setTransferindoId(null);
     }
-    setTransferindo(null);
   }, [aplicarConversa]);
 
+  // Define o responsavel pela conversa no banco (compartilhado com a equipe).
+  // membro.id e o id do usuario (vem de equipe.listar).
+  const transferirConversa = useCallback(
+    (conv, membro) => trocarAtendente(conv, membro.id, 'Não foi possível transferir'),
+    [trocarAtendente]
+  );
+
   // Remove a atribuicao (deixa a conversa sem responsavel), tambem no banco.
-  const removerAtendente = useCallback(async (conv) => {
-    try {
-      aplicarConversa(await ConversasAPI.definirAtendente(conv.id, null));
-    } catch (e) {
-      window.alert('Não foi possível remover a atribuição: ' + e.message);
-    }
-    setTransferindo(null);
-  }, [aplicarConversa]);
+  const removerAtendente = useCallback(
+    (conv) => trocarAtendente(conv, null, 'Não foi possível remover a atribuição'),
+    [trocarAtendente]
+  );
 
   // Inicia conversa com um numero digitado. O servidor acha ou cria a conversa,
   // ja aberta e no setor escolhido, e envia a primeira mensagem.
@@ -3563,15 +3597,22 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               )}
               {equipe.map(m => {
                 const atual = transferindo.atendenteId === m.id;
+                // Um pedido no ar desabilita a LISTA INTEIRA, e não só a linha
+                // clicada: enquanto a primeira transferência não volta, clicar
+                // num segundo atendente é pedir duas trocas de dono para a
+                // mesma conversa.
+                const ocupado = transferindoId !== null;
                 return (
                   <button
                     key={m.id}
                     onClick={() => transferirConversa(transferindo, m)}
-                    disabled={atual}
+                    disabled={atual || ocupado}
                     className={`w-full text-left p-3 rounded-xl border flex items-center gap-3 transition-all ${
                       atual
                         ? 'bg-purple-500/15 border-purple-500/40 cursor-default'
-                        : 'bg-grafite-700 border-linha hover:border-purple-500/40 hover:bg-grafite-600'
+                        : ocupado
+                          ? 'bg-grafite-700 border-linha opacity-50 cursor-wait'
+                          : 'bg-grafite-700 border-linha hover:border-purple-500/40 hover:bg-grafite-600'
                     }`}
                   >
                     <div className="w-9 h-9 rounded-xl bg-purple-500/15 text-purple-300 font-bold text-sm flex items-center justify-center border border-purple-500/30 shrink-0">
@@ -3581,13 +3622,19 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                       <div className="text-xs font-bold text-white truncate">{m.nome}</div>
                       <div className="text-[11px] text-slate-400 truncate">{m.cargo || 'Atendimento'}</div>
                     </div>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold shrink-0 ${
-                      m.status === 'online'
-                        ? 'bg-ativo/15 text-ativo-400 border-ativo/30'
-                        : 'bg-slate-700/40 text-slate-400 border-linha'
-                    }`}>
-                      {m.status === 'online' ? 'Online' : 'Offline'}
-                    </span>
+                    {transferindoId === m.id ? (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full border font-semibold shrink-0 bg-purple-500/15 text-purple-300 border-purple-500/30 flex items-center gap-1">
+                        <Loader2 size={10} className="animate-spin" /> Transferindo…
+                      </span>
+                    ) : (
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold shrink-0 ${
+                        m.status === 'online'
+                          ? 'bg-ativo/15 text-ativo-400 border-ativo/30'
+                          : 'bg-slate-700/40 text-slate-400 border-linha'
+                      }`}>
+                        {m.status === 'online' ? 'Online' : 'Offline'}
+                      </span>
+                    )}
                     {atual && <Check size={15} className="text-purple-400 shrink-0" />}
                   </button>
                 );
@@ -3598,8 +3645,9 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               {transferindo.atendenteId ? (
                 <button
                   onClick={() => removerAtendente(transferindo)}
-                  className="text-[11px] text-slate-400 hover:text-falha-400 font-semibold transition-colors">
-                  Remover atribuicao
+                  disabled={transferindoId !== null}
+                  className="text-[11px] text-slate-400 hover:text-falha-400 disabled:opacity-40 disabled:cursor-wait font-semibold transition-colors">
+                  {transferindoId === 'remover' ? 'Removendo…' : 'Remover atribuicao'}
                 </button>
               ) : <span />}
               <button onClick={() => setTransferindo(null)} className="px-3 py-2 sm:py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors">Fechar</button>

@@ -332,6 +332,46 @@ class ConversaRepository {
     return { assumido: true };
   }
 
+  /**
+   * TRANSFERIR, de forma atomica -- a troca de dono num UPDATE condicional.
+   *
+   * `donoEsperado` e de quem a conversa PRECISA ser para a troca valer. Ou
+   * seja: o service leu que o dono era X e decidiu com base nisso; aqui o banco
+   * confere que continua sendo X no instante da escrita. Se alguem transferiu
+   * no meio, a condicao nao casa, nenhuma linha muda, e o service devolve 409
+   * com o estado real em vez de sobrescrever a decisao do outro.
+   *
+   * ── POR QUE ISTO NAO PODIA CONTINUAR SENDO UM `update` ────────────────────
+   *
+   * `definirAtendente` era ler-depois-escrever, igual ao `atender` de antes:
+   *
+   *     const conversa = await findById(id);      // dono = A
+   *     ...                                        // <- outra requisicao passa aqui
+   *     await update(id, { atendenteId: novo });   // grava por cima
+   *
+   * Dois cliques (ou dois atendentes) passavam os dois: o ultimo UPDATE vencia,
+   * e o historico ganhava DUAS mensagens "Conversa transferida para ...", cada
+   * uma para uma pessoa diferente. A tela de quem perdeu seguia mostrando a
+   * transferencia que ela mesma fez.
+   *
+   * `null` em `donoEsperado` quer dizer "a conversa tem de estar SEM dono" --
+   * e o caso de atribuir uma conversa da fila.
+   */
+  async transferirAtomico(id, donoEsperado, novoAtendenteId, nomeAtendente) {
+    const r = await prisma.conversa.updateMany({
+      // `atendenteId: null` no where do Prisma e um filtro de verdade (IS NULL),
+      // e nao "sem filtro" -- isso so vale para `undefined`. Por isso da para
+      // passar o esperado direto, inclusive quando ele e null.
+      where: { id, atendenteId: donoEsperado ?? null },
+      data: {
+        atendenteId: novoAtendenteId || null,
+        ...(nomeAtendente ? { ultimoAtendenteNome: nomeAtendente } : {}),
+        versao: { increment: 1 },
+      },
+    });
+    return { transferido: r.count > 0 };
+  }
+
   delete(id) {
     return prisma.conversa.delete({ where: { id } });
   }

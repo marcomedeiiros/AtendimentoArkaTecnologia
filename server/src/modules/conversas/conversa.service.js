@@ -908,14 +908,57 @@ class ConversaService {
     );
   }
 
-  // Define (ou limpa) o responsavel pelo atendimento. Antes isso vivia so no
-  // localStorage de cada navegador; agora e do banco -- toda a equipe ve igual.
-  // Guardado pela mesma regra de setor: so mexe em conversa que a pessoa acessa,
-  // e o atendente precisa ser um usuario real (ou null para remover a atribuicao).
-  async definirAtendente(id, atendenteId, userCargo = null) {
+  /**
+   * DEFINE (OU LIMPA) O RESPONSAVEL PELA CONVERSA.
+   *
+   * ── QUEM PODE TRANSFERIR ──────────────────────────────────────────────────
+   *
+   * A regra antiga era so uma: `exigirAcessoSetor`. Ou seja, "voce e do setor
+   * desta conversa?". Isso deixava QUALQUER Tecnico tirar de qualquer outro
+   * Tecnico a conversa que ele estava atendendo -- e o controller nem repassava
+   * o id de quem pedia, entao nao havia como conferir dono nem se alguem
+   * quisesse. Pela API, com um curl, era a mesma coisa: escondendo o botao na
+   * tela nada mudava.
+   *
+   * A regra passa a ser, nesta ordem:
+   *
+   *   1. acesso ao SETOR da conversa (o guard que ja existia, mantido);
+   *   2. e uma destas:
+   *        - a conversa NAO tem dono -> quem tem acesso ao setor pode atribuir
+   *          (e o caso da fila; barrar aqui quebraria o uso normal);
+   *        - o dono e voce                     -> voce passa adiante o que e seu;
+   *        - voce e Administrador              -> escalonamento e destravar
+   *          conversa de quem saiu de ferias continuam possiveis.
+   *
+   * Fora disso: 403. Nao e "o botao some" -- e a rota recusando.
+   *
+   * O detalhe que faz isso valer alguma coisa: `autorId` vem do TOKEN
+   * (req.user.sub), nunca do corpo. Um id de atendente mandado pelo cliente e
+   * so um campo JSON que qualquer um digita.
+   *
+   * ── E POR QUE A TROCA E ATOMICA ───────────────────────────────────────────
+   *
+   * Ler o dono e depois gravar por cima e uma corrida: dois cliques (ou dois
+   * atendentes) passavam os dois, e o historico ganhava DUAS mensagens
+   * "Conversa transferida para ...", cada uma para uma pessoa diferente. A
+   * troca vai para `transferirAtomico`, que so grava se o dono ainda for o que
+   * foi lido -- mesma solucao ja usada em `assumirAtomico`.
+   */
+  async definirAtendente(id, atendenteId, userCargo = null, autorId = null) {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
     exigirAcessoSetor(userCargo, conversa.setor);
+
+    const donoAtual = conversa.atendenteId || null;
+    // `autorId` nulo = chamada interna (bot, n8n, script), que nao tem dono a
+    // conferir -- o mesmo criterio ja usado por `exigirAcessoSetor`.
+    if (autorId && donoAtual && donoAtual !== autorId && userCargo !== "Administrador") {
+      throw new AppError(
+        "Esta conversa esta com outro atendente. So quem responde por ela pode transferi-la.",
+        403,
+        "NAO_E_O_RESPONSAVEL"
+      );
+    }
 
     let novoId = null;
     let nome = null;
@@ -926,22 +969,50 @@ class ConversaService {
       nome = usuario.nome;
     }
 
+    // IDEMPOTENCIA. Transferir para quem ja e o dono nao e erro -- e um clique
+    // repetido, um reenvio, uma reconexao. Devolve o estado atual sem gravar
+    // nada e, principalmente, SEM um segundo aviso no historico. Sem isto, o
+    // duplo-clique deixava duas linhas identicas no fio da conversa.
+    if (novoId === donoAtual) {
+      return mapConversa(conversa);
+    }
+
     // Guarda tambem o nome como historico (ver ultimoAtendenteNome no schema):
     // ao remover a atribuicao, o relatorio continua sabendo quem atendeu.
     await conversaRepository.garantirAtendimento(id);
-    await conversaRepository.update(id, {
-      atendenteId: novoId,
-      ...(nome ? { ultimoAtendenteNome: nome } : {}),
-    });
+
+    const { transferido } = await conversaRepository.transferirAtomico(id, donoAtual, novoId, nome);
+    if (!transferido) {
+      // O dono mudou entre a leitura e a escrita. Duas situacoes MUITO
+      // diferentes cabem aqui, e tratar as duas como erro seria errado:
+      const agora = await conversaRepository.findById(id);
+
+      // (a) alguem ja colocou a conversa exatamente onde esta requisicao queria.
+      //     E o duplo-clique: os dois pedidos leem o mesmo dono, o primeiro
+      //     grava, o segundo encontra a condicao vencida. Nao ha nada a
+      //     corrigir -- o resultado pedido E o estado atual. Devolve sucesso
+      //     sem gravar de novo e, principalmente, sem um segundo aviso no fio.
+      if ((agora?.atendenteId || null) === novoId) return mapConversa(agora);
+
+      // (b) alguem transferiu para OUTRA pessoa. Ai e conflito de verdade: nao
+      //     sobrescreve a decisao do outro, e devolve 409 para a tela mostrar a
+      //     verdade em vez da intencao.
+      throw new AppError(
+        "Esta conversa acabou de ser transferida por outra pessoa. Recarregue para ver quem esta com ela.",
+        409,
+        "TRANSFERENCIA_CONFLITO"
+      );
+    }
+
     // A OS em curso acompanha a transferencia: e ela que o historico mostra.
     await conversaRepository.atualizarAtendimentoAtual(id, {
       atendenteId: novoId,
       ...(nome ? { atendenteNome: nome } : {}),
     });
 
-    // Aviso de sistema no chat quando ha um novo responsavel (mudou de fato).
-    // Fica so no historico interno -- nao vai para o WhatsApp do cliente.
-    if (novoId && novoId !== conversa.atendenteId) {
+    // Aviso de sistema no chat quando ha um novo responsavel. Fica so no
+    // historico interno -- nao vai para o WhatsApp do cliente.
+    if (novoId) {
       await conversaRepository.addMensagem(id, "sistema", `Conversa transferida para ${nome}`);
     }
 

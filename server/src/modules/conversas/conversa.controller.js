@@ -151,9 +151,13 @@ class ConversaController {
     return conversaService.atualizarSetor(req.params.id, req.body.setor, req.user?.cargo).then((data) => success(res, data));
   }
 
+  // `req.user.sub` -- de quem esta PEDINDO -- nao vinha, e sem ele o service nao
+  // tinha como conferir se quem transfere e mesmo o responsavel pela conversa.
+  // Vem do token, nunca do corpo: id de atendente mandado pelo cliente e so um
+  // campo JSON que qualquer um digita no curl.
   definirAtendente(req, res) {
     return conversaService
-      .definirAtendente(req.params.id, req.body.atendenteId ?? null, req.user?.cargo)
+      .definirAtendente(req.params.id, req.body.atendenteId ?? null, req.user?.cargo, req.user?.sub)
       .then((data) => success(res, data));
   }
 
