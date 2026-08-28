@@ -20,6 +20,8 @@ server/prisma/dev.db-journal
 # Backups do banco gerados na VM (deploy/backup.sh)
 backups/
 
+
+.planning/
 # Logs
 *.log
 npm-debug.log*
