@@ -312,6 +312,40 @@ class ChatbotEngine {
     return null;
   }
 
+  /**
+   * ALGUMA OPCAO DESTE PASSO LEVA A ALGUM LUGAR?
+   *
+   * Um passo com `config.opcoes` estaciona o fluxo esperando a escolha do
+   * cliente. Isso e certo quando ha escolha a fazer -- e errado quando nao ha:
+   *
+   *   passo final: texto "✅ Chamado aberto com sucesso ..."
+   *               opcoes: [{ esperaEscolha: false, acao: "ir", targetId: null }]
+   *
+   * Esse desenho (comum quando a confirmacao e escrita num no PROPRIO em vez de
+   * no `mensagemHandoff` da opcao que transfere) fazia o motor parar ali em
+   * `aguardando: "opcao"` -- ou seja, "esperando resposta do cliente" -- depois
+   * de ter anunciado que o chamado ja estava aberto. Ninguem ia responder: o
+   * proximo a agir e o tecnico. Minutos depois, a inatividade encerrava o
+   * chamado. Era o defeito relatado.
+   *
+   * `aplicarOpcao` JA trata a opcao sem destino assim ("ramificacao apontando
+   * para o vazio: um atendente e melhor que silencio"), mas so DEPOIS que o
+   * cliente responde -- uma resposta que este passo nao tem por que esperar. A
+   * mesma regra passa a valer no instante em que o passo e alcancado.
+   *
+   * O criterio nao olha o TEXTO do passo (isso seria fragil e quebraria com
+   * qualquer reescrita): olha se existe saida. Uma pergunta aberta legitima
+   * ("AGORA DESCREVA SUA SOLICITACAO", cuja unica opcao tem `acao: "transferir"`)
+   * tem saida e continua estacionando -- e continua podendo expirar.
+   */
+  temSaidaAcionavel(passo, passos = []) {
+    return this.opcoesDoPasso(passo).some((opcao) => {
+      // Acoes terminais resolvem por si; nao dependem de destino.
+      if (opcao.acao === "transferir" || opcao.acao === "encerrar") return true;
+      return !!(opcao.targetId && passos.some((p) => p.id === opcao.targetId));
+    });
+  }
+
   // Um passo de mensagem pode pedir CNPJ explicitamente via config.aguardar.
   // A heuristica pelo texto existe so para os fluxos criados antes disso.
   passoAguardaCnpj(passo) {
@@ -1622,6 +1656,9 @@ class ChatbotEngine {
     // satisfacao guarda aqui a sua config). Quando null, o chamador usa o reset
     // padrao (tentativas zeradas).
     let contextoSessao = null;
+    // O passo tem opcoes, mas nenhuma leva a lugar nenhum: o fluxo TERMINA aqui,
+    // e nao fica esperando uma resposta que ninguem tem por que dar.
+    let fimDoFluxo = false;
 
     switch (passo.tipo) {
       case "gatilho":
@@ -1670,7 +1707,10 @@ class ChatbotEngine {
         // o motor seguiria o targetId na hora e o cliente receberia o fluxo
         // inteiro de uma vez, sem chance de escolher nada.
         if (this.opcoesDoPasso(passo).length) {
-          aguardando = AGUARDANDO.OPCAO;
+          // ...mas so para se houver escolha a fazer. Opcoes sem saida = fim do
+          // fluxo, nao pergunta em aberto (ver temSaidaAcionavel).
+          if (this.temSaidaAcionavel(passo, fluxo.passos)) aguardando = AGUARDANDO.OPCAO;
+          else fimDoFluxo = true;
         } else if (this.passoAguardaCnpj(passo) && !contexto.cnpjValidacao?.valido) {
           // Contato recorrente: oferece o CNPJ ja usado antes (ver memoria).
           const pedido = await this._pedirOuConfirmarCnpj(conversa, resposta, passo);
@@ -1736,8 +1776,10 @@ class ChatbotEngine {
         } else {
           resposta = this.textoDoPasso(passo, contexto);
         }
-        if (this.opcoesDoPasso(passo).length) aguardando = AGUARDANDO.OPCAO;
-        else proximo = this.proximoPasso(fluxo.passos, passo);
+        if (this.opcoesDoPasso(passo).length) {
+          if (this.temSaidaAcionavel(passo, fluxo.passos)) aguardando = AGUARDANDO.OPCAO;
+          else fimDoFluxo = true;
+        } else proximo = this.proximoPasso(fluxo.passos, passo);
         break;
       }
 
@@ -1758,7 +1800,33 @@ class ChatbotEngine {
 
     await this.registrarLog(instanciaId, fluxo.id, passo, conversa.id, resposta, true, inicio);
 
-    return { proximo, aguardando, contextoSessao };
+    return { proximo, aguardando, contextoSessao, fimDoFluxo };
+  }
+
+  /**
+   * O FLUXO ACABOU NUM PASSO SEM SAIDA -- entrega para a equipe.
+   *
+   * O passo ja falou com o cliente (tipicamente a confirmacao de que o chamado
+   * foi aberto), e nao ha para onde ir. Duas alternativas seriam erradas:
+   *
+   *   - ESTACIONAR em `aguardando: "opcao"` (o que o motor fazia): a sessao
+   *     passava a dizer "esperando resposta do cliente" depois de anunciar que o
+   *     chamado estava aberto, e a inatividade fechava o atendimento minutos
+   *     depois. Era o defeito relatado.
+   *   - Apenas DESLIGAR a sessao: a conversa ficaria em Pendentes sem OS
+   *     garantida, sem setor gravado e sem evento para a Central.
+   *
+   * `transferirParaHumano` e o caminho que ja faz a coisa certa: garante a OS
+   * aberta, marca a conversa como pendente para a equipe, grava `concluidoEm`
+   * (portanto mata a inatividade) e emite o evento. `avisar: false` porque o
+   * passo acabou de falar -- mandar a confirmacao de encaminhamento em seguida
+   * seriam duas mensagens dizendo a mesma coisa.
+   *
+   * Idempotente: e um upsert de sessao + `garantirAtendimentoAberto`. Reprocessar
+   * o passo final nao cria OS nem timer duplicado.
+   */
+  async _entregarNoFimDoFluxo(contexto) {
+    return this.transferirParaHumano(contexto, { avisar: false, motivo: "fim_do_fluxo" });
   }
 
   // Percorre os passos com dois freios: um teto de passos e um conjunto de
@@ -1804,6 +1872,18 @@ class ChatbotEngine {
         return { passoAtual, aguardando, contextoSessao: resultado.contextoSessao || null };
       }
 
+      // O passo falou e nao tem saida: fim do fluxo. Sai avisando o chamador,
+      // que entrega a conversa ao atendente em vez de estacionar a sessao.
+      if (resultado.fimDoFluxo) {
+        logger.info("Fluxo terminou num passo sem saida", {
+          fluxoId: contexto.fluxo.id,
+          conversaId: contexto.conversa.id,
+          passoId: passoAtual.id,
+          passoTitulo: passoAtual.titulo,
+        });
+        return { passoAtual: null, aguardando: null, contextoSessao: null, fimDoFluxo: true };
+      }
+
       passoAtual = resultado.proximo;
     }
 
@@ -1821,7 +1901,13 @@ class ChatbotEngine {
       ...contextoExtra,
     };
 
-    const { passoAtual, aguardando, contextoSessao } = await this.percorrer(passos[0] || null, contexto);
+    const { passoAtual, aguardando, contextoSessao, fimDoFluxo } = await this.percorrer(
+      passos[0] || null,
+      contexto
+    );
+    if (fimDoFluxo) {
+      return { fluxoId: fluxo.id, ...(await this._entregarNoFimDoFluxo(contexto)) };
+    }
 
     await this.deps.sessaoRepository.upsert(instanciaId, conversa.id, telefone, {
       fluxoAtualId: fluxo.id,
@@ -1928,6 +2014,9 @@ class ChatbotEngine {
     }
 
     const resultado = await this.percorrer(destino, contexto);
+    if (resultado.fimDoFluxo) {
+      return { fluxoId: fluxo.id, ...(await this._entregarNoFimDoFluxo(contexto)) };
+    }
 
     await this.deps.sessaoRepository.update(sessao.id, {
       passoAtualId: resultado.passoAtual?.id || null,
@@ -2028,6 +2117,9 @@ class ChatbotEngine {
           // O passo que pediu o CNPJ cumpriu seu papel; segue para o proximo.
           const seguinte = passoAtual ? this.proximoPasso(passos, passoAtual) : null;
           const resultado = await this.percorrer(seguinte, contexto);
+          if (resultado.fimDoFluxo) {
+            return { fluxoId: fluxo.id, ...(await this._entregarNoFimDoFluxo(contexto)) };
+          }
           await this.deps.sessaoRepository.update(sessao.id, {
             passoAtualId: resultado.passoAtual?.id || null,
             aguardando: resultado.aguardando,
@@ -2168,6 +2260,9 @@ class ChatbotEngine {
     }
 
     const resultado = await this.percorrer(passoAtual, contexto);
+    if (resultado.fimDoFluxo) {
+      return { fluxoId: fluxo.id, ...(await this._entregarNoFimDoFluxo(contexto)) };
+    }
 
     await this.deps.sessaoRepository.update(sessao.id, {
       passoAtualId: resultado.passoAtual?.id || null,

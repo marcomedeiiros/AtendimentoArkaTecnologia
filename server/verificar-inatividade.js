@@ -342,6 +342,77 @@ async function rodarAteConcluir(a) {
     check(a.inatividadesEnviadas() === 1, `a mensagem saiu uma vez so (saiu ${a.inatividadesEnviadas()}x)`);
   }
 
+  // ── Teste 8: passo final SEM SAIDA -- o desenho do relato de 2026-08-28 ────
+  //
+  // A confirmacao ("Chamado aberto com sucesso") escrita no TEXTO de um no cujas
+  // opcoes nao levam a lugar nenhum. O motor estacionava em `aguardando: opcao`
+  // -- "esperando resposta do cliente" -- depois de anunciar que o chamado
+  // estava aberto, e a inatividade fechava o atendimento minutos depois.
+  //
+  // O criterio da correcao NAO olha o texto (seria fragil): olha se alguma opcao
+  // tem saida. Ver ChatbotEngine.temSaidaAcionavel.
+  console.log("\n[8] passo final com opcoes sem destino (confirmacao no texto do no)");
+  {
+    const FINAL_SEM_SAIDA = {
+      id: "f-sem-saida", nome: "final sem saida", gatilho: "*", ativo: true,
+      passos: [
+        { id: "s0", tipo: "gatilho", titulo: "Inicio", ordem: 0, targetId: "s1", config: null },
+        { id: "s1", tipo: "mensagem", titulo: "Motivo", ordem: 1, targetId: null,
+          texto: "Descreva sua solicitacao",
+          config: { opcoes: [{ id: "x1", ordem: 0, esperaEscolha: false, rotulo: "livre", palavrasChave: [], acao: "ir", targetId: "s2" }] } },
+        { id: "s2", tipo: "mensagem", titulo: "Chamado aberto", ordem: 2, targetId: null,
+          texto: "✅ *Chamado aberto com sucesso*\n\nUm de nossos tecnicos dara continuidade por aqui.",
+          config: { opcoes: [{ id: "x2", ordem: 0, esperaEscolha: false, rotulo: "livre", palavrasChave: [], acao: "ir", targetId: null }] } },
+        { id: "s3", tipo: "espera", titulo: "Sem resposta", ordem: 3, targetId: null,
+          config: { modo: "sem_resposta", minutos: 2, mensagem: "Não entendemos a sua demanda. Por favor, abra um chamado novamente.", acao: "encerrar" } },
+      ],
+    };
+    const a = ambiente(FINAL_SEM_SAIDA);
+    await a.cliente("oi");
+    const r = await a.cliente("Liberar novo colaborador");
+    check(r?.transferido === true, `o fim do fluxo entregou para a equipe (motivo: ${r?.motivo})`);
+    check(a.est.sessao?.aguardando === AGUARDANDO.HUMANO, `sessao em humano, nao em opcao (veio ${a.est.sessao?.aguardando})`);
+    check(!!a.est.sessao?.concluidoEm, "a sessao ficou marcada como CONCLUIDA");
+    check(
+      a.doBot.filter((t) => /Chamado aberto com sucesso/.test(String(t))).length === 1,
+      "a confirmacao do passo saiu uma vez, sem mensagem de encaminhamento em duplicata"
+    );
+    a.envelhecer(10);
+    const v = await a.varrer();
+    check(v.agiu === false, `nao encerrou por inatividade (motivo: ${v.fora || "-"})`);
+    check(a.inatividadesEnviadas() === 0, "nenhuma mensagem de inatividade enviada");
+    check(a.est.conversa.statusAtendimento === "pendente", "a conversa segue Pendente para o tecnico");
+  }
+
+  // ── Teste 9: pergunta aberta legitima CONTINUA expirando ──────────────────
+  //
+  // O contraponto do Teste 8, e o que impede a correcao de virar "desligar a
+  // inatividade": a unica opcao deste no e livre TAMBEM, mas ela TEM saida
+  // (`acao: "transferir"`) -- e o no esta de fato perguntando. Igual ao
+  // "AGORA DESCREVA SUA SOLICITACAO" do fluxo da ARKA.
+  console.log("\n[9] pergunta aberta com saida (acao transferir) continua expirando");
+  {
+    const PERGUNTA_ABERTA = {
+      id: "f-aberta", nome: "pergunta aberta", gatilho: "*", ativo: true,
+      passos: [
+        { id: "q0", tipo: "gatilho", titulo: "Inicio", ordem: 0, targetId: "q1", config: null },
+        { id: "q1", tipo: "mensagem", titulo: "Descreva", ordem: 1, targetId: null,
+          texto: "AGORA DESCREVA SUA SOLICITACAO",
+          config: { opcoes: [{ id: "y1", ordem: 0, esperaEscolha: false, rotulo: "transferir", palavrasChave: [], acao: "transferir", targetId: null }] } },
+        { id: "q2", tipo: "espera", titulo: "Sem resposta", ordem: 2, targetId: null,
+          config: { modo: "sem_resposta", minutos: 2, mensagem: "Não entendemos a sua demanda. Por favor, abra um chamado novamente.", acao: "encerrar" } },
+      ],
+    };
+    const a = ambiente(PERGUNTA_ABERTA);
+    await a.cliente("oi");
+    check(a.est.sessao?.aguardando === AGUARDANDO.OPCAO, `estacionou esperando a resposta (veio ${a.est.sessao?.aguardando})`);
+    check(!a.est.sessao?.concluidoEm, "NAO marcou como concluida: a pergunta esta em aberto");
+    a.envelhecer(3);
+    const v = await a.varrer();
+    check(v.agiu === true, "encerrou por inatividade, como deve");
+    check(a.inatividadesEnviadas() === 1, "enviou a mensagem do bloco de espera");
+  }
+
   // ── PARTE B: a varredura real, com Prisma ────────────────────────────────
   console.log("\n=== PARTE B -- a varredura real contra o banco ===");
   const prisma = new PrismaClient();
