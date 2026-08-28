@@ -9,12 +9,12 @@ a Fase 7 roda tudo junto e procura regressao.
 ## Phases
 
 - [x] **Phase 1: Investigacao** - Mapear as areas e confirmar as causas-raiz
-- [ ] **Phase 2: CRUD de fluxos** - Contrato do PUT, identidade dos passos, CRUD de bloco
-- [ ] **Phase 3: Salvar bloco** - Rascunho local + botao Salvar + erro visivel
-- [ ] **Phase 4: Transferencia** - Autorizacao por dono, atomicidade, sem duplicata
-- [ ] **Phase 5: Midia WhatsApp** - CSRF no XHR e confiabilidade de envio
-- [ ] **Phase 6: CAPTCHA no cadastro** - Turnstile na tela de criar conta
-- [ ] **Phase 7: Validacao** - Suite completa, build, e caca a regressao
+- [x] **Phase 2: CRUD de fluxos** - Contrato do PUT, identidade dos passos, CRUD de bloco
+- [x] **Phase 3: Salvar bloco** - Rascunho local + botao Salvar + erro visivel
+- [x] **Phase 4: Transferencia** - Autorizacao por dono, atomicidade, sem duplicata
+- [x] **Phase 5: Midia WhatsApp** - CSRF no XHR e confiabilidade de envio
+- [x] **Phase 6: CAPTCHA no cadastro** - Turnstile na tela de criar conta
+- [x] **Phase 7: Validacao** - Suite completa, build, e caca a regressao
 
 ## Phase Details
 
@@ -37,9 +37,9 @@ sobrevive ao save.
   4. Erro de validacao chega ao cliente com o campo culpado.
 
 Plans:
-- [ ] 02-01: DTO tolerante a `null` + normalizacao na borda
-- [ ] 02-02: `update` preserva ids (diff em vez de delete+recreate)
-- [ ] 02-03: CRUD de passo individual (`/fluxos/:id/passos[/:passoId]`)
+- [x] 02-01: DTO tolerante a `null` + normalizacao na borda
+- [x] 02-02: `update` preserva ids (diff em vez de delete+recreate)
+- [x] 02-03: CRUD de passo individual (`/fluxos/:id/passos[/:passoId]`)
 
 ### Phase 3: Salvar bloco
 **Goal**: Editar bloco vira rascunho local; salvar e um ato explicito que ou
@@ -53,8 +53,8 @@ persiste, ou diz que falhou.
   5. Fechar o painel com rascunho pendente avisa antes de descartar.
 
 Plans:
-- [ ] 03-01: Rascunho + Salvar no `FlowPropertyPanel`
-- [ ] 03-02: Fim do `catch {}` no editor; salvamento serializado
+- [x] 03-01: Rascunho + Salvar no `FlowPropertyPanel`
+- [x] 03-02: Fim do `catch {}` no editor; salvamento serializado
 
 ### Phase 4: Transferencia
 **Goal**: So quem responde pela conversa a transfere, uma vez so.
@@ -68,9 +68,9 @@ Plans:
   6. Duas transferencias simultaneas: uma vence, a outra recebe conflito.
 
 Plans:
-- [ ] 04-01: Autorizacao de dono no service + `req.user` no controller
-- [ ] 04-02: Troca atomica no repositorio (UPDATE condicional + versao)
-- [ ] 04-03: Estado de pendencia e trava de clique no front
+- [x] 04-01: Autorizacao de dono no service + `req.user` no controller
+- [x] 04-02: Troca atomica no repositorio (UPDATE condicional + versao)
+- [x] 04-03: Estado de pendencia e trava de clique no front
 
 ### Phase 5: Midia WhatsApp
 **Goal**: Imagem, video, audio, documento e localizacao voltam a sair.
@@ -82,8 +82,8 @@ Plans:
   4. Falha mostra erro util, e a tela nunca fica travada em "enviando".
 
 Plans:
-- [ ] 05-01: Cabecalhos de sessao no XHR de midia
-- [ ] 05-02: Confiabilidade de envio (sem duplicata, sem travar)
+- [x] 05-01: Cabecalhos de sessao no XHR de midia
+- [x] 05-02: Confiabilidade de envio (sem duplicata, sem travar)
 
 ### Phase 6: CAPTCHA no cadastro
 **Goal**: Criar conta com o Turnstile ligado.
@@ -96,7 +96,7 @@ Plans:
   5. Sem chaves configuradas, a tela funciona como hoje.
 
 Plans:
-- [ ] 06-01: Turnstile na `CadastroPage` + repasse do token
+- [x] 06-01: Turnstile na `CadastroPage` + repasse do token
 
 ### Phase 7: Validacao
 **Goal**: Provar que funciona e que nada mais quebrou.
@@ -107,16 +107,16 @@ Plans:
   3. `npm run build` do front conclui.
 
 Plans:
-- [ ] 07-01: Suite completa + build + revisao final
+- [x] 07-01: Suite completa + build + revisao final
 
 ## Progress
 
 | Phase | Plans | Status | Completed |
 |-------|-------|--------|-----------|
 | 1. Investigacao | 1/1 | Complete | 2026-08-28 |
-| 2. CRUD de fluxos | 0/3 | Not started | - |
-| 3. Salvar bloco | 0/2 | Not started | - |
-| 4. Transferencia | 0/3 | Not started | - |
-| 5. Midia WhatsApp | 0/2 | Not started | - |
-| 6. CAPTCHA | 0/1 | Not started | - |
-| 7. Validacao | 0/1 | Not started | - |
+| 2. CRUD de fluxos | 3/3 | Complete | 2026-08-28 |
+| 3. Salvar bloco | 2/2 | Complete | 2026-08-28 |
+| 4. Transferencia | 3/3 | Complete | 2026-08-28 |
+| 5. Midia WhatsApp | 2/2 | Complete | 2026-08-28 |
+| 6. CAPTCHA | 1/1 | Complete | 2026-08-28 |
+| 7. Validacao | 1/1 | Complete | 2026-08-28 |
