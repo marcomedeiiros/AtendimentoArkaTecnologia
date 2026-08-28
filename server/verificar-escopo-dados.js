@@ -375,14 +375,57 @@ async function criarUsuario(cargo) {
       Financeiro: await logar(financeiro.email, financeiro.senha, "203.0.113.6"),
       "Técnico": await logar(tecnico.email, tecnico.senha, "203.0.113.7"),
     };
+    // A TRIAGEM E DO TECNICO. Conversa sem setor ("Geral") aparece para ele e
+    // para o Administrador, e para mais ninguem -- o bot entrega conversa ao
+    // humano sem setor em varios caminhos, e sem alguem enxergando isso o
+    // cliente fica esperando (ver o comentario em setor.helper.js).
+    //
+    // DUAS CONFERENCIAS, e elas se cobrem:
+    //
+    //   a) a lista abaixo e LIDA do helper, entao o teste compara o que o codigo
+    //      FAZ com o que ele DECLARA. Mexer na condicao sem mexer na declaracao
+    //      (ou o contrario) quebra aqui.
+    //
+    //   b) a declaracao em si e travada logo abaixo, com o valor escrito a mao.
+    //      Sem isso, acrescentar um cargo ao Set faria o teste se ADAPTAR e
+    //      passar calado -- que e exatamente o jeito de uma permissao crescer
+    //      sem ninguem decidir. Ampliar a triagem agora exige editar o teste, e
+    //      editar um teste de vazamento e uma decisao, nao um descuido.
+    const { CUIDAM_DA_TRIAGEM } = require("./src/shared/helpers/setor.helper");
+    const SEM_SETOR = "Geral";
+
+    check(
+      [...CUIDAM_DA_TRIAGEM].sort().join(",") === "Técnico",
+      `so o Tecnico (alem do Administrador) faz triagem -- hoje: [${[...CUIDAM_DA_TRIAGEM].join(", ")}]`
+    );
+
     for (const [cargo, sessao] of Object.entries(sessoes)) {
       const lista = await pedir("/api/conversas", { sessao });
+      const fazTriagem = CUIDAM_DA_TRIAGEM.has(cargo);
+
       const proprias = Object.entries(iscas).filter(([k]) => k.startsWith(cargo + "/"));
-      const outras = Object.entries(iscas).filter(([k]) => !k.startsWith(cargo + "/"));
-      const veProprias = proprias.every(([, v]) => lista.texto.includes(v.chave));
-      const veOutras = outras.filter(([, v]) => lista.texto.includes(v.chave));
-      check(veProprias, `${cargo} enxerga as 3 conversas do proprio setor`);
-      check(veOutras.length === 0, `${cargo} NAO enxerga nenhuma de outro setor${veOutras.length ? " (VAZOU: " + veOutras.map(([k]) => k).join(", ") + ")" : ""}`);
+      // Para quem faz triagem, "Geral" conta como proprio: e trabalho dele.
+      const permitidas = fazTriagem
+        ? Object.entries(iscas).filter(([k]) => k.startsWith(cargo + "/") || k.startsWith(SEM_SETOR + "/"))
+        : proprias;
+      const proibidas = Object.entries(iscas).filter(([k]) => !permitidas.some(([p]) => p === k));
+
+      check(proprias.every(([, v]) => lista.texto.includes(v.chave)),
+        `${cargo} enxerga as 3 conversas do proprio setor`);
+
+      const vazou = proibidas.filter(([, v]) => lista.texto.includes(v.chave));
+      check(vazou.length === 0,
+        `${cargo} NAO enxerga nenhuma que nao lhe cabe${vazou.length ? " (VAZOU: " + vazou.map(([k]) => k).join(", ") + ")" : ""}`);
+
+      if (fazTriagem) {
+        const semSetor = Object.entries(iscas).filter(([k]) => k.startsWith(SEM_SETOR + "/"));
+        check(semSetor.length > 0 && semSetor.every(([, v]) => lista.texto.includes(v.chave)),
+          `${cargo} faz triagem: ENXERGA as conversas sem setor`);
+      } else {
+        const semSetor = Object.entries(iscas).filter(([k]) => k.startsWith(SEM_SETOR + "/"));
+        check(semSetor.every(([, v]) => !lista.texto.includes(v.chave)),
+          `${cargo} nao faz triagem: NAO enxerga as conversas sem setor`);
+      }
     }
 
     // ── 7. ADMINISTRADOR CONTINUA VENDO TUDO ───────────────────────────────

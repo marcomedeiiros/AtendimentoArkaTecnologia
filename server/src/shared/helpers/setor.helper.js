@@ -24,7 +24,8 @@ function setorValido(valor) {
 // vivo o que a leitura esconde. `userCargo` vem do token ja validado.
 //
 //   - sem cargo / Administrador: ve tudo
-//   - Financeiro/Tecnico/Comercial: so o proprio setor, e mais nada
+//   - Tecnico: o proprio setor MAIS as conversas sem setor (triagem, abaixo)
+//   - Financeiro/Comercial: so o proprio setor, e mais nada
 //
 // ── POR QUE "GERAL" NAO E PASSE LIVRE ──────────────────────────────────────
 //
@@ -38,23 +39,44 @@ function setorValido(valor) {
 // conversa nova de cliente ficava legivel por toda a equipe ate alguem escolher
 // o setor -- e continuava assim depois de FECHADA, se ninguem escolheu.
 //
-// Nao era um caso de canto: era o caminho normal de toda conversa. Um Tecnico
-// lia negociacao do Comercial e cobranca do Financeiro so por chegarem antes da
-// triagem. A varredura em verificar-escopo-dados.js acusava 15 vazamentos por
-// tres caminhos independentes: a listagem, o acesso direto por ID e o histórico
-// de chamados fechados.
+// Nao era um caso de canto: era o caminho normal de toda conversa. O Comercial
+// lia cobranca do Financeiro so por ela chegar antes da triagem. A varredura em
+// verificar-escopo-dados.js acusava 15 vazamentos por tres caminhos
+// independentes: a listagem, o acesso direto por ID e o histórico de chamados
+// fechados.
 //
-// Agora "Geral" e um setor como os outros: nao pertence a Comercial, nem a
-// Financeiro, nem a Tecnico, entao nenhum dos tres o enxerga. Administrador
-// continua vendo tudo -- e e por ele que uma conversa sem setor e distribuida.
+// ── MAS ALGUEM PRECISA VER A TRIAGEM ───────────────────────────────────────
 //
-// A linha "Tecnico nunca ve Financeiro" tambem saiu: nao era protecao extra,
-// era um caso particular do `setorNorm === userCargo` logo abaixo, que ja o
-// cobre. Duas regras dizendo a mesma coisa so criam a duvida de qual vale.
+// Fechar "Geral" para todos resolvia o vazamento e criava outro problema: o bot
+// entrega a conversa para atendimento humano SEM setor em caminhos que nao sao
+// escolha do cliente (timeout de "cliente nao respondeu", menu sem gatilho,
+// ramificacao sem destino), e o chamado NOVO de quem ja e cliente volta para
+// "Geral" ate o menu ser respondido de novo. Nesses casos ficava gente
+// esperando atendimento numa conversa que so o Administrador enxergava.
+//
+// Decisao do time: a triagem e do TECNICO, junto com o Administrador. Comercial
+// e Financeiro continuam vendo so o proprio setor.
+//
+// O preco, para ficar dito em vez de descoberto depois: conversa sem setor pode
+// ser sobre qualquer assunto, cobranca inclusive, e o Tecnico a le ate o cliente
+// escolher no menu. E a troca entre esse risco e deixar cliente esperando sem
+// ninguem ver.
+//
+// Fica num Set, e nao num `||` dentro do if, para trocar de ideia depois ser uma
+// linha -- e para o teste conseguir citar a regra pelo nome em vez de repetir a
+// condicao (teste que repete a implementacao concorda com ela ate quando ela
+// esta errada).
+//
+// A linha "Tecnico nunca ve Financeiro" saiu: nao era protecao extra, era um
+// caso particular do `setorNorm === userCargo` abaixo, que ja o cobre. Duas
+// regras dizendo a mesma coisa so criam a duvida de qual vale.
+const CUIDAM_DA_TRIAGEM = new Set(["Técnico"]);
+
 function podeAcessarSetor(userCargo, setorConversa) {
   if (!userCargo || userCargo === "Administrador") return true;
   const setorNorm = normalizarSetor(setorConversa);
   if (["Financeiro", "Técnico", "Comercial"].includes(userCargo)) {
+    if (setorNorm === SETOR_PADRAO) return CUIDAM_DA_TRIAGEM.has(userCargo);
     return setorNorm === userCargo;
   }
   return true;
@@ -149,6 +171,8 @@ function setorDaOpcaoEscolhida(opcao) {
 module.exports = {
   SETORES,
   SETOR_PADRAO,
+  // Exportado para o teste conseguir CITAR a regra em vez de reescreve-la.
+  CUIDAM_DA_TRIAGEM,
   setorValido,
   normalizarSetor,
   podeAcessarSetor,
