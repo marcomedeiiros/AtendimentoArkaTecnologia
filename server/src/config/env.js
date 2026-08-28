@@ -72,6 +72,29 @@ const env = {
     // ali. A AUTORIDADE da sessao continua aqui (rotacao, revogacao, reuso).
     inatividadeMs: duracaoMs(process.env.SESSAO_INATIVIDADE, 12 * 3_600_000), // 12h
   },
+  /**
+   * QUANTOS PROXIES ESTAO NA FRENTE DA API.
+   *
+   * O compose ja mandava `TRUST_PROXY`, mas nenhum codigo lia -- entao o Express
+   * ficava no padrao (`false`) e enxergava o IP do CONTAINER do nginx em toda
+   * requisicao. O log de producao mostrava exatamente isso:
+   *   ip: "::ffff:172.18.0.5"   (a rede interna do Docker, nao o cliente)
+   * mais um aviso do express-rate-limit a cada requisicao.
+   *
+   * O efeito nao e so log sujo: com um IP unico para todo mundo, o rate limiting
+   * vira uma cota GLOBAL em vez de por IP. Um atacante estoura o limite de login
+   * e tranca o painel da empresa inteira, enquanto a protecao por IP contra
+   * forca bruta simplesmente nao existe.
+   *
+   * Contagem de hops ate a API, do mais externo para o mais interno:
+   *   1 = so o nginx do container `web`
+   *   2 = Cloudflare + nginx  (o caso deste projeto)
+   *
+   * Numero exato, NUNCA `true`: com `true` o Express aceita qualquer
+   * `X-Forwarded-For` que chegue, e o proprio cliente escolhe o seu "IP".
+   */
+  trustProxy: Math.max(0, Number(process.env.TRUST_PROXY ?? 2)),
+
   corsOrigin: process.env.CORS_ORIGIN || "http://localhost:5173",
   evolutionApi: {
     url: process.env.EVOLUTION_API_URL || "http://localhost:8080",

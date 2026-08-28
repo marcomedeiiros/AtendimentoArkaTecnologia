@@ -41,8 +41,20 @@ services:
       DATABASE_URL: "file:/data/arka.db"
       # Nome do servico na rede do compose -- nao e localhost aqui dentro.
       EVOLUTION_API_URL: "http://evolution-api:8080"
-      # Um proxy na frente (o nginx do container web).
-      TRUST_PROXY: "1"
+      # QUANTOS PROXIES ESTAO NA FRENTE, de fora para dentro.
+      #
+      # Sao DOIS: Cloudflare (termina o HTTPS) e o nginx do container `web`.
+      # Estava "1", contando so o nginx -- com um hop a menos o Express le a
+      # cadeia errada e enxerga o IP da BORDA DA CLOUDFLARE como se fosse o do
+      # cliente, e todo mundo que passa pela mesma borda cai no MESMO balde de
+      # rate limit.
+      #
+      # Medido: com a cadeia "cliente, borda-cf",
+      #   TRUST_PROXY=1 -> req.ip = borda-cf   (errado)
+      #   TRUST_PROXY=2 -> req.ip = cliente    (correto)
+      #
+      # Se a Cloudflare sair da frente, isto volta a ser "1".
+      TRUST_PROXY: "2"
       # Midia no mesmo volume do banco: /app nao e gravavel pelo usuario node,
       # e sem isto o boot loga "EACCES ... mkdir '/app/dados'" e o envio de
       # audio/imagem falha.

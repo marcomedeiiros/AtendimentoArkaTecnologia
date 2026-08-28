@@ -229,8 +229,20 @@ async function request(endpoint, options = {}, jaRenovou = false) {
 }
 
 export const AuthAPI = {
-  entrar: async (email, senha, lembrar = true) => {
-    const data = await publico('/auth/login', { email, senha });
+  // `turnstileToken` vem do widget e viaja no corpo do login. Ele NAO prova
+  // nada sozinho: quem valida e o servidor, perguntando a Cloudflare. Aqui ele
+  // e apenas mais um campo do formulario.
+  //
+  // Esta assinatura precisa acompanhar a do AuthContext e a da LoginPage -- se
+  // uma das tres ficar para tras, o token e descartado em silencio e o servidor
+  // responde "token-ausente", com o widget mostrando "Sucesso!" na tela. Foi
+  // exatamente o que aconteceu quando so este arquivo ficou sem atualizar.
+  entrar: async (email, senha, lembrar = true, turnstileToken = null) => {
+    const data = await publico('/auth/login', {
+      email,
+      senha,
+      ...(turnstileToken ? { turnstileToken } : {}),
+    });
     setToken(data.token, lembrar, data.refreshToken);
     guardarSessao(data.sessao, lembrar);
     // Digitar e-mail e senha e, por definicao, alguem ali: e o unico ponto
@@ -263,7 +275,7 @@ export const AuthAPI = {
    *
    * A site key não está no bundle de propósito: assim não existe nenhuma
    * variável de ambiente do Turnstile do lado do cliente, e trocar a chave na
-   * Cloudflare não exige rebuild do front. A secret nunca passa por aqui — ela
+   * Cloudflare não exige rebuild do front. A secret nunca passa por aqui ela
    * só existe no processo do servidor.
    *
    * Falha silenciosa devolvendo `ativo: false`: se esta chamada quebrar, o

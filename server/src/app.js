@@ -37,6 +37,14 @@ const webhookAuth = require("./shared/middlewares/webhook.middleware");
 function createApp() {
   const app = express();
 
+  // QUEM E O CLIENTE. Precisa vir antes de qualquer limiter.
+  //
+  // Sem isto o Express nao confia no `X-Forwarded-For` do nginx e enxerga o IP
+  // do container em toda requisicao -- o rate limiting deixa de ser por IP e
+  // vira uma cota global, alem de o express-rate-limit avisar em cada chamada.
+  // Numero exato de hops, nunca `true` (ver env.trustProxy).
+  app.set("trust proxy", env.trustProxy);
+
   app.use(cors({ origin: env.corsOrigin }));
   app.use(express.json({ limit: "30mb" })); // mídia enviada em base64 passa de 2mb
   app.use(apiLimiter);
