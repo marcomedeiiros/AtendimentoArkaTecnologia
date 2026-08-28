@@ -499,7 +499,7 @@ export const FluxosAPI = {
   //
   // A diferença que justifica as duas existirem não é o tamanho do corpo: é que
   // mandando o fluxo inteiro, duas abas editando blocos DIFERENTES do mesmo
-  // fluxo se sobrescreviam — cada PUT levava junto a versão antiga do bloco da
+  // fluxo se sobrescreviam cada PUT levava junto a versão antiga do bloco da
   // outra. Tocando só a própria linha, as duas edições sobrevivem.
   //
   // Todas devolvem o FLUXO inteiro, e não só o bloco: o editor precisa

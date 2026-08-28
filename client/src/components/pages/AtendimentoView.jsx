@@ -2894,7 +2894,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   // Numa rede lenta isso é uma janela aberta: dá para clicar duas vezes no
   // mesmo atendente, ou clicar num segundo enquanto o primeiro está no ar.
   //
-  // A trava de verdade é do servidor — a troca de dono é um UPDATE condicional,
+  // A trava de verdade é do servidor a troca de dono é um UPDATE condicional,
   // e a segunda tentativa recebe 409 em vez de sobrescrever. O que está aqui é
   // a metade da tela: nem sequer disparar o segundo pedido, e dizer o que está
   // acontecendo enquanto o primeiro não volta.

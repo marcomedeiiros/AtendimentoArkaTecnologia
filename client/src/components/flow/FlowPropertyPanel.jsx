@@ -92,7 +92,7 @@ function RichTextEditor({ value, onChange, rows = 4, placeholder }) {
  * Antes, cada `onChange` deste painel subia direto: digitar "Bom dia" mandava
  * sete gravações do FLUXO INTEIRO ao servidor, uma por tecla, sem ordem
  * garantida de chegada. E como cada gravação reescrevia todos os passos, a
- * resposta que chegasse por último vencia — podendo ser a mais velha.
+ * resposta que chegasse por último vencia, e podia ser a mais velha.
  *
  * O que muda aqui é só ONDE a digitação mora. O corpo do painel continua
  * chamando `onChangeNode({ ...node, campo: valor })` exatamente como antes; o
@@ -100,7 +100,7 @@ function RichTextEditor({ value, onChange, rows = 4, placeholder }) {
  * mais o servidor. Foi de propósito: manter a assinatura interna evita mexer
  * nas dezenas de campos do painel só para trocar o destino do dado.
  *
- * Quem sobe é o botão Salvar, uma vez, com o bloco inteiro — e ele diz o que
+ * Quem sobe é o botão Salvar, uma vez, com o bloco inteiro e ele diz o que
  * aconteceu. Se falhar, o rascunho FICA: perder o texto que a pessoa acabou de
  * escrever porque a rede piscou seria trocar um problema por outro pior.
  *
@@ -172,7 +172,7 @@ export function FlowPropertyPanel({
   }, [salvando, rascunho, onSalvarNode]);
 
   // Fechar com alteração pendente avisa. Sem isto, o X do canto vira um
-  // "descartar" silencioso — e o painel acabou de deixar de salvar sozinho.
+  // "descartar" silencioso e o painel acabou de deixar de salvar sozinho.
   const fechar = useCallback(() => {
     if (sujo && !window.confirm('Este bloco tem alterações não salvas. Descartar?')) return;
     onClose();
@@ -735,7 +735,7 @@ export function FlowPropertyPanel({
           O botão fica no rodapé, largo e sozinho na primeira linha: é a ação
           principal do painel desde que a digitação parou de subir sozinha.
 
-          Ele mostra os três estados que importam — pendente, salvando, salvo —
+          Ele mostra os três estados que importam pendente, salvando, salvo
           e o erro aparece AQUI, colado nele, e não num aviso qualquer no canto
           da tela. Uma falha de gravação que a pessoa não lê é a mesma coisa que
           o `catch {}` que existia antes. */}

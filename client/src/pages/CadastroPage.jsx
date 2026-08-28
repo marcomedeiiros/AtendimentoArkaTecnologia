@@ -72,7 +72,7 @@ export default function CadastroPage() {
         senha: form.senha,
         ...(exigeCodigo ? { codigo: form.codigo } : {}),
         // Só vai quando existe: sem chaves configuradas o widget não renderiza
-        // e o servidor também está com o desafio desligado — as duas pontas
+        // e o servidor também está com o desafio desligado as duas pontas
         // ficam desligadas juntas, e mandar `null` só sujaria o corpo.
         ...(turnstileToken ? { turnstileToken } : {}),
       });
@@ -86,8 +86,8 @@ export default function CadastroPage() {
       if (Object.keys(err.campos || {}).length) setCampos(err.campos);
       else setErro(err.message);
       setEnviando(false);
-      // O token do Turnstile vale UMA vez. Depois de uma tentativa — mesmo
-      // recusada por outro motivo, como e-mail já cadastrado — ele já foi
+      // O token do Turnstile vale UMA vez. Depois de uma tentativa mesmo
+      // recusada por outro motivo, como e-mail já cadastrado ele já foi
       // gasto: reapresentá-lo faria a Cloudflare responder
       // `timeout-or-duplicate`, e a segunda tentativa morreria com "não foi
       // possível confirmar que você não é um robô" em vez do erro real. Zerar
