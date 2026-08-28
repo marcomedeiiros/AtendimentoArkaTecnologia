@@ -1,11 +1,40 @@
 const authService = require("./auth.service");
 const { success } = require("../../shared/helpers/response.helper");
 const env = require("../../config/env");
+const bloqueio = require("../../shared/middlewares/bloqueioProgressivo.middleware");
+const seg = require("../../shared/helpers/seguranca.helper");
 
 class AuthController {
+  /**
+   * O login precisa CONTAR o que aconteceu, e nao so responder.
+   *
+   * O middleware `bloqueioProgressivo` decide se a tentativa passa, mas quem
+   * sabe se ela deu certo e este ponto -- e sem esse retorno o contador nunca
+   * anda, e o bloqueio nunca acontece. Sao as duas metades do mesmo freio.
+   *
+   * Sucesso ZERA o castigo: quem lembrou a senha na quarta tentativa nao fica
+   * pagando pelas tres primeiras.
+   */
   async login(req, res) {
-    const data = await authService.login(req.body);
-    return success(res, data);
+    const email = req.body?.email;
+    try {
+      const data = await authService.login(req.body);
+      bloqueio.registrarSucesso(req, email);
+      seg.registrar(seg.EVENTOS.LOGIN_OK, req, { conta: seg.marcaDe(email) });
+      return success(res, data);
+    } catch (e) {
+      // Só conta como falha o que é ERRO DE CREDENCIAL. Conta desativada,
+      // Turnstile recusado ou banco fora do ar nao sao tentativa de adivinhar
+      // senha -- somar tudo bloquearia gente por problema que nao e dela.
+      //
+      // Conta certa com senha errada e conta inexistente contam IGUAL: quem
+      // sonda quais e-mails existem nao aprende nada com a diferenca.
+      if (e?.statusCode === 401 || e?.code === "INVALID_CREDENTIALS") {
+        bloqueio.registrarFalha(req, email);
+        seg.observarLoginFalhou(req, email);
+      }
+      throw e;
+    }
   }
 
   async renovar(req, res) {

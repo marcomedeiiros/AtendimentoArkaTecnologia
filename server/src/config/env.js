@@ -135,6 +135,31 @@ const env = {
       return !!(this.siteKey && this.secretKey);
     },
   },
+
+  /**
+   * Freios da autenticacao (ver bloqueioProgressivo.middleware.js).
+   *
+   * O rate limit responde "quantas requisicoes por janela". Isto responde outra
+   * pergunta: "quantas FALHAS seguidas" -- que e o sinal de forca bruta. Quem
+   * acerta a senha de primeira nao encosta em nada disto.
+   *
+   * Sao configuraveis porque "muita tentativa" depende do time: cinco pessoas
+   * num mesmo escritorio saem todas pelo mesmo IP.
+   */
+  seguranca: {
+    // Falhas toleradas antes de comecar a ATRASAR a resposta.
+    falhasAteAtraso: Math.max(1, Number(process.env.SEG_FALHAS_ATE_ATRASO) || 3),
+    // Falhas ate o bloqueio temporario (so por IP -- ver o middleware).
+    falhasAteBloqueio: Math.max(2, Number(process.env.SEG_FALHAS_ATE_BLOQUEIO) || 8),
+    // Primeiro bloqueio; dobra a cada reincidencia ate o teto.
+    bloqueioBaseMs: duracaoMs(process.env.SEG_BLOQUEIO_BASE, 60_000), // 1min
+    bloqueioMaxMs: duracaoMs(process.env.SEG_BLOQUEIO_MAX, 30 * 60_000), // 30min
+    // Janela em que as falhas sao contadas; sem falha nova, o contador zera.
+    janelaMs: duracaoMs(process.env.SEG_JANELA, 15 * 60_000), // 15min
+    // Teto do atraso. Atraso longo demais vira DoS contra nos mesmos: cada
+    // tentativa presa segura um socket aberto.
+    atrasoMaxMs: duracaoMs(process.env.SEG_ATRASO_MAX, 2_000),
+  },
 };
 
 module.exports = env;

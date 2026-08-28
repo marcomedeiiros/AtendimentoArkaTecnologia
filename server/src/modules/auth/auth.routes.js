@@ -4,6 +4,7 @@ const validate = require("../../shared/middlewares/validate.middleware");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
 const { authLimiter } = require("../../shared/middlewares/rateLimit.middleware");
 const { exigirTurnstile } = require("../../shared/middlewares/turnstile.middleware");
+const { bloqueioProgressivo } = require("../../shared/middlewares/bloqueioProgressivo.middleware");
 const { loginSchema, cadastroSchema, atualizarPerfilSchema, trocarSenhaSchema, refreshSchema, sairSchema } = require("./auth.dto");
 
 /**
@@ -26,7 +27,13 @@ const { loginSchema, cadastroSchema, atualizarPerfilSchema, trocarSenhaSchema, r
  *       200:
  *         description: Token JWT
  */
-router.post("/login", authLimiter, validate(loginSchema), exigirTurnstile, (req, res, next) =>
+/* ORDEM DOS FREIOS, e ela importa:
+     authLimiter        corta VOLUME por IP (barato, primeiro)
+     validate           corpo malformado nem conta como tentativa
+     bloqueioProgressivo pune SEQUENCIA de falhas -- antes do Turnstile, para
+                        um bloqueado nao gastar chamada a Cloudflare
+     exigirTurnstile    por ultimo: e a checagem que sai da maquina */
+router.post("/login", authLimiter, validate(loginSchema), bloqueioProgressivo, exigirTurnstile, (req, res, next) =>
   authController.login(req, res).catch(next)
 );
 
@@ -115,7 +122,7 @@ router.post("/sair-todos", authMiddleware, (req, res, next) =>
  *       201: { description: "Conta criada. Devolve apenas os dados do usuario; o token sai do /login" }
  *       409: { description: E-mail ja cadastrado }
  */
-router.post("/cadastrar", authLimiter, validate(cadastroSchema), exigirTurnstile, (req, res, next) =>
+router.post("/cadastrar", authLimiter, validate(cadastroSchema), bloqueioProgressivo, exigirTurnstile, (req, res, next) =>
   authController.cadastrar(req, res).catch(next)
 );
 
