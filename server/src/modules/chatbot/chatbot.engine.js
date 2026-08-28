@@ -2013,6 +2013,22 @@ class ChatbotEngine {
         // Fica parado no passo que pediu a informacao; a resposta do cliente
         // e que faz avancar. `contextoSessao` carrega o que esse passo precisa
         // guardar (ex.: a config da pesquisa de satisfacao).
+        // ESPERA SEM COBRANCA -- registrada em `info`, nao em `debug`.
+        //
+        // Este e o unico sinal observavel de que o passo de confirmacao ("Chamado
+        // aberto com sucesso") parou SEM abrir prazo de inatividade. Sem esta
+        // linha, a prova de que a correcao funciona seria a AUSENCIA de
+        // "Etapa encerrada" no log -- indistinguivel de "ninguem testou ainda".
+        // Em producao o nivel e `info`, entao `debug` nao serviria.
+        if (resultado.cobraResposta === false) {
+          logger.info("Espera sem cobranca: a resposta do cliente nao muda o desfecho", {
+            fluxoId: contexto.fluxo.id,
+            conversaId: contexto.conversa.id,
+            passoId: passoAtual.id,
+            passoTitulo: passoAtual.titulo,
+          });
+        }
+
         return {
           passoAtual,
           aguardando,
