@@ -498,6 +498,37 @@ async function rodarAteConcluir(a) {
     );
   }
 
+  // ── Teste 12: o aviso de ESPERA NA FILA conta desde o handoff ─────────────
+  //
+  // O relogio era `os.abertoEm` -- a abertura da OS, que acontece na PRIMEIRA
+  // mensagem do cliente. Os 10 minutos incluiam a triagem inteira do bot, e quem
+  // levava 8 minutos respondendo recebia "seu atendimento esta na fila" 2 minutos
+  // depois de ja ter sido avisado de que o chamado foi aberto.
+  console.log("\n[12] aviso de espera na fila conta desde a entrada na fila");
+  {
+    const a = ambiente(fluxo);
+    // OS aberta ha 30 min (o cliente demorou na triagem)...
+    a.est.conversa.atendimentos[0].abertoEm = new Date(Date.now() - 30 * MIN);
+    // ...e o handoff acabou de acontecer.
+    a.est.sessao = { id: "s", concluidoEm: new Date(), aguardando: AGUARDANDO.HUMANO, ativo: true };
+    a.est.conversa.sessao = a.est.sessao;
+
+    const avisou = await a.engine.aplicarEsperaFila(a.est.conversa, fluxo, { instanceName: "arka" });
+    check(avisou === false, "nao avisou: entrou na fila agora, apesar da OS ser de 30 min atras");
+
+    // Agora sim: 15 min NA FILA (o bloco pede 10).
+    a.est.sessao.concluidoEm = new Date(Date.now() - 15 * MIN);
+    const avisou2 = await a.engine.aplicarEsperaFila(a.est.conversa, fluxo, { instanceName: "arka" });
+    check(avisou2 === true, "avisou depois de 15 min de espera real por atendente");
+
+    // Conversa que chegou a fila sem passar por fluxo: vale a abertura da OS.
+    const b = ambiente(fluxo);
+    b.est.conversa.atendimentos[0].abertoEm = new Date(Date.now() - 30 * MIN);
+    b.est.conversa.sessao = null;
+    const avisou3 = await b.engine.aplicarEsperaFila(b.est.conversa, fluxo, { instanceName: "arka" });
+    check(avisou3 === true, "sem sessao, o relogio continua sendo a abertura da OS");
+  }
+
   // ── PARTE B: a varredura real, com Prisma ────────────────────────────────
   console.log("\n=== PARTE B -- a varredura real contra o banco ===");
   const prisma = new PrismaClient();

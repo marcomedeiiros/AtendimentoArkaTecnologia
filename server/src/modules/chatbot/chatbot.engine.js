@@ -1581,10 +1581,22 @@ class ChatbotEngine {
     // depois nem um restart do servidor mandam a mensagem de novo.
     if (os.avisoEsperaEm && !cfg.repetir) return false;
 
-    // O relogio conta desde que a conversa ENTROU na fila (a abertura da OS),
-    // nao desde a ultima mensagem: o cliente pode ter mandado varias e continuar
-    // esperando o mesmo tanto.
-    const desde = new Date(os.abertoEm || conversa.criadoEm).getTime();
+    // O RELOGIO CONTA DESDE QUE A CONVERSA ENTROU NA FILA -- e nao desde que o
+    // cliente comecou a falar com o bot.
+    //
+    // Aqui era `os.abertoEm`, a abertura da OS. Mas a OS abre quando o CICLO
+    // comeca, isto e, na primeira mensagem do cliente -- entao os 10 minutos
+    // incluiam toda a triagem do bot. Quem levava 8 minutos respondendo CNPJ,
+    // menu e descricao recebia "seu atendimento esta na fila" 2 minutos depois de
+    // ja ter sido avisado de que o chamado foi aberto. O aviso e sobre a DEMORA
+    // do atendente; enquanto o cliente respondia ao bot, ninguem estava devendo
+    // resposta a ele.
+    //
+    // `sessao.concluidoEm` e o instante exato do handoff (ver _marcasDeEspera).
+    // Sem ele -- conversa que chegou a fila sem passar por fluxo, ou reaberta
+    // pelo atendente -- vale a abertura da OS, como antes.
+    const entrouNaFila = conversa.sessao?.concluidoEm || null;
+    const desde = new Date(entrouNaFila || os.abertoEm || conversa.criadoEm).getTime();
     const ultimoAviso = os.avisoEsperaEm ? new Date(os.avisoEsperaEm).getTime() : null;
     const base = cfg.repetir && ultimoAviso ? ultimoAviso : desde;
     if (Date.now() - base < cfg.minutos * 60 * 1000) return false;
