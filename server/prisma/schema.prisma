@@ -257,6 +257,22 @@ model Conversa {
   // mas nao aparece mais na conversa.
   empresa             String?
   cnpjVerificado      Boolean   @default(false) @map("cnpj_verificado")
+  /// TIPO DO CLIENTE, como o sistema o classificou: "cadastrado" | "avulso".
+  ///
+  /// O motor SEMPRE soube disto -- `validarCnpjRecebido` devolve
+  /// `estado: parceiro ? "cadastrado" : "avulso"` -- mas a classificacao vivia
+  /// so no retorno da funcao e numa linha de log. O que era gravado nao
+  /// distinguia os dois: `cnpjVerificado: true` para ambos.
+  ///
+  /// Por isso a Central chamava um avulso de "CLIENTE IDENTIFICADO": ela so
+  /// tinha "verificou o CNPJ?" para perguntar, e a resposta era sim nos dois
+  /// casos.
+  ///
+  /// Nulo = ainda nao classificado (conversa nova, sem CNPJ). NAO e o mesmo que
+  /// avulso: "nao sei" e "sei que e avulso" sao estados diferentes, e o segundo
+  /// pode existir SEM cnpjVerificado -- e o caso do fluxo que esgota as
+  /// tentativas de CNPJ e segue como avulso por configuracao.
+  clienteTipo         String?   @map("cliente_tipo")
   lido                Boolean   @default(false)
   naoLidas            Int       @default(0) @map("nao_lidas")
   fotoUrl             String?   @map("foto_url")

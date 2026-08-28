@@ -336,6 +336,10 @@ class ConversaService {
         cnpj: cnpjNumeros,
         empresa: parceiro?.razaoSocial || null,
         cnpjVerificado: true,
+        // Mesma classificacao dos outros dois pontos de gravacao (o motor e o
+        // "validar CNPJ" da Central). Sem ela a Central so sabia "verificou?",
+        // e chamava o avulso de "CLIENTE IDENTIFICADO".
+        clienteTipo: parceiro ? "cadastrado" : "avulso",
       });
       logger.info("CNPJ identificado na mensagem da equipe", {
         conversaId: id,
@@ -759,6 +763,7 @@ class ConversaService {
       cnpj: cnpjLimpo,
       empresa: parceiro?.razaoSocial || null,
       cnpjVerificado: true,
+      clienteTipo: parceiro ? "cadastrado" : "avulso",
     });
 
     // A TERCEIRA COPIA DA MESMA REGRA SAIU DAQUI.

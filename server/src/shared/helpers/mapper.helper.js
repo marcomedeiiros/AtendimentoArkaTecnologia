@@ -113,6 +113,11 @@ function mapConversa(c) {
     cnpj: c.cnpj,
     empresa: c.empresa || null,
     cnpjVerificado: c.cnpjVerificado,
+    // "cadastrado" | "avulso" | null (ainda nao classificado). Sai daqui para a
+    // badge da Central poder dizer O QUE o cliente e, em vez de deduzir de
+    // `cnpjVerificado` -- que valia true para os dois tipos e por isso chamava
+    // todo avulso de "CLIENTE IDENTIFICADO".
+    clienteTipo: c.clienteTipo || null,
     lido: c.lido,
     naoLidas: c.naoLidas ?? 0,
     fotoUrl: c.fotoUrl || null,

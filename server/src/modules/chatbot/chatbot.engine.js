@@ -776,6 +776,14 @@ class ChatbotEngine {
       cnpj: cnpjLimpo,
       empresa: parceiro?.razaoSocial || null,
       cnpjVerificado: true,
+      // O TIPO DO CLIENTE, gravado -- e nao so devolvido.
+      //
+      // A classificacao logo abaixo (`estado: parceiro ? "cadastrado" :
+      // "avulso"`) sempre existiu, mas morria no retorno desta funcao e numa
+      // linha de log. O que ia para o banco era `cnpjVerificado: true` nos dois
+      // casos, entao a Central nao tinha como distinguir um do outro e chamava
+      // o avulso de "CLIENTE IDENTIFICADO".
+      clienteTipo: parceiro ? "cadastrado" : "avulso",
     });
 
     // O RESULTADO DA CONSULTA E INTERNO. NAO VAI PARA O WHATSAPP.
@@ -1925,6 +1933,15 @@ class ChatbotEngine {
             await this.deps.sessaoRepository.update(sessao.id, {
               contexto: { ...(sessao.contexto || {}), tentativasCnpj: 0 },
             });
+            // ESTE CAMINHO NAO GRAVAVA NADA. O fluxo decidia atender como
+            // avulso, escrevia no log e transferia -- e a conversa seguia com
+            // `cnpjVerificado: false`, entao a Central mostrava "CLIENTE NAO
+            // IDENTIFICADO". O sistema tinha tomado a decisao e a tela nao
+            // ficava sabendo.
+            //
+            // `cnpjVerificado` continua false de proposito: nenhum CNPJ foi
+            // confirmado aqui. O que se sabe e o TIPO, e e so isso que se grava.
+            await this.deps.conversaRepository.update(conversa.id, { clienteTipo: "avulso" });
             logger.info("CNPJ nao confirmado: seguindo como cliente avulso", {
               conversaId: conversa.id,
             });

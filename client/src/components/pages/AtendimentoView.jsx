@@ -212,8 +212,65 @@ function empresaDaConversa(c, parceiros = []) {
 // precisa saber COM QUEM esta falando, e os 14 digitos so ocupavam a badge sem
 // dizer nada. A cor continua distinguindo parceiro com contrato de cliente sem
 // contrato.
+/**
+ * TIPO DO CLIENTE -- a pergunta que a badge responde.
+ *
+ * ── O DEFEITO ─────────────────────────────────────────────────────────────
+ *
+ * A badge só sabia perguntar "o CNPJ foi verificado?". E a resposta era SIM
+ * para os dois tipos de cliente, porque as três gravações do servidor escreviam
+ * `cnpjVerificado: true` tanto para o parceiro cadastrado quanto para o avulso.
+ * Um avulso não tem razão social conhecida, então `empresa` vinha null e o
+ * rótulo caía no literal 'CLIENTE IDENTIFICADO'.
+ *
+ * O motor sempre soube a diferença -- `validarCnpjRecebido` devolve
+ * `estado: parceiro ? "cadastrado" : "avulso"` -- mas jogava a classificação
+ * fora. Agora ela é gravada em `clienteTipo`, e é ela que manda aqui.
+ *
+ * ── A ORDEM DAS PERGUNTAS, E POR QUE ELA É ESSA ───────────────────────────
+ *
+ * 1. Há CNPJ verificado? Então o CADASTRO VIVO decide, e só ele: parceiro ativo
+ *    agora = cadastrado; qualquer outra coisa = avulso.
+ *
+ *    Os dois sentidos importam, e é por isso que o valor gravado NÃO manda
+ *    aqui. Uma empresa registrada como parceira depois da identificação passa a
+ *    valer na hora (essa releitura sempre existiu, de propósito). E um parceiro
+ *    que PERDEU o contrato deixa de aparecer como cadastrado -- confiar no
+ *    `clienteTipo` gravado mostraria "cadastrado" em verde para quem já não tem
+ *    contrato, que é o erro oposto ao que estamos consertando.
+ *
+ * 2. Sem CNPJ verificado, vale o que foi CLASSIFICADO. É o caso do fluxo que
+ *    esgota as tentativas de CNPJ e segue como avulso por configuração: nenhum
+ *    CNPJ foi confirmado, mas o sistema decidiu o tipo, e a Central precisa
+ *    mostrar isso em vez de "não identificado".
+ *
+ * 3. Nada disso: ainda não identificado.
+ *
+ * Repare que a regra 1 já cobre sozinha as conversas ANTIGAS, anteriores à
+ * coluna `clienteTipo`: elas não têm o campo, e mesmo assim são classificadas
+ * certo pela consulta ao vivo.
+ *
+ * Nada aqui é estado de tela: tudo vem da conversa que o servidor devolveu,
+ * então sobrevive ao F5, à troca de conversa e a uma mensagem nova chegando.
+ */
+function tipoDoCliente(c, parceiros = []) {
+  if (c?.cnpjVerificado) {
+    const digitos = limparCnpj(c?.cnpj);
+    const parceiro = digitos ? parceiros.find(p => limparCnpj(p.cnpj) === digitos) : null;
+    return parceiro?.status === 'ativo' ? 'cadastrado' : 'avulso';
+  }
+  if (c?.clienteTipo === 'avulso') return 'avulso';
+  return null; // ainda não identificado
+}
+
+// Situacao do cliente como badge. Fica fora dos componentes porque duas telas
+// mostram a mesma informacao -- o cartao da lista e o painel de TV -- e, quando
+// a regra do "parceiro ativo" vivia duplicada, era questao de tempo as duas
+// discordarem sobre o mesmo cliente.
 function chipDoCliente(c, parceiros = []) {
-  if (!c.cnpjVerificado) {
+  const tipo = tipoDoCliente(c, parceiros);
+
+  if (!tipo) {
     return {
       label: 'CLIENTE NÃO IDENTIFICADO',
       classe: 'bg-slate-700/50 border-linha-forte text-slate-300',
@@ -221,24 +278,32 @@ function chipDoCliente(c, parceiros = []) {
     };
   }
 
-  const digitos = limparCnpj(c.cnpj);
-  const parceiro = digitos ? parceiros.find(p => limparCnpj(p.cnpj) === digitos) : null;
-  const ehParceiro = parceiro?.status === 'ativo';
-  // Identificado sem razao social conhecida (empresa fora do cadastro): dizer
-  // "identificado" e mais util do que devolver o numero para a tela.
-  const nome = (empresaDaConversa(c, parceiros) || 'CLIENTE IDENTIFICADO').toUpperCase();
+  // O QUE APARECE E O NOME DA EMPRESA, nunca o numero do CNPJ: quem atende
+  // precisa saber COM QUEM esta falando, e os 14 digitos so ocupavam a badge sem
+  // dizer nada.
+  const empresa = empresaDaConversa(c, parceiros);
 
-  return ehParceiro
-    ? {
-        label: nome,
-        classe: 'bg-ativo/15 border-ativo/30 text-ativo-400',
-        titulo: `${nome} · parceiro com contrato ativo`,
-      }
-    : {
-        label: nome,
-        classe: 'bg-espera/15 border-espera/30 text-espera-400',
-        titulo: `${nome} · sem contrato de parceiro`,
-      };
+  if (tipo === 'cadastrado') {
+    const nome = (empresa || 'CLIENTE CADASTRADO').toUpperCase();
+    return {
+      label: nome,
+      classe: 'bg-ativo/15 border-ativo/30 text-ativo-400',
+      titulo: `${nome} · parceiro com contrato ativo`,
+    };
+  }
+
+  // AVULSO. O rótulo diz o tipo, e não "identificado" -- era exatamente essa
+  // troca que fazia um avulso aparecer como cliente identificado. Quando a
+  // empresa é conhecida (parceiro que perdeu o contrato depois), o nome vem
+  // junto: ele continua sendo a informação mais útil para quem atende.
+  const nome = empresa ? `${empresa.toUpperCase()} · AVULSO` : 'CLIENTE AVULSO';
+  return {
+    label: nome,
+    classe: 'bg-espera/15 border-espera/30 text-espera-400',
+    titulo: empresa
+      ? `${empresa} · atendimento avulso (sem contrato de parceiro)`
+      : 'Cliente avulso · sem contrato de parceiro',
+  };
 }
 
 /**
@@ -1834,8 +1899,10 @@ function PainelChat({
     setTimeout(() => irParaFim(true), 0);
   }, [anexo, enviarAnexo, onEnviar, onEditar, texto, irParaFim, respondendoA, editando, setTexto]);
 
-  const ehParceiro = conversa.cnpjVerificado &&
-    parceiros.some(p => limparCnpj(p.cnpj) === limparCnpj(conversa.cnpj) && p.status === 'ativo');
+  // Mesma regra da badge da lista, e pela mesma função: quando isto era um
+  // `some(...)` próprio aqui, o cabeçalho e o cartão podiam discordar sobre o
+  // mesmo cliente. Ver `tipoDoCliente`.
+  const tipoCliente = tipoDoCliente(conversa, parceiros);
   // Nome da empresa identificada. O NUMERO do CNPJ não aparece mais aqui: ele
   // segue no banco (busca, relacionamento com o parceiro, Registro), mas na
   // conversa quem importa é com quem se está falando.
@@ -1939,11 +2006,15 @@ function PainelChat({
                 identificado -- corrigir um CNPJ errado é feito pelo próprio
                 cliente (responde "NÃO" quando o bot confirma) ou pelo
                 administrador em Clientes (CNPJ). */}
-            {!conversa.cnpjVerificado
+            {!tipoCliente
               ? <EmojiIcon name="question" label="Cliente não identificado" size="sm" />
-              : ehParceiro
-                ? <EmojiIcon name="shield" label={empresa || 'Cliente identificado'} size="sm" />
-                : <EmojiIcon name="warning" label={`${empresa || 'Cliente identificado'} (Sem Contrato)`} size="sm" />
+              : tipoCliente === 'cadastrado'
+                ? <EmojiIcon name="shield" label={empresa || 'Cliente cadastrado'} size="sm" />
+                // AVULSO: o rótulo diz o TIPO. Antes escrevia "Cliente
+                // identificado (Sem Contrato)" -- e "identificado" era
+                // justamente a palavra errada, porque a Central não distinguia
+                // o cadastrado do avulso.
+                : <EmojiIcon name="warning" label={empresa ? `${empresa} (Avulso)` : 'Cliente avulso'} size="sm" />
             }
             {/* Mesma badge de setor do cartao: com o chat aberto ela continua
                 sendo o motivo pelo qual o cliente chamou. */}
