@@ -305,6 +305,26 @@ export const AuthAPI = {
     } catch { /* offline ou sessao ja morta: limpa localmente do mesmo jeito */ }
     limparSessaoLocal();
   },
+  /**
+   * SAIR DE TODOS OS DISPOSITIVOS.
+   *
+   * Quem encerra e o SERVIDOR: ele revoga todas as familias de refresh da conta,
+   * e como o token de acesso carrega o id da sessao, os que ja estao em
+   * circulacao param de valer na hora -- inclusive na maquina de outra pessoa.
+   *
+   * Limpar este navegador aqui e CONSEQUENCIA, nunca a acao em si. Se fosse so
+   * isso, o botao apagaria o proprio login e deixaria intacta exatamente a
+   * sessao de quem invadiu -- o contrario do que ele promete.
+   *
+   * Por isso tambem nao ha `try/catch` engolindo o erro, ao contrario do `sair`:
+   * ali limpar localmente ja resolve o que o usuario queria; aqui, se o servidor
+   * nao confirmou, nada foi encerrado, e a tela precisa dizer isso.
+   */
+  sairDeTodos: async () => {
+    const r = await request('/auth/sair-todos', { method: 'POST' });
+    limparSessaoLocal();
+    return r;
+  },
   // Ha sessao guardada neste navegador? Basta o refresh token: o token de acesso
   // pode ter vencido, e nesse caso a primeira chamada o renova sozinha.
   temSessaoGuardada: () => !!getToken() || !!getRefreshToken(),

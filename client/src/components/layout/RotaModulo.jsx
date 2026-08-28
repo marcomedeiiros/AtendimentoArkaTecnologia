@@ -47,7 +47,7 @@ export default function RotaModulo() {
 
   // Nenhuma tela permitida (perfil sem nada liberado): mensagem, sem loop.
   return (
-    <div className="flex min-h-[60vh] flex-col items-center justify-center gap-2 text-center text-texto-suave">
+    <div className="flex min-h-[60dvh] flex-col items-center justify-center gap-2 text-center text-texto-suave">
       <p className="text-sm font-semibold text-white">Sem acesso</p>
       <p className="max-w-sm text-xs">
         Seu perfil não tem nenhuma tela liberada. Fale com um Administrador para ajustar as permissões.

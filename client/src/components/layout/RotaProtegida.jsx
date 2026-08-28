@@ -17,7 +17,7 @@ export default function RotaProtegida() {
 
   if (verificando) {
     return (
-      <div className="min-h-screen bg-grafite-900 flex flex-col items-center justify-center gap-3 text-texto-suave">
+      <div className="altura-app-min bg-grafite-900 flex flex-col items-center justify-center gap-3 text-texto-suave">
         <Loader2 className="w-7 h-7 text-acao animate-spin" />
         <span className="text-sm font-medium tracking-wide">Verificando sessão...</span>
       </div>

@@ -1145,14 +1145,31 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
         {/* Sidebar Biblioteca colapsável */}
         <div className="relative flex-shrink-0 flex z-10">
           {/* Painel da biblioteca com animação de largura */}
+          {/* Os dois eixos precisam de tratamento DIFERENTE, e por isso não há um
+              `overflow` só:
+
+              HORIZONTAL fica `hidden` -- é ele que recorta o conteúdo enquanto a
+              largura anima de 224px para 0. O texto aqui é `whitespace-nowrap`;
+              sem o recorte, ele vazaria por cima do canvas durante o recolher.
+
+              VERTICAL precisa ROLAR. Com a Sequência ligada, a lista de blocos
+              entra embaixo da biblioteca e a coluna passa da altura da tela --
+              num fluxo de 15 nós, o fim da sequência ficava inalcançável, sem
+              rolagem nenhuma. Era um `overflow: hidden` no estilo inline, que
+              vence a classe, escondendo o problema dos dois lados.
+
+              `min-h-0` é o que dá permissão: sem ele, este item flex se recusa a
+              ficar menor que o próprio conteúdo, a altura estoura o pai e não
+              sobra o que rolar. */}
           <div
-            className="bg-grafite-800 border-r border-linha flex flex-col gap-3 select-none overflow-hidden"
+            className="bg-grafite-800 border-r border-linha flex flex-col gap-3 select-none min-h-0"
             style={{
               width: showLibrary ? '224px' : '0px',
               padding: showLibrary ? '12px' : '0px',
               opacity: showLibrary ? 1 : 0,
               transition: 'width 0.28s cubic-bezier(0.4,0,0.2,1), padding 0.28s cubic-bezier(0.4,0,0.2,1), opacity 0.2s ease',
-              overflow: 'hidden'
+              overflowX: 'hidden',
+              overflowY: 'auto',
             }}
           >
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1 whitespace-nowrap">

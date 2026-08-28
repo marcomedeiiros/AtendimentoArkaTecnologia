@@ -269,6 +269,29 @@ class AuthService {
     return { encerrada: true };
   }
 
+  /**
+   * SAIR DE TODOS OS DISPOSITIVOS.
+   *
+   * Revoga TODAS as familias de refresh da conta, sem excecao -- inclusive a de
+   * quem pediu. O "menos a atual" que a troca de senha usa NAO vale aqui, e e
+   * de proposito: quem clica nisso desconfia que alguem entrou na conta, e a
+   * duvida inclui a propria aba (pode ser justamente o computador emprestado
+   * onde a sessao ficou aberta).
+   *
+   * O efeito e IMEDIATO, e nao no fim do prazo do JWT: o `authMiddleware`
+   * confere `familiaAtiva(sid)` a cada requisicao, entao um token de acesso ja
+   * emitido -- ou copiado -- para de autenticar no mesmo instante, em qualquer
+   * maquina. Sem isso, "encerrar tudo" so valeria quando o token vencesse
+   * sozinho, e o botao mentiria justamente para quem mais precisa dele.
+   *
+   * Reusa `revogarDoUsuario`, o mesmo que a troca de senha chama, sem `exceto`.
+   */
+  async sairDeTodos(userId) {
+    const { count } = await sessaoRefreshRepository.revogarDoUsuario(userId);
+    logger.info("Todas as sessoes encerradas pelo usuario", { usuarioId: userId, linhas: count });
+    return { encerradas: true, sessoesEncerradas: count };
+  }
+
   async me(userId) {
     const usuario = await usuarioRepository.findById(userId);
     if (!usuario) throw new AppError("Usuario nao encontrado", 404, "NOT_FOUND");

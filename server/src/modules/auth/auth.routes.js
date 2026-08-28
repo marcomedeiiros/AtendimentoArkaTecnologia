@@ -71,6 +71,29 @@ router.post("/sair", authLimiter, validate(sairSchema), (req, res, next) =>
 
 /**
  * @openapi
+ * /api/auth/sair-todos:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Encerra a sessao em TODOS os dispositivos, inclusive neste
+ *     description: >
+ *       Revoga todas as familias de refresh da conta. Como o authMiddleware
+ *       confere a familia (sid) a cada requisicao, os tokens de acesso ja
+ *       emitidos param de valer na hora, e nao no fim do prazo deles. O alvo e
+ *       sempre o usuario do token -- nao ha como atingir a conta de outro.
+ *     responses:
+ *       200: { description: "Quantas sessoes foram encerradas" }
+ *       401: { description: "Sem sessao valida" }
+ */
+/* `authMiddleware` e obrigatorio, e nao decorativo: e ele que poe `req.user.sub`
+   -- o alvo da revogacao. Sem o middleware, `req.user` seria indefinido e a
+   rota derrubaria a sessao de ninguem, ou quebraria. Sem corpo: nao ha nada
+   para validar, porque nao se aceita nenhum parametro de quem chama. */
+router.post("/sair-todos", authMiddleware, (req, res, next) =>
+  authController.sairDeTodos(req, res).catch(next)
+);
+
+/**
+ * @openapi
  * /api/auth/cadastrar:
  *   post:
  *     tags: [Auth]

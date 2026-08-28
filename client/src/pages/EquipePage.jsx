@@ -506,13 +506,13 @@ export default function EquipePage() {
 
       {resetAlvo && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 seguro-lados"
           onClick={fecharReset}
         >
           <form
             onSubmit={confirmarReset}
             onClick={e => e.stopPropagation()}
-            className="glass-panel w-full max-w-sm space-y-4 rounded-2xl border border-linha p-5"
+            className="glass-panel modal-cabe w-full max-w-sm space-y-4 rounded-2xl border border-linha p-5"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-2">

@@ -58,7 +58,7 @@ function Cena() {
 
 export default function AcessoLayout({ titulo, subtitulo, children, rodape }) {
   return (
-    <div className="min-h-screen bg-grafite-900 text-texto lg:grid lg:grid-cols-[1.05fr_minmax(420px,0.95fr)]">
+    <div className="altura-app-min bg-grafite-900 text-texto lg:grid lg:grid-cols-[1.05fr_minmax(420px,0.95fr)]">
 
       {/* ── Painel de marca ─────────────────────────────────────────────── */}
       <section className="relative hidden overflow-hidden border-r border-linha lg:flex lg:flex-col lg:justify-between lg:p-12">
@@ -92,7 +92,7 @@ export default function AcessoLayout({ titulo, subtitulo, children, rodape }) {
       </section>
 
       {/* ── Formulário ──────────────────────────────────────────────────── */}
-      <section className="relative flex min-h-screen items-center justify-center px-5 py-12 sm:px-10">
+      <section className="relative flex altura-app-min items-center justify-center px-5 py-12 sm:px-10 seguro-lados seguro-topo seguro-baixo">
         <div className="grade-tecnica pointer-events-none absolute inset-0 lg:hidden" />
 
         <div className="relative w-full max-w-sm">

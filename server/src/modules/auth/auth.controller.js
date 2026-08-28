@@ -18,6 +18,20 @@ class AuthController {
     return success(res, data);
   }
 
+  /**
+   * Encerra a sessao em TODOS os dispositivos, inclusive neste.
+   *
+   * O alvo e SEMPRE `req.user.sub` -- o id que veio do token ja validado. Nao
+   * ha parametro de usuario, e isso e a protecao: sem um id vindo do corpo ou
+   * da URL, nao existe como derrubar a sessao de outra pessoa por aqui, nem
+   * trocando o que se manda. A rota exige `authMiddleware`, entao so quem tem
+   * sessao valida chega ate esta linha.
+   */
+  async sairDeTodos(req, res) {
+    const data = await authService.sairDeTodos(req.user.sub);
+    return success(res, data);
+  }
+
   async cadastrar(req, res) {
     const data = await authService.cadastrar(req.body);
     return success(res, data, 201);

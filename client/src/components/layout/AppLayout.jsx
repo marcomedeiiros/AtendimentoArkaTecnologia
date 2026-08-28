@@ -135,7 +135,8 @@ function Sidebar({ aberto, onClose }) {
          (ver comentário acima), e estreitar cortaria texto. Numa tela curta o
          que falta é altura -- com o menu inteiro visível, ninguém precisa rolar
          a barra para achar um item. */
-      className={`w-[17rem] shrink-0 bg-grafite-800 border-r border-linha flex flex-col p-4 baixa:lg:p-3 h-screen select-none overflow-y-auto
+      className={`w-[17rem] shrink-0 bg-grafite-800 border-r border-linha flex flex-col p-4 baixa:lg:p-3 altura-app select-none overflow-y-auto
+        seguro-topo seguro-baixo seguro-esquerda
         fixed inset-y-0 left-0 z-50 transition-transform duration-300 lg:static lg:translate-x-0
         ${aberto ? 'translate-x-0 shadow-2xl shadow-black/50' : '-translate-x-full'}`}
     >
@@ -237,7 +238,7 @@ export default function AppLayout() {
 
   if (carregando) {
     return (
-      <div className="min-h-screen bg-grafite-900 flex flex-col items-center justify-center gap-3 text-slate-400">
+      <div className="altura-app-min bg-grafite-900 flex flex-col items-center justify-center gap-3 text-slate-400">
         <Loader2 className="w-7 h-7 text-acao animate-spin" />
         <span className="text-sm font-medium tracking-wide">Inicializando Arka Tecnologia...</span>
       </div>
@@ -245,7 +246,7 @@ export default function AppLayout() {
   }
 
   return (
-    <div className="min-h-screen bg-grafite-900 text-[#F3F4F8] flex font-sans antialiased selection:bg-acao/30 selection:text-acao-200">
+    <div className="altura-app-min bg-grafite-900 text-[#F3F4F8] flex font-sans antialiased selection:bg-acao/30 selection:text-acao-200">
       <NotificacoesToast />
       <ReportarBug />
       <Sidebar aberto={menuAberto} onClose={() => setMenuAberto(false)} />
@@ -259,8 +260,14 @@ export default function AppLayout() {
         />
       )}
 
-      <div className="flex-1 min-w-0 flex flex-col h-screen">        
-        <header className="lg:hidden flex items-center gap-3 h-14 px-4 bg-grafite-800 border-b border-linha shrink-0 sticky top-0 z-30">
+      {/* `altura-app` (100dvh), e nao `h-screen` (100vh): esta coluna e a que
+          termina no CAMPO DE ESCREVER da Central. Com 100vh o rodape dela fica
+          embaixo da barra de endereco do celular, e o atendente perde o campo
+          de resposta -- ver o comentario em index.css. */}
+      <div className="flex-1 min-w-0 flex flex-col altura-app">
+        {/* `seguro-topo` afasta o botao do menu do entalhe do iPhone; sem ele o
+            dedo cai na barra de status em vez de abrir a barra lateral. */}
+        <header className="lg:hidden flex items-center gap-3 h-14 px-4 seguro-topo box-content bg-grafite-800 border-b border-linha shrink-0 sticky top-0 z-30">
           <button
             onClick={() => setMenuAberto(true)}
             className="p-2 -ml-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"

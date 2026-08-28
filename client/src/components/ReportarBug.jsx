@@ -173,14 +173,14 @@ export default function ReportarBug() {
       {aberto && (
         <Portal>
           <div
-            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 seguro-baixo seguro-lados sm:items-center"
             onClick={fechar}
           >
             <form
               onSubmit={enviar}
               onClick={e => e.stopPropagation()}
               onPaste={aoColar}
-              className="glass-panel w-full max-w-md space-y-4 rounded-2xl border border-linha p-5"
+              className="glass-panel modal-cabe w-full max-w-md space-y-4 rounded-2xl border border-linha p-5"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2">

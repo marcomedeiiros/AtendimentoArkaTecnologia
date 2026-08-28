@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowLeft } from 'lucide-react';
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen bg-grafite-900 flex flex-col items-center justify-center gap-6 text-center p-8">
+    <div className="altura-app-min bg-grafite-900 flex flex-col items-center justify-center gap-6 text-center p-8">
       <div className="p-5 rounded-2xl bg-acao/10 border border-acao/20 text-acao-200">
         <AlertTriangle size={48} />
       </div>

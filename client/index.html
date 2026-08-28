@@ -2,7 +2,13 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- `viewport-fit=cover` deixa a pagina ocupar a tela inteira do iPhone com
+         entalhe (senao sobram tarjas pretas) e, so entao, `env(safe-area-inset-*)`
+         passa a valer algo -- e as classes `seguro-*` do index.css afastam o
+         conteudo do entalhe e da barra de gestos.
+         Sem `maximum-scale`/`user-scalable=no`: impedir o zoom quebra a leitura
+         de quem enxerga pouco, e o iOS ignora mesmo assim. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Arka Tecnologia - Central de Atendimento</title>
     <meta name="description" content="Painel corporativo de atendimento ao cliente, validação de CNPJ de parceiros e automação via WhatsApp API da Arka Tecnologia." />
     

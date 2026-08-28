@@ -366,3 +366,54 @@
     "Twemoji Mozilla", "Android Emoji", "EmojiOne Color", sans-serif;
   font-variant-emoji: emoji;
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   CELULAR: A ALTURA REAL DA TELA, E A PARTE DELA QUE DÁ PARA USAR
+   ────────────────────────────────────────────────────────────────────────────
+
+   `100vh` MENTE no celular. O navegador móvel calcula essa medida com a barra
+   de endereço RECOLHIDA -- que é o estado em que ela quase nunca está. Enquanto
+   a barra aparece, `100vh` é maior que o espaço visível, e o final da página
+   fica embaixo dela.
+
+   Num painel de atendimento isso não é detalhe estético: o que mora no rodapé
+   da Central é o CAMPO DE ESCREVER. Some o campo, e o atendente não responde o
+   cliente pelo celular.
+
+   `100dvh` (dynamic viewport height) é a altura que sobra AGORA, e acompanha a
+   barra ao aparecer e sumir. As duas linhas são propositais: quem não conhece
+   `dvh` (navegador antigo) ignora a segunda e fica com o comportamento de hoje;
+   quem conhece, sobrescreve. Sem quebrar ninguém.
+
+   As classes `seguro-*` cuidam do outro pedaço perdido: o ENTALHE e a barra de
+   gestos do iPhone. `env(safe-area-inset-*)` vale 0 em aparelho sem entalhe,
+   então aplicar é de graça onde não faz falta. Depende do `viewport-fit=cover`
+   no index.html -- sem ele o valor é sempre 0. */
+@layer utilities {
+  .altura-app {
+    height: 100vh;
+    height: 100dvh;
+  }
+  .altura-app-min {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+  .seguro-topo    { padding-top: env(safe-area-inset-top); }
+  .seguro-baixo   { padding-bottom: env(safe-area-inset-bottom); }
+  .seguro-esquerda{ padding-left: env(safe-area-inset-left); }
+  .seguro-lados {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Painel de modal que CABE na tela do celular.
+     Um formulário de 5 campos passa de 667px de altura (iPhone SE) com folga.
+     Centralizado e sem limite, ele transborda para os dois lados e o botão
+     "Salvar" fica fora do alcance -- sem rolagem, porque o fundo é `fixed`.
+     O `4rem` desconta o respiro de `p-4` do fundo (2rem) mais a área segura. */
+  .modal-cabe {
+    max-height: calc(100dvh - 4rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}

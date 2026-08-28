@@ -2255,7 +2255,7 @@ function PainelChat({
       {encaminhando && (
         <Portal>
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-[55] p-4">
-            <div className="glass-panel border border-linha rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-[80vh]">
+            <div className="glass-panel border border-linha rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-[calc(100dvh-2rem)] sm:max-h-[80vh]">
               <div className="p-4 bg-grafite-600 border-b border-linha flex items-center justify-between rounded-t-2xl">
                 <div className="flex items-center gap-2 text-sm font-bold text-white">
                   <Share2 size={16} className="text-acao-200" /> Encaminhar para
@@ -3300,7 +3300,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
         {/* Sem altura minima: o painel passa a ter a altura das conversas que
             existem. O teto de 70vh e o que mantem a rolagem DENTRO da lista
             quando a fila cresce, em vez de esticar a pagina inteira. */}
-        <div className={`${chatAberto ? 'hidden lg:flex' : 'flex'} lg:col-span-4 glass-panel rounded-2xl flex-col overflow-hidden border border-linha max-h-[70vh] lg:max-h-none lg:min-h-0`}>
+        <div className={`${chatAberto ? 'hidden lg:flex' : 'flex'} lg:col-span-4 glass-panel rounded-2xl flex-col overflow-hidden border border-linha max-h-[70dvh] lg:max-h-none lg:min-h-0`}>
        
           <div className="grid bg-grafite-600/80 border-b border-linha"
             style={{ gridTemplateColumns: `repeat(${Math.max(abasVisiveis.length, 1)}, minmax(0, 1fr))` }}>
@@ -3423,7 +3423,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
           </div>
         </div>
 
-        <div className={`${chatAberto ? 'flex' : 'hidden lg:flex'} lg:col-span-8 glass-panel rounded-2xl flex-col overflow-hidden border border-linha min-h-[70vh] lg:min-h-0`}>
+        <div className={`${chatAberto ? 'flex' : 'hidden lg:flex'} lg:col-span-8 glass-panel rounded-2xl flex-col overflow-hidden border border-linha min-h-[70dvh] lg:min-h-0`}>
           {!conversa ? (
             <TelaSemConversa />
           ) : (
