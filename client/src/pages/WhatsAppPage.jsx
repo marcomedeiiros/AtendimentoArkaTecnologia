@@ -235,6 +235,10 @@ export default function WhatsAppPage() {
               Não trocar por `bg-white`/`text-slate-*`: aqui esses nomes são
               tokens de tema no claro viram quase-preto e quase-branco, e o QR
               deixa de ser legível por câmera. */}
+          {/* O desenho de espera NÃO é esmaecido quando já está conectado: ele
+              usa o preto cheio que `.qr-cartao` define. Em opacidade reduzida
+              virava um cinza claro que parecia falha de carregamento, e não
+              "você já está pareado" — quem diz isso é a etiqueta verde abaixo. */}
           <div className="qr-cartao p-4 rounded-2xl shadow-lg mb-4 inline-block">
             {carregandoQr ? (
               <div className="w-40 h-40 flex items-center justify-center">
@@ -243,7 +247,7 @@ export default function WhatsAppPage() {
             ) : qrcode ? (
               <img src={qrcode} alt="QR Code de autenticação" className="w-40 h-40 object-contain" />
             ) : (
-              <QrCode size={160} className={conectado ? 'opacity-25' : ''} />
+              <QrCode size={160} />
             )}
           </div>
 
