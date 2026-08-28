@@ -25,3 +25,9 @@ backups/
 npm-debug.log*
 server/prisma/dev.db-shm
 server/prisma/dev.db-wal
+
+# Copias do banco de desenvolvimento salvas antes de um reparo. Sao arquivos
+# grandes e locais -- e um deles esta corrompido de proposito, guardado so como
+# ponto de retorno.
+server/prisma/dev.db.corrompido-*
+server/prisma/dev.db.bak-*
