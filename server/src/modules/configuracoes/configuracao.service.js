@@ -32,7 +32,12 @@ const DEFINICOES = {
   "chatbot.horario":    { padrao: () => process.env.CHATBOT_HORARIO || "", segredo: false },
   // Mapa fila -> setor. O `queueId` dos fluxos importados nao existe aqui; este
   // mapa e o que permite a transferencia cair no setor certo do HelpDesk.
-  // JSON: { "33": "Suporte", "35": "Comercial" }
+  // JSON: { "33": "Técnico", "35": "Comercial" }
+  //
+  // OS NOMES SAO A LISTA CANONICA de setor.helper.SETORES, e nao rotulo livre.
+  // Este exemplo dizia "Suporte" -- que nao esta na lista. Quem o copiava fazia
+  // toda conversa daquela fila cair em "Geral", porque e nisso que
+  // normalizarSetor converte o que nao reconhece.
   "chatbot.filas":      { padrao: () => process.env.CHATBOT_FILAS || "", segredo: false },
   // Pesquisa de satisfacao (CSAT) que o bot dispara ao encerrar o atendimento:
   // pergunta a nota de 1 a 5 e, em seguida, um comentario livre. As respostas
@@ -181,7 +186,8 @@ class ConfiguracaoService {
     };
   }
 
-  // { "33": "Suporte" } -> setor para onde a fila do fluxo importado aponta.
+  // { "33": "Técnico" } -> setor para onde a fila do fluxo importado aponta.
+  // Valor fora de setor.helper.SETORES nao vira setor nenhum: ver acharSetor.
   async filasParaSetor() {
     const c = await this._carregar();
     const mapa = this._json(c["chatbot.filas"], {});

@@ -271,7 +271,15 @@ export function extrairFluxosImportados(dados) {
       return {
         nomeExplicito: nome.length >= 2,
         nome: nome.length >= 2 ? nome.slice(0, 120) : `Fluxo Importado ${idx + 1}`,
-        gatilho: gatilho.length >= 2
+        // `gatilhoValido`, e nao `length >= 2`: o curinga '*' tem UM caractere.
+        //
+        // A regra duplicada aqui reprovava justamente o gatilho do fluxo de
+        // boas-vindas e o trocava por `importado_12345`. O efeito era silencioso
+        // e total: reimportar o fluxo da ARKA fazia o bot parar de abrir na
+        // primeira mensagem do cliente: ele passava a esperar alguem digitar uma
+        // palavra-chave que ninguem conhece. A funcao logo acima ja dizia que
+        // '*' vale, e o zod do servidor tambem o aceita por literal.
+        gatilho: gatilhoValido(gatilho)
           ? gatilho.slice(0, 120)
           : `importado_${Date.now().toString().slice(-5)}${idx || ''}`,
         ativo: typeof f.ativo === 'boolean' ? f.ativo : true,

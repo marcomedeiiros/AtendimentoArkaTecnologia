@@ -21,7 +21,7 @@
       "id": "0abb83d6-8f39-4f03-b90a-d60e8b01bc07",
       "tipo": "comentario",
       "titulo": "Configurações do bot",
-      "desc": "Textos de fallback e timeout de inatividade, herdados do ARKA original.",
+      "desc": "Textos de fallback do bot. Os tempos moram nos blocos \"espera\" do canvas, e a confirmação de encaminhamento em handoffMessage (ou no próprio nó que transfere).",
       "targetId": null,
       "ordem": 1,
       "config": {
@@ -30,14 +30,8 @@
             "message": "Não consegui entender sua solicitação, pode responder novamente?",
             "stepReturn": "A"
           },
-          "notResponseMessage": {
-            "time": 10,
-            "type": 3,
-            "destiny": "",
-            "message": "Que pena, por falta de interação o chat foi encerrado, mas não se preocupe, caso deseje tentar novamente, envie uma nova mensagem! "
-          },
-          "welcomeMessage": {
-            "message": "Agora sim!! Sua solicitação está completa, basta esperar que logo um dos nossos colaboradores virá lhe atender!"
+          "handoffMessage": {
+            "message": "✅ *Solicitação registrada*\n\nRecebemos suas informações e encaminhamos sua solicitação para a nossa equipe.\n\nUm de nossos atendentes dará continuidade ao atendimento por aqui."
           },
           "farewellMessage": {
             "message": "Seu atendimento foi encerrado! Se precisar nos envie uma nova mensagem!"
@@ -223,7 +217,7 @@
       "id": "8d01304a-ef09-49cf-bc6a-4f97c9a32d74",
       "tipo": "condicao",
       "titulo": "VALIDA CONTRATO (CNPJ)",
-      "desc": "Recebe o CNPJ, confere os dígitos verificadores e consulta a base de Parceiros. Após 3 tentativas inválidas o motor transfere para um atendente.",
+      "desc": "Recebe o CNPJ, confere os dígitos verificadores e consulta a base de Parceiros. Após 2 tentativas inválidas (maxTentativasCnpj) o motor confirma o encaminhamento e transfere para um atendente.",
       "targetId": "14fe8be5-ffb5-47ee-b2cf-0475e2883554",
       "ordem": 4,
       "texto": "🤖 Certo! Para confirmar seu contrato, me informe o *CNPJ da empresa contratante* (pode enviar com ou sem pontuação).\n\nExemplo: 12.345.678/0001-90",
@@ -350,7 +344,7 @@
       "id": "9bbec3f6-9a9a-4f09-a0b9-b0d8fd973dd9",
       "tipo": "mensagem",
       "titulo": "IDENTIFICA PROBLEMA",
-      "desc": "Último passo do bot: entrega para a fila técnica (queueId 33).",
+      "desc": "Último passo do bot: confirma a abertura e entrega para a fila técnica (queueId 33).",
       "targetId": null,
       "ordem": 7,
       "texto": "🤖*AGORA DESCREVA SUA SOLICITAÇÃO*",
@@ -365,7 +359,9 @@
             "palavrasChave": [],
             "acao": "transferir",
             "targetId": null,
-            "filaId": 33
+            "filaId": 33,
+            "setor": "Técnico",
+            "mensagemHandoff": "✅ *Chamado aberto com sucesso*\n\nSua solicitação foi registrada e encaminhada para a equipe técnica.\n\nAssim que um técnico estiver disponível, ele dará continuidade ao atendimento por aqui."
           }
         ]
       },
@@ -497,7 +493,7 @@
       "id": "98273bfb-4099-4020-a61c-ebba61ea1f44",
       "tipo": "mensagem",
       "titulo": "VENDEDOR",
-      "desc": "Entrega para a fila comercial (queueId 35).",
+      "desc": "Coleta a necessidade, confirma e entrega para a fila comercial (queueId 35).",
       "targetId": null,
       "ordem": 10,
       "texto": "Entendi, para melhor direcionar seu atendimento pode nos dizer um pouco mais sobre sua demanda?\n",
@@ -512,7 +508,9 @@
             "palavrasChave": [],
             "acao": "transferir",
             "targetId": null,
-            "filaId": 35
+            "filaId": 35,
+            "setor": "Comercial",
+            "mensagemHandoff": "✅ *Solicitação comercial registrada*\n\nRecebemos as informações que você enviou e encaminhamos sua solicitação para nossa equipe comercial.\n\nUm de nossos atendentes dará continuidade ao atendimento por aqui."
           }
         ]
       },
@@ -525,7 +523,7 @@
       "id": "4f5f1646-5441-4afd-974d-dd4fa639f958",
       "tipo": "mensagem",
       "titulo": "FINANCEIRO",
-      "desc": "Entrega para a fila adm/financeiro (queueId 35).",
+      "desc": "Coleta nome e necessidade, confirma e entrega para o Financeiro. ATENÇÃO: o queueId 35 abaixo é o mesmo do Comercial e precisa ser trocado pelo ID real da fila financeira desta instalação. Enquanto isso, o \"setor\" declarado na opção é o que garante o roteamento certo.",
       "targetId": null,
       "ordem": 11,
       "texto": "🤖 Você selecionou o Setor Administrativo/Financeiro. Para melhor atendê-lo, por favor, informe seu nome e descreva o que deseja para melhor direcionarmos seu atendimento!",
@@ -540,7 +538,9 @@
             "palavrasChave": [],
             "acao": "transferir",
             "targetId": null,
-            "filaId": 35
+            "filaId": 35,
+            "setor": "Financeiro",
+            "mensagemHandoff": "✅ *Solicitação encaminhada*\n\nRecebemos suas informações e encaminhamos sua solicitação para nossa equipe administrativa/financeira.\n\nUm de nossos atendentes dará continuidade ao atendimento por aqui."
           }
         ]
       },

@@ -46,8 +46,44 @@ const PADROES = {
       "Vi que você já foi atendido por aqui. O CNPJ continua sendo este?\n\n📄 {{cnpj}}\n\nResponda *SIM* para confirmar ou *NÃO* para informar outro.",
     mensagemPedirOutro:
       "Sem problema. Por favor, informe o *CNPJ* (pode enviar com ou sem pontuação).",
+    // O QUE O CLIENTE OUVE QUANDO O CNPJ É RECONHECIDO -- por padrão, NADA.
+    //
+    // Aqui vivia "Cliente identificado: {razão social} - parceiro com contrato
+    // ativo.", montada no motor e enviada no WhatsApp. Era um log de
+    // processamento entregue ao cliente: ele não pediu o resultado da consulta,
+    // pediu atendimento. E a informação nunca dependeu dessa bolha -- a
+    // identificação fica gravada na conversa (`cnpj`, `empresa`,
+    // `cnpjVerificado`) e a Central a mostra no cabeçalho.
+    //
+    // Vazio = o fluxo segue direto para o próximo passo, que já fala com o
+    // cliente ("Agora me informe seu nome e setor"). Quem quiser confirmar em
+    // voz alta preenche `mensagemCnpjCadastrado` no passo.
+    mensagemCadastrado: "",
     // Memória do contato recorrente: oferecer o CNPJ já usado antes.
     memoria: true,
+  },
+
+  /**
+   * ENTREGA PARA A FILA -- a mensagem que fecha o ciclo do bot.
+   *
+   * O bot coletou o que precisava, abriu a OS e vai calar a boca; esta é a
+   * frase que diz isso ao cliente. Ela NÃO é a mensagem de boas-vindas.
+   *
+   * Antes era: o motor lia `configuracoesGlobais.welcomeMessage` na hora de
+   * transferir, porque o editor de origem usava aquele campo para as duas
+   * coisas. O resultado, no fluxo da ARKA, era o cliente do Financeiro receber
+   * "Agora sim!! Sua solicitação está completa" como se fosse uma saudação --
+   * e, pior, quem esgotava as tentativas de CNPJ não recebia nada, porque esse
+   * caminho não passava por ali.
+   *
+   * Agora há um campo só para isto, com três níveis: a opção que transferiu
+   * (`mensagemHandoff`, o texto do próprio nó), o padrão do fluxo
+   * (`configuracoesGlobais.handoffMessage.message`) e este padrão do sistema.
+   * `welcomeMessage` não é mais lida em lugar nenhum.
+   */
+  handoff: {
+    mensagem:
+      "✅ *Solicitação registrada*\n\nRecebemos suas informações e encaminhamos sua solicitação para a nossa equipe.\n\nUm de nossos atendentes dará continuidade ao atendimento por aqui.",
   },
 
   /**
@@ -134,8 +170,28 @@ function paramsCnpj(passo) {
       p.mensagemConfirmarSemEmpresa
     ),
     mensagemPedirOutro: texto(c.mensagemPedirOutroCnpj, p.mensagemPedirOutro),
+    mensagemCadastrado: texto(c.mensagemCnpjCadastrado, p.mensagemCadastrado),
     memoria: booleano(c.memoriaCnpj, p.memoria),
   };
+}
+
+/**
+ * O TEXTO DA ENTREGA PARA A FILA.
+ *
+ * Precedência: a opção que transferiu > o padrão do fluxo > o padrão do
+ * sistema. A opção vence porque é o que está escrito no nó que o operador vê
+ * no canvas -- cada setor confirma com as suas próprias palavras sem precisar
+ * de um campo global por setor.
+ *
+ * `welcomeMessage` NÃO entra nesta cadeia, de propósito: era exatamente a
+ * confusão que este parâmetro existe para desfazer. Um fluxo antigo que só
+ * tenha aquele campo cai no padrão do sistema, que é uma confirmação correta --
+ * e não na saudação de boas-vindas fora de hora.
+ */
+function paramsHandoff(fluxo, opcao = null) {
+  const daOpcao = opcao && opcao.mensagemHandoff;
+  const doFluxo = globaisDoFluxo(fluxo)?.handoffMessage?.message;
+  return texto(daOpcao, texto(doFluxo, PADROES.handoff.mensagem));
 }
 
 /** Parâmetros da pesquisa de satisfação de um passo (tipo "avaliacao"). */
@@ -325,6 +381,35 @@ function resumoAutomacoes(fluxo) {
     });
   }
 
+  // ENTREGA PARA A FILA -- o texto de cada saída "transferir".
+  //
+  // Fica no painel porque é a última coisa que o cliente ouve do bot, e era
+  // justamente a que ninguém conseguia ver: vinha de `welcomeMessage`, um campo
+  // com outro nome, guardado num bloco de configuração global.
+  const entregas = [];
+  for (const passo of passos) {
+    for (const op of passo.config?.opcoes || []) {
+      if (op?.acao !== "transferir") continue;
+      const destino = op.setor
+        ? `setor ${op.setor}`
+        : op.filaId != null
+          ? `fila ${op.filaId} (setor pelo mapa de Configurações)`
+          : "fila geral";
+      entregas.push({
+        rotulo: `"${passo.titulo || op.rotulo || op.id}" entrega para`,
+        valor: `${destino} — "${paramsHandoff(fluxo, op)}"`,
+      });
+    }
+  }
+  if (entregas.length) {
+    itens.push({
+      grupo: "Entrega para a fila",
+      passoId: "handoff",
+      passoTitulo: "Saídas que transferem",
+      regras: entregas,
+    });
+  }
+
   const passoAval = passos.find((p) => p.tipo === "avaliacao");
   if (passoAval) {
     const cfg = paramsAvaliacao(passoAval);
@@ -390,4 +475,11 @@ function resumoAutomacoes(fluxo) {
   return { ativo: !!fluxo.ativo, nome: fluxo.nome, gatilho: fluxo.gatilho, itens };
 }
 
-module.exports = { PADROES, paramsCnpj, paramsAvaliacao, paramsTempos, resumoAutomacoes };
+module.exports = {
+  PADROES,
+  paramsCnpj,
+  paramsAvaliacao,
+  paramsTempos,
+  paramsHandoff,
+  resumoAutomacoes,
+};

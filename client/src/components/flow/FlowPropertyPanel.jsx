@@ -619,6 +619,16 @@ export function FlowPropertyPanel({
                         “{op.mensagemEncerramento}”
                       </div>
                     )}
+                    {/* A CONFIRMACAO DE ENCAMINHAMENTO, no no que transfere.
+                        Antes esse texto vinha da `welcomeMessage` -- um campo
+                        com outro nome, num bloco de configuracao global -- e
+                        nao havia como saber, olhando o no, o que o cliente
+                        ouviria ao ser mandado para a fila. */}
+                    {op.mensagemHandoff && (
+                      <div className="text-[10px] text-slate-500 italic line-clamp-2 break-words">
+                        “{op.mensagemHandoff}”
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

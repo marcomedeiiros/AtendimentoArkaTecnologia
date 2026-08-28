@@ -306,8 +306,22 @@ class ConversaService {
       }
     }
 
+    // CNPJ NA MENSAGEM DA EQUIPE: VINCULA EM SILENCIO.
+    //
+    // Aqui tambem se montava "Cliente identificado: ... - parceiro com contrato
+    // ativo." -- a segunda das TRES copias da mesma regra que existiam no
+    // projeto (as outras em chatbot.engine.validarCnpjRecebido e em
+    // validarCnpjManual, abaixo, cada uma com uma redacao propria).
+    //
+    // E ela nao ficava na Central: `mensagensExtras` e percorrida por
+    // `_entregarNoWhatsApp`, que manda cada item para o WhatsApp. O atendente
+    // digitava um CNPJ na resposta e o cliente recebia, antes da resposta, uma
+    // bolha "[Validacao Automatica Arka]" com o retorno da consulta.
+    //
+    // O vinculo continua -- ele e util e nao custa nada ao cliente. O que sai e
+    // a narracao: a empresa identificada aparece no cabecalho do atendimento,
+    // que le `conversa.empresa`.
     const cnpjNumeros = limparCnpj(texto);
-    let mensagensExtras = [];
 
     if (cnpjNumeros.length === 14 && !conversa.cnpjVerificado && cnpjValido(cnpjNumeros)) {
       const parceiro = await parceiroRepository.findAtivoByCnpj(cnpjNumeros);
@@ -319,16 +333,11 @@ class ConversaService {
         empresa: parceiro?.razaoSocial || null,
         cnpjVerificado: true,
       });
-
-      // Sem os 14 digitos: a bolha e parte da conversa, e o que identifica o
-      // cliente e a razao social. O numero segue no banco para busca e vinculo.
-      const msgConf = parceiro
-        ? `Cliente identificado: ${parceiro.razaoSocial} - parceiro com contrato ativo.`
-        : "CNPJ recebido. Nao consta contrato de parceiro ativo para esta empresa.";
-
-      mensagensExtras.push(
-        await conversaRepository.addMensagem(id, "bot", `[Validacao Automatica Arka]: ${msgConf}`)
-      );
+      logger.info("CNPJ identificado na mensagem da equipe", {
+        conversaId: id,
+        empresa: parceiro?.razaoSocial || null,
+        cadastrado: !!parceiro,
+      });
     }
 
     const msgLocal = await conversaRepository.addMensagem(
@@ -358,7 +367,6 @@ class ConversaService {
       texto: texto.trim(),
       quoted,
       mensagemId: msgLocal.id,
-      mensagensExtras,
       conversaId: id,
     });
 
@@ -373,11 +381,11 @@ class ConversaService {
    * visivel. O que a falha faz e marcar a mensagem como "erro" -- que e
    * exatamente o que o atendente precisa ver na bolha.
    */
-  async _entregarNoWhatsApp({ telefone, texto, quoted, mensagemId, mensagensExtras, conversaId }) {
+  async _entregarNoWhatsApp({ telefone, texto, quoted, mensagemId, conversaId }) {
     try {
-      for (const msg of mensagensExtras || []) {
-        await this._enviarWhatsApp(telefone, msg.texto);
-      }
+      // `mensagensExtras` saiu daqui junto com a bolha de validacao de CNPJ que
+      // era a sua unica usuaria -- e que fazia o cliente receber o retorno da
+      // consulta a base de parceiros antes da resposta do atendente.
       const envio = await this._enviarWhatsApp(telefone, texto, quoted);
       await conversaRepository.vincularWaMessageId(
         mensagemId,
@@ -742,20 +750,29 @@ class ConversaService {
     }
 
     const parceiro = await parceiroRepository.findAtivoByCnpj(cnpjLimpo);
-    const msgBot = parceiro
-      ? `Cliente identificado: ${parceiro.razaoSocial} (parceiro cadastrado).`
-      : "CNPJ recebido. A empresa nao consta como parceiro cadastrado.";
 
     await conversaRepository.update(id, {
       cnpj: cnpjLimpo,
       empresa: parceiro?.razaoSocial || null,
       cnpjVerificado: true,
     });
-    await conversaRepository.addMensagem(id, "bot", `[Validacao de CNPJ]: ${msgBot}`);
-    await this._enviarWhatsApp(
-      (await conversaRepository.findById(id)).telefone,
-      `[Validacao de CNPJ]: ${msgBot}`
-    );
+
+    // A TERCEIRA COPIA DA MESMA REGRA SAIU DAQUI.
+    //
+    // Esta gravava a bolha E a mandava para o WhatsApp -- com uma redacao
+    // propria, "(parceiro cadastrado)", diferente das outras duas. Tres
+    // caminhos, tres textos, todos narrando ao cliente uma consulta interna que
+    // ele nao pediu.
+    //
+    // Quem dispara isto e um atendente clicando em "validar CNPJ" na Central: o
+    // resultado e para ELE, e ele o recebe pelo caminho de sempre -- a conversa
+    // volta com `empresa` preenchida e o cabecalho do atendimento passa a
+    // mostrar a razao social. Nao ha nada a dizer ao cliente.
+    logger.info("CNPJ validado manualmente pela equipe", {
+      conversaId: id,
+      empresa: parceiro?.razaoSocial || null,
+      cadastrado: !!parceiro,
+    });
 
     return this._emitir(await conversaRepository.findById(id));
   }

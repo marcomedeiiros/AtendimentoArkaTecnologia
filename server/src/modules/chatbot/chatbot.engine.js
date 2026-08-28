@@ -14,7 +14,12 @@ const {
 const { comLock } = require("../../shared/helpers/lock.helper");
 // PARAMETROS DA AUTOMACAO: quem manda e o FLUXO, nao o codigo. Ver
 // fluxos/fluxo.automacao.js -- todo texto, tentativa e prazo do bot sai de la.
-const { paramsCnpj, paramsAvaliacao, paramsTempos } = require("../fluxos/fluxo.automacao");
+const {
+  paramsCnpj,
+  paramsAvaliacao,
+  paramsTempos,
+  paramsHandoff,
+} = require("../fluxos/fluxo.automacao");
 // Setor do atendimento: so por DECLARACAO (opcao escolhida no menu, mapa de
 // filas, ou o que a conversa ja tem). Nunca deduzido do texto -- ver setor.helper.
 const {
@@ -338,21 +343,19 @@ class ChatbotEngine {
 
   // ------------------------------------------------------- inatividade ---
 
-  // `notResponseMessage` do fluxo: depois de N minutos parado, avisa e encerra.
-  // Roda pelo varredor (chatbot.inatividade.js), nao por mensagem recebida - o
-  // motor so acordava com mensagem do cliente, e e justamente a ausencia dela
-  // que precisa ser detectada aqui.
-  configuracaoInatividade(fluxo) {
-    const cfg = this.configuracoesGlobais(fluxo)?.notResponseMessage;
-    const minutos = Number(cfg?.time);
-    if (!cfg || !Number.isFinite(minutos) || minutos <= 0) return null;
-    return {
-      minutos,
-      mensagem: typeof cfg.message === "string" ? cfg.message.trim() : "",
-      // type 3 no editor de origem = encerrar o atendimento.
-      encerrar: Number(cfg.type) === 3,
-    };
-  }
+  // AQUI EXISTIA `configuracaoInatividade(fluxo)`.
+  //
+  // Ela lia `configuracoesGlobais.notResponseMessage` DIRETO e devolvia os
+  // minutos daquele campo legado. So que quem manda no relogio e `paramsTempos`,
+  // cuja precedencia e outra: bloco de espera no canvas > configuracoes globais
+  // > legado > padrao. No fluxo da ARKA os dois discordavam -- o legado dizia 10
+  // minutos, o bloco dizia 5, e o bot esperava 5.
+  //
+  // Nenhum caminho de producao a chamava: so o script de verificacao, que por
+  // isso validava um numero que o bot nao usa. Duas fontes para o mesmo
+  // parametro, e a que ninguem usava era a que o teste conferia.
+  //
+  // Quem precisa do valor efetivo chama `paramsTempos(fluxo).semResposta`.
 
   // Aplica o timeout de inatividade em uma sessao que ficou parada esperando
   // resposta do cliente. Devolve null quando ainda nao deu o tempo.
@@ -387,7 +390,9 @@ class ChatbotEngine {
     if (!convAgora || convAgora.statusAtendimento !== "pendente") return null;
     if (convAgora.atendenteId) return null;
 
-    const ctx = { conversa: convAgora, telefone: sessao.telefone, instanciaId, instanceName };
+    // `fluxo` viaja junto: e dele que sai o texto da confirmacao de
+    // encaminhamento quando `acao` e "fila" (ver paramsHandoff).
+    const ctx = { conversa: convAgora, telefone: sessao.telefone, instanciaId, instanceName, fluxo };
     const texto = cfg.mensagem ? this.interpolar(cfg.mensagem, ctx) : null;
 
     logger.info("Etapa encerrada: cliente nao respondeu ao bot", {
@@ -410,8 +415,13 @@ class ChatbotEngine {
       });
     }
 
+    // `acao: "fila"` -- devolve para um atendente em vez de fechar. A mensagem
+    // do bloco de espera JA explica o que aconteceu, entao a confirmacao de
+    // encaminhamento so entra quando o bloco nao tem texto: duas mensagens
+    // seguidas dizendo coisas diferentes ("nao entendemos a sua demanda" +
+    // "solicitacao registrada") confundem mais do que uma.
     if (texto) await this.enviarBot(conversa.id, sessao.telefone, texto, instanceName);
-    return this.transferirParaHumano(ctx, { motivo: "sem_resposta" });
+    return this.transferirParaHumano(ctx, { avisar: !texto, motivo: "sem_resposta" });
   }
 
   sessaoExpirada(sessao) {
@@ -768,10 +778,26 @@ class ChatbotEngine {
       cnpjVerificado: true,
     });
 
-    // Sem os 14 digitos na bolha: quem identifica o cliente e a razao social.
-    const mensagem = parceiro
-      ? `Cliente identificado: ${parceiro.razaoSocial} - parceiro com contrato ativo.`
-      : cfg.mensagemNaoCadastrado;
+    // O RESULTADO DA CONSULTA E INTERNO. NAO VAI PARA O WHATSAPP.
+    //
+    // Aqui era montada "Cliente identificado: {razao social} - parceiro com
+    // contrato ativo." e os quatro chamadores a enviavam com `enviarBot`. Era um
+    // log de processamento na conversa do cliente: ele nao pediu o retorno da
+    // consulta a base de parceiros, pediu atendimento.
+    //
+    // E a informacao nunca dependeu daquela bolha: a identificacao acabou de ser
+    // GRAVADA na conversa logo acima, e e de la que a Central le a empresa para
+    // mostrar no cabecalho do atendimento. O log abaixo cobre a auditoria.
+    //
+    // O caso "CNPJ valido, empresa fora da lista" continua falando, porque ali o
+    // cliente PRECISA saber que sera atendido como avulso -- isso muda o preco.
+    logger.info("CNPJ identificado", {
+      conversaId: conversa.id,
+      empresa: parceiro?.razaoSocial || null,
+      cadastrado: !!parceiro,
+    });
+
+    const mensagem = parceiro ? cfg.mensagemCadastrado || null : cfg.mensagemNaoCadastrado;
 
     return {
       valido: true,
@@ -801,14 +827,10 @@ class ChatbotEngine {
   // ------------------------------------------------------------ handoff ---
 
   async transferirParaHumano(
-    // eslint-disable-next-line no-unused-vars
     ctx,
-    { avisar = true, motivo = "solicitado", setor = null, filaId = null } = {}
+    { avisar = true, motivo = "solicitado", setor = null, filaId = null, opcao = null } = {}
   ) {
     const { conversa, telefone, instanciaId, instanceName } = ctx;
-
-    if (avisar) {
-    }
 
     const dados = { statusAtendimento: "pendente", lido: false };
 
@@ -828,6 +850,27 @@ class ChatbotEngine {
       setorAtual: conversa.setor,
     });
     dados.setor = setorFinal;
+
+    // ── A CONFIRMACAO DE ENCAMINHAMENTO ────────────────────────────────────
+    //
+    // Aqui existia `if (avisar) { }` -- um bloco VAZIO. O parametro continuava
+    // sendo passado por seis chamadores, documentando uma intencao que o codigo
+    // nao cumpria: quem caia em `avisar: true` nao recebia nada.
+    //
+    // Nao era teoria. O fluxo da ARKA usa `aoEsgotarTentativasCnpj: transferir`
+    // com duas tentativas: quem errava o CNPJ duas vezes ia para a fila em
+    // SILENCIO ABSOLUTO -- sem saber que desistimos do CNPJ, sem saber que havia
+    // fila. Do lado do cliente, o bot simplesmente parava de responder. O mesmo
+    // valia para `ramificacao_sem_destino`.
+    //
+    // Quem passa `avisar: false` ja falou com o cliente na linha anterior (a
+    // mensagem de fora de horario, a de cliente avulso, a de "nao entendemos a
+    // sua demanda") e nao quer duas mensagens seguidas dizendo coisas
+    // diferentes.
+    if (avisar) {
+      const aviso = paramsHandoff(ctx.fluxo, opcao);
+      if (aviso) await this.enviarBot(conversa.id, telefone, this.interpolar(aviso, ctx), instanceName);
+    }
 
     // Fila e um ciclo em curso: precisa de OS aberta para o atendente assumir.
     await this.deps.conversaRepository.garantirAtendimentoAberto(conversa.id, { setor: setorFinal });
@@ -1681,12 +1724,19 @@ class ChatbotEngine {
     }
 
     if (opcao.acao === "transferir") {
-      // O editor de origem manda a `welcomeMessage` ("sua solicitacao esta
-      // completa, aguarde um colaborador") justamente ao entregar para a fila.
-      const aviso = globais?.welcomeMessage?.message;
-      if (aviso) {
-        await this.enviarBot(conversa.id, telefone, this.interpolar(aviso, contexto), instanceName);
-      }
+      // A CONFIRMACAO NAO E MAIS MONTADA AQUI.
+      //
+      // Este trecho lia `configuracoesGlobais.welcomeMessage` -- a mensagem de
+      // BOAS-VINDAS -- e a enviava como aviso de transferencia, porque o editor
+      // de origem usava o mesmo campo para as duas coisas. No fluxo da ARKA isso
+      // fazia o cliente do Financeiro terminar o atendimento ouvindo "Agora
+      // sim!! Sua solicitacao esta completa", e deixava sem confirmacao nenhuma
+      // todo caminho de transferencia que nao passasse por aqui.
+      //
+      // Agora quem envia e `transferirParaHumano`, com o texto de `paramsHandoff`
+      // -- um caminho so, para todos os motivos de handoff. A opcao viaja junto
+      // porque ela pode trazer o texto do proprio no (`mensagemHandoff`).
+      //
       // A fila do editor de origem (queueId) vira setor pelo mapa de
       // Configuracoes; sem mapa, a conversa cai na fila geral como antes.
       const filaId = opcao.filaId ?? null;
@@ -1699,6 +1749,7 @@ class ChatbotEngine {
         motivo: "fluxo_transferiu",
         setor,
         filaId,
+        opcao,
       });
     }
 
@@ -1752,11 +1803,11 @@ class ChatbotEngine {
       if (!escolha) {
         // Passo perdeu as opcoes (fluxo editado no meio do atendimento): nao ha
         // como continuar de onde parou.
-        if (!opcoes.length) return this.transferirParaHumano(ctx, { motivo: "passo_sem_opcoes" });
+        if (!opcoes.length) return this.transferirParaHumano(contexto, { motivo: "passo_sem_opcoes" });
 
         const tentativas = (sessao.contexto?.tentativasOpcao || 0) + 1;
         if (tentativas >= limites.maxTentativasOpcao) {
-          return this.transferirParaHumano(ctx, { motivo: "opcao_invalida" });
+          return this.transferirParaHumano(contexto, { motivo: "opcao_invalida" });
         }
 
         // Texto do proprio fluxo importado, nao do motor.
@@ -1795,7 +1846,11 @@ class ChatbotEngine {
           paramsCnpj(passoAtual)
         );
         if (cnpjValidacao.valido) {
-          await this.enviarBot(conversa.id, telefone, cnpjValidacao.mensagem, instanceName);
+          // Pode nao haver nada a dizer: parceiro reconhecido segue direto para
+          // o proximo passo, que ja fala com o cliente. Ver validarCnpjRecebido.
+          if (cnpjValidacao.mensagem) {
+            await this.enviarBot(conversa.id, telefone, cnpjValidacao.mensagem, instanceName);
+          }
           contexto.cnpjValidacao = cnpjValidacao;
           contexto.conversa = await this.deps.conversaRepository.findById(conversa.id);
           // O passo que pediu o CNPJ cumpriu seu papel; segue para o proximo.
@@ -1873,9 +1928,15 @@ class ChatbotEngine {
             logger.info("CNPJ nao confirmado: seguindo como cliente avulso", {
               conversaId: conversa.id,
             });
-            return this.transferirParaHumano(ctx, { avisar: false, motivo: "cliente_avulso" });
+            return this.transferirParaHumano(contexto, {
+              avisar: false,
+              motivo: "cliente_avulso",
+            });
           }
-          return this.transferirParaHumano(ctx, { motivo: "cnpj_invalido" });
+          // `contexto`, e nao `ctx`: e ele que carrega o fluxo, e sem o fluxo a
+          // confirmacao de encaminhamento cai no padrao do sistema em vez do
+          // texto que a instalacao configurou em `handoffMessage`.
+          return this.transferirParaHumano(contexto, { motivo: "cnpj_invalido" });
         }
 
         // Ainda ha tentativa: avisa QUE errou (antes o bot ficava mudo e o
@@ -1895,7 +1956,11 @@ class ChatbotEngine {
         return { conversaId: conversa.id, aguardando: AGUARDANDO.CNPJ };
       }
 
-      await this.enviarBot(conversa.id, telefone, cnpjValidacao.mensagem, instanceName);
+      // Silencio aqui e o caminho normal do parceiro reconhecido: quem fala com
+      // o cliente e o proximo passo do fluxo. Ver validarCnpjRecebido.
+      if (cnpjValidacao.mensagem) {
+        await this.enviarBot(conversa.id, telefone, cnpjValidacao.mensagem, instanceName);
+      }
 
       contexto.cnpjValidacao = cnpjValidacao;
       contexto.conversa = await this.deps.conversaRepository.findById(conversa.id);
@@ -2316,7 +2381,9 @@ class ChatbotEngine {
       if (cnpjNumeros.length === 14 && cnpjValido(cnpjNumeros) && !conversa.cnpjVerificado) {
         // Fora de fluxo nao ha passo: valem os padroes de fluxo.automacao.
         cnpjValidacao = await this.validarCnpjRecebido(conversa, textoLimpo);
-        await this.enviarBot(conversa.id, telefone, cnpjValidacao.mensagem, instanceName);
+        if (cnpjValidacao.mensagem) {
+          await this.enviarBot(conversa.id, telefone, cnpjValidacao.mensagem, instanceName);
+        }
         conversa = await this.deps.conversaRepository.findById(conversa.id);
       }
 

@@ -82,17 +82,29 @@ function podeAcessarSetor(userCargo, setorConversa) {
   return true;
 }
 
-// Aceita o que der para aproveitar (espaco sobrando, caixa diferente, sem
-// acento) e cai no padrao em vez de gravar lixo no banco.
-function normalizarSetor(valor) {
+/**
+ * O setor canonico que este valor representa, ou `null` se ele nao representa
+ * nenhum.
+ *
+ * A distincao entre "null" e "Geral" e o que `normalizarSetor` sozinho nao
+ * conseguia expressar: para ele, "Suporte" (lixo) e "Geral" (uma declaracao
+ * legitima de "ainda sem triagem") davam o mesmo resultado. Ver
+ * `resolverSetorDeclarado`, que precisa saber a diferenca.
+ */
+function acharSetor(valor) {
   const bruto = String(valor || "").trim();
-  if (!bruto) return SETOR_PADRAO;
+  if (!bruto) return null;
 
   const semAcento = (s) =>
     s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-  const achado = SETORES.find((s) => semAcento(s) === semAcento(bruto));
-  return achado || SETOR_PADRAO;
+  return SETORES.find((s) => semAcento(s) === semAcento(bruto)) || null;
+}
+
+// Aceita o que der para aproveitar (espaco sobrando, caixa diferente, sem
+// acento) e cai no padrao em vez de gravar lixo no banco.
+function normalizarSetor(valor) {
+  return acharSetor(valor) || SETOR_PADRAO;
 }
 
 /**
@@ -112,10 +124,35 @@ function normalizarSetor(valor) {
  *
  * `setorAtual` importa: um handoff no meio do caminho (timeout, "quero um
  * atendente") nao pode APAGAR o setor que o cliente ja escolheu no menu.
+ *
+ * ── E VALOR IRRECONHECIVEL TAMBEM NAO APAGA ────────────────────────────────
+ *
+ * Antes isto era `setorExplicito || setorDaFila || setorAtual` seguido de
+ * `normalizarSetor`. O `||` so olha para "tem alguma coisa escrita?", e
+ * `normalizarSetor` devolve "Geral" para qualquer coisa fora da lista canonica.
+ * Somando as duas, um valor irreconhecivel no primeiro candidato VENCIA o setor
+ * ja gravado e o rebaixava para "Geral".
+ *
+ * O caminho real: o cliente escolhe "1 - Setor Tecnico" (grava Tecnico), o
+ * fluxo transfere pela fila 33, o mapa de Configuracoes devolve "Suporte" --
+ * nome que nao existe na lista -- e a conversa terminava em "Geral". O comentario
+ * acima ja prometia que isso nao aconteceria; a implementacao e que nao cumpria.
+ *
+ * Nao e caso de canto: "Suporte" e exatamente o valor que o exemplo em
+ * configuracao.service.js ensinava a escrever. E o estrago nao para na etiqueta
+ * -- `podeAcessarSetor` decide por ela quem enxerga a conversa.
+ *
+ * Agora cada candidato e testado antes de vencer: quem nao e setor nao decide
+ * nada, e a vez passa para o proximo. Declarar "Geral" de proposito continua
+ * valendo, porque "Geral" ESTA na lista -- e por isso o teste e `acharSetor`
+ * (que devolve null para o que nao reconhece) e nao `normalizarSetor`.
  */
 function resolverSetorDeclarado({ setorExplicito, setorDaFila, setorAtual } = {}) {
-  const declarado = setorExplicito || setorDaFila || setorAtual;
-  return declarado ? normalizarSetor(declarado) : SETOR_PADRAO;
+  for (const candidato of [setorExplicito, setorDaFila, setorAtual]) {
+    const achado = acharSetor(candidato);
+    if (achado) return achado;
+  }
+  return SETOR_PADRAO;
 }
 
 /**
@@ -174,6 +211,7 @@ module.exports = {
   // Exportado para o teste conseguir CITAR a regra em vez de reescreve-la.
   CUIDAM_DA_TRIAGEM,
   setorValido,
+  acharSetor,
   normalizarSetor,
   podeAcessarSetor,
   resolverSetorDeclarado,
