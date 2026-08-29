@@ -841,7 +841,11 @@ class ChatbotEngine {
 
   // Rotulo amigavel do botao: tenta extrair da linha do menu (ex.: "1️⃣- Setor
   // Técnico" -> "Setor Técnico"); senao usa uma palavra-chave legivel/numero.
-  _rotuloOpcao(op, texto) {
+  /**
+   * @param {number} [indice] posicao da opcao no menu (0-based). Usada para
+   *   achar a linha quando a opcao nao tem palavra-chave numerica.
+   */
+  _rotuloOpcao(op, texto, indice) {
     // TEXTO DO BOTAO ESCRITO NO FLUXO, quando houver.
     //
     // `opcao.botao` e o campo para quem monta o fluxo dizer exatamente o que vai
@@ -851,21 +855,38 @@ class ChatbotEngine {
     // COM A ARKA" cortado em 20 caracteres pelo limite do WhatsApp.
     if (op?.botao && String(op.botao).trim()) return String(op.botao).trim();
 
-    const num = (op.palavrasChave || []).find((k) => /^\d+$/.test(k));
-    if (num && texto) {
-      // O SEPARADOR E OPCIONAL, e foi isso que quebrou.
+    // POR QUAL NUMERO PROCURAR a linha do menu, em ordem de confianca:
+    // a palavra-chave numerica, e senao a POSICAO da opcao no menu. Sem o
+    // segundo, um menu cujas opcoes nao tenham a palavra-chave "1" nao tem
+    // como achar a propria linha, e todo rotulo cai na palavra-chave.
+    const kwNum = (op.palavrasChave || []).find((k) => /^\d+$/.test(k));
+    const candidatos = [];
+    if (kwNum) candidatos.push(kwNum);
+    if (Number.isInteger(indice)) candidatos.push(String(indice + 1));
+    if (Number.isInteger(op?.ordem)) candidatos.push(String(op.ordem + 1));
+
+    for (const num of candidatos) {
+      if (!texto) break;
+      // O SEPARADOR E OPCIONAL, e O NEGRITO PODE VIR ANTES DO NUMERO.
       //
-      // A versao antiga exigia um traco depois do numero (`[^-\n]*[-–]`), como
-      // em "1️⃣- Setor Técnico". O menu novo escreve "1️⃣ Técnico", sem traco:
-      // a extracao falhava, caia na palavra-chave, e o rotulo do botao virava
-      // "tecnico" -- minusculo e sem acento, porque palavra-chave e texto de
-      // casamento, nao rotulo de tela.
+      // Duas versoes quebraram aqui, pelo mesmo motivo -- supor como o menu
+      // esta escrito:
       //
-      // Agora: o numero, os caracteres do emoji de teclado (U+FE0F variation
-      // selector e U+20E3 combining keycap, que e o que faz "1" virar "1️⃣"),
-      // um separador OPCIONAL, e o resto da linha.
+      //   1. a primeira exigia traco depois do numero (`[^-\n]*[-–]`), e o menu
+      //      escreve "1️⃣ Técnico", sem traco;
+      //   2. a segunda passou a aceitar sem traco, mas exigia o digito no
+      //      COMECO da linha -- e o menu de producao escreve "*1️⃣ Técnico*",
+      //      com o asterisco do negrito ANTES do numero.
+      //
+      // Nos dois casos a extracao falhava, caia na palavra-chave, e o botao
+      // virava "tecnico": minusculo e sem acento, porque palavra-chave e texto
+      // de casamento, nao rotulo de tela. Foi o que o cliente viu.
+      //
+      // Agora: marcadores de formatacao opcionais, o numero, os invisiveis do
+      // emoji de teclado (U+FE0F variation selector e U+20E3 combining keycap,
+      // que sao o que faz "1" virar "1️⃣"), um separador opcional, e o resto.
       const re = new RegExp(
-        `(?:^|\\n)\\s*${num}[\\uFE0F\\u20E3]*\\s*[-–—.):]*\\s*(.+)`,
+        `(?:^|\\n)[ \\t]*[*_~]*[ \\t]*${num}[\\uFE0F\\u20E3]*[ \\t]*[-–—.):]*[ \\t]*(.+)`,
         "u"
       );
       const m = texto.match(re);
@@ -875,7 +896,7 @@ class ChatbotEngine {
       if (limpo) return limpo;
     }
     const kw = (op.palavrasChave || []).find((k) => !/^\d+$/.test(k));
-    return kw || num || String(op.rotulo || "").split(",")[0] || "Opção";
+    return kw || kwNum || String(op.rotulo || "").split(",")[0] || "Opção";
   }
 
   // Remove do corpo as linhas de opcao numeradas (ex.: "1️⃣- Setor Técnico"),
@@ -884,18 +905,25 @@ class ChatbotEngine {
   // os numeros, para o cliente nunca ficar sem opcao.)
   _corpoInterativo(texto) {
     const linhas = String(texto || "").split("\n");
-    // A LINHA NUMERADA SAI DO CORPO -- com ou sem traco.
+    // A LINHA NUMERADA SAI DO CORPO -- com ou sem traco, com ou sem negrito.
     //
-    // A versao anterior exigia `[-–]`: limpava "1️⃣- Setor Tecnico" e deixava
-    // passar "1️⃣ Tecnico", que e como o menu esta escrito EM PRODUCAO. O
-    // cliente via os botoes E a lista numerada no texto -- a mesma escolha
-    // oferecida duas vezes. Mesmo defeito que `_rotuloOpcao` teve (a0d41ac).
+    // Duas suposicoes sobre "como o menu esta escrito" quebraram isto:
+    //
+    //   1. exigir `[-–]` depois do numero limpava "1️⃣- Setor Tecnico" e
+    //      deixava passar "1️⃣ Tecnico";
+    //   2. exigir o digito no COMECO da linha deixava passar
+    //      "*1️⃣ Tecnico*" -- que e como o menu de PRODUCAO esta escrito, com
+    //      o asterisco do negrito antes do numero.
+    //
+    // Nos dois casos o cliente recebia os botoes E a lista numerada logo
+    // abaixo: a mesma escolha oferecida duas vezes. Mesmo defeito de
+    // `_rotuloOpcao` (a0d41ac), pela mesma raiz.
     //
     // Depois do numero exige-se keycap OU separador, nunca apenas espaco, para
     // nao comer linha de conteudo legitima como "2 vias do documento".
     const semOpcoes = linhas.filter(
       // ️⃣ = os dois invisiveis do keycap ("1" + seletor + caixinha).
-      (l) => !/^\s*\d+(?:[️⃣]+\s*[-–—.):]?|\s*[-–—.):])\s*\S/u.test(l)
+      (l) => !/^[ \t]*[*_~]*[ \t]*\d+(?:[️⃣]+[ \t]*[-–—.):]?|[ \t]*[-–—.):])[ \t]*\S/u.test(l)
     );
     const corpo = semOpcoes.join("\n").replace(/\n{3,}/g, "\n\n").trim();
     return corpo || "Escolha uma opção:";
@@ -924,7 +952,7 @@ class ChatbotEngine {
     const inst = instanceName || env.evolutionApi.instance;
     const itens = opcoes
       .slice(0, 12)
-      .map((op) => this._rotuloOpcao(op, texto).slice(0, 100))
+      .map((op, i) => this._rotuloOpcao(op, texto, i).slice(0, 100))
       // Enquete nao aceita opcao repetida; duas com o mesmo rotulo viram uma.
       .filter((v, i, a) => v && a.indexOf(v) === i);
 
@@ -1002,9 +1030,9 @@ class ChatbotEngine {
     const msg = await this.deps.conversaRepository.addMensagem(conversaId, "bot", texto, null, null, {
       status: "enviando",
     });
-    const itens = opcoes.slice(0, 10).map((op) => ({
+    const itens = opcoes.slice(0, 10).map((op, i) => ({
       id: this._valorOpcao(op),
-      titulo: this._rotuloOpcao(op, texto),
+      titulo: this._rotuloOpcao(op, texto, i),
     }));
 
     const marcar = (r, status) =>

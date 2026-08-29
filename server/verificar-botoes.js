@@ -387,6 +387,53 @@ const TEXTO_MENU =
   });
   check(regLista.length === 1 && regLista[0].tipo === "list", "`list` explicito ainda manda lista (opt-in preservado)");
 
+  titulo("11. COMO O MENU ESTA ESCRITO nao pode mudar o que o cliente ve");
+
+  // Este arquivo ja quebrou DUAS vezes por supor a escrita do menu:
+  //
+  //   1. exigindo traco depois do numero  -> "1️⃣ Tecnico" falhava;
+  //   2. exigindo o digito no comeco      -> "*1️⃣ Tecnico*" falhava.
+  //
+  // O segundo e o que estava em PRODUCAO, e o cliente via duas coisas erradas
+  // ao mesmo tempo: rotulo "tecnico" (minusculo, sem acento -- palavra-chave
+  // usada como rotulo de tela) e a lista numerada repetida embaixo dos botoes.
+  //
+  // A matriz abaixo existe para a terceira variante de escrita nao virar um
+  // terceiro incidente. Vale para as duas funcoes de uma vez.
+  const K = "️⃣"; // os dois invisiveis do keycap
+  const ESCRITAS = [
+    ["cru", `1${K} Técnico`],
+    ["negrito na linha inteira (producao)", `*1${K} Técnico*`],
+    ["negrito so no rotulo", `1${K} *Técnico*`],
+    ["italico", `_1${K} Técnico_`],
+    ["traco", `1${K}- Técnico`],
+    ["traco dentro do negrito", `*1${K}- Técnico*`],
+    ["sem keycap", "1- Técnico"],
+    ["ponto", "1. Técnico"],
+    ["parentese", "1) Técnico"],
+  ];
+  const COM_NUM = { palavrasChave: ["1", "tecnico"], ordem: 0, rotulo: "1,tecnico" };
+  const SEM_NUM = { palavrasChave: ["tecnico"], ordem: 0, rotulo: "tecnico" };
+  for (const [comoEscreveu, linha] of ESCRITAS) {
+    const texto = `Como podemos ajudar?\n\n${linha}`;
+    check(engine._rotuloOpcao(COM_NUM, texto, 0) === "Técnico", `${comoEscreveu}: rotulo -> "Técnico"`);
+    check(
+      engine._rotuloOpcao(SEM_NUM, texto, 0) === "Técnico",
+      `${comoEscreveu}: rotulo -> "Técnico" mesmo SEM palavra-chave numerica`
+    );
+    check(engine._corpoInterativo(texto) === "Como podemos ajudar?", `${comoEscreveu}: corpo sem a linha numerada`);
+  }
+
+  // E o limite do zelo: linha de CONTEUDO que comeca com numero nao e opcao.
+  check(
+    engine._corpoInterativo("Envie 2 vias do documento") === "Envie 2 vias do documento",
+    "linha de conteudo comecando com numero NAO e removida"
+  );
+  check(
+    engine._corpoInterativo(`Total: 3 itens\n\n*1${K} Sim*\n*2${K} Nao*`) === "Total: 3 itens",
+    "conteudo e opcoes na mesma mensagem: sai so a opcao"
+  );
+
   console.log(
     "\n" + (erros.length ? `FALHAS (${erros.length}):\n  ` + erros.join("\n  ") : "BOTOES: TUDO CONFERE")
   );
