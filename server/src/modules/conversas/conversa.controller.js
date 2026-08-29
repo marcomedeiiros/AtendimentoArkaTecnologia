@@ -8,6 +8,12 @@ class ConversaController {
     return conversaService.listar(req.query, req.user?.cargo).then((data) => success(res, data));
   }
 
+  // Retrato barato para a Central reconciliar as abas com frequencia, sem
+  // arrastar o historico inteiro. Ver conversaService.listarEstados.
+  listarEstados(req, res) {
+    return conversaService.listarEstados(req.user?.cargo).then((data) => success(res, data));
+  }
+
   obter(req, res) {
     return conversaService.obter(req.params.id, req.user?.cargo).then((data) => success(res, data));
   }

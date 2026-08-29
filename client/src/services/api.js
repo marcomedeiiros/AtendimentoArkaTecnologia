@@ -629,6 +629,12 @@ export const ConfiguracoesAPI = {
 // ── Conversas API ──
 export const ConversasAPI = {
   listar: () => request('/conversas'),
+  // RETRATO BARATO DO ESTADO de todas as conversas: status, setor, responsável e
+  // versão, sem mensagem nenhuma. A `listar` traz todo o histórico (medido: 2,76
+  // MB para 10 conversas de 800 mensagens), e por isso a reconciliação só rodava
+  // a cada 5 minutos -- tempo em que uma conversa que o SSE perdeu ficava na aba
+  // errada. Este retrato pode ser lido de minuto em minuto.
+  estados: () => request('/conversas/estados'),
   // Uma conversa, direto do servidor. É o desempate quando o estado local pode
   // estar errado (ex.: falhou ao assumir): em vez de restaurar um retrato antigo
   // guardado na tela, perguntamos qual é a verdade.

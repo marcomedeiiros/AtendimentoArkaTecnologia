@@ -37,6 +37,13 @@ router.use(exigirModulo("atendimento"));
 router.post("/stream-ticket", (req, res) => conversaStream.criarTicket(req, res));
 router.get("/", (req, res, next) => conversaController.listar(req, res).catch(next));
 
+// ANTES de "/:id": "estados" casaria com o parametro e cairia em `obter`.
+// Retrato barato (status/setor/responsavel/versao, sem mensagem nenhuma) para a
+// Central reconciliar de minuto em minuto -- ver conversaService.listarEstados.
+router.get("/estados", (req, res, next) =>
+  conversaController.listarEstados(req, res).catch(next)
+);
+
 // PARA QUEM DA PARA TRANSFERIR -- e ANTES de "/:id", senao "atendentes" seria
 // lido como um id de conversa.
 //

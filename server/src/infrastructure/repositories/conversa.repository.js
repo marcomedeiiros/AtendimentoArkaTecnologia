@@ -163,6 +163,35 @@ class ConversaRepository {
   // repositorio, quando o CLIENTE diz no fluxo que o CNPJ nao e o dele. Ver
   // chatbot.engine._desassociarCnpj.
 
+  /**
+   * RETRATO DE ESTADO DE TODAS AS CONVERSAS -- alguns bytes por linha.
+   *
+   * Existe para a Central conseguir se reconciliar com frequencia. A releitura
+   * completa (`findAll`) traz todas as conversas COM todas as mensagens: medido,
+   * 10 conversas de 800 mensagens custam 628ms de servidor e 2,76 MB. Por causa
+   * desse preco a reconciliacao roda a cada 5 MINUTOS -- e uma conversa que o
+   * SSE perdeu ficava esse tempo todo na aba errada. Foi o que aconteceu em
+   * 2026-08-28: o bot encerrou o atendimento, o banco gravou `fechada`, e a
+   * Central seguiu mostrando "Pendente" ate alguem apertar F5.
+   *
+   * Aqui vem so o que decide ABA e BADGE: status, responsavel, setor e a versao
+   * (que e como o front sabe se o retrato e mais novo que o dele). Sem mensagem
+   * nenhuma. Da para chamar de minuto em minuto sem competir com o trafego real.
+   */
+  listarEstados() {
+    return prisma.conversa.findMany({
+      select: {
+        id: true,
+        statusAtendimento: true,
+        setor: true,
+        atendenteId: true,
+        naoLidas: true,
+        lido: true,
+        versao: true,
+      },
+    });
+  }
+
   // Versao LEVE: so os campos escalares (sem carregar todas as mensagens). Para
   // checagens rapidas (setor/telefone) sem o custo de puxar o historico inteiro.
   findByIdBasico(id) {

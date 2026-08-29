@@ -57,6 +57,31 @@ class ConversaService {
     return dto.filter((c) => podeAcessarSetor(userCargo, c.setor));
   }
 
+  /**
+   * ESTADO DE TODAS AS CONVERSAS -- o retrato barato para reconciliar.
+   *
+   * Mesmo filtro de setor da listagem, de proposito: se este caminho enxergasse
+   * um setor que `listar` esconde, ele contaria conversa de outro setor no
+   * numerinho das abas -- vazamento por outra porta.
+   *
+   * Nao passa por `mapConversa`: o retrato ja e exatamente o conjunto de campos
+   * que a tela precisa, e montar o DTO completo aqui derrotaria o proposito.
+   */
+  async listarEstados(userCargo = null) {
+    const estados = await conversaRepository.listarEstados();
+    const normalizados = estados.map((c) => ({
+      id: c.id,
+      statusAtendimento: c.statusAtendimento,
+      setor: c.setor || "Geral",
+      atendenteId: c.atendenteId || null,
+      naoLidas: c.naoLidas ?? 0,
+      lido: !!c.lido,
+      versao: c.versao ?? 0,
+    }));
+    if (!userCargo || userCargo === "Administrador") return normalizados;
+    return normalizados.filter((c) => podeAcessarSetor(userCargo, c.setor));
+  }
+
   async obter(id, userCargo = null) {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");

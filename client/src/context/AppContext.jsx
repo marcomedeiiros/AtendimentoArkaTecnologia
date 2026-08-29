@@ -50,6 +50,10 @@ export function AppProvider({ children }) {
   // (Contatos e a busca da Central) e não no estado global.
   const [sinalContatos,     setSinalContatos]     = useState(0);
   const msgCountsRef = useRef(null);
+  // Espelho de `conversas` para quem precisa LER o estado sem entrar nas
+  // dependências de um efeito (a conferência de estado abaixo roda num intervalo
+  // e não pode ser recriada a cada mensagem que chega).
+  const conversasRef = useRef([]);
 
   const carregarDadosDoServidor = useCallback(async () => {
     setCarregando(true);
@@ -279,6 +283,69 @@ export function AppProvider({ children }) {
       document.removeEventListener('visibilitychange', aoVoltar);
     };
   }, [recarregarConversas]);
+
+  /**
+   * CONFERÊNCIA DE ESTADO -- de minuto em minuto, e barata.
+   *
+   * A rede de segurança acima só roda a cada 5 minutos porque a listagem
+   * completa é caríssima. Isso deixava um buraco de até 5 minutos: se o SSE
+   * perdesse UM evento, a conversa ficava na aba errada até lá.
+   *
+   * Foi o que aconteceu em 2026-08-28: o bot encerrou o atendimento, o banco
+   * gravou `fechada` (log e OS confirmados), e a Central seguiu mostrando
+   * "Pendente" -- o operador só via mudar apertando F5.
+   *
+   * `/conversas/estados` devolve apenas o que decide ABA e BADGE (status, setor,
+   * responsável, não-lidas e versão), sem mensagem nenhuma: alguns bytes por
+   * conversa. Dá para conferir de minuto em minuto sem competir com o tráfego
+   * real de mensagens.
+   *
+   * Quando um retrato vem com versão MAIOR que a da tela, buscamos aquela
+   * conversa inteira -- só ela. Assim o custo alto acontece uma vez, na conversa
+   * que de fato ficou atrás, em vez de a cada minuto em todas.
+   */
+  useEffect(() => {
+    let ativo = true;
+    const conferir = async () => {
+      if (document.visibilityState === 'hidden') return;
+      try {
+        const estados = await ConversasAPI.estados();
+        if (!ativo || !Array.isArray(estados)) return;
+        const porId = new Map(conversasRef.current.map(c => [c.id, c]));
+        const atrasadas = estados
+          .filter(e => {
+            const atual = porId.get(e.id);
+            // Conversa que a tela não tem ainda: a listagem completa cuida dela
+            // na próxima reconciliação -- aqui não há retrato para comparar.
+            if (!atual) return false;
+            return (
+              typeof e.versao === 'number' &&
+              typeof atual.versao === 'number' &&
+              e.versao > atual.versao
+            );
+          })
+          .map(e => e.id);
+        for (const id of atrasadas) {
+          try {
+            const conv = await ConversasAPI.obter(id);
+            if (!ativo || !conv?.id) continue;
+            setConversas(prev => {
+              const atual = prev.find(c => c.id === conv.id);
+              const mesclada = mesclarConversa(atual, conv);
+              return ordenarConversas(
+                atual ? prev.map(c => (c.id === conv.id ? mesclada : c)) : [mesclada, ...prev]
+              );
+            });
+          } catch { /* uma conversa que falhou nao pode parar as outras */ }
+        }
+      } catch { /* back-end offline: mantem estado atual */ }
+    };
+    const id = setInterval(conferir, 60000);
+    return () => { ativo = false; clearInterval(id); };
+  }, []);
+
+  // Mantém o espelho de `conversas` em dia para a conferência acima.
+  useEffect(() => { conversasRef.current = conversas; }, [conversas]);
 
   const removerNotificacao = useCallback((id) => {
     setNotificacoes(prev => prev.filter(n => n.id !== id));
