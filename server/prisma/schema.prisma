@@ -273,6 +273,22 @@ model Conversa {
   /// pode existir SEM cnpjVerificado -- e o caso do fluxo que esgota as
   /// tentativas de CNPJ e segue como avulso por configuracao.
   clienteTipo         String?   @map("cliente_tipo")
+  /// O CLIENTE PEDIU ATENDIMENTO AVULSO neste ciclo.
+  ///
+  /// Campo separado de `clienteTipo` porque as duas coisas se parecem e nao sao
+  /// a mesma. `clienteTipo` e um RETRATO do cadastro no instante em que o CNPJ
+  /// foi validado, e ele precisa poder envelhecer: uma empresa cadastrada como
+  /// parceira DEPOIS passa a valer na hora, e a Central volta a mostrar
+  /// "cadastrado". Ja isto aqui e uma ESCOLHA do cliente no menu do bot -- "este
+  /// atendimento e cobrado a parte" -- e nenhuma consulta ao cadastro desmente.
+  ///
+  /// Guardar as duas coisas no mesmo campo foi a primeira tentativa, e o
+  /// verificar-cliente-avulso reprovou na hora: um parceiro cadastrado depois da
+  /// identificacao ficava marcado como avulso para sempre.
+  ///
+  /// E do CICLO, nao do fio: um chamado novo comeca sem a marca (ver o reset em
+  /// chatbot.engine, junto do setor).
+  atendimentoAvulso   Boolean   @default(false) @map("atendimento_avulso")
   lido                Boolean   @default(false)
   naoLidas            Int       @default(0) @map("nao_lidas")
   fotoUrl             String?   @map("foto_url")

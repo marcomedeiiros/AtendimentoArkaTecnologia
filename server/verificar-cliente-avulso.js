@@ -284,6 +284,99 @@ async function main() {
   );
 
   // ─────────────────────────────────────────────────────────────────────────
+  titulo("9. O TERCEIRO caminho: o cliente ESCOLHEU 'Atendimento avulso' no menu");
+
+  // O relato: o cliente selecionava "2 - Atendimento avulso" e a Central seguia
+  // mostrando a badge verde da empresa ("parceiro com contrato ativo"), porque o
+  // unico caminho que classificava o tipo era a validacao de CNPJ. Quem atende
+  // nao tinha como saber que aquele chamado e cobrado a parte.
+  const { tipoClienteDaOpcaoEscolhida } = require("./src/shared/helpers/cnpj.helper");
+
+  // O caminho oficial e o campo no JSON do fluxo...
+  check(
+    tipoClienteDaOpcaoEscolhida({ clienteTipo: "avulso" }) === "avulso",
+    "opcao.clienteTipo declarado -> avulso"
+  );
+  // ...e o encaixe para os fluxos que nao o tem: o ROTULO da opcao escolhida,
+  // igual ao que setorDaOpcaoEscolhida faz com setor. E o fluxo real da ARKA.
+  check(
+    tipoClienteDaOpcaoEscolhida({
+      rotulo: "2,cliente avulso,avulso,novo cliente",
+      palavrasChave: ["2", "cliente avulso", "avulso", "novo cliente"],
+    }) === "avulso",
+    "opcao do fluxo real ('2, cliente avulso, avulso') -> avulso"
+  );
+  // E as opcoes que NAO sao avulso continuam null -- casamento por token
+  // inteiro, senao "avulso" apareceria dentro de frases que nao sao a opcao.
+  for (const rotulo of [
+    "1,contrato,tenho contrato",
+    "3,voltar ao inicio,menu inicial,voltar",
+    "1,tecnico,setor tecnico,suporte",
+  ]) {
+    check(
+      tipoClienteDaOpcaoEscolhida({ rotulo, palavrasChave: rotulo.split(",") }) === null,
+      `"${rotulo.slice(0, 22)}..." -> null (nao e avulso)`
+    );
+  }
+
+  // A ESCOLHA GANHA DO CADASTRO VIVO -- e o ponto do pedido. Parceiro com
+  // contrato ATIVO que pediu avulso aparece como avulso, com o nome junto.
+  const parceiroQuePediuAvulso = mapConversa({
+    id: "w", cliente: "c", telefone: "5511", mensagens: [],
+    cnpj: CNPJ_PARCEIRO, empresa: null, cnpjVerificado: true,
+    clienteTipo: "cadastrado", atendimentoAvulso: true,
+  });
+  check(
+    badge.tipo(parceiroQuePediuAvulso, parceirosNaTela) === "avulso",
+    "parceiro ATIVO que escolheu avulso -> a badge vira avulso"
+  );
+  chip = badge.chip(parceiroQuePediuAvulso, parceirosNaTela);
+  check(/AVULSO/.test(chip.label), `a badge diz "${chip.label}"`);
+  // A razao social vem do cadastro vivo e continua na badge: escolher avulso e
+  // decisao de cobranca, nao negacao de que a empresa exista.
+  check(/PARCEIRA/.test(chip.label), "e a razao social continua a vista (o CNPJ nao foi apagado)");
+
+  // SEM a escolha, nada muda: o cadastro vivo segue mandando. E a regra que a
+  // primeira versao desta correcao quebrou, guardando escolha e retrato do
+  // cadastro no mesmo campo.
+  const soCadastrado = mapConversa({
+    id: "w2", cliente: "c", telefone: "5511", mensagens: [],
+    cnpj: CNPJ_PARCEIRO, empresa: null, cnpjVerificado: true, clienteTipo: "avulso",
+  });
+  check(
+    badge.tipo(soCadastrado, parceirosNaTela) === "cadastrado",
+    "sem a escolha, parceiro ativo volta a ser cadastrado (clienteTipo nao congela)"
+  );
+
+  // E o motor grava a marca quando a opcao e escolhida.
+  const gravadoOpcao = {};
+  const motorOpcao = new ChatbotEngine({
+    conversaRepository: {
+      update: async (_id, data) => { Object.assign(gravadoOpcao, data); return data; },
+      atualizarAtendimentoAtual: async () => null,
+      findById: async () => ({ id: "cx", atendimentoAvulso: true }),
+    },
+    fluxoRepository: { findById: async () => null, createLog: async () => {} },
+    bus: { emitConversa: () => {} },
+  });
+  const conversaMotor = { id: "cx", setor: "Técnico", atendimentoAvulso: false };
+  await motorOpcao
+    .aplicarOpcao(
+      { id: "sup_2", rotulo: "2,cliente avulso,avulso", palavrasChave: ["2", "avulso"], acao: "ir", targetId: "nao-existe" },
+      { conversa: conversaMotor, telefone: "5511", instanciaId: "i", fluxo: { id: "f", passos: [] } },
+      { id: "s", contexto: {} }
+    )
+    .catch(() => {}); // o destino inexistente cai em handoff; o que importa e a gravacao
+  check(
+    gravadoOpcao.atendimentoAvulso === true,
+    `o motor grava atendimentoAvulso=${gravadoOpcao.atendimentoAvulso} ao escolher a opcao`
+  );
+  check(
+    gravadoOpcao.clienteTipo === undefined,
+    "e NAO escreve em clienteTipo (que e retrato do cadastro, nao escolha)"
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────
   titulo("8. O estado vem do SERVIDOR (sobrevive a F5 e a troca de conversa)");
 
   conversa = await criarConversa(instancia.id);

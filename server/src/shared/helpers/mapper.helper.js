@@ -118,6 +118,9 @@ function mapConversa(c) {
     // `cnpjVerificado` -- que valia true para os dois tipos e por isso chamava
     // todo avulso de "CLIENTE IDENTIFICADO".
     clienteTipo: c.clienteTipo || null,
+    // Escolha do cliente ("Atendimento avulso" no menu), nao retrato do
+    // cadastro -- ver o campo no schema. A Central usa este para a badge.
+    atendimentoAvulso: !!c.atendimentoAvulso,
     lido: c.lido,
     naoLidas: c.naoLidas ?? 0,
     fotoUrl: c.fotoUrl || null,

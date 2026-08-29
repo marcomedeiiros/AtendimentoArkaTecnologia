@@ -10,6 +10,7 @@ const {
   mascararCnpj,
   partesBrasilia,
   sleep,
+  tipoClienteDaOpcaoEscolhida,
 } = require("../../shared/helpers/cnpj.helper");
 const { comLock } = require("../../shared/helpers/lock.helper");
 // PARAMETROS DA AUTOMACAO: quem manda e o FLUXO, nao o codigo. Ver
@@ -2179,6 +2180,37 @@ class ChatbotEngine {
       }
     }
 
+    // ---------------------------------------------------------------------
+    // "ATENDIMENTO AVULSO" TAMBEM E ESCOLHA DO CLIENTE, e vale como o setor.
+    //
+    // O cliente escolhia "2 - Atendimento avulso" e nada era gravado: a Central
+    // seguia mostrando a badge da empresa (verde, "parceiro com contrato
+    // ativo"), porque o unico caminho que classificava o tipo era a validacao
+    // de CNPJ. Quem atende precisava adivinhar que aquele atendimento e cobrado
+    // a parte.
+    //
+    // NAO desassocia o CNPJ de proposito. Escolher atendimento avulso e uma
+    // decisao sobre COMO este atendimento e cobrado, nao uma negacao de que a
+    // empresa exista -- apagar o vinculo perderia a razao social, que segue
+    // sendo a informacao mais util para quem atende (a badge mostra
+    // "EMPRESA · AVULSO"). Quem quer desvincular usa `limparCnpj`, abaixo.
+    // ---------------------------------------------------------------------
+    // Grava em `atendimentoAvulso`, e NAO em `clienteTipo`: aquele campo e o
+    // retrato do cadastro no instante da validacao do CNPJ, e ele precisa poder
+    // envelhecer (empresa cadastrada como parceira depois volta a ser
+    // "cadastrado"). Escrever a escolha ali marcava o cliente como avulso para
+    // sempre -- o verificar-cliente-avulso reprovou a primeira versao por isso.
+    const tipoDaEscolha = tipoClienteDaOpcaoEscolhida(opcao);
+    if (tipoDaEscolha === "avulso" && !conversa.atendimentoAvulso) {
+      await this.deps.conversaRepository.update(conversa.id, { atendimentoAvulso: true });
+      conversa.atendimentoAvulso = true;
+      await this._emitirConversa(conversa.id);
+      logger.info("Atendimento avulso escolhido pelo cliente", {
+        conversaId: conversa.id,
+        opcao: opcao.id,
+      });
+    }
+
     // "INFORMAR OUTRO CNPJ": o cliente esta dizendo que o CNPJ vinculado nao
     // serve. Mesma acao do "NAO" na confirmacao -- desassocia a conversa, sem
     // tocar no cadastro da empresa -- e por isso reusa o mesmo metodo. Sem
@@ -2621,6 +2653,11 @@ class ChatbotEngine {
           atendenteId: null,
           // Sem triagem ate o cliente escolher no menu deste chamado.
           setor: SETOR_PADRAO,
+          // A escolha de "atendimento avulso" e DO CHAMADO, pela mesma razao que
+          // o setor: quem pediu avulso em agosto nao esta pedindo avulso de novo
+          // em setembro. Sem este reset, a badge "AVULSO" ficaria colada no fio
+          // para sempre -- o mesmo sintoma que o setor herdado tinha.
+          atendimentoAvulso: false,
           avaliacao: null,
           feedback: null,
           lido: false,

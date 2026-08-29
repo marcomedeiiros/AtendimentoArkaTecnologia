@@ -116,6 +116,43 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * O TIPO DE CLIENTE QUE A OPCAO ESCOLHIDA DECLARA -- "avulso" ou null.
+ *
+ * O caminho oficial e `opcao.clienteTipo`, no JSON do fluxo. Como esse campo e
+ * novo e o fluxo vive no BANCO de cada instalacao, ha o mesmo encaixe que
+ * `setorDaOpcaoEscolhida` usa para setor: o tipo sai do ROTULO DA OPCAO QUE O
+ * CLIENTE ESCOLHEU ("2,cliente avulso,avulso,novo cliente").
+ *
+ * Isso NAO e adivinhar pelo texto do cliente. O rotulo foi escrito por quem
+ * montou o fluxo, e o cliente escolheu aquela opcao explicitamente -- e a mesma
+ * natureza da escolha de setor no menu principal. Palpite sobre a frase livre do
+ * cliente continua fora de questao.
+ *
+ * So existe "avulso": nao ha rotulo que declare "cadastrado", e nao deveria
+ * haver. Ser cliente cadastrado e um fato do cadastro de parceiros, verificado
+ * pelo CNPJ -- nunca algo que o cliente escolhe num menu.
+ *
+ * CASAMENTO POR TOKEN INTEIRO, pela mesma razao do setor: substring casaria
+ * "avulso" dentro de frases que nao sao a opcao.
+ */
+const PALAVRAS_DE_AVULSO = ["avulso", "cliente avulso", "atendimento avulso", "sou cliente avulso"];
+
+function tipoClienteDaOpcaoEscolhida(opcao) {
+  if (!opcao) return null;
+  if (opcao.clienteTipo === "avulso") return "avulso";
+
+  const semAcento = (s) =>
+    String(s || "").toLowerCase().trim().normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+  const tokens = [
+    ...(Array.isArray(opcao.palavrasChave) ? opcao.palavrasChave : []),
+    ...String(opcao.rotulo || "").split(","),
+  ].map(semAcento).filter(Boolean);
+
+  return tokens.some((t) => PALAVRAS_DE_AVULSO.includes(t)) ? "avulso" : null;
+}
+
 module.exports = {
   limparCnpj,
   mascararCnpj,
@@ -126,4 +163,5 @@ module.exports = {
   dataBrasilia,
   partesBrasilia,
   sleep,
+  tipoClienteDaOpcaoEscolhida,
 };

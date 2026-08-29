@@ -254,11 +254,37 @@ function empresaDaConversa(c, parceiros = []) {
  * então sobrevive ao F5, à troca de conversa e a uma mensagem nova chegando.
  */
 function tipoDoCliente(c, parceiros = []) {
+  // 0. O CLIENTE ESCOLHEU ATENDIMENTO AVULSO -- e isso ganha de tudo.
+  //
+  //    Campo SEPARADO de `clienteTipo` de propósito, porque as duas coisas se
+  //    parecem e não são a mesma:
+  //
+  //      `clienteTipo: 'avulso'`   -> retrato do cadastro no momento em que o
+  //                                   CNPJ foi validado. Pode envelhecer: a
+  //                                   empresa vira parceira depois e a regra 1
+  //                                   tem de passar a dizer "cadastrado".
+  //      `atendimentoAvulso: true` -> o cliente escolheu "Atendimento avulso"
+  //                                   no menu. É decisão sobre ESTE atendimento
+  //                                   (cobrado à parte) e nenhuma consulta ao
+  //                                   cadastro pode desmentir.
+  //
+  //    Misturar os dois num campo só foi a primeira tentativa, e o
+  //    verificar-cliente-avulso reprovou: um parceiro cadastrado DEPOIS da
+  //    identificação voltava a aparecer como avulso para sempre.
+  //
+  //    A razão social continua aparecendo junto ("EMPRESA · AVULSO"): o vínculo
+  //    de CNPJ não é apagado, e saber com quem se fala continua sendo útil.
+  if (c?.atendimentoAvulso) return 'avulso';
+
   if (c?.cnpjVerificado) {
     const digitos = limparCnpj(c?.cnpj);
     const parceiro = digitos ? parceiros.find(p => limparCnpj(p.cnpj) === digitos) : null;
     return parceiro?.status === 'ativo' ? 'cadastrado' : 'avulso';
   }
+  // Sem CNPJ verificado, vale o que foi CLASSIFICADO -- é o caminho do fluxo que
+  // esgota as tentativas de CNPJ e segue como avulso por configuração: nenhum
+  // CNPJ foi confirmado, mas o sistema decidiu o tipo, e a Central precisa
+  // mostrar isso em vez de "não identificado".
   if (c?.clienteTipo === 'avulso') return 'avulso';
   return null; // ainda não identificado
 }
