@@ -283,6 +283,22 @@ class ChatbotEngine {
     const porId = opcoes.find((o) => o?.id && this.normalizarTexto(o.id) === alvo);
     if (porId) return porId;
 
+    // ── VOTO DE ENQUETE: casa pelo ROTULO ────────────────────────────────────
+    //
+    // A enquete nao carrega id: o que volta e o NOME da opcao, exatamente o
+    // texto que foi enviado. E o mesmo texto que `_rotuloOpcao` monta, entao
+    // comparamos com ele -- incluindo o `opcao.botao` escrito no fluxo, que e o
+    // que de fato aparece na enquete.
+    //
+    // Casamento exato e normalizado (minusculo, sem acento), nao "contem": um
+    // rotulo nunca deve casar por pedaco, senao "Voltar ao Menu" casaria dentro
+    // de outra opcao que mencione menu.
+    const porRotulo = opcoes.find((o) => {
+      const rot = o?.botao || this._rotuloOpcao(o, "");
+      return rot && this.normalizarTexto(rot) === alvo;
+    });
+    if (porRotulo) return porRotulo;
+
     let melhor = null;
     for (const opcao of opcoes) {
       for (const palavra of opcao.palavrasChave || []) {
@@ -860,12 +876,81 @@ class ChatbotEngine {
   // Corpo = texto SEM as linhas numeradas (buttons-only). Se a instancia Baileys
   // recusar/nao renderizar, cai para texto puro COM os numeros -- fallback que
   // nunca deixa o cliente sem menu.
+  /**
+   * MENU COMO ENQUETE -- clicavel, e com o texto numerado preservado.
+   *
+   * A pergunta vai no `name` da enquete (o WhatsApp mostra esse texto acima das
+   * opcoes), e cada opcao usa o rotulo do fluxo (`opcao.botao` quando existir).
+   *
+   * O texto completo do passo continua sendo enviado ANTES, como mensagem
+   * normal. Nao e redundancia: se o voto nao voltar legivel -- o risco conhecido
+   * do Baileys --, o cliente ainda tem o menu numerado para digitar, e o
+   * atendimento nao para. E o mesmo motivo pelo qual `casarOpcao` aceita numero,
+   * palavra-chave, id e rotulo.
+   *
+   * Limites do WhatsApp: 2 a 12 opcoes, e cada opcao com no maximo 100
+   * caracteres. Com menos de 2 opcoes nao ha enquete possivel -- cai para texto.
+   */
+  async _enviarMenuEnquete(conversaId, telefone, texto, opcoes, instanceName) {
+    const inst = instanceName || env.evolutionApi.instance;
+    const itens = opcoes
+      .slice(0, 12)
+      .map((op) => this._rotuloOpcao(op, texto).slice(0, 100))
+      // Enquete nao aceita opcao repetida; duas com o mesmo rotulo viram uma.
+      .filter((v, i, a) => v && a.indexOf(v) === i);
+
+    // O texto do passo primeiro: e o que sobra se o voto nao voltar legivel.
+    await this.enviarBot(conversaId, telefone, texto, instanceName);
+
+    if (itens.length < 2) return texto;
+
+    try {
+      await this.deps.evolutionApi.sendPoll(
+        telefone,
+        { name: "Toque na sua opção", values: itens, selectableCount: 1 },
+        inst
+      );
+      logger.info("Menu enviado como enquete", { conversaId, opcoes: itens.length });
+    } catch (error) {
+      // Sem fallback aqui de proposito: o texto numerado JA foi enviado acima.
+      // Mandar outra coisa agora seria uma segunda mensagem dizendo o mesmo.
+      logger.warn("Falha ao enviar a enquete do menu; o texto numerado ja foi enviado", {
+        conversaId,
+        message: error.message,
+      });
+    }
+    return texto;
+  }
+
   async enviarBotComOpcoes(conversaId, telefone, texto, opcoes, instanceName) {
     // Botoes/listas interativos SO funcionam na API OFICIAL do WhatsApp. Na
     // integracao atual (Baileys/Evolution) o WhatsApp nao renderiza e a Baileys
     // chega a estourar ("this.isZero is not a function"). Por isso o padrao e
     // mandar o menu em TEXTO (com as opcoes numeradas, que o cliente digita).
     // Para ligar os botoes ao migrar para a API oficial: WHATSAPP_BOTOES_INTERATIVOS=true.
+    // ── ENQUETE: o menu CLICAVEL que funciona no transporte de hoje ──────────
+    //
+    // Botao e lista dependem do `native_flow`, que a Evolution 2.3.7 nao monta
+    // (regressao `this.isZero`) -- e por isso ficam atras de
+    // WHATSAPP_BOTOES_INTERATIVOS, desligado. A enquete usa outro caminho do
+    // protocolo e renderiza no Baileys, entao e o unico jeito de o cliente
+    // TOCAR numa opcao sem migrar o numero e sem custo.
+    //
+    // Flag propria (`WHATSAPP_MENU_ENQUETE`), separada da dos botoes: sao
+    // transportes diferentes, e ligar um nao deve implicar o outro.
+    //
+    // Vem ANTES do bloco de botoes porque, no estado atual, e a via que tem
+    // chance de funcionar. Quando o numero migrar para a Cloud API, desliga-se
+    // esta e liga-se a de botoes, que sao nativos la.
+    //
+    // O RISCO, dito no lugar onde a decisao acontece: o voto pode nao voltar
+    // legivel (ver extrairTexto). Se nao voltar, o cliente clica e o bot nao
+    // entende -- por isso o texto numerado continua no corpo da enquete, e
+    // digitar o numero segue funcionando.
+    if (process.env.WHATSAPP_MENU_ENQUETE === "true") {
+      return this._enviarMenuEnquete(conversaId, telefone, texto, opcoes, instanceName);
+    }
+
     if (process.env.WHATSAPP_BOTOES_INTERATIVOS !== "true") {
       return this.enviarBot(conversaId, telefone, texto, instanceName);
     }

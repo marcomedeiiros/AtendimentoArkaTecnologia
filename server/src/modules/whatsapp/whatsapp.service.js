@@ -60,6 +60,44 @@ class WhatsAppService {
       } catch { /* ignora json invalido */ }
     }
 
+    // ── VOTO DE ENQUETE ──────────────────────────────────────────────────────
+    //
+    // A enquete e o menu clicavel que funciona no transporte atual (botao e
+    // lista dependem do `native_flow`, que a 2.3.7 nao monta). Mas o voto e a
+    // parte fragil: no Baileys ele vem CRIPTOGRAFADO
+    // (`pollUpdateMessage.vote.encPayload`), e so chega legivel aqui se a
+    // Evolution decifrar e expor o nome da opcao -- comportamento que varia
+    // entre versoes.
+    //
+    // Por isso duas coisas:
+    //
+    //   1. varios formatos plausiveis sao tentados, porque nao ha um contrato
+    //      estavel para isso;
+    //   2. quando NENHUM casa, o formato bruto vai para o log. E deliberado: um
+    //      voto que nao vira texto e indistinguivel de "cliente nao respondeu",
+    //      e sem o retrato do payload a proxima investigacao comeca do zero. O
+    //      primeiro voto real diz exatamente o que esta instalacao manda.
+    //
+    // O que volta e o NOME da opcao (nao um id), e o motor casa por rotulo --
+    // ver `casarOpcao` no chatbot.engine.
+    const voto =
+      msg.pollUpdateMessage?.vote?.selectedOptions?.[0]?.name ||
+      msg.pollUpdateMessage?.vote?.selectedOptions?.[0] ||
+      msg.pollUpdateMessage?.selectedName ||
+      msg.pollUpdateMessage?.name ||
+      payload?.data?.pollUpdates?.[0]?.vote?.name ||
+      payload?.data?.selectedOptions?.[0]?.name ||
+      null;
+    if (typeof voto === "string" && voto.trim()) return voto.trim();
+
+    if (msg.pollUpdateMessage || payload?.data?.pollUpdates) {
+      logger.warn("Voto de enquete recebido em formato NAO reconhecido", {
+        // Recorte pequeno de proposito: e para identificar o formato, nao para
+        // guardar conteudo de conversa no log.
+        payload: JSON.stringify(msg.pollUpdateMessage || payload?.data?.pollUpdates).slice(0, 600),
+      });
+    }
+
     return null;
   }
 

@@ -123,6 +123,61 @@ const TEXTO_MENU =
     "o rotulo escrito a mao cabe no botao"
   );
 
+  titulo("7. ENQUETE: o voto volta pelo ROTULO, nao por id");
+
+  // A enquete nao carrega id -- o WhatsApp devolve o NOME da opcao votada, que e
+  // exatamente o texto que foi enviado. Por isso `casarOpcao` casa por rotulo.
+  const COM_BOTAO = SUPORTE.map((o, i) => ({
+    ...o,
+    botao: ["✋ Tenho contrato", "👤 Atendimento avulso", "🏠 Voltar ao Menu"][i],
+  }));
+  for (const op of COM_BOTAO) {
+    const casada = engine.casarOpcao(op.botao, COM_BOTAO);
+    check(casada?.id === op.id, `voto "${op.botao}" -> opcao ${casada?.id}`);
+  }
+  // Sem `botao`, o rotulo e o que foi extraido da linha do menu.
+  check(
+    engine.casarOpcao("Tenho contrato com a ARKA", SUPORTE)?.id === "sup_1",
+    "voto pelo rotulo extraido do menu tambem casa"
+  );
+  // Casamento EXATO: o rotulo nao pode casar por PEDACO. "menu" nao e palavra-
+  // chave de nenhuma opcao (a de voltar tem "menu inicial") e nao pode ser
+  // aceito so por aparecer dentro de "🏠 Voltar ao Menu" -- senao a palavra
+  // solta roubaria a opcao. Devolver null e o certo: o motor trata "menu" como
+  // comando global (chatbot.config.palavrasChave), nao como escolha do menu.
+  check(
+    engine.casarOpcao("menu", COM_BOTAO) === null,
+    '"menu" nao casa por pedaco do rotulo (devolve null, como deve)'
+  );
+
+  titulo("8. ENQUETE: o extrator do webhook reconhece o voto");
+
+  const whats = require("./src/modules/whatsapp/whatsapp.service");
+  const formatos = [
+    ["selectedOptions[].name", { data: { message: { pollUpdateMessage: { vote: { selectedOptions: [{ name: "👤 Atendimento avulso" }] } } } } }],
+    ["selectedName", { data: { message: { pollUpdateMessage: { selectedName: "✋ Tenho contrato" } } } }],
+    ["pollUpdates[].vote.name", { data: { pollUpdates: [{ vote: { name: "🏠 Voltar ao Menu" } }] } }],
+  ];
+  for (const [nome, payload] of formatos) {
+    const t = whats.extrairTexto(payload);
+    check(!!t, `formato "${nome}" -> ${JSON.stringify(t)}`);
+  }
+
+  // Voto CRIPTOGRAFADO (o risco conhecido do Baileys): devolve null em vez de
+  // inventar, e o formato bruto vai para o log -- e o que faz o primeiro voto
+  // real dizer o que esta instalacao manda, em vez de falhar em silencio.
+  check(
+    whats.extrairTexto({ data: { message: { pollUpdateMessage: { vote: { encPayload: "AAAA" } } } } }) === null,
+    "voto criptografado/desconhecido -> null (e o formato e registrado)"
+  );
+
+  // E nada disso pode ter quebrado o caminho normal.
+  check(whats.extrairTexto({ data: { message: { conversation: "oi" } } }) === "oi", "texto normal segue extraido");
+  check(
+    whats.extrairTexto({ data: { message: { buttonsResponseMessage: { selectedButtonId: "sup_2" } } } }) === "sup_2",
+    "id de botao segue extraido"
+  );
+
   console.log(
     "\n" + (erros.length ? `FALHAS (${erros.length}):\n  ` + erros.join("\n  ") : "BOTOES: TUDO CONFERE")
   );

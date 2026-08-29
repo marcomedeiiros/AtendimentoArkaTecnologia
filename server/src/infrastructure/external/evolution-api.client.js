@@ -206,6 +206,33 @@ class EvolutionApiClient {
     });
   }
 
+  /**
+   * ENQUETE -- a unica coisa CLICAVEL que renderiza no transporte atual.
+   *
+   * Botao e lista dependem do `native_flow`, que a Evolution 2.3.7 nao consegue
+   * montar (regressao `this.isZero`). A enquete usa outro caminho do protocolo e
+   * renderiza normalmente no Baileys -- e por isso ela existe aqui: e o menu
+   * clicavel que da para ter HOJE, sem migrar o numero e sem custo.
+   *
+   * `selectableCount: 1` = escolha unica (o cliente marca uma opcao). O WhatsApp
+   * aceita de 2 a 12 opcoes.
+   *
+   * A RESSALVA, e ela e grande: o VOTO volta criptografado no Baileys
+   * (`pollUpdateMessage.vote.encPayload`) e depende de a Evolution decifrar e
+   * expor a opcao escolhida. Quem chama tem de estar pronto para o voto nao
+   * chegar legivel -- ver `extrairTexto` (whatsapp.service), que registra o
+   * formato bruto quando nao reconhece, para o primeiro voto real dizer
+   * exatamente o que esta instalacao manda.
+   */
+  async sendPoll(number, { name, values, selectableCount = 1 }, instance = this.defaultInstance) {
+    return this.request("POST", `/message/sendPoll/${instance}`, {
+      number,
+      name,
+      selectableCount,
+      values,
+    });
+  }
+
   // Edicao de mensagem ja enviada (WhatsApp permite ate ~15 min).
   async editarMensagem({ number, key, texto }, instance = this.defaultInstance) {
     return this.request("POST", `/chat/updateMessage/${instance}`, {
