@@ -101,6 +101,34 @@ const AGUARDA_RESPOSTA_DO_CLIENTE = [
   AGUARDANDO.OPCAO,
 ];
 
+// ── BOTAO ONDE A RESPOSTA E FIXA (nao vem de opcao de menu) ──────────────────
+//
+// Nem toda pergunta do bot e menu. "O CNPJ continua sendo este?" e "de 1 a 5,
+// que nota voce da?" tem resposta fechada, mas nasceram como TEXTO: o cliente
+// tinha de digitar "SIM" ou "3" no meio de uma conversa cheia de botoes. Era a
+// unica coisa que ainda pedia digitacao sem precisar.
+//
+// A SACADA que faz isto caber sem tocar no recebimento: o `id` do botao E O
+// TEXTO QUE O MOTOR JA ESPERA. O WhatsApp devolve o id do botao tocado
+// (`selectedButtonId`, ver extrairTexto), entao tocar em "✅ Sim" chega aqui
+// exatamente como se o cliente tivesse digitado "SIM". Nenhum parser muda,
+// nenhum estado novo, e digitar continua funcionando igual.
+const BOTOES_FIXOS = {
+  [AGUARDANDO.CNPJ_CONFIRMA]: [
+    { id: "SIM", rotulo: "✅ Sim, é esse" },
+    { id: "NÃO", rotulo: "🔁 Não, outro CNPJ" },
+  ],
+  // Cinco notas em duas bolhas (3 + 2), porque o WhatsApp so aceita 3 botoes
+  // por mensagem. A carinha ajuda a ler a escala sem o cliente voltar na legenda.
+  [AGUARDANDO.AVALIACAO_NOTA]: [
+    { id: "1", rotulo: "1 😠" },
+    { id: "2", rotulo: "2 🙁" },
+    { id: "3", rotulo: "3 😐" },
+    { id: "4", rotulo: "4 🙂" },
+    { id: "5", rotulo: "5 😍" },
+  ],
+};
+
 // Gatilho que casa com qualquer primeira mensagem (fluxo de boas-vindas).
 const GATILHO_CURINGA = "*";
 
@@ -899,6 +927,67 @@ class ChatbotEngine {
     return kw || kwNum || String(op.rotulo || "").split(",")[0] || "Opção";
   }
 
+  /**
+   * Encurta o rotulo SEM comer palavra no meio.
+   *
+   * O WhatsApp corta em 20 caracteres no botao e 24 na linha de lista, e
+   * cortar por contagem produzia botao que nao diz o que faz -- visto na tela
+   * do cliente: "Tenho contrato com a", "Administrativo / Fin", "Voltar ao
+   * menu inici". Pior que curto e ambiguo.
+   *
+   * Tres passos: corta na ultima fronteira de palavra que cabe; joga fora
+   * palavra de ligacao pendurada no fim ("...com a" nao acrescenta nada); e
+   * limpa pontuacao solta ("Administrativo /" -> "Administrativo").
+   *
+   * A conta e em UTF-16, como o limite do protocolo -- e o corte cru de reserva
+   * cuida de nao partir par surrogado no meio, que viraria caractere invalido.
+   */
+  _cortarRotulo(texto, limite) {
+    const s = String(texto || "").trim();
+    if (s.length <= limite) return s;
+
+    const semSurrogadoPartido = (v) =>
+      /[\uD800-\uDBFF]$/.test(v) ? v.slice(0, -1) : v;
+
+    const espaco = s.slice(0, limite + 1).lastIndexOf(" ");
+    let partes = (espaco > 0 ? s.slice(0, espaco) : s.slice(0, limite)).split(/\s+/);
+
+    // Palavras que so ligam outras: sozinhas no fim do rotulo, nao informam
+    // nada e ainda sugerem que o texto foi cortado (e foi).
+    const LIGACAO = new Set([
+      "com", "a", "o", "as", "os", "de", "da", "do", "das", "dos", "e", "em",
+      "no", "na", "nos", "nas", "para", "por", "ao", "aos", "à", "às", "um",
+      "uma", "que", "ou", "como", "sem", "sob", "sobre", "meu", "minha",
+    ]);
+    while (partes.length > 1 && LIGACAO.has(partes[partes.length - 1].toLowerCase())) partes.pop();
+
+    const saida = partes.join(" ").replace(/[\s/\\|\-–—,:;.]+$/u, "");
+    return semSurrogadoPartido(saida || s.slice(0, limite));
+  }
+
+  /**
+   * Manda uma pergunta de RESPOSTA FIXA com botao (SIM/NÃO, nota 1..5).
+   *
+   * Reaproveita `enviarBotComOpcoes` de proposito: e la que vivem o corte de
+   * rotulo, a divisao em bolhas de 3 e o fallback para texto quando a Evolution
+   * recusa. Duplicar isso aqui seria criar um segundo caminho para o mesmo
+   * problema -- e um deles envelheceria.
+   *
+   * Com os botoes desligados, ou sem botao definido para o estado, cai no texto
+   * de sempre. Digitar a resposta continua funcionando nos dois casos: o id do
+   * botao E o texto esperado.
+   */
+  async _enviarComBotoesFixos(conversaId, telefone, texto, aguardando, instanceName) {
+    const fixos = BOTOES_FIXOS[aguardando];
+    if (!fixos?.length || process.env.WHATSAPP_BOTOES_INTERATIVOS !== "true") {
+      return this.enviarBot(conversaId, telefone, texto, instanceName);
+    }
+    const opcoes = fixos.map((b) => ({ id: b.id, botao: b.rotulo }));
+    return this.enviarBotComOpcoes(conversaId, telefone, texto, opcoes, instanceName, {
+      exibicao: "buttons",
+    });
+  }
+
   // Remove do corpo as linhas de opcao numeradas (ex.: "1️⃣- Setor Técnico"),
   // deixando so o cabecalho -- as opcoes viram BOTOES. Se sobrar vazio, usa um
   // cabecalho padrao. (No fallback de texto puro, mandamos o texto ORIGINAL com
@@ -925,7 +1014,17 @@ class ChatbotEngine {
       // ️⃣ = os dois invisiveis do keycap ("1" + seletor + caixinha).
       (l) => !/^[ \t]*[*_~]*[ \t]*\d+(?:[️⃣]+[ \t]*[-–—.):]?|[ \t]*[-–—.):])[ \t]*\S/u.test(l)
     );
-    const corpo = semOpcoes.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+    // E A INSTRUCAO DE DIGITAR TAMBEM SAI.
+    //
+    // "Responda *SIM* para continuar ou *NÃO* para informar outro CNPJ" e
+    // "Digite apenas uma nota" mandam o cliente fazer o que o botao acabou de
+    // dispensar. Este metodo SO roda no caminho interativo -- no fallback de
+    // texto o original vai inteiro --, entao remover aqui nao deixa ninguem
+    // sem saber o que fazer.
+    const semInstrucao = semOpcoes.filter(
+      (l) => !/^[ \t]*[*_~]*(responda|digite|envie o n[úu]mero|escolha uma das op)\b/iu.test(l)
+    );
+    const corpo = semInstrucao.join("\n").replace(/\n{3,}/g, "\n\n").trim();
     return corpo || "Escolha uma opção:";
   }
 
@@ -1090,7 +1189,11 @@ class ChatbotEngine {
             title: "Atendimento",
             description: g === 0 ? corpo : "Mais opções:",
             footer: "Selecione uma opção",
-            buttons: grupos[g].map((i) => ({ type: "reply", displayText: i.titulo.slice(0, 20), id: i.id })),
+            buttons: grupos[g].map((i) => ({
+              type: "reply",
+              displayText: this._cortarRotulo(i.titulo, 20),
+              id: i.id,
+            })),
           };
           if (g === 0) {
             r = await this.deps.evolutionApi.sendButtons(telefone, payload, inst);
@@ -1121,7 +1224,7 @@ class ChatbotEngine {
               {
                 title: "Opções",
                 rows: itens.map((i) => ({
-                  title: i.titulo.slice(0, 24),
+                  title: this._cortarRotulo(i.titulo, 24),
                   description: "Toque para selecionar",
                   rowId: i.id,
                 })),
@@ -1635,7 +1738,13 @@ class ChatbotEngine {
       return null;
     }
 
-    await this.enviarBot(conversa.id, telefone, cfg.mensagemNota, instanceName);
+    await this._enviarComBotoesFixos(
+      conversa.id,
+      telefone,
+      cfg.mensagemNota,
+      AGUARDANDO.AVALIACAO_NOTA,
+      instanceName
+    );
 
     // `osAvaliada` prende a pesquisa ao CICLO que acabou de fechar. Sem isso, se
     // o cliente abrir um chamado novo antes de responder a nota, a nota (e o
@@ -1763,7 +1872,15 @@ class ChatbotEngine {
           await this.registrarStatusAvaliacao(alvoId, osAvaliada, "sem_nota");
           return this.finalizarPesquisa(ctx, sessao);
         }
-        await this.enviarBot(conversa.id, telefone, cfg.mensagemNotaInvalida, instanceName);
+        // Repergunta COM os botoes: se a primeira nota nao veio no formato, o
+        // que o cliente menos precisa e da mesma pergunta pedindo digitacao.
+        await this._enviarComBotoesFixos(
+          conversa.id,
+          telefone,
+          cfg.mensagemNotaInvalida,
+          AGUARDANDO.AVALIACAO_NOTA,
+          instanceName
+        );
         await this.deps.sessaoRepository.update(sessao.id, {
           contexto: { ...(sessao.contexto || {}), tentativasAval: tentativas },
         });
@@ -2224,7 +2341,10 @@ class ChatbotEngine {
           exibicao: passo.config?.exibicao || "auto",
         });
       } else {
-        await this.enviarBot(conversa.id, telefone, resposta, instanceName);
+        // Pergunta de resposta FIXA (o CNPJ continua este? / nota 1..5) vai com
+        // botao; qualquer outra mensagem e texto. Sem botao definido para o
+        // estado, `_enviarComBotoesFixos` cai no texto sozinho.
+        await this._enviarComBotoesFixos(conversa.id, telefone, resposta, aguardando, instanceName);
       }
     }
 
@@ -2641,10 +2761,11 @@ class ChatbotEngine {
       } else if (!nao.includes(resp)) {
         // Nem sim nem nao: e o caso "cliente nao respondeu o que foi pedido".
         // O texto vem do fluxo, igual a todos os outros.
-        await this.enviarBot(
+        await this._enviarComBotoesFixos(
           conversa.id,
           telefone,
           paramsCnpj(passoAtual).mensagemRespostaInvalida,
+          AGUARDANDO.CNPJ_CONFIRMA,
           instanceName
         );
         // Este caminho tambem nao escrevia nada na sessao (ver o de CNPJ, mais

@@ -434,6 +434,106 @@ const TEXTO_MENU =
     "conteudo e opcoes na mesma mensagem: sai so a opcao"
   );
 
+  titulo("12. PERGUNTA DE RESPOSTA FIXA tambem vira botao (SIM/NAO e nota 1..5)");
+
+  // Nem toda pergunta e menu. "O CNPJ continua sendo este?" e "de 1 a 5, que
+  // nota voce da?" tinham resposta fechada e nasceram como TEXTO -- eram as
+  // unicas coisas que ainda pediam digitacao no meio de uma conversa de botoes.
+  //
+  // O que este teste protege e a SACADA que fez isso caber sem tocar no
+  // recebimento: o `id` do botao e o texto que o motor ja espera. Se alguem
+  // "arrumar" os ids para `cnpj_sim`/`nota_3`, o cliente toca no botao e o bot
+  // responde "nao entendi" -- e e isto que falha aqui primeiro.
+  const regCnpj = [];
+  await fazerMotor(regCnpj)._enviarComBotoesFixos(
+    "c",
+    "5541999999999",
+    "O CNPJ continua sendo este?\n\n📄 05.832.287/0001-30\n\nResponda *SIM* para continuar ou *NÃO* para informar outro CNPJ.",
+    "cnpj_confirma",
+    "inst"
+  );
+  check(regCnpj.length === 1 && regCnpj[0].tipo === "buttons", `confirmacao de CNPJ em 1 bolha de botao (veio ${regCnpj.map((e) => e.tipo).join("/")})`);
+  const btnCnpj = regCnpj[0]?.payload.buttons || [];
+  check(btnCnpj.map((b) => b.id).join(",") === "SIM,NÃO", `ids do botao SAO o texto esperado (veio: ${btnCnpj.map((b) => b.id).join(",")})`);
+  check(
+    btnCnpj.every((b) => ["sim", "nao"].includes(engine.normalizarTexto(b.id))),
+    "cada id, normalizado, cai no vocabulario que o motor ja aceita"
+  );
+  check(
+    !/Responda/i.test(regCnpj[0]?.payload.description || ""),
+    "a instrucao de DIGITAR sai do corpo quando ha botao"
+  );
+  check(
+    /continua sendo este/.test(regCnpj[0]?.payload.description || ""),
+    "a pergunta e o CNPJ continuam no corpo"
+  );
+
+  const regNota = [];
+  await fazerMotor(regNota)._enviarComBotoesFixos(
+    "c",
+    "5541999999999",
+    "De 1 a 5, qual nota?\n\n*1* = Péssimo\n*5* = Excelente\n\nDigite apenas uma nota.",
+    "avaliacao_nota",
+    "inst"
+  );
+  const btnNota = regNota.flatMap((e) => e.payload.buttons || []);
+  check(regNota.length === 2, `5 notas -> 2 bolhas (veio ${regNota.length})`);
+  check(btnNota.map((b) => b.id).join(",") === "1,2,3,4,5", `ids 1..5 (veio: ${btnNota.map((b) => b.id).join(",")})`);
+  check(
+    btnNota.every((b, i) => engine.interpretarNota(b.id) === i + 1),
+    "cada id volta como a nota certa por `interpretarNota`"
+  );
+  check(
+    !/Digite/i.test(regNota[0]?.payload.description || ""),
+    "\"Digite apenas uma nota\" sai do corpo"
+  );
+  check(
+    /Péssimo/.test(regNota[0]?.payload.description || ""),
+    "a legenda da escala (1 = Péssimo) CONTINUA -- ela explica os botoes"
+  );
+
+  // Com os botoes desligados, tudo isto tem de voltar a ser texto puro.
+  process.env.WHATSAPP_BOTOES_INTERATIVOS = "false";
+  const regDesligado = [];
+  await fazerMotor(regDesligado)._enviarComBotoesFixos("c", "5541999999999", "O CNPJ continua sendo este?", "cnpj_confirma", "inst");
+  check(
+    regDesligado.length === 1 && regDesligado[0].tipo === "text",
+    `com a flag desligada volta a ser texto (veio ${regDesligado.map((e) => e.tipo).join("/")})`
+  );
+  process.env.WHATSAPP_BOTOES_INTERATIVOS = "true";
+
+  // Estado sem botao definido (ex.: pedir o CNPJ digitado) segue texto.
+  const regTexto = [];
+  await fazerMotor(regTexto)._enviarComBotoesFixos("c", "5541999999999", "Informe o CNPJ:", "cnpj", "inst");
+  check(regTexto.length === 1 && regTexto[0].tipo === "text", "estado sem botao definido continua texto");
+
+  titulo("13. ROTULO CURTO nao pode comer palavra no meio");
+
+  // O cliente viu "Tenho contrato com a", "Administrativo / Fin" e "Voltar ao
+  // menu inici". Cortar por contagem cabe no limite e nao diz o que o botao faz.
+  const CORTES = [
+    ["Tenho contrato com a ARKA", 20, "Tenho contrato"],
+    ["Administrativo / Financeiro", 20, "Administrativo"],
+    ["Voltar ao menu inicial", 20, "Voltar ao menu"],
+    ["Encerrar atendimento", 20, "Encerrar atendimento"],
+    ["SEGUIR COMO ATENDIMENTO AVULSO", 20, "SEGUIR"],
+    ["Atendimento avulso para novos clientes", 24, "Atendimento avulso"],
+  ];
+  for (const [entrada, limite, esperado] of CORTES) {
+    const saida = engine._cortarRotulo(entrada, limite);
+    check(saida === esperado, `"${entrada}" (${entrada.length}) -> "${saida}" (esperado "${esperado}")`);
+  }
+  check(engine._cortarRotulo("🛠️ Setor Técnico", 20) === "🛠️ Setor Técnico", "rotulo que ja cabe nao e tocado");
+  // Palavra unica maior que o limite: nao ha fronteira, corta cru -- mas sem
+  // partir par surrogado no meio, que viraria caractere invalido na tela.
+  const semEspaco = engine._cortarRotulo("Palavradificilenormequenaotemespaco", 20);
+  check(semEspaco.length <= 20 && semEspaco === "Palavradificilenorme", `palavra unica corta cru (veio "${semEspaco}")`);
+  const soEmoji = engine._cortarRotulo("😀".repeat(15), 20);
+  check(
+    soEmoji.length <= 20 && !/[\uD800-\uDBFF]$/.test(soEmoji),
+    `corte no meio de emoji nao deixa surrogado solto (veio ${soEmoji.length} unidades)`
+  );
+
   console.log(
     "\n" + (erros.length ? `FALHAS (${erros.length}):\n  ` + erros.join("\n  ") : "BOTOES: TUDO CONFERE")
   );
