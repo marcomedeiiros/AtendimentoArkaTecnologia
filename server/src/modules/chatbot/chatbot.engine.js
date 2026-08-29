@@ -853,9 +853,26 @@ class ChatbotEngine {
 
     const num = (op.palavrasChave || []).find((k) => /^\d+$/.test(k));
     if (num && texto) {
-      const re = new RegExp(`(?:^|\\n)\\s*${num}[^-\\n]*[-–]\\s*(.+)`, "u");
+      // O SEPARADOR E OPCIONAL, e foi isso que quebrou.
+      //
+      // A versao antiga exigia um traco depois do numero (`[^-\n]*[-–]`), como
+      // em "1️⃣- Setor Técnico". O menu novo escreve "1️⃣ Técnico", sem traco:
+      // a extracao falhava, caia na palavra-chave, e o rotulo do botao virava
+      // "tecnico" -- minusculo e sem acento, porque palavra-chave e texto de
+      // casamento, nao rotulo de tela.
+      //
+      // Agora: o numero, os caracteres do emoji de teclado (U+FE0F variation
+      // selector e U+20E3 combining keycap, que e o que faz "1" virar "1️⃣"),
+      // um separador OPCIONAL, e o resto da linha.
+      const re = new RegExp(
+        `(?:^|\\n)\\s*${num}[\\uFE0F\\u20E3]*\\s*[-–—.):]*\\s*(.+)`,
+        "u"
+      );
       const m = texto.match(re);
-      if (m && m[1].trim()) return m[1].trim();
+      // Marcadores de formatacao do WhatsApp (*negrito*, _italico_) fazem parte
+      // do texto, e nao do rotulo: dentro do botao eles apareceriam crus.
+      const limpo = m && m[1].trim().replace(/^[*_~]+|[*_~]+$/g, "").trim();
+      if (limpo) return limpo;
     }
     const kw = (op.palavrasChave || []).find((k) => !/^\d+$/.test(k));
     return kw || num || String(op.rotulo || "").split(",")[0] || "Opção";

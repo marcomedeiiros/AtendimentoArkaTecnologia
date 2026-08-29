@@ -123,6 +123,31 @@ const TEXTO_MENU =
     "o rotulo escrito a mao cabe no botao"
   );
 
+  titulo("6b. O SEPARADOR do menu e opcional (o bug dos rotulos minusculos)");
+
+  // Menu de producao (29/08): numero em emoji de teclado, negrito, SEM traco.
+  // Com a exigencia de traco, a extracao falhava e o rotulo caia na
+  // palavra-chave -- "tecnico" em vez de "Técnico" dentro do botao.
+  const MENU_SEM_TRACO =
+    "👋 *Olá, Marco!*\n\nBem-vindo(a) à *ARKA Tecnologia*.\n\nComo podemos ajudar você hoje?\n\n1️⃣ *Técnico*\n2️⃣ *Comercial*\n3️⃣ *Administrativo / Financeiro*\n4️⃣ *Encerrar atendimento*";
+  const MENU_PRINCIPAL = [
+    { id: "mp_1", palavrasChave: ["1", "tecnico"], rotulo: "1,tecnico" },
+    { id: "mp_2", palavrasChave: ["2", "comercial"], rotulo: "2,comercial" },
+    { id: "mp_3", palavrasChave: ["3", "financeiro"], rotulo: "3,financeiro" },
+    { id: "mp_4", palavrasChave: ["4", "encerrar"], rotulo: "4,encerrar" },
+  ];
+  const esperados = ["Técnico", "Comercial", "Administrativo / Financeiro", "Encerrar atendimento"];
+  MENU_PRINCIPAL.forEach((op, i) => {
+    const rot = engine._rotuloOpcao(op, MENU_SEM_TRACO);
+    check(rot === esperados[i], `"1️⃣ *Técnico*" -> ${JSON.stringify(rot)} (esperado ${JSON.stringify(esperados[i])})`);
+  });
+
+  // E o formato COM traco (fluxo antigo) continua funcionando.
+  check(
+    engine._rotuloOpcao(SUPORTE[0], TEXTO_MENU) === "Tenho contrato com a ARKA",
+    "formato com traco segue extraido"
+  );
+
   titulo("7. ENQUETE: o voto volta pelo ROTULO, nao por id");
 
   // A enquete nao carrega id -- o WhatsApp devolve o NOME da opcao votada, que e
