@@ -2189,21 +2189,26 @@ class ChatbotEngine {
     // de CNPJ. Quem atende precisava adivinhar que aquele atendimento e cobrado
     // a parte.
     //
-    // NAO desassocia o CNPJ de proposito. Escolher atendimento avulso e uma
-    // decisao sobre COMO este atendimento e cobrado, nao uma negacao de que a
-    // empresa exista -- apagar o vinculo perderia a razao social, que segue
-    // sendo a informacao mais util para quem atende (a badge mostra
-    // "EMPRESA · AVULSO"). Quem quer desvincular usa `limparCnpj`, abaixo.
+    // E DESVINCULA O CNPJ: quem pede atendimento avulso deixa de ser atendido
+    // como a empresa daquele contrato, e a Central mostra "CLIENTE AVULSO" em vez
+    // do nome dela. O cadastro da empresa NAO e tocado -- e o mesmo
+    // `_desassociarCnpj` do "informar outro CNPJ", que solta a conversa e deixa
+    // o parceiro em paz.
     // ---------------------------------------------------------------------
     // Grava em `atendimentoAvulso`, e NAO em `clienteTipo`: aquele campo e o
     // retrato do cadastro no instante da validacao do CNPJ, e ele precisa poder
     // envelhecer (empresa cadastrada como parceira depois volta a ser
     // "cadastrado"). Escrever a escolha ali marcava o cliente como avulso para
     // sempre -- o verificar-cliente-avulso reprovou a primeira versao por isso.
+    //
+    // A marca continua existindo mesmo com o CNPJ desvinculado, e isso importa:
+    // sem ela, uma conversa sem CNPJ cairia em "CLIENTE NAO IDENTIFICADO", que e
+    // outra coisa. "Nao sei quem e" e "sei que e avulso" sao estados diferentes.
     const tipoDaEscolha = tipoClienteDaOpcaoEscolhida(opcao);
     if (tipoDaEscolha === "avulso" && !conversa.atendimentoAvulso) {
       await this.deps.conversaRepository.update(conversa.id, { atendimentoAvulso: true });
       conversa.atendimentoAvulso = true;
+      await this._desassociarCnpj(conversa);
       await this._emitirConversa(conversa.id);
       logger.info("Atendimento avulso escolhido pelo cliente", {
         conversaId: conversa.id,

@@ -272,8 +272,12 @@ function tipoDoCliente(c, parceiros = []) {
   //    verificar-cliente-avulso reprovou: um parceiro cadastrado DEPOIS da
   //    identificação voltava a aparecer como avulso para sempre.
   //
-  //    A razão social continua aparecendo junto ("EMPRESA · AVULSO"): o vínculo
-  //    de CNPJ não é apagado, e saber com quem se fala continua sendo útil.
+  //    Escolher avulso DESVINCULA o CNPJ da conversa (o cadastro da empresa não
+  //    é tocado), então a badge sai como "CLIENTE AVULSO", sem nome de empresa:
+  //    quem pede atendimento avulso deixa de ser atendido como aquele contrato.
+  //    A marca ainda é necessária mesmo assim -- sem ela, uma conversa sem CNPJ
+  //    cairia em "não identificado", que é outra coisa: "não sei quem é" e "sei
+  //    que é avulso" são estados diferentes.
   if (c?.atendimentoAvulso) return 'avulso';
 
   if (c?.cnpjVerificado) {

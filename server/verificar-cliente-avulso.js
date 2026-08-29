@@ -319,22 +319,55 @@ async function main() {
     );
   }
 
-  // A ESCOLHA GANHA DO CADASTRO VIVO -- e o ponto do pedido. Parceiro com
-  // contrato ATIVO que pediu avulso aparece como avulso, com o nome junto.
-  const parceiroQuePediuAvulso = mapConversa({
+  // A ESCOLHA GANHA DO CADASTRO VIVO -- e o ponto do pedido. Escolher avulso
+  // DESVINCULA o CNPJ, entao o que fica na badge e "CLIENTE AVULSO", sem nome de
+  // empresa: quem pede avulso deixa de ser atendido como aquele contrato.
+  const depoisDeEscolherAvulso = mapConversa({
     id: "w", cliente: "c", telefone: "5511", mensagens: [],
-    cnpj: CNPJ_PARCEIRO, empresa: null, cnpjVerificado: true,
+    cnpj: null, empresa: null, cnpjVerificado: false,
     clienteTipo: "cadastrado", atendimentoAvulso: true,
   });
   check(
-    badge.tipo(parceiroQuePediuAvulso, parceirosNaTela) === "avulso",
-    "parceiro ATIVO que escolheu avulso -> a badge vira avulso"
+    badge.tipo(depoisDeEscolherAvulso, parceirosNaTela) === "avulso",
+    "depois de escolher avulso -> o tipo e avulso"
   );
-  chip = badge.chip(parceiroQuePediuAvulso, parceirosNaTela);
-  check(/AVULSO/.test(chip.label), `a badge diz "${chip.label}"`);
-  // A razao social vem do cadastro vivo e continua na badge: escolher avulso e
-  // decisao de cobranca, nao negacao de que a empresa exista.
-  check(/PARCEIRA/.test(chip.label), "e a razao social continua a vista (o CNPJ nao foi apagado)");
+  chip = badge.chip(depoisDeEscolherAvulso, parceirosNaTela);
+  check(chip.label === "CLIENTE AVULSO", `a badge diz "${chip.label}"`);
+  // A marca e necessaria mesmo sem CNPJ: sem ela isto cairia em "nao
+  // identificado", que e outro estado.
+  const semMarca = mapConversa({
+    id: "w0", cliente: "c", telefone: "5511", mensagens: [],
+    cnpj: null, empresa: null, cnpjVerificado: false, clienteTipo: null,
+  });
+  check(
+    badge.chip(semMarca, parceirosNaTela).label === "CLIENTE NÃO IDENTIFICADO",
+    "sem a marca, conversa sem CNPJ segue 'nao identificado' (estados diferentes)"
+  );
+
+  // E o motor DESVINCULA de fato quando a opcao e escolhida.
+  const desvinculado = {};
+  const motorDesvincula = new ChatbotEngine({
+    conversaRepository: {
+      update: async (_id, data) => { Object.assign(desvinculado, data); return data; },
+      atualizarAtendimentoAtual: async () => null,
+      findById: async () => ({ id: "cy" }),
+    },
+    fluxoRepository: { findById: async () => null, createLog: async () => {} },
+    bus: { emitConversa: () => {} },
+  });
+  const comCnpj = {
+    id: "cy", setor: "Técnico", atendimentoAvulso: false,
+    cnpj: CNPJ_PARCEIRO, empresa: "Parceira", cnpjVerificado: true,
+  };
+  await motorDesvincula
+    .aplicarOpcao(
+      { id: "sup_2", rotulo: "2,avulso", palavrasChave: ["2", "avulso"], acao: "ir", targetId: "nao-existe" },
+      { conversa: comCnpj, telefone: "5511", instanciaId: "i", fluxo: { id: "f", passos: [] } },
+      { id: "s", contexto: {} }
+    )
+    .catch(() => {});
+  check(desvinculado.cnpjVerificado === false, "o motor zera cnpjVerificado");
+  check(desvinculado.cnpj === null && desvinculado.empresa === null, "e limpa cnpj e empresa da conversa");
 
   // SEM a escolha, nada muda: o cadastro vivo segue mandando. E a regra que a
   // primeira versao desta correcao quebrou, guardando escolha e retrato do
