@@ -1,0 +1,130 @@
+/**
+ * BOTOES DO MENU: o que sai no botao, e o que volta quando o cliente toca.
+ *
+ * ── AS PERGUNTAS QUE ESTE ARQUIVO RESPONDE ─────────────────────────────────
+ *
+ * "Se eu reordenar as opcoes do menu no editor, o botao que o cliente ja
+ *  recebeu continua significando a mesma coisa?"
+ * "O texto do botao da para escrever, ou o sistema adivinha?"
+ *
+ * A primeira resposta era NAO. O id do botao vinha da palavra-chave numerica
+ * (`_valorOpcao`), entao era "1", "2", "3" -- a POSICAO no menu. Trocar a ordem
+ * das opcoes fazia o botao recebido antes da edicao voltar apontando para outra
+ * coisa: o cliente toca em "Atendimento avulso" e cai no Financeiro. E o id que
+ * volta do WhatsApp (`selectedButtonId`) nao era casado por id nenhum -- ele
+ * caia no casamento por palavra-chave, que e o caminho do texto DIGITADO.
+ *
+ * Nao ha rede aqui: o WhatsApp devolve o id, e se o motor nao souber traduzi-lo
+ * a escolha do cliente vira "nao entendi".
+ *
+ * Este teste NAO depende da integracao renderizar botao. Ele exercita o par
+ * `_valorOpcao` (o que vai no botao) e `casarOpcao` (o que volta), que e onde a
+ * traducao acontece -- e continua valendo o dia em que os botoes forem ligados.
+ *
+ *   cd server && node verificar-botoes.js
+ */
+process.env.LOG_LEVEL = process.env.LOG_LEVEL || "error";
+
+const fs = require("fs");
+const path = require("path");
+const { ChatbotEngine } = require("./src/modules/chatbot/chatbot.engine");
+
+const erros = [];
+function check(condicao, mensagem) {
+  if (condicao) console.log(`  OK   ${mensagem}`);
+  else { erros.push(mensagem); console.log(`  FALHA ${mensagem}`); }
+}
+const titulo = (t) => console.log(`\n=== ${t} ===`);
+
+// Motor sem dependencia nenhuma: os dois metodos sob teste sao puros.
+const engine = new ChatbotEngine({});
+
+// O menu real do fluxo da ARKA (nomes e palavras-chave como estao no banco).
+const SUPORTE = [
+  { id: "sup_1", ordem: 0, esperaEscolha: true, rotulo: "1,contrato,tenho contrato", palavrasChave: ["1", "contrato", "tenho contrato"], acao: "ir", targetId: "cnpj" },
+  { id: "sup_2", ordem: 1, esperaEscolha: true, rotulo: "2,cliente avulso,avulso", palavrasChave: ["2", "cliente avulso", "avulso"], acao: "ir", targetId: "avulso" },
+  { id: "sup_3", ordem: 2, esperaEscolha: true, rotulo: "3,voltar,menu inicial", palavrasChave: ["3", "voltar", "menu inicial"], acao: "ir", targetId: "inicio" },
+];
+const TEXTO_MENU =
+  "🔧 *Atendimento Técnico*\n\nComo podemos prosseguir?\n\n1️⃣- Tenho contrato com a ARKA\n2️⃣- Atendimento avulso\n3️⃣- Voltar ao menu inicial";
+
+(async () => {
+  titulo("1. O VALOR DO BOTAO e o id do no, nao a posicao no menu");
+
+  for (const op of SUPORTE) {
+    check(engine._valorOpcao(op) === op.id, `${op.id} -> valor "${engine._valorOpcao(op)}"`);
+  }
+  // Fluxo antigo, cujas opcoes nao tem id: continua usando a palavra-chave.
+  check(
+    engine._valorOpcao({ palavrasChave: ["2", "avulso"], rotulo: "2,avulso" }) === "2",
+    "opcao SEM id cai na palavra-chave numerica (fluxo antigo segue funcionando)"
+  );
+
+  titulo("2. O QUE VOLTA do WhatsApp resolve a opcao certa");
+
+  // `extrairTexto` entrega o selectedButtonId como se fosse a mensagem.
+  for (const op of SUPORTE) {
+    const casada = engine.casarOpcao(op.id, SUPORTE);
+    check(casada?.id === op.id, `toque no botao "${op.id}" -> opcao ${casada?.id}`);
+  }
+
+  titulo("3. E O DIGITADO continua funcionando (nada foi trancado)");
+
+  check(engine.casarOpcao("1", SUPORTE)?.id === "sup_1", 'digitar "1" -> sup_1');
+  check(engine.casarOpcao("2", SUPORTE)?.id === "sup_2", 'digitar "2" -> sup_2');
+  check(engine.casarOpcao("avulso", SUPORTE)?.id === "sup_2", 'digitar "avulso" -> sup_2');
+  check(engine.casarOpcao("menu inicial", SUPORTE)?.id === "sup_3", 'digitar "menu inicial" -> sup_3');
+  check(engine.casarOpcao("xpto", SUPORTE) === null, 'texto sem relacao -> null (cai no "nao entendi")');
+
+  titulo("4. REORDENAR O MENU nao troca o significado do botao");
+
+  // Mesmas opcoes, ordem invertida e numeros trocados -- como ficaria depois de
+  // uma edicao no editor de fluxos.
+  const REORDENADO = [
+    { ...SUPORTE[1], ordem: 0, rotulo: "1,cliente avulso,avulso", palavrasChave: ["1", "cliente avulso", "avulso"] },
+    { ...SUPORTE[0], ordem: 1, rotulo: "2,contrato,tenho contrato", palavrasChave: ["2", "contrato", "tenho contrato"] },
+    { ...SUPORTE[2], ordem: 2, rotulo: "3,voltar,menu inicial", palavrasChave: ["3", "voltar", "menu inicial"] },
+  ];
+  // O botao que o cliente recebeu ANTES da edicao dizia sup_2 (avulso).
+  check(
+    engine.casarOpcao("sup_2", REORDENADO)?.targetId === "avulso",
+    "botao antigo sup_2 continua indo para avulso depois da reordenacao"
+  );
+  // Enquanto o NUMERO, que era o id antes desta correcao, aponta para outra coisa.
+  check(
+    engine.casarOpcao("2", REORDENADO)?.targetId === "cnpj",
+    'e o numero "2" agora significa contrato -- por isso o id nao pode ser a posicao'
+  );
+
+  titulo("5. O TEXTO DO BOTAO da para escrever no fluxo");
+
+  check(
+    engine._rotuloOpcao({ id: "sup_1", botao: "✋ Tenho contrato", palavrasChave: ["1"] }, TEXTO_MENU) === "✋ Tenho contrato",
+    "`opcao.botao` manda quando existe (com emoji)"
+  );
+  // Sem o campo, segue extraindo da linha do menu -- comportamento anterior.
+  check(
+    engine._rotuloOpcao(SUPORTE[0], TEXTO_MENU) === "Tenho contrato com a ARKA",
+    `sem o campo, extrai da linha do menu ("${engine._rotuloOpcao(SUPORTE[0], TEXTO_MENU)}")`
+  );
+  check(
+    engine._rotuloOpcao({ palavrasChave: [], rotulo: "" }, "") === "Opção",
+    "e nunca devolve vazio (o WhatsApp recusa botao sem texto)"
+  );
+
+  titulo("6. O limite do WhatsApp e respeitado");
+
+  // O envio corta em 20 (botao) e 24 (linha de lista); o rotulo do fluxo da ARKA
+  // passa de 20, e e por isso que `opcao.botao` existe.
+  const longo = engine._rotuloOpcao(SUPORTE[0], TEXTO_MENU);
+  check(longo.length > 20, `o rotulo extraido tem ${longo.length} caracteres (cortaria no botao)`);
+  check(
+    engine._rotuloOpcao({ botao: "✋ Tenho contrato" }, TEXTO_MENU).length <= 20,
+    "o rotulo escrito a mao cabe no botao"
+  );
+
+  console.log(
+    "\n" + (erros.length ? `FALHAS (${erros.length}):\n  ` + erros.join("\n  ") : "BOTOES: TUDO CONFERE")
+  );
+  process.exit(erros.length ? 1 : 0);
+})().catch((e) => { console.error("ERRO", e); process.exit(1); });

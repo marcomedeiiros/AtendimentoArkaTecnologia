@@ -267,6 +267,22 @@ class ChatbotEngine {
     const alvo = this.normalizarTexto(texto);
     if (!alvo) return null;
 
+    // ── RESPOSTA DE BOTAO: casa pelo ID DA OPCAO, e antes de tudo ────────────
+    //
+    // Quando o cliente TOCA num botao (ou numa linha de lista), o WhatsApp
+    // devolve o id que foi enviado -- nao o texto que ele leu. `extrairTexto`
+    // (whatsapp.service) entrega esse id aqui como se fosse a mensagem.
+    //
+    // Casar por id e EXATO e nao depende da numeracao do menu: reordenar as
+    // opcoes no editor deixaria "2" apontando para outra coisa, e um botao
+    // enviado minutos antes chegaria com o significado trocado. O id do no
+    // (`sup_1`, `res_3`) e estavel.
+    //
+    // Vem antes das palavras-chave de proposito: um id nunca deve ser
+    // interpretado como texto digitado.
+    const porId = opcoes.find((o) => o?.id && this.normalizarTexto(o.id) === alvo);
+    if (porId) return porId;
+
     let melhor = null;
     for (const opcao of opcoes) {
       for (const palavra of opcao.palavrasChave || []) {
@@ -791,6 +807,18 @@ class ChatbotEngine {
   // Valor que o clique de um botao/linha "digita" para o motor: o numero da
   // opcao (casa com palavrasChave em casarOpcao). Fallback: 1a palavra-chave.
   _valorOpcao(op) {
+    // O ID DO NO E O VALOR DO BOTAO -- estavel, e nao a posicao no menu.
+    //
+    // Aqui vinha a palavra-chave numerica, entao o id do botao era "1", "2",
+    // "3". Funcionava enquanto ninguem mexesse no menu: reordenar as opcoes no
+    // editor fazia "2" passar a significar outra coisa, e um botao que o cliente
+    // recebeu antes da edicao voltava com o significado trocado -- ele toca em
+    // "Atendimento avulso" e cai no Financeiro.
+    //
+    // `casarOpcao` reconhece o id na volta (ver o casamento por id la).
+    // O fallback continua sendo a palavra-chave, para fluxo cujas opcoes nao
+    // tenham id.
+    if (op?.id) return String(op.id);
     const num = (op.palavrasChave || []).find((k) => /^\d+$/.test(k));
     return num || (op.palavrasChave || [])[0] || String(op.rotulo || "").split(",")[0] || "";
   }
@@ -798,6 +826,15 @@ class ChatbotEngine {
   // Rotulo amigavel do botao: tenta extrair da linha do menu (ex.: "1️⃣- Setor
   // Técnico" -> "Setor Técnico"); senao usa uma palavra-chave legivel/numero.
   _rotuloOpcao(op, texto) {
+    // TEXTO DO BOTAO ESCRITO NO FLUXO, quando houver.
+    //
+    // `opcao.botao` e o campo para quem monta o fluxo dizer exatamente o que vai
+    // dentro do botao -- com emoji, curto, sem depender de a extracao abaixo
+    // adivinhar a partir da linha do menu ("1️⃣- Setor Técnico" -> "Setor
+    // Técnico"). E o que permite "✋ Tenho contrato" em vez de "TENHO CONTRATO
+    // COM A ARKA" cortado em 20 caracteres pelo limite do WhatsApp.
+    if (op?.botao && String(op.botao).trim()) return String(op.botao).trim();
+
     const num = (op.palavrasChave || []).find((k) => /^\d+$/.test(k));
     if (num && texto) {
       const re = new RegExp(`(?:^|\\n)\\s*${num}[^-\\n]*[-–]\\s*(.+)`, "u");
