@@ -939,7 +939,20 @@ class ChatbotEngine {
     return texto;
   }
 
-  async enviarBotComOpcoes(conversaId, telefone, texto, opcoes, instanceName) {
+  /**
+   * @param {object} [opcoes2]
+   * @param {"buttons"|"list"|"auto"} [opcoes2.exibicao] forma pedida pelo NO do
+   *   fluxo (`config.exibicao`). Sem isso, decide pela contagem: ate 3 botoes,
+   *   acima lista.
+   *
+   *   Existe porque contagem nao e intencao. Um menu de 3 opcoes que vai crescer
+   *   pode querer ja nascer lista, e um de 4 pode preferir 3 botoes + "outras
+   *   opcoes". Quem monta o fluxo decide; a contagem e so o padrao.
+   *
+   *   `buttons` com mais de 3 opcoes e impossivel no WhatsApp: nesse caso a
+   *   lista prevalece e o motivo vai para o log, em vez de a mensagem falhar.
+   */
+  async enviarBotComOpcoes(conversaId, telefone, texto, opcoes, instanceName, { exibicao = "auto" } = {}) {
     // Botoes/listas interativos SO funcionam na API OFICIAL do WhatsApp. Na
     // integracao atual (Baileys/Evolution) o WhatsApp nao renderiza e a Baileys
     // chega a estourar ("this.isZero is not a function"). Por isso o padrao e
@@ -985,9 +998,26 @@ class ChatbotEngine {
     const marcar = (r, status) =>
       this.deps.conversaRepository.vincularWaMessageId(msg.id, r?.key?.id || null, status);
 
+    // BOTAO ou LISTA: o no manda, a contagem e o padrao.
+    //
+    // `buttons` pedido com mais de 3 opcoes nao existe no WhatsApp -- a lista
+    // assume, e o log diz por que, em vez de a mensagem simplesmente falhar.
+    let comoBotoes = itens.length <= 3;
+    if (exibicao === "buttons") {
+      comoBotoes = itens.length <= 3;
+      if (!comoBotoes) {
+        logger.info("Passo pediu botoes, mas ha mais de 3 opcoes: enviando como lista", {
+          conversaId,
+          opcoes: itens.length,
+        });
+      }
+    } else if (exibicao === "list") {
+      comoBotoes = false;
+    }
+
     try {
       let r;
-      if (itens.length <= 3) {
+      if (comoBotoes) {
         // Evolution v2 exige title/description/footer nao-vazios.
         r = await this.deps.evolutionApi.sendButtons(
           telefone,
@@ -2110,7 +2140,11 @@ class ChatbotEngine {
       // Menu (esperando escolha) -> tenta botoes/lista interativos, com o texto
       // do passo como corpo (fallback visivel). Demais mensagens -> texto normal.
       if (opcoesMenu.length && aguardando === AGUARDANDO.OPCAO) {
-        await this.enviarBotComOpcoes(conversa.id, telefone, resposta, opcoesMenu, instanceName);
+        // `config.exibicao` do PASSO ("buttons" | "list"); sem ele, a contagem
+        // decide (ate 3 botoes, acima lista).
+        await this.enviarBotComOpcoes(conversa.id, telefone, resposta, opcoesMenu, instanceName, {
+          exibicao: passo.config?.exibicao || "auto",
+        });
       } else {
         await this.enviarBot(conversa.id, telefone, resposta, instanceName);
       }

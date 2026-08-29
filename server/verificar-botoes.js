@@ -203,6 +203,40 @@ const TEXTO_MENU =
     "id de botao segue extraido"
   );
 
+  titulo("9. O FLUXO REAL declara exibicao e rotulos dentro dos limites");
+
+  const fluxo = JSON.parse(
+    fs.readFileSync(path.join(__dirname, "..", "docs", "fluxo-arka.json"), "utf8")
+  );
+  const passos = Object.fromEntries(fluxo.passos.map((p) => [p.id, p]));
+  const ESPERADO = {
+    "d70e3322-5760-49c6-98e9-c60550093310": "list",     // Boas Vindas (4)
+    "de723e94-ac45-4ed4-b9c8-4d9e71a6c84f": "buttons",  // SUPORTE (3)
+    "14fe8be5-ffb5-47ee-b2cf-0475e2883554": "list",     // RESULTADO (4)
+    "8619e80e-47a4-4a05-80fd-be50e7649756": "buttons",  // C_AVULSO (3)
+    "64b85687-198c-49ef-b7a7-827fdb8a456a": "buttons",  // COMERCIAL (3)
+  };
+  // Limite do WhatsApp: 20 caracteres no botao, 24 na linha da lista. Estourar
+  // nao da erro -- o texto e CORTADO, e "SEGUIR COMO ATENDIMENTO AV" nao diz o
+  // que a opcao faz. Por isso o teste cobra o limite em vez de confiar no olho.
+  const LIMITE = { buttons: 20, list: 24 };
+  for (const [id, exibicao] of Object.entries(ESPERADO)) {
+    const no = passos[id];
+    check(no?.config?.exibicao === exibicao, `${no?.titulo}: exibicao=${no?.config?.exibicao} (esperado ${exibicao})`);
+    const semRotulo = (no?.config?.opcoes || []).filter((o) => !o.botao);
+    check(semRotulo.length === 0, `${no?.titulo}: toda opcao tem rotulo de botao`);
+    const longos = (no?.config?.opcoes || []).filter((o) => [...String(o.botao || "")].length > LIMITE[exibicao]);
+    check(longos.length === 0, `${no?.titulo}: nenhum rotulo passa de ${LIMITE[exibicao]} chars`);
+  }
+
+  // E o texto numerado CONTINUA no fluxo -- ele e o fallback quando a Evolution
+  // recusa o interativo. Limpar os "1️⃣-" deixaria o cliente sem opcao nenhuma.
+  const comNumero = Object.keys(ESPERADO).filter((id) => /[1-9]️⃣/.test(passos[id]?.texto || ""));
+  check(
+    comNumero.length === Object.keys(ESPERADO).length,
+    `os ${comNumero.length} menus mantem o texto numerado (fallback do interativo)`
+  );
+
   console.log(
     "\n" + (erros.length ? `FALHAS (${erros.length}):\n  ` + erros.join("\n  ") : "BOTOES: TUDO CONFERE")
   );
