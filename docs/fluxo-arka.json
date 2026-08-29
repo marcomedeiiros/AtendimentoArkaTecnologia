@@ -149,10 +149,10 @@
             ],
             "acao": "ir",
             "targetId": "bd0fb1d0-fc23-432d-825d-9a2b9a8cd45f",
-            "botao": "👋 Encerrar atendimento"
+            "botao": "👋 Encerrar"
           }
         ],
-        "exibicao": "list"
+        "exibicao": "buttons"
       },
       "x": 40,
       "y": 300,
@@ -272,7 +272,7 @@
             ],
             "acao": "ir",
             "targetId": "f083aed3-0296-499e-af69-9dfcde346d4a",
-            "botao": "✅ Confirmar chamado"
+            "botao": "✅ Abrir chamado"
           },
           {
             "id": "res_2",
@@ -288,7 +288,7 @@
             "acao": "ir",
             "targetId": "8d01304a-ef09-49cf-bc6a-4f97c9a32d74",
             "limparCnpj": true,
-            "botao": "🔁 Informar outro CNPJ"
+            "botao": "🔁 Outro CNPJ"
           },
           {
             "id": "res_3",
@@ -302,7 +302,7 @@
             ],
             "acao": "ir",
             "targetId": "8619e80e-47a4-4a05-80fd-be50e7649756",
-            "botao": "🙋 Atendimento avulso"
+            "botao": "🙋 Cliente avulso"
           },
           {
             "id": "res_4",
@@ -320,7 +320,7 @@
             "botao": "🏠 Voltar ao menu"
           }
         ],
-        "exibicao": "list"
+        "exibicao": "buttons"
       },
       "x": 940,
       "y": 220,

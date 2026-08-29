@@ -884,7 +884,19 @@ class ChatbotEngine {
   // os numeros, para o cliente nunca ficar sem opcao.)
   _corpoInterativo(texto) {
     const linhas = String(texto || "").split("\n");
-    const semOpcoes = linhas.filter((l) => !/^\s*\d+[^\p{L}\n]*[-–]/u.test(l));
+    // A LINHA NUMERADA SAI DO CORPO -- com ou sem traco.
+    //
+    // A versao anterior exigia `[-–]`: limpava "1️⃣- Setor Tecnico" e deixava
+    // passar "1️⃣ Tecnico", que e como o menu esta escrito EM PRODUCAO. O
+    // cliente via os botoes E a lista numerada no texto -- a mesma escolha
+    // oferecida duas vezes. Mesmo defeito que `_rotuloOpcao` teve (a0d41ac).
+    //
+    // Depois do numero exige-se keycap OU separador, nunca apenas espaco, para
+    // nao comer linha de conteudo legitima como "2 vias do documento".
+    const semOpcoes = linhas.filter(
+      // ️⃣ = os dois invisiveis do keycap ("1" + seletor + caixinha).
+      (l) => !/^\s*\d+(?:[️⃣]+\s*[-–—.):]?|\s*[-–—.):])\s*\S/u.test(l)
+    );
     const corpo = semOpcoes.join("\n").replace(/\n{3,}/g, "\n\n").trim();
     return corpo || "Escolha uma opção:";
   }
@@ -998,17 +1010,37 @@ class ChatbotEngine {
     const marcar = (r, status) =>
       this.deps.conversaRepository.vincularWaMessageId(msg.id, r?.key?.id || null, status);
 
-    // BOTAO ou LISTA: o no manda, a contagem e o padrao.
+    // BOTAO ou LISTA -- e, pedindo botao com mais de 3 opcoes, botao MESMO ASSIM.
     //
-    // `buttons` pedido com mais de 3 opcoes nao existe no WhatsApp -- a lista
-    // assume, e o log diz por que, em vez de a mensagem simplesmente falhar.
-    let comoBotoes = itens.length <= 3;
+    // A Evolution recusa 4 botoes numa mensagem: `400 Maximum of 3 reply buttons
+    // allowed` (medido em 29/08/2026 na 2.4.0-rc2, chamando o endpoint direto).
+    // O limite e do protocolo do WhatsApp, nao da Evolution -- vale igual na
+    // Cloud API oficial da Meta. A lista cabe 10, mas esconde tudo atras de um
+    // "Ver opcoes", que e precisamente o toque a mais que o menu de botoes
+    // existe para eliminar.
+    //
+    // Entao as opcoes vao em MENSAGENS DE 3: 4 opcoes = 3 + 1. Duas bolhas,
+    // quatro botoes, nenhum "Ver opcoes".
+    //
+    // O PADRAO E BOTAO, e a lista virou opt-in (`exibicao: "list"`). Era o
+    // contrario -- `auto` mandava lista acima de 3 --, e o efeito pratico era
+    // que os menus de producao, que nao tem `exibicao` gravado no banco,
+    // caiam todos no "Ver opcoes" mesmo com os botoes ligados. Decisao do
+    // Marco (29/08): o cliente deve ver as opcoes ao entrar na conversa.
+    //
+    // Acima de 6, `auto` volta para lista: tres ou mais bolhas seguidas de
+    // botao viram spam, e ai a lista realmente le melhor. Um NO que pedir
+    // `buttons` explicitamente continua mandando botao -- quem escreveu o fluxo
+    // sabe o que quer --, e o log registra o tamanho.
+    const MAX_OPCOES_EM_BOTAO = 6;
+    let comoBotoes = itens.length <= MAX_OPCOES_EM_BOTAO;
     if (exibicao === "buttons") {
-      comoBotoes = itens.length <= 3;
-      if (!comoBotoes) {
-        logger.info("Passo pediu botoes, mas ha mais de 3 opcoes: enviando como lista", {
+      comoBotoes = true;
+      if (itens.length > MAX_OPCOES_EM_BOTAO) {
+        logger.info("Passo pediu botoes com muitas opcoes: vai em varias bolhas", {
           conversaId,
           opcoes: itens.length,
+          bolhas: Math.ceil(itens.length / 3),
         });
       }
     } else if (exibicao === "list") {
@@ -1018,17 +1050,35 @@ class ChatbotEngine {
     try {
       let r;
       if (comoBotoes) {
-        // Evolution v2 exige title/description/footer nao-vazios.
-        r = await this.deps.evolutionApi.sendButtons(
-          telefone,
-          {
+        const grupos = [];
+        for (let i = 0; i < itens.length; i += 3) grupos.push(itens.slice(i, i + 3));
+        // A PRIMEIRA bolha e a que vale: se ela falhar, o catch la embaixo manda
+        // o texto numerado inteiro e o cliente nao fica sem menu. As seguintes
+        // falham em silencio REGISTRADO -- cair para texto ali duplicaria um menu
+        // que o cliente acabou de receber clicavel.
+        for (let g = 0; g < grupos.length; g++) {
+          // Evolution v2 exige title/description/footer nao-vazios.
+          const payload = {
             title: "Atendimento",
-            description: corpo,
+            description: g === 0 ? corpo : "Mais opções:",
             footer: "Selecione uma opção",
-            buttons: itens.map((i) => ({ type: "reply", displayText: i.titulo.slice(0, 20), id: i.id })),
-          },
-          inst
-        );
+            buttons: grupos[g].map((i) => ({ type: "reply", displayText: i.titulo.slice(0, 20), id: i.id })),
+          };
+          if (g === 0) {
+            r = await this.deps.evolutionApi.sendButtons(telefone, payload, inst);
+            continue;
+          }
+          try {
+            await this.deps.evolutionApi.sendButtons(telefone, payload, inst);
+          } catch (error) {
+            logger.warn("Falha ao enviar a continuacao do menu de botoes", {
+              conversaId,
+              grupo: g + 1,
+              de: grupos.length,
+              message: error.message,
+            });
+          }
+        }
       } else {
         // Evolution v2 exige title + footerText, e a `description` de CADA linha
         // nao pode ser vazia (validado pela API).

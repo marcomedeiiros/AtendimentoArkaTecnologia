@@ -209,24 +209,39 @@ const TEXTO_MENU =
     fs.readFileSync(path.join(__dirname, "..", "docs", "fluxo-arka.json"), "utf8")
   );
   const passos = Object.fromEntries(fluxo.passos.map((p) => [p.id, p]));
+  // Os CINCO menus em botao, inclusive os de 4 opcoes: a Evolution recusa 4
+  // botoes numa mensagem ("Maximum of 3 reply buttons allowed", medido em
+  // 29/08/2026 na 2.4.0-rc2), entao o motor entrega em bolhas de 3 -- 4 = 3 + 1.
+  // A lista cabia 10, mas escondia tudo atras de "Ver opcoes".
   const ESPERADO = {
-    "d70e3322-5760-49c6-98e9-c60550093310": "list",     // Boas Vindas (4)
+    "d70e3322-5760-49c6-98e9-c60550093310": "buttons",  // Boas Vindas (4 -> 3+1)
     "de723e94-ac45-4ed4-b9c8-4d9e71a6c84f": "buttons",  // SUPORTE (3)
-    "14fe8be5-ffb5-47ee-b2cf-0475e2883554": "list",     // RESULTADO (4)
+    "14fe8be5-ffb5-47ee-b2cf-0475e2883554": "buttons",  // RESULTADO (4 -> 3+1)
     "8619e80e-47a4-4a05-80fd-be50e7649756": "buttons",  // C_AVULSO (3)
     "64b85687-198c-49ef-b7a7-827fdb8a456a": "buttons",  // COMERCIAL (3)
   };
   // Limite do WhatsApp: 20 caracteres no botao, 24 na linha da lista. Estourar
   // nao da erro -- o texto e CORTADO, e "SEGUIR COMO ATENDIMENTO AV" nao diz o
   // que a opcao faz. Por isso o teste cobra o limite em vez de confiar no olho.
+  //
+  // A CONTA E EM UTF-16 (`.length`), e nao em code points, porque e assim que o
+  // motor corta (`titulo.slice(0, 20)`). Medir com `[...s].length` era mais
+  // frouxo que a realidade: "🛠️ Setor Tecnico" da 16 em code points e 17 no
+  // slice -- um rotulo podia passar no teste e chegar cortado no cliente.
   const LIMITE = { buttons: 20, list: 24 };
   for (const [id, exibicao] of Object.entries(ESPERADO)) {
     const no = passos[id];
     check(no?.config?.exibicao === exibicao, `${no?.titulo}: exibicao=${no?.config?.exibicao} (esperado ${exibicao})`);
-    const semRotulo = (no?.config?.opcoes || []).filter((o) => !o.botao);
+    const opcoes = no?.config?.opcoes || [];
+    const semRotulo = opcoes.filter((o) => !o.botao);
     check(semRotulo.length === 0, `${no?.titulo}: toda opcao tem rotulo de botao`);
-    const longos = (no?.config?.opcoes || []).filter((o) => [...String(o.botao || "")].length > LIMITE[exibicao]);
-    check(longos.length === 0, `${no?.titulo}: nenhum rotulo passa de ${LIMITE[exibicao]} chars`);
+    const longos = opcoes.filter((o) => String(o.botao || "").length > LIMITE[exibicao]);
+    check(
+      longos.length === 0,
+      `${no?.titulo}: nenhum rotulo passa de ${LIMITE[exibicao]} (maior: ${Math.max(
+        ...opcoes.map((o) => String(o.botao || "").length)
+      )})`
+    );
   }
 
   // E o texto numerado CONTINUA no fluxo -- ele e o fallback quando a Evolution
@@ -236,6 +251,141 @@ const TEXTO_MENU =
     comNumero.length === Object.keys(ESPERADO).length,
     `os ${comNumero.length} menus mantem o texto numerado (fallback do interativo)`
   );
+
+  titulo("10. QUATRO opcoes viram 3 + 1 bolhas, e o corpo perde a lista numerada");
+
+  // O QUE ESTE TESTE DEFENDE, do ponto de vista do cliente:
+  //
+  //   1. quatro opcoes chegam como QUATRO BOTOES, nao como "Ver opcoes";
+  //   2. em duas bolhas, porque a Evolution recusa 4 num sendButtons so
+  //      ("Maximum of 3 reply buttons allowed", medido na 2.4.0-rc2);
+  //   3. a segunda bolha NAO repete o texto do menu;
+  //   4. o corpo nao mostra "1️⃣ Tecnico" embaixo dos botoes -- a mesma escolha
+  //      oferecida duas vezes era o que estava acontecendo em producao.
+  const enviados = [];
+  const motorEnvio = new ChatbotEngine({
+    evolutionApi: {
+      sendButtons: async (numero, payload) => {
+        enviados.push({ tipo: "buttons", payload });
+        return { key: { id: `wa${enviados.length}` } };
+      },
+      sendList: async (numero, payload) => {
+        enviados.push({ tipo: "list", payload });
+        return { key: { id: "wa-lista" } };
+      },
+      sendText: async (numero, texto) => {
+        enviados.push({ tipo: "text", texto });
+        return { key: { id: "wa-texto" } };
+      },
+    },
+    conversaRepository: {
+      addMensagem: async () => ({ id: "msg-1" }),
+      vincularWaMessageId: async () => {},
+      findByIdParaEvento: async () => null,
+    },
+    bus: { emitConversa: () => {} },
+  });
+
+  const MENU_REAL = passos["d70e3322-5760-49c6-98e9-c60550093310"];
+  process.env.WHATSAPP_BOTOES_INTERATIVOS = "true";
+  delete process.env.WHATSAPP_MENU_ENQUETE;
+  await motorEnvio.enviarBotComOpcoes(
+    "conv-1",
+    "5541999999999",
+    MENU_REAL.texto,
+    MENU_REAL.config.opcoes,
+    "inst",
+    { exibicao: "buttons" }
+  );
+
+  const bolhas = enviados.filter((e) => e.tipo === "buttons");
+  check(enviados.every((e) => e.tipo === "buttons"), `so mensagens de botao (veio: ${enviados.map((e) => e.tipo).join(", ")})`);
+  check(bolhas.length === 2, `4 opcoes -> 2 bolhas (veio ${bolhas.length})`);
+  check(bolhas[0]?.payload.buttons.length === 3, `1a bolha com 3 botoes (veio ${bolhas[0]?.payload.buttons.length})`);
+  check(bolhas[1]?.payload.buttons.length === 1, `2a bolha com 1 botao (veio ${bolhas[1]?.payload.buttons.length})`);
+
+  const todos = bolhas.flatMap((b) => b.payload.buttons);
+  check(todos.length === 4, "as 4 opcoes viraram botao, nenhuma sumiu");
+  check(
+    todos.map((b) => b.id).join(",") === "mp_1,mp_2,mp_3,mp_4",
+    `ids na ordem do menu (veio: ${todos.map((b) => b.id).join(",")})`
+  );
+  check(todos.every((b) => b.type === "reply"), "todos do tipo reply (resposta rapida, nao URL)");
+  check(
+    todos.every((b) => b.displayText.length <= 20 && b.displayText === b.displayText.trim()),
+    "nenhum rotulo chegou cortado ou com sobra de espaco"
+  );
+
+  const corpo1 = bolhas[0]?.payload.description || "";
+  check(!/[1-9]️⃣/.test(corpo1), "corpo da 1a bolha SEM a lista numerada");
+  check(/ARKA/i.test(corpo1), "corpo da 1a bolha mantem a saudacao");
+  check(bolhas[1]?.payload.description === "Mais opções:", `2a bolha nao repete o menu (veio: ${JSON.stringify(bolhas[1]?.payload.description)})`);
+
+  // E o caminho da falha: se a PRIMEIRA bolha cai, o cliente recebe o texto
+  // numerado inteiro. Se cair a SEGUNDA, nao -- reenviar o texto duplicaria um
+  // menu que ele acabou de receber clicavel.
+  const enviados2 = [];
+  const motorFalha = new ChatbotEngine({
+    evolutionApi: {
+      sendButtons: async (numero, payload) => {
+        enviados2.push({ tipo: "buttons", payload });
+        if (enviados2.length === 2) throw new Error("Maximum of 3 reply buttons allowed");
+        return { key: { id: "wa1" } };
+      },
+      sendText: async (numero, texto) => { enviados2.push({ tipo: "text", texto }); return { key: { id: "wa-texto" } }; },
+    },
+    conversaRepository: {
+      addMensagem: async () => ({ id: "msg-2" }),
+      vincularWaMessageId: async () => {},
+      findByIdParaEvento: async () => null,
+    },
+    bus: { emitConversa: () => {} },
+  });
+  await motorFalha.enviarBotComOpcoes("conv-2", "5541999999999", MENU_REAL.texto, MENU_REAL.config.opcoes, "inst", {
+    exibicao: "buttons",
+  });
+  check(
+    enviados2.filter((e) => e.tipo === "text").length === 0,
+    "falha na 2a bolha NAO duplica o menu em texto"
+  );
+
+  // E O PADRAO, que e o que vale em PRODUCAO: o banco de producao nao tem
+  // `exibicao` gravado, entao todo menu chega aqui como "auto". Antes disso
+  // virar botao, os menus de 4 opcoes caiam no "Ver opcoes" mesmo com os
+  // botoes ligados -- exatamente o que o Marco viu na tela.
+  const fazerMotor = (registro) =>
+    new ChatbotEngine({
+      evolutionApi: {
+        sendButtons: async (n, payload) => { registro.push({ tipo: "buttons", payload }); return { key: { id: "b" } }; },
+        sendList: async (n, payload) => { registro.push({ tipo: "list", payload }); return { key: { id: "l" } }; },
+        sendText: async (n, texto) => { registro.push({ tipo: "text", texto }); return { key: { id: "t" } }; },
+      },
+      conversaRepository: {
+        addMensagem: async () => ({ id: "m" }),
+        vincularWaMessageId: async () => {},
+        findByIdParaEvento: async () => null,
+      },
+      bus: { emitConversa: () => {} },
+    });
+
+  const opcoesFalsas = (n) =>
+    Array.from({ length: n }, (_, i) => ({ id: `op_${i + 1}`, botao: `Opção ${i + 1}`, palavrasChave: [String(i + 1)] }));
+
+  for (const [n, esperado, bolhasEsperadas] of [[4, "buttons", 2], [6, "buttons", 2], [7, "list", 1]]) {
+    const reg = [];
+    await fazerMotor(reg).enviarBotComOpcoes("c", "5541999999999", "Escolha:", opcoesFalsas(n), "inst");
+    const tipos = [...new Set(reg.map((e) => e.tipo))];
+    check(
+      tipos.length === 1 && tipos[0] === esperado && reg.length === bolhasEsperadas,
+      `auto com ${n} opcoes -> ${esperado} em ${bolhasEsperadas} (veio ${tipos.join("/")} em ${reg.length})`
+    );
+  }
+
+  const regLista = [];
+  await fazerMotor(regLista).enviarBotComOpcoes("c", "5541999999999", "Escolha:", opcoesFalsas(4), "inst", {
+    exibicao: "list",
+  });
+  check(regLista.length === 1 && regLista[0].tipo === "list", "`list` explicito ainda manda lista (opt-in preservado)");
 
   console.log(
     "\n" + (erros.length ? `FALHAS (${erros.length}):\n  ` + erros.join("\n  ") : "BOTOES: TUDO CONFERE")
