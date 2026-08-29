@@ -89,6 +89,23 @@ services:
       AUTHENTICATION_API_KEY: "${EVOLUTION_API_KEY}"
       AUTHENTICATION_TYPE: "apikey"
 
+      # Licenciamento, exigido a partir da 2.4.0. Sem ativacao a Evolution
+      # recusa TODA requisicao com 503 LICENSE_REQUIRED -- inclusive as do
+      # proprio /manager, que por isso nao consegue nem mostrar a tela de
+      # ativacao. O tier `community` e gratuito: sem limite de instancias, sem
+      # limite de mensagens, sem recurso bloqueado; a ativacao serve a
+      # telemetria (heartbeat a cada 5 min) e tolera queda de rede depois.
+      #
+      # Com o e-mail JA registrado uma vez pelo navegador, a subida chama
+      # /v1/register/auto sozinha e o container nasce ativado -- sem /manager e
+      # sem janela de indisponibilidade. Isso importa aqui porque o fluxo pelo
+      # navegador NAO fecha nesta topologia: a porta so escuta em 127.0.0.1 e
+      # o SERVER_URL abaixo nao e alcancavel de fora da VM.
+      #
+      # Inofensivo na v2.3.7, que simplesmente ignora a variavel. O `:-` deixa
+      # o compose subir com ela ausente do .env.
+      EVOLUTION_OPERATOR_EMAIL: "${EVOLUTION_OPERATOR_EMAIL:-}"
+
       DATABASE_ENABLED: "true"
       DATABASE_PROVIDER: "postgresql"
       DATABASE_CONNECTION_URI: "postgresql://evolution:${EVOLUTION_DB_PASSWORD}@evolution-db:5432/evolution?schema=public"
