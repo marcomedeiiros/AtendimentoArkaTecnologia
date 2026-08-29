@@ -102,7 +102,7 @@
             "acao": "ir",
             "targetId": "de723e94-ac45-4ed4-b9c8-4d9e71a6c84f",
             "setor": "Técnico",
-            "botao": "Setor Técnico"
+            "botao": "🛠️ Setor Técnico"
           },
           {
             "id": "mp_2",
@@ -117,7 +117,7 @@
             "acao": "ir",
             "targetId": "64b85687-198c-49ef-b7a7-827fdb8a456a",
             "setor": "Comercial",
-            "botao": "Comercial"
+            "botao": "💼 Comercial"
           },
           {
             "id": "mp_3",
@@ -134,7 +134,7 @@
             "acao": "ir",
             "targetId": "4f5f1646-5441-4afd-974d-dd4fa639f958",
             "setor": "Financeiro",
-            "botao": "Adm/Financeiro"
+            "botao": "💰 Adm/Financeiro"
           },
           {
             "id": "mp_4",
@@ -149,7 +149,7 @@
             ],
             "acao": "ir",
             "targetId": "bd0fb1d0-fc23-432d-825d-9a2b9a8cd45f",
-            "botao": "Encerrar atendimento"
+            "botao": "👋 Encerrar atendimento"
           }
         ],
         "exibicao": "list"
@@ -182,7 +182,7 @@
             ],
             "acao": "ir",
             "targetId": "8d01304a-ef09-49cf-bc6a-4f97c9a32d74",
-            "botao": "TENHO CONTRATO"
+            "botao": "📄 Tenho contrato"
           },
           {
             "id": "sup_2",
@@ -197,7 +197,7 @@
             ],
             "acao": "ir",
             "targetId": "8619e80e-47a4-4a05-80fd-be50e7649756",
-            "botao": "SOU CLIENTE AVULSO"
+            "botao": "🙋 Cliente avulso"
           },
           {
             "id": "sup_3",
@@ -212,7 +212,7 @@
             ],
             "acao": "ir",
             "targetId": "d70e3322-5760-49c6-98e9-c60550093310",
-            "botao": "VOLTAR AO MENU"
+            "botao": "🏠 Voltar ao menu"
           }
         ],
         "exibicao": "buttons"
@@ -272,7 +272,7 @@
             ],
             "acao": "ir",
             "targetId": "f083aed3-0296-499e-af69-9dfcde346d4a",
-            "botao": "CONFIRMAR CHAMADO"
+            "botao": "✅ Confirmar chamado"
           },
           {
             "id": "res_2",
@@ -288,7 +288,7 @@
             "acao": "ir",
             "targetId": "8d01304a-ef09-49cf-bc6a-4f97c9a32d74",
             "limparCnpj": true,
-            "botao": "INFORMAR OUTRO CNPJ"
+            "botao": "🔁 Informar outro CNPJ"
           },
           {
             "id": "res_3",
@@ -302,7 +302,7 @@
             ],
             "acao": "ir",
             "targetId": "8619e80e-47a4-4a05-80fd-be50e7649756",
-            "botao": "ATENDIMENTO AVULSO"
+            "botao": "🙋 Atendimento avulso"
           },
           {
             "id": "res_4",
@@ -317,7 +317,7 @@
             ],
             "acao": "ir",
             "targetId": "d70e3322-5760-49c6-98e9-c60550093310",
-            "botao": "VOLTAR AO MENU INICIAL"
+            "botao": "🏠 Voltar ao menu"
           }
         ],
         "exibicao": "list"
@@ -406,7 +406,7 @@
             ],
             "acao": "ir",
             "targetId": "9bbec3f6-9a9a-4f09-a0b9-b0d8fd973dd9",
-            "botao": "SIM"
+            "botao": "✅ Sim"
           },
           {
             "id": "av_2",
@@ -422,7 +422,7 @@
             "acao": "encerrar",
             "targetId": null,
             "mensagemEncerramento": "Certo, de qualquer forma agradecemos seu contato, e se mudar de idéia, basta nos chamar novamente! ",
-            "botao": "NÃO"
+            "botao": "❌ Não"
           },
           {
             "id": "av_3",
@@ -437,7 +437,7 @@
             ],
             "acao": "ir",
             "targetId": "d70e3322-5760-49c6-98e9-c60550093310",
-            "botao": "VOLTAR AO MENU"
+            "botao": "🏠 Voltar ao menu"
           }
         ],
         "exibicao": "buttons"
@@ -471,7 +471,7 @@
             ],
             "acao": "ir",
             "targetId": "98273bfb-4099-4020-a61c-ebba61ea1f44",
-            "botao": "PRODUTOS"
+            "botao": "🖥️ Produtos"
           },
           {
             "id": "com_2",
@@ -486,7 +486,7 @@
             ],
             "acao": "ir",
             "targetId": "98273bfb-4099-4020-a61c-ebba61ea1f44",
-            "botao": "SERVIÇOS"
+            "botao": "🔧 Serviços"
           },
           {
             "id": "com_3",
@@ -501,7 +501,7 @@
             ],
             "acao": "ir",
             "targetId": "d70e3322-5760-49c6-98e9-c60550093310",
-            "botao": "VOLTAR AO INICIO"
+            "botao": "🏠 Voltar ao início"
           }
         ],
         "exibicao": "buttons"
