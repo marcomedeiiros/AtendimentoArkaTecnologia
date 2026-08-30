@@ -1724,7 +1724,8 @@ class ChatbotEngine {
       telefone,
       cfg.mensagemNota,
       AGUARDANDO.AVALIACAO_NOTA,
-      instanceName
+      instanceName,
+      { exibicao: cfg.exibicao || "auto" }
     );
 
     // `osAvaliada` prende a pesquisa ao CICLO que acabou de fechar. Sem isso, se
@@ -1860,7 +1861,8 @@ class ChatbotEngine {
           telefone,
           cfg.mensagemNotaInvalida,
           AGUARDANDO.AVALIACAO_NOTA,
-          instanceName
+          instanceName,
+          { exibicao: cfg.exibicao || "auto" }
         );
         await this.deps.sessaoRepository.update(sessao.id, {
           contexto: { ...(sessao.contexto || {}), tentativasAval: tentativas },

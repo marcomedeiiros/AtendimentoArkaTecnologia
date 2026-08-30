@@ -199,6 +199,7 @@ function paramsAvaliacao(passo) {
   const c = (passo && passo.config) || {};
   const p = PADROES.avaliacao;
   return {
+    exibicao: c.exibicao || "auto",
     pedirComentario: booleano(c.pedirComentario, p.pedirComentario),
     mensagemNota: texto(c.mensagemNota, p.mensagemNota),
     mensagemComentario: texto(c.mensagemComentario, p.mensagemComentario),

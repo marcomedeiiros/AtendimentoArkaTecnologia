@@ -443,6 +443,52 @@ export function FlowPropertyPanel({
                   />
                 </div>
 
+                {/* MODO DE INTERAÇÃO DA PESQUISA DE SATISFAÇÃO */}
+                <div className="p-3 rounded-xl bg-grafite-700 border border-linha space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <span>🔘</span> Modo de Resposta da Nota
+                    </label>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      {node.config?.exibicao === 'text' ? 'Digitar nota (1 a 5)' : 'Botões interativos'}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 leading-relaxed">
+                    Escolha como o cliente responderá à pergunta da nota:
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { id: 'buttons', label: '🔘 Botões', sub: 'Clicar na nota (1 a 5)' },
+                      { id: 'text',    label: '💬 Texto', sub: 'Digitar a nota (1 a 5)' },
+                    ].map((modo) => {
+                      const ativo = (node.config?.exibicao || 'buttons') === modo.id;
+                      return (
+                        <button
+                          key={modo.id}
+                          type="button"
+                          onClick={() =>
+                            onChangeNode({
+                              ...node,
+                              config: { ...(node.config || {}), exibicao: modo.id },
+                            })
+                          }
+                          className={`p-2.5 rounded-xl border text-left transition-all ${
+                            ativo
+                              ? 'bg-yellow-500/15 border-yellow-500/50 text-white shadow-sm'
+                              : 'bg-grafite-800 border-linha text-slate-300 hover:border-slate-500'
+                          }`}
+                        >
+                          <div className="text-xs font-bold flex items-center justify-between">
+                            <span>{modo.label}</span>
+                            {ativo && <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" />}
+                          </div>
+                          <div className="text-[9px] text-slate-400 mt-0.5">{modo.sub}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 <label className="flex items-center gap-2 text-[11px] font-semibold text-slate-300 cursor-pointer">
                   <input
                     type="checkbox"
@@ -639,6 +685,49 @@ export function FlowPropertyPanel({
                         Aceita <code className="text-blue-300 font-mono">{'{{empresa}}'}</code> e{' '}
                         <code className="text-blue-300 font-mono">{'{{cnpj}}'}</code>.
                       </p>
+                    </div>
+
+                    {/* MODO DE INTERAÇÃO DA CONFIRMAÇÃO DE CNPJ */}
+                    <div className="p-3 rounded-xl bg-grafite-700 border border-linha space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <span>🔘</span> Modo de Confirmação (SIM / NÃO)
+                        </label>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {node.config?.exibicao === 'text' ? 'Digitar SIM/NÃO' : 'Botões interativos'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { id: 'buttons', label: '🔘 Botões', sub: 'Clicar em SIM ou NÃO' },
+                          { id: 'text',    label: '💬 Texto', sub: 'Digitar SIM ou NÃO' },
+                        ].map((modo) => {
+                          const ativo = (node.config?.exibicao || 'buttons') === modo.id;
+                          return (
+                            <button
+                              key={modo.id}
+                              type="button"
+                              onClick={() =>
+                                onChangeNode({
+                                  ...node,
+                                  config: { ...(node.config || {}), exibicao: modo.id },
+                                })
+                              }
+                              className={`p-2.5 rounded-xl border text-left transition-all ${
+                                ativo
+                                  ? 'bg-blue-500/15 border-blue-500/50 text-white shadow-sm'
+                                  : 'bg-grafite-800 border-linha text-slate-300 hover:border-slate-500'
+                              }`}
+                            >
+                              <div className="text-xs font-bold flex items-center justify-between">
+                                <span>{modo.label}</span>
+                                {ativo && <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />}
+                              </div>
+                              <div className="text-[9px] text-slate-400 mt-0.5">{modo.sub}</div>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
 
                     <div>

@@ -260,7 +260,19 @@ class FluxoRepository {
   }
 
   delete(id) {
-    return prisma.fluxo.delete({ where: { id } });
+    return prisma.$transaction(async (tx) => {
+      // 1. Apaga todos os blocos/passos vinculados ao fluxo
+      await tx.passoFluxo.deleteMany({ where: { fluxoId: id } });
+      // 2. Apaga histórico de logs de execução deste fluxo
+      await tx.logExecucaoFluxo.deleteMany({ where: { fluxoId: id } });
+      // 3. Desassocia sessões ativas que apontavam para este fluxo
+      await tx.sessaoChatbot.updateMany({
+        where: { fluxoAtualId: id },
+        data: { fluxoAtualId: null, passoAtualId: null, ativo: false },
+      });
+      // 4. Exclui o fluxo
+      return tx.fluxo.delete({ where: { id } });
+    });
   }
 
   // SEM ROTA HTTP. O `DELETE /api/fluxos` e o botao "Apagar todos os fluxos" do

@@ -116,23 +116,231 @@ function previaDoBloco(node) {
   return '';
 }
 
+/**
+ * Calcula a altura e largura reais renderizadas do nó para que as conexões (handles)
+ * e linhas SVG interceptem com 100% de exatidão no centro das bolinhas.
+ */
+export function getNodeDimensions(node) {
+  const isComment = node?.tipo === 'comentario';
+  const isEspera = node?.tipo === 'espera';
+  const w = node?.w || (isComment ? 260 : 220);
+
+  if (node?.h && node.h > 120) return { w, h: node.h };
+
+  let h = 32; // padding (p-4)
+  h += 38; // header (emoji + titulo + badge)
+
+  const previa = previaDoBloco(node);
+  if (previa) {
+    h += 34; // texto de preview
+  } else {
+    h += 18; // placeholder
+  }
+
+  const opcoes = Array.isArray(node?.config?.opcoes) ? node.config.opcoes : [];
+  if (opcoes.length > 0) {
+    const renderedOpts = Math.min(opcoes.length, 3);
+    h += renderedOpts * 22 + 6;
+  }
+
+  if (isComment) h = Math.max(h, 110);
+  if (isEspera) h = Math.max(h, 96);
+
+  return { w, h: Math.max(96, Math.round(h)) };
+}
+
+/**
+ * Traçado Inteligente de Conexões (Smart Bezier Routing).
+ * 
+ * - Evita cruzar por cima dos blocos.
+ * - Suporta múltiplas saídas/ramificações espaçando a origem.
+ * - Para loops / conexões de retorno (ex.: "Voltar ao menu"), contorna por cima ou
+ *   por fora sem cortar o meio dos blocos anteriores.
+ */
+export function calculateSmartEdgePath(sx, sy, ex, ey, { isBranch = false, branchIndex = 0, totalBranches = 1 } = {}) {
+  let startY = sy;
+  if (totalBranches > 1) {
+    const spread = Math.min(36, (totalBranches - 1) * 10);
+    const offset = ((branchIndex / (totalBranches - 1)) - 0.5) * spread;
+    startY = sy + offset;
+  }
+
+  const dx = ex - sx;
+  const dy = ey - startY;
+
+  // 1. Fluxo para a frente (Target está à direita da origem com folga)
+  if (dx >= 40) {
+    const curvature = Math.max(40, Math.min(220, dx * 0.45));
+    return `M ${sx} ${startY} C ${sx + curvature} ${startY}, ${ex - curvature} ${ey}, ${ex} ${ey}`;
+  }
+
+  // 2. Target na mesma coluna ou verticalmente próximo
+  if (dx >= -40 && dx < 40) {
+    const vertDir = dy >= 0 ? 1 : -1;
+    const arcX = Math.max(sx, ex) + 55;
+    return `M ${sx} ${startY} C ${arcX} ${startY + 20 * vertDir}, ${arcX} ${ey - 20 * vertDir}, ${ex} ${ey}`;
+  }
+
+  // 3. Conexão de Retorno / Loop (Target está à ESQUERDA da origem)
+  // Contorna externamente para nunca passar por cima dos cards intermediários
+  const loopWidth = Math.max(45, Math.min(90, Math.abs(dx) * 0.25 + 35));
+
+  if (Math.abs(dy) < 50) {
+    const loopY = Math.min(startY, ey) - 75;
+    return `M ${sx} ${startY} C ${sx + loopWidth} ${startY}, ${sx + loopWidth} ${loopY}, ${(sx + ex) / 2} ${loopY} C ${ex - loopWidth} ${loopY}, ${ex - loopWidth} ${ey}, ${ex} ${ey}`;
+  } else {
+    const vertDir = dy >= 0 ? 1 : -1;
+    const midX = (sx + ex) / 2;
+    const midY = (startY + ey) / 2 + (vertDir * 45);
+    return `M ${sx} ${startY} C ${sx + loopWidth} ${startY}, ${sx + loopWidth} ${midY}, ${midX} ${midY} S ${ex - loopWidth} ${ey}, ${ex} ${ey}`;
+  }
+}
+
+/**
+ * Organização Automática do Fluxo em Árvore Hierárquica (DAG Layout).
+ * Posiciona os blocos em colunas e camadas por profundidade, eliminando sobreposições.
+ */
+export function autoOrganizeFlow(nodes = []) {
+  if (!Array.isArray(nodes) || nodes.length === 0) return [];
+
+  const floatingTypes = ['comentario', 'espera'];
+  const mainNodes = nodes.filter(n => !floatingTypes.includes(n.tipo));
+  const floatingNodes = nodes.filter(n => floatingTypes.includes(n.tipo));
+
+  const nodeMap = new Map(mainNodes.map(n => [n.id, n]));
+  const incoming = new Map(mainNodes.map(n => [n.id, []]));
+  const outgoing = new Map(mainNodes.map(n => [n.id, []]));
+
+  mainNodes.forEach(node => {
+    const targets = [];
+    if (node.targetId && nodeMap.has(node.targetId)) {
+      targets.push(node.targetId);
+    }
+    if (Array.isArray(node.config?.opcoes)) {
+      node.config.opcoes.forEach(op => {
+        if (op?.targetId && nodeMap.has(op.targetId) && !targets.includes(op.targetId)) {
+          targets.push(op.targetId);
+        }
+      });
+    }
+
+    outgoing.set(node.id, targets);
+    targets.forEach(tId => {
+      if (!incoming.has(tId)) incoming.set(tId, []);
+      incoming.get(tId).push(node.id);
+    });
+  });
+
+  let roots = mainNodes.filter(n => n.tipo === 'gatilho' || (incoming.get(n.id) || []).length === 0);
+  if (roots.length === 0 && mainNodes.length > 0) roots = [mainNodes[0]];
+
+  const levels = new Map();
+  const visited = new Set();
+  const queue = roots.map(r => ({ id: r.id, level: 0 }));
+
+  roots.forEach(r => levels.set(r.id, 0));
+
+  while (queue.length > 0) {
+    const { id, level } = queue.shift();
+    if (visited.has(id)) continue;
+    visited.add(id);
+
+    const targets = outgoing.get(id) || [];
+    targets.forEach(tId => {
+      if (!visited.has(tId)) {
+        const nextLevel = level + 1;
+        const currentLevel = levels.get(tId);
+        if (currentLevel === undefined || nextLevel > currentLevel) {
+          levels.set(tId, nextLevel);
+        }
+        queue.push({ id: tId, level: levels.get(tId) || nextLevel });
+      }
+    });
+  }
+
+  mainNodes.forEach((node, idx) => {
+    if (!levels.has(node.id)) {
+      levels.set(node.id, idx > 0 ? 1 : 0);
+    }
+  });
+
+  const columns = new Map();
+  mainNodes.forEach(node => {
+    const lvl = levels.get(node.id) || 0;
+    if (!columns.has(lvl)) columns.set(lvl, []);
+    columns.get(lvl).push(node);
+  });
+
+  const sortedLevels = Array.from(columns.keys()).sort((a, b) => a - b);
+  const updatedNodes = [];
+
+  const startX = 80;
+  const startY = 160;
+  const colWidth = 330;
+  const rowGap = 32;
+
+  sortedLevels.forEach(lvl => {
+    const colNodes = columns.get(lvl);
+    let currentY = startY;
+
+    colNodes.forEach((node) => {
+      const dims = getNodeDimensions(node);
+      updatedNodes.push({
+        ...node,
+        x: startX + lvl * colWidth,
+        y: currentY,
+        w: dims.w,
+        h: dims.h,
+      });
+      currentY += dims.h + rowGap;
+    });
+  });
+
+  floatingNodes.forEach((node, idx) => {
+    const dims = getNodeDimensions(node);
+    if (node.tipo === 'comentario') {
+      updatedNodes.push({
+        ...node,
+        x: startX + 330,
+        y: 40,
+        w: dims.w,
+        h: dims.h,
+      });
+    } else if (node.tipo === 'espera') {
+      updatedNodes.push({
+        ...node,
+        x: startX,
+        y: startY + 420 + idx * (dims.h + 24),
+        w: dims.w,
+        h: dims.h,
+      });
+    } else {
+      updatedNodes.push({
+        ...node,
+        x: startX + idx * 280,
+        y: startY + 600,
+        w: dims.w,
+        h: dims.h,
+      });
+    }
+  });
+
+  return updatedNodes;
+}
+
 function formatNodesPositions(passos = []) {
-  // Fluxos antigos (seed) chegam sem targetId nenhum e dependem do
-  // encadeamento automatico abaixo. Fluxos com ligacao explicita - inclusive os
-  // importados, que ramificam por config.opcoes - nao podem receber esse
-  // "proximo" inventado: isso criava fios fantasma saindo dos blocos terminais
-  // (um VENDEDOR que so transfere para atendente, por exemplo).
   const temLigacaoExplicita = passos.some(p => p.targetId || p.config?.opcoes?.length);
-  return passos.map((p, idx) => ({
-    ...p,
-    // Usa ?? para tratar null (posicao nao salva no banco) alem de undefined
-    // senao os blocos do seed (posX/posY null) empilhavam todos em left:0.
-    x: p.x ?? (80 + idx * 270),
-    y: p.y ?? (180 + (idx % 2 === 0 ? 0 : 40)),
-    w: p.w || (p.tipo === 'comentario' ? 240 : 220),
-    h: p.h || (p.tipo === 'comentario' ? 120 : 96),
-    targetId: p.targetId || (temLigacaoExplicita ? null : (idx < passos.length - 1 ? passos[idx + 1].id : null))
-  }));
+  return passos.map((p, idx) => {
+    const dims = getNodeDimensions(p);
+    return {
+      ...p,
+      x: p.x ?? (80 + idx * 300),
+      y: p.y ?? (180 + (idx % 2 === 0 ? 0 : 40)),
+      w: dims.w,
+      h: dims.h,
+      targetId: p.targetId || (temLigacaoExplicita ? null : (idx < passos.length - 1 ? passos[idx + 1].id : null))
+    };
+  });
 }
 
 function SequencePanel({ nodes, onReorder, onSelectNode, selectedNodeIds }) {
@@ -495,11 +703,29 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
     const anteriores = fluxos;
     const remaining = fluxos.filter(f => f.id !== targetId);
     setFluxos(remaining);
-    if (remaining.length > 0) setSelectedFlowId(remaining[0].id);
-    else setSelectedFlowId(null);
+
+    if (remaining.length > 0) {
+      const nextFlow = remaining[0];
+      setSelectedFlowId(nextFlow.id);
+      const formatted = formatNodesPositions(nextFlow.passos || []);
+      setNodes(formatted);
+      setHistory([JSON.stringify(formatted)]);
+      setHistoryIndex(0);
+    } else {
+      setSelectedFlowId(null);
+      setNodes([]);
+      setHistory([]);
+      setHistoryIndex(-1);
+    }
+    setSelectedNodeIds([]);
+    setActivePropertyNodeId(null);
+    setSelectedEdgeTargetId(null);
+    setConnectingFromId(null);
     setShowDeleteConfirm(false);
+
     try {
       if (targetId) await FluxosAPI.remover(targetId);
+      mostrarAvisoJson('ok', 'Fluxo e todos os seus blocos foram excluídos com sucesso.');
     } catch (e) {
       // O fluxo continua vivo no servidor: devolvê-lo à lista é o único jeito
       // de a tela parar de afirmar uma exclusão que não aconteceu.
@@ -785,9 +1011,10 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
   };
 
   const handleAutoOrganize = () => {
-    const updated = nodes.map((n, idx) => ({ ...n, x: 100 + idx * 270, y: 180 + (idx % 2 === 0 ? 0 : 50) }));
+    const updated = autoOrganizeFlow(nodes);
     syncFlowToParent(updated);
     pushHistory(updated);
+    mostrarAvisoJson('ok', 'Fluxo organizado automaticamente!');
   };
 
   const addNode = (tipo, pos = null) => {
@@ -1479,72 +1706,107 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
           <div style={{ transform: `translate3d(${canvasOffset.x}px, ${canvasOffset.y}px, 0) scale(${zoom})`, transformOrigin: '0 0', width: '100%', height: '100%', position: 'absolute' }}>
 
             <svg className="absolute inset-0 w-full h-full overflow-visible z-0" style={{ pointerEvents: 'none' }}>
+              {/* Conexões principais (targetId) */}
               {nodes.map(node => {
                 if (!node.targetId) return null;
                 const target = nodes.find(n => n.id === node.targetId);
                 if (!target) return null;
-                const sx = node.x + (node.w || 220), sy = node.y + (node.h || 96) / 2;
-                const ex = target.x, ey = target.y + (target.h || 96) / 2;
-                const dx = Math.abs(ex - sx) * 0.5;
-                const d = `M ${sx} ${sy} C ${sx + dx} ${sy}, ${ex - dx} ${ey}, ${ex} ${ey}`;
+
+                const srcDims = getNodeDimensions(node);
+                const tgtDims = getNodeDimensions(target);
+
+                const sx = node.x + srcDims.w;
+                const sy = node.y + srcDims.h / 2;
+                const ex = target.x;
+                const ey = target.y + tgtDims.h / 2;
+
+                const d = calculateSmartEdgePath(sx, sy, ex, ey);
                 const active  = activeSimNodeId === node.id || executedNodeIdsEff.includes(node.id);
                 const edgeSel = selectedEdgeTargetId === node.targetId;
+
                 return (
                   <g key={`${node.id}->${target.id}`}>
-                   
-                    <path d={d} fill="none" stroke="transparent" strokeWidth={12}
+                    <path
+                      d={d}
+                      fill="none"
+                      stroke="transparent"
+                      strokeWidth={14}
                       style={{ cursor: 'pointer', pointerEvents: 'all' }}
-                      onClick={(e) => { e.stopPropagation(); setSelectedEdgeTargetId(prev => prev === node.targetId ? null : node.targetId); setSelectedNodeIds([]); }} />
-                    <path d={d} fill="none"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedEdgeTargetId(prev => prev === node.targetId ? null : node.targetId);
+                        setSelectedNodeIds([]);
+                      }}
+                    />
+                    <path
+                      d={d}
+                      fill="none"
                       stroke={edgeSel ? '#F43F5E' : active ? '#10B981' : '#384156'}
                       strokeWidth={edgeSel ? 3 : active ? 3 : 2}
                       strokeDasharray={edgeSel ? '6 3' : 'none'}
                       style={{ pointerEvents: 'none' }}
-                      className="transition-all duration-300" />
-                    {active && !edgeSel && <path d={d} fill="none" stroke="#FF7A29" strokeWidth="3" strokeDasharray="6 6" style={{ pointerEvents: 'none' }} className="animate-pulse" />}
+                      className="transition-all duration-300"
+                    />
+                    {active && !edgeSel && (
+                      <path d={d} fill="none" stroke="#FF7A29" strokeWidth="3" strokeDasharray="6 6" style={{ pointerEvents: 'none' }} className="animate-pulse" />
+                    )}
                   </g>
                 );
               })}
-              {/* Ramificacoes de fluxos importados. O passo desenha a saida
-                  principal acima (targetId); as demais saidas vivem em
-                  config.opcoes e aparecem aqui em azul tracejado, com o rotulo
-                  das palavras-chave que levam a cada destino.
 
-                  Este bloco nao recebia NADA da simulacao: enquanto as ligacoes
-                  principais ficavam verdes e pulsando, os fios das ramificacoes
-                  seguiam iguais, apagados, como se nao fizessem parte do fluxo.
-                  Agora eles usam o mesmo `active` das outras (bloco de origem em
-                  execucao ou ja executado) e ganham a mesma pulsacao -- so
-                  mantem o azul, que e o que distingue ramificacao de saida
-                  principal. */}
+              {/* Ramificações (opcoes com targetId) */}
               {nodes.map(node => {
                 const opcoes = node.config?.opcoes;
                 if (!Array.isArray(opcoes) || opcoes.length === 0) return null;
-                return opcoes.map((op, i) => {
-                  if (!op?.targetId || op.targetId === node.targetId) return null;
+                const validOptions = opcoes.filter(op => op?.targetId && op.targetId !== node.targetId);
+                if (validOptions.length === 0) return null;
+
+                const srcDims = getNodeDimensions(node);
+
+                return validOptions.map((op, i) => {
                   const target = nodes.find(n => n.id === op.targetId);
                   if (!target) return null;
-                  const sx = node.x + (node.w || 220), sy = node.y + (node.h || 96) / 2;
-                  const ex = target.x, ey = target.y + (target.h || 96) / 2;
-                  const dx = Math.abs(ex - sx) * 0.5;
-                  const d = `M ${sx} ${sy} C ${sx + dx} ${sy}, ${ex - dx} ${ey}, ${ex} ${ey}`;
-                  const rotulo = String(op.rotulo || '').slice(0, 22);
+
+                  const tgtDims = getNodeDimensions(target);
+
+                  const sx = node.x + srcDims.w;
+                  const sy = node.y + srcDims.h / 2;
+                  const ex = target.x;
+                  const ey = target.y + tgtDims.h / 2;
+
+                  const d = calculateSmartEdgePath(sx, sy, ex, ey, {
+                    isBranch: true,
+                    branchIndex: i,
+                    totalBranches: validOptions.length,
+                  });
+
+                  const rotulo = String(op.rotulo || '').slice(0, 24);
                   const active = activeSimNodeId === node.id || executedNodeIdsEff.includes(node.id);
+
                   return (
                     <g key={`${node.id}-op${i}->${target.id}`} style={{ pointerEvents: 'none' }}>
-                      <path d={d} fill="none"
+                      <path
+                        d={d}
+                        fill="none"
                         stroke={active ? '#60A5FA' : '#3B82F6'}
-                        strokeWidth={active ? 3 : 2}
+                        strokeWidth={active ? 2.5 : 1.8}
                         strokeDasharray="5 4"
-                        opacity={active ? 1 : 0.7}
-                        className="transition-all duration-300" />
-                      {/* Mesma sobreposicao laranja pulsante das ligacoes
-                          principais: e ela que faz o fio "piscar". */}
+                        opacity={active ? 1 : 0.75}
+                        className="transition-all duration-300"
+                      />
                       {active && (
-                        <path d={d} fill="none" stroke="#FF7A29" strokeWidth="3" strokeDasharray="6 6" className="animate-pulse" />
+                        <path d={d} fill="none" stroke="#FF7A29" strokeWidth="2.5" strokeDasharray="6 6" className="animate-pulse" />
                       )}
                       {rotulo && (
-                        <text x={(sx + ex) / 2} y={(sy + ey) / 2 - 5} fill={active ? '#DBEAFE' : '#93C5FD'} fontSize="9" textAnchor="middle">
+                        <text
+                          x={(sx + ex) / 2}
+                          y={(sy + ey) / 2 - 6}
+                          fill={active ? '#DBEAFE' : '#93C5FD'}
+                          fontSize="9"
+                          fontWeight="500"
+                          textAnchor="middle"
+                          className="select-none"
+                        >
                           {rotulo}
                         </text>
                       )}
@@ -1553,12 +1815,14 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                 });
               })}
 
+              {/* Linha de conexão interativa ao arrastar porta */}
               {connectingFromId && (() => {
                 const src = nodes.find(n => n.id === connectingFromId);
                 if (!src) return null;
-                const sx = src.x + (src.w || 220), sy = src.y + (src.h || 96) / 2;
-                const dx = Math.abs(mouseCanvasPos.x - sx) * 0.5;
-                const d = `M ${sx} ${sy} C ${sx + dx} ${sy}, ${mouseCanvasPos.x - dx} ${mouseCanvasPos.y}, ${mouseCanvasPos.x} ${mouseCanvasPos.y}`;
+                const srcDims = getNodeDimensions(src);
+                const sx = src.x + srcDims.w;
+                const sy = src.y + srcDims.h / 2;
+                const d = calculateSmartEdgePath(sx, sy, mouseCanvasPos.x, mouseCanvasPos.y);
                 return <path d={d} fill="none" stroke="#FF7A29" strokeWidth="2.5" strokeDasharray="4 4" style={{ pointerEvents: 'none' }} />;
               })()}
             </svg>
@@ -1587,6 +1851,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
               const isNoTeste   = testPassoId === node.id;
               const isComment   = node.tipo === 'comentario';
               const meta        = BLOCK_META[node.tipo] || BLOCK_META.mensagem;
+              const dims        = getNodeDimensions(node);
 
               return (
                 <div
@@ -1608,7 +1873,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
                     ${isExecuted && !isExecuting ? 'border-ativo/80' : ''}
                     ${isNoTeste ? 'ring-2 ring-blue-400 shadow-blue-500/20' : ''}
                   `}
-                  style={{ left: node.x, top: node.y, width: node.w || 220, minHeight: node.h || 96 }}
+                  style={{ left: node.x, top: node.y, width: dims.w, minHeight: dims.h }}
                 >
                  
                   {!isComment && (() => {
