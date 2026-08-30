@@ -961,7 +961,7 @@ class ChatbotEngine {
     ]);
     while (partes.length > 1 && LIGACAO.has(partes[partes.length - 1].toLowerCase())) partes.pop();
 
-    const saida = partes.join(" ").replace(/[\s/\\|\-–-,:;.]+$/u, "");
+    const saida = partes.join(" ").replace(/[\s/\\|,\-:;.]+$/u, "");
     return semSurrogadoPartido(saida || s.slice(0, limite));
   }
 
@@ -1017,7 +1017,7 @@ class ChatbotEngine {
     // nao comer linha de conteudo legitima como "2 vias do documento".
     const semOpcoes = linhas.filter(
       // ️⃣ = os dois invisiveis do keycap ("1" + seletor + caixinha).
-      (l) => !/^[ \t]*[*_~]*[ \t]*\d+(?:[️⃣]+[ \t]*[-–-.):]?|[ \t]*[-–-.):])[ \t]*\S/u.test(l)
+      (l) => !/^[ \t]*[*_~]*[ \t]*\d+(?:[️⃣]+[ \t]*[\-.):]?|[ \t]*[\-.):])[ \t]*\S/u.test(l)
     );
     // E A INSTRUCAO DE DIGITAR TAMBEM SAI.
     //
