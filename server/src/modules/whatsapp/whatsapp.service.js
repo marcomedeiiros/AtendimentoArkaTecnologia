@@ -37,24 +37,36 @@ class WhatsAppService {
     if (msg.extendedTextMessage?.text) return msg.extendedTextMessage.text.trim();
     if (msg.imageMessage?.caption) return msg.imageMessage.caption.trim();
 
-    // Resposta de BOTAO: o `id` (que enviamos = numero da opcao) casa direto com
-    // as palavras-chave no motor; por isso vem ANTES do texto do botao, que pode
-    // estar truncado pelo WhatsApp.
-    if (msg.buttonsResponseMessage?.selectedButtonId) {
-      return String(msg.buttonsResponseMessage.selectedButtonId).trim();
-    }
+    // Resposta de BOTAO: o texto visivel (selectedDisplayText) e o que o cliente
+    // viu e tocou (ex.: "Comercial", "Produtos"). Vem antes do id para a bolha no
+    // chat exibir o rotulo bonito. O selectedButtonId e extraido em separado por
+    // `extrairBotaoId` para o motor poder casar por id tambem.
     if (msg.buttonsResponseMessage?.selectedDisplayText) {
       return msg.buttonsResponseMessage.selectedDisplayText.trim();
     }
-    // Resposta de LISTA: idem, o rowId primeiro; senao o titulo da linha.
+    if (msg.buttonsResponseMessage?.selectedButtonId) {
+      return String(msg.buttonsResponseMessage.selectedButtonId).trim();
+    }
+    // Resposta de LISTA: titulo da linha primeiro; senao o rowId.
+    if (msg.listResponseMessage?.title) {
+      return msg.listResponseMessage.title.trim();
+    }
     if (msg.listResponseMessage?.singleSelectReply?.selectedRowId) {
       return String(msg.listResponseMessage.singleSelectReply.selectedRowId).trim();
     }
-    if (msg.listResponseMessage?.title) return msg.listResponseMessage.title.trim();
-    // Formato "interactive" (algumas versoes): id da opcao escolhida.
+    // Formato Template Button:
+    if (msg.templateButtonReplyMessage?.selectedDisplayText) {
+      return msg.templateButtonReplyMessage.selectedDisplayText.trim();
+    }
+    if (msg.templateButtonReplyMessage?.selectedId) {
+      return String(msg.templateButtonReplyMessage.selectedId).trim();
+    }
+    // Formato "interactive" (algumas versoes): titulo da opcao escolhida.
     if (msg.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson) {
       try {
         const p = JSON.parse(msg.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson);
+        const title = p?.title || p?.displayText || p?.text;
+        if (title) return String(title).trim();
         const id = p?.id || p?.selectedId || p?.selectedRowId;
         if (id) return String(id).trim();
       } catch { /* ignora json invalido */ }
@@ -98,6 +110,29 @@ class WhatsAppService {
       });
     }
 
+    return null;
+  }
+
+  extrairBotaoId(payload) {
+    const msg = payload?.data?.message || payload?.message || payload;
+    if (!msg || typeof msg !== "object") return null;
+
+    if (msg.buttonsResponseMessage?.selectedButtonId) {
+      return String(msg.buttonsResponseMessage.selectedButtonId).trim();
+    }
+    if (msg.listResponseMessage?.singleSelectReply?.selectedRowId) {
+      return String(msg.listResponseMessage.singleSelectReply.selectedRowId).trim();
+    }
+    if (msg.templateButtonReplyMessage?.selectedId) {
+      return String(msg.templateButtonReplyMessage.selectedId).trim();
+    }
+    if (msg.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson) {
+      try {
+        const p = JSON.parse(msg.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson);
+        const id = p?.id || p?.selectedId || p?.selectedRowId;
+        if (id) return String(id).trim();
+      } catch { /* ignora json invalido */ }
+    }
     return null;
   }
 
@@ -320,6 +355,7 @@ class WhatsAppService {
 
     const telefone = this.extrairTelefone(key?.remoteJid || data?.remoteJid);
     const texto = this.extrairTexto(body);
+    const botaoId = this.extrairBotaoId(body);
     const nomeCliente = data?.pushName || data?.senderName || "Cliente";
 
     // Encaminhamento vale para QUALQUER tipo -- inclusive texto puro, que não
@@ -391,13 +427,14 @@ class WhatsAppService {
       }
     }
 
-    if (!telefone || (!texto && !midia)) {
+    if (!telefone || (!texto && !midia && !botaoId)) {
       return { recebido: true, processado: false, motivo: "dados_incompletos" };
     }
 
     const result = await chatbotService.processar({
       telefone,
       texto,
+      botaoId,
       nomeCliente,
       instanceName,
       waMessageId: key?.id || null,

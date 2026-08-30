@@ -200,7 +200,15 @@ const TEXTO_MENU =
   check(whats.extrairTexto({ data: { message: { conversation: "oi" } } }) === "oi", "texto normal segue extraido");
   check(
     whats.extrairTexto({ data: { message: { buttonsResponseMessage: { selectedButtonId: "sup_2" } } } }) === "sup_2",
-    "id de botao segue extraido"
+    "id de botao segue extraido como fallback"
+  );
+  check(
+    whats.extrairTexto({ data: { message: { buttonsResponseMessage: { selectedButtonId: "sup_2", selectedDisplayText: "Atendimento avulso" } } } }) === "Atendimento avulso",
+    "texto legivel do botao e extraido com prioridade para exibicao no chat"
+  );
+  check(
+    whats.extrairBotaoId({ data: { message: { buttonsResponseMessage: { selectedButtonId: "sup_2", selectedDisplayText: "Atendimento avulso" } } } }) === "sup_2",
+    "id do botao e extraido separadamente para o motor"
   );
 
   titulo("9. O FLUXO REAL declara exibicao e rotulos dentro dos limites");
@@ -386,6 +394,12 @@ const TEXTO_MENU =
     exibicao: "list",
   });
   check(regLista.length === 1 && regLista[0].tipo === "list", "`list` explicito ainda manda lista (opt-in preservado)");
+
+  const regTextoManual = [];
+  await fazerMotor(regTextoManual).enviarBotComOpcoes("c", "5541999999999", "Escolha:\n1 - Opção 1", opcoesFalsas(4), "inst", {
+    exibicao: "text",
+  });
+  check(regTextoManual.length === 1 && regTextoManual[0].tipo === "text", "`text` explicito manda mensagem de texto (falar/digitar preservado)");
 
   titulo("11. COMO O MENU ESTA ESCRITO nao pode mudar o que o cliente ve");
 

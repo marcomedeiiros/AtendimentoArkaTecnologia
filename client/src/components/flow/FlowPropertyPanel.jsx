@@ -678,19 +678,73 @@ export function FlowPropertyPanel({
             </div>
             )}
 
-            {/* Ramificacoes importadas. Somente leitura de proposito: editar
-                aqui daria a entender que o motor local ja segue todas elas. */}
+            {/* MODO DE INTERAÇÃO COM O CLIENTE */}
+            {(opcoes.length > 0 || node.tipo === 'mensagem' || node.tipo === 'gatilho') && (
+              <div className="p-3.5 rounded-xl bg-grafite-700/80 border border-linha space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <span>🔘</span> Modo de Interação do Menu
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    {node.config?.exibicao === 'text'
+                      ? 'Texto (Falar/Digitar)'
+                      : node.config?.exibicao === 'list'
+                      ? 'Lista'
+                      : node.config?.exibicao === 'enquete'
+                      ? 'Enquete'
+                      : 'Botões (Clicar)'}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400 leading-relaxed">
+                  Escolha como o cliente interagirá com as opções deste bloco no WhatsApp:
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'buttons', label: '🔘 Botões', sub: 'Clicar na tela' },
+                    { id: 'text',    label: '💬 Texto', sub: 'Digitar / Falar (1, 2...)' },
+                    { id: 'list',    label: '📋 Lista', sub: 'Menu "Ver opções"' },
+                    { id: 'enquete', label: '📊 Enquete', sub: 'Votação nativa' },
+                  ].map((modo) => {
+                    const ativo = (node.config?.exibicao || 'buttons') === modo.id;
+                    return (
+                      <button
+                        key={modo.id}
+                        type="button"
+                        onClick={() =>
+                          onChangeNode({
+                            ...node,
+                            config: { ...(node.config || {}), exibicao: modo.id },
+                          })
+                        }
+                        className={`p-2.5 rounded-xl border text-left transition-all ${
+                          ativo
+                            ? 'bg-acao/15 border-acao/50 text-white shadow-sm'
+                            : 'bg-grafite-800 border-linha text-slate-300 hover:border-slate-500'
+                        }`}
+                      >
+                        <div className="text-xs font-bold flex items-center justify-between">
+                          <span>{modo.label}</span>
+                          {ativo && <span className="w-1.5 h-1.5 rounded-full bg-acao-200" />}
+                        </div>
+                        <div className="text-[9px] text-slate-400 mt-0.5">{modo.sub}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Ramificacoes / Opções */}
             {opcoes.length > 0 && (
               <div className="space-y-2">
                 <div className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                   <GitBranch size={13} className="text-blue-400" /> Ramificações ({opcoes.length})
                 </div>
                 <p className="text-[10px] text-slate-500 leading-relaxed">
-                  Importadas do JSON e desenhadas no canvas. O motor local ainda executa
-                  apenas a saída principal.
+                  Opções deste menu. Você pode ajustar o texto do botão exibido no WhatsApp.
                 </p>
                 {opcoes.map((op, i) => (
-                  <div key={op.id || i} className="p-2.5 rounded-xl bg-grafite-700 border border-linha space-y-1.5">
+                  <div key={op.id || i} className="p-2.5 rounded-xl bg-grafite-700 border border-linha space-y-2">
                     <div className="text-[11px] font-semibold text-white break-words">
                       {op.rotulo || (op.esperaEscolha ? '(sem rótulo)' : 'Qualquer resposta')}
                     </div>
@@ -706,13 +760,35 @@ export function FlowPropertyPanel({
                     <div className="text-[10px] text-slate-400 flex items-center gap-1">
                       <span className="text-blue-400">→</span> {descreverDestino(op)}
                     </div>
-                    {/* O QUE ESTA OPCAO DECIDE, alem de para onde ela vai.
-                        Setor e desassociacao de CNPJ sao regras do fluxo, e nao
-                        do codigo -- entao precisam ser legiveis aqui, senao a
-                        unica forma de saber que "1" define o Setor Técnico
-                        seria abrir o JSON. */}
+
+                    {/* Texto no Botão do WhatsApp */}
+                    <div className="pt-1.5 border-t border-linha/50">
+                      <div className="flex items-center justify-between text-[10px] text-slate-300 mb-1">
+                        <span className="font-semibold">Texto do Botão (WhatsApp):</span>
+                        <span className={`text-[9px] ${String(op.botao || '').length > 20 ? 'text-falha-400 font-bold' : 'text-slate-400'}`}>
+                          {String(op.botao || '').length}/20 chars
+                        </span>
+                      </div>
+                      <input
+                        type="text"
+                        maxLength={24}
+                        value={op.botao || ''}
+                        placeholder={op.rotulo?.split(',')[1] || op.rotulo?.split(',')[0] || 'Texto do botão'}
+                        onChange={(e) => {
+                          const novasOpcoes = [...opcoes];
+                          novasOpcoes[i] = { ...op, botao: e.target.value };
+                          onChangeNode({
+                            ...node,
+                            config: { ...(node.config || {}), opcoes: novasOpcoes },
+                          });
+                        }}
+                        className="w-full bg-grafite-800 border border-linha rounded-lg px-2.5 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 font-sans"
+                      />
+                    </div>
+
+                    {/* O QUE ESTA OPCAO DECIDE, alem de para onde ela vai. */}
                     {(op.setor || op.limparCnpj) && (
-                      <div className="flex flex-wrap gap-1">
+                      <div className="flex flex-wrap gap-1 pt-1">
                         {op.setor && (
                           <span
                             title="Ao escolher esta opção, a conversa passa a ser deste setor"
@@ -736,11 +812,6 @@ export function FlowPropertyPanel({
                         “{op.mensagemEncerramento}”
                       </div>
                     )}
-                    {/* A CONFIRMACAO DE ENCAMINHAMENTO, no no que transfere.
-                        Antes esse texto vinha da `welcomeMessage` -- um campo
-                        com outro nome, num bloco de configuracao global -- e
-                        nao havia como saber, olhando o no, o que o cliente
-                        ouviria ao ser mandado para a fila. */}
                     {op.mensagemHandoff && (
                       <div className="text-[10px] text-slate-500 italic line-clamp-2 break-words">
                         “{op.mensagemHandoff}”

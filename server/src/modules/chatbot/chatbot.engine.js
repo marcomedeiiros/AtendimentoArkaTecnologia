@@ -977,14 +977,19 @@ class ChatbotEngine {
    * de sempre. Digitar a resposta continua funcionando nos dois casos: o id do
    * botao E o texto esperado.
    */
-  async _enviarComBotoesFixos(conversaId, telefone, texto, aguardando, instanceName) {
+  async _enviarComBotoesFixos(conversaId, telefone, texto, aguardando, instanceName, { exibicao = "auto" } = {}) {
     const fixos = BOTOES_FIXOS[aguardando];
-    if (!fixos?.length || process.env.WHATSAPP_BOTOES_INTERATIVOS !== "true") {
+    if (
+      !fixos?.length ||
+      exibicao === "text" ||
+      exibicao === "texto" ||
+      (process.env.WHATSAPP_BOTOES_INTERATIVOS !== "true" && exibicao !== "buttons")
+    ) {
       return this.enviarBot(conversaId, telefone, texto, instanceName);
     }
     const opcoes = fixos.map((b) => ({ id: b.id, botao: b.rotulo }));
     return this.enviarBotComOpcoes(conversaId, telefone, texto, opcoes, instanceName, {
-      exibicao: "buttons",
+      exibicao: exibicao === "auto" ? "buttons" : exibicao,
     });
   }
 
@@ -1080,47 +1085,23 @@ class ChatbotEngine {
 
   /**
    * @param {object} [opcoes2]
-   * @param {"buttons"|"list"|"auto"} [opcoes2.exibicao] forma pedida pelo NO do
+   * @param {"buttons"|"list"|"text"|"enquete"|"auto"} [opcoes2.exibicao] forma pedida pelo NO do
    *   fluxo (`config.exibicao`). Sem isso, decide pela contagem: ate 3 botoes,
    *   acima lista.
-   *
-   *   Existe porque contagem nao e intencao. Um menu de 3 opcoes que vai crescer
-   *   pode querer ja nascer lista, e um de 4 pode preferir 3 botoes + "outras
-   *   opcoes". Quem monta o fluxo decide; a contagem e so o padrao.
-   *
-   *   `buttons` com mais de 3 opcoes e impossivel no WhatsApp: nesse caso a
-   *   lista prevalece e o motivo vai para o log, em vez de a mensagem falhar.
    */
   async enviarBotComOpcoes(conversaId, telefone, texto, opcoes, instanceName, { exibicao = "auto" } = {}) {
-    // Botoes/listas interativos SO funcionam na API OFICIAL do WhatsApp. Na
-    // integracao atual (Baileys/Evolution) o WhatsApp nao renderiza e a Baileys
-    // chega a estourar ("this.isZero is not a function"). Por isso o padrao e
-    // mandar o menu em TEXTO (com as opcoes numeradas, que o cliente digita).
-    // Para ligar os botoes ao migrar para a API oficial: WHATSAPP_BOTOES_INTERATIVOS=true.
-    // ── ENQUETE: o menu CLICAVEL que funciona no transporte de hoje ──────────
-    //
-    // Botao e lista dependem do `native_flow`, que a Evolution 2.3.7 nao monta
-    // (regressao `this.isZero`) -- e por isso ficam atras de
-    // WHATSAPP_BOTOES_INTERATIVOS, desligado. A enquete usa outro caminho do
-    // protocolo e renderiza no Baileys, entao e o unico jeito de o cliente
-    // TOCAR numa opcao sem migrar o numero e sem custo.
-    //
-    // Flag propria (`WHATSAPP_MENU_ENQUETE`), separada da dos botoes: sao
-    // transportes diferentes, e ligar um nao deve implicar o outro.
-    //
-    // Vem ANTES do bloco de botoes porque, no estado atual, e a via que tem
-    // chance de funcionar. Quando o numero migrar para a Cloud API, desliga-se
-    // esta e liga-se a de botoes, que sao nativos la.
-    //
-    // O RISCO, dito no lugar onde a decisao acontece: o voto pode nao voltar
-    // legivel (ver extrairTexto). Se nao voltar, o cliente clica e o bot nao
-    // entende -- por isso o texto numerado continua no corpo da enquete, e
-    // digitar o numero segue funcionando.
-    if (process.env.WHATSAPP_MENU_ENQUETE === "true") {
+    // 1. Se o passo pede "text" / "texto" no bloco do fluxo, envia mensagem de texto com números (1️⃣, 2️⃣...) para o cliente falar ou digitar.
+    if (exibicao === "text" || exibicao === "texto") {
+      return this.enviarBot(conversaId, telefone, texto, instanceName);
+    }
+
+    // 2. Se o passo pede enquete explicitamente ou se a flag global estiver ativa:
+    if (exibicao === "enquete" || exibicao === "poll" || process.env.WHATSAPP_MENU_ENQUETE === "true") {
       return this._enviarMenuEnquete(conversaId, telefone, texto, opcoes, instanceName);
     }
 
-    if (process.env.WHATSAPP_BOTOES_INTERATIVOS !== "true") {
+    // 3. Se os botões interativos estiverem desligados no ambiente e o bloco não pedir buttons/list explicitamente:
+    if (process.env.WHATSAPP_BOTOES_INTERATIVOS !== "true" && exibicao !== "buttons" && exibicao !== "list") {
       return this.enviarBot(conversaId, telefone, texto, instanceName);
     }
 
@@ -1854,7 +1835,7 @@ class ChatbotEngine {
     const osAvaliada = sessao.contexto?.osAvaliada || null;
 
     if (sessao.aguardando === AGUARDANDO.AVALIACAO_NOTA) {
-      const nota = this.interpretarNota(textoEntrada);
+      const nota = this.interpretarNota(ctx.botaoId || textoEntrada);
 
       // O cliente DISSE que nao quer avaliar. Isso nao e "nao respondeu" nem
       // nota zero: e uma escolha, e o relatorio precisa mostra-la como tal.
@@ -2344,7 +2325,9 @@ class ChatbotEngine {
         // Pergunta de resposta FIXA (o CNPJ continua este? / nota 1..5) vai com
         // botao; qualquer outra mensagem e texto. Sem botao definido para o
         // estado, `_enviarComBotoesFixos` cai no texto sozinho.
-        await this._enviarComBotoesFixos(conversa.id, telefone, resposta, aguardando, instanceName);
+        await this._enviarComBotoesFixos(conversa.id, telefone, resposta, aguardando, instanceName, {
+          exibicao: passo.config?.exibicao || "auto",
+        });
       }
     }
 
@@ -2680,7 +2663,9 @@ class ChatbotEngine {
     // Cliente parado num menu do fluxo: a mensagem dele e a escolha da opcao.
     if (sessao.aguardando === AGUARDANDO.OPCAO) {
       const opcoes = this.opcoesDoPasso(passoAtual);
-      const escolha = opcoes.length ? this.casarOpcao(textoEntrada, opcoes) : null;
+      const escolha = opcoes.length
+        ? (ctx.botaoId ? this.casarOpcao(ctx.botaoId, opcoes) : null) || this.casarOpcao(textoEntrada, opcoes)
+        : null;
 
       if (!escolha) {
         // Passo perdeu as opcoes (fluxo editado no meio do atendimento): nao ha
@@ -2718,7 +2703,7 @@ class ChatbotEngine {
 
     // Cliente recorrente confirmando o CNPJ que ja usou antes.
     if (sessao.aguardando === AGUARDANDO.CNPJ_CONFIRMA) {
-      const resp = this.normalizarTexto(textoEntrada);
+      const resp = this.normalizarTexto(ctx.botaoId || textoEntrada);
       const sim = ["sim", "s", "isso", "confirmo", "correto", "positivo", "ok", "sim!", "1"];
       const nao = ["nao", "n", "outro", "errado", "negativo", "2"];
 
@@ -2917,6 +2902,7 @@ class ChatbotEngine {
     instanceName,
     telefone,
     texto,
+    botaoId = null,
     nomeCliente = "Cliente",
     waMessageId = null,
     midia = null,
@@ -2924,8 +2910,8 @@ class ChatbotEngine {
   }) {
     const textoLimpo = this.extrairTextoMensagem(texto);
     const ehMidia = !!midia && midia.tipo && midia.tipo !== "texto";
-    // Sem texto e sem midia: nada a processar.
-    if (!textoLimpo && !ehMidia) return { processado: false, motivo: "mensagem_vazia" };
+    // Sem texto, sem botaoId e sem midia: nada a processar.
+    if (!textoLimpo && !botaoId && !ehMidia) return { processado: false, motivo: "mensagem_vazia" };
 
     // A Evolution API reentrega webhooks; sem isso a mesma mensagem rodava o
     // fluxo duas vezes e o cliente recebia tudo duplicado.
@@ -2935,11 +2921,7 @@ class ChatbotEngine {
 
     // Texto exibido na bolha/preview + metadata da midia (quando houver).
     const rotulos = { imagem: "[Imagem]", figurinha: "[Figurinha]", video: "[Vídeo]", documento: "[Documento]", audio: "[Áudio]", localizacao: "[Localização]", contato: "[Contato]" };
-    const textoMsg = ehMidia ? (textoLimpo || rotulos[midia.tipo] || "[Mídia]") : textoLimpo;
-    // A marca de encaminhamento entra no metadata (campo Json que ja existe --
-    // sem migracao) e vale tambem para texto puro, que nao tem midia nenhuma.
-    const metadata =
-      ehMidia || encaminhada ? { ...(ehMidia ? midia : {}), ...(encaminhada || {}) } : null;
+    let textoMsg = ehMidia ? (textoLimpo || rotulos[midia.tipo] || "[Mídia]") : (textoLimpo || botaoId);
 
     // RESPOSTA DA PESQUISA DE SATISFACAO: a conversa avaliada JA ESTA FECHADA, e
     // findByTelefone (de proposito) so olha pendente/aberta. Sem este desvio, a
@@ -2951,6 +2933,48 @@ class ChatbotEngine {
     // Esta mensagem abriu um CICLO NOVO no fio (a conversa estava fechada)?
     let cicloReaberto = false;
     const sessaoAberta = await this.deps.sessaoRepository.findByTelefone(instanciaId, telefone);
+
+    // Se o texto recebido for apenas um ID técnico de botão (ex: "mp_2", "com_1" ou botaoId),
+    // tenta resolver para o rótulo legível da opção (ex: "Comercial", "Produtos")
+    // para que no chat de atendimento apareça o nome da opção e não o código técnico.
+    const idBusca = botaoId || (textoLimpo && !ehMidia ? textoLimpo : null);
+    if (sessaoAberta?.ativo && idBusca) {
+      if (sessaoAberta.aguardando === AGUARDANDO.OPCAO && sessaoAberta.fluxoAtualId) {
+        try {
+          const flx = await this.deps.fluxoRepository.findById(sessaoAberta.fluxoAtualId);
+          if (flx) {
+            const passos = this.ordenarPassos(flx.passos);
+            const passoAtual = sessaoAberta.passoAtualId ? passos.find((p) => p.id === sessaoAberta.passoAtualId) : passos[0];
+            const opcoes = this.opcoesDoPasso(passoAtual);
+            const op = opcoes.find((o) => o?.id && (o.id === idBusca || this.normalizarTexto(o.id) === this.normalizarTexto(idBusca)));
+            if (op) {
+              const rot = op.botao || this._rotuloOpcao(op, this.textoDoPasso(passoAtual, { conversa: { cliente: nomeCliente, telefone } }));
+              if (rot && (textoMsg === op.id || !textoMsg || textoMsg === botaoId)) {
+                textoMsg = rot;
+              }
+            }
+          }
+        } catch { /* ignora falha de resolucao de rotulo */ }
+      } else if (sessaoAberta.aguardando === AGUARDANDO.CNPJ_CONFIRMA) {
+        const btn = (BOTOES_FIXOS[AGUARDANDO.CNPJ_CONFIRMA] || []).find(
+          (b) => b.id === idBusca || this.normalizarTexto(b.id) === this.normalizarTexto(idBusca)
+        );
+        if (btn && (textoMsg === btn.id || !textoMsg || textoMsg === botaoId)) {
+          textoMsg = btn.rotulo;
+        }
+      } else if (sessaoAberta.aguardando === AGUARDANDO.AVALIACAO_NOTA) {
+        const btn = (BOTOES_FIXOS[AGUARDANDO.AVALIACAO_NOTA] || []).find((b) => b.id === idBusca);
+        if (btn && (textoMsg === btn.id || !textoMsg || textoMsg === botaoId)) {
+          textoMsg = btn.rotulo;
+        }
+      }
+    }
+
+    // A marca de encaminhamento e botaoId entram no metadata.
+    const metadata =
+      ehMidia || encaminhada || botaoId
+        ? { ...(ehMidia ? midia : {}), ...(encaminhada || {}), ...(botaoId ? { botaoId } : {}) }
+        : null;
     const respondendoPesquisa =
       sessaoAberta?.ativo &&
       sessaoAberta.conversaId &&
@@ -3232,6 +3256,7 @@ class ChatbotEngine {
       telefone,
       instanciaId,
       instanceName,
+      botaoId,
       contexto: sessao?.contexto || {},
     };
 
