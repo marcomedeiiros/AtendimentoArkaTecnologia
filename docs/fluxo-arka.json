@@ -82,7 +82,7 @@
       "desc": "Menu inicial.",
       "targetId": "de723e94-ac45-4ed4-b9c8-4d9e71a6c84f",
       "ordem": 2,
-      "texto": "🤖Olá, {{cliente.nome}}. Bem-vindo(a) à ARKA TECNOLOGIA. Agradecemos seu contato. Por favor, escolha uma das opções abaixo para direcionar seu atendimento:\n\n1️⃣- Setor Técnico\n2️⃣- Comercial\n3️⃣- Adm/Financeiro\n4️⃣- Encerrar atendimento",
+      "texto": "🤖Olá, {{cliente.nome}}. Bem-vindo(a) à ARKA TECNOLOGIA. Agradecemos seu contato. Por favor, escolha uma das opções abaixo para direcionar seu atendimento:\n\n1️⃣- Setor Técnico\n2️⃣- Comercial\n3️⃣- Adm/Financeiro",
       "config": {
         "variavel": "boas_vindas",
         "opcoes": [
@@ -135,21 +135,6 @@
             "targetId": "4f5f1646-5441-4afd-974d-dd4fa639f958",
             "setor": "Financeiro",
             "botao": "💰 Adm/Financeiro"
-          },
-          {
-            "id": "mp_4",
-            "ordem": 3,
-            "esperaEscolha": true,
-            "rotulo": "4,encerrar,sair,finalizar",
-            "palavrasChave": [
-              "4",
-              "encerrar",
-              "sair",
-              "finalizar"
-            ],
-            "acao": "ir",
-            "targetId": "bd0fb1d0-fc23-432d-825d-9a2b9a8cd45f",
-            "botao": "👋 Encerrar"
           }
         ],
         "exibicao": "buttons"

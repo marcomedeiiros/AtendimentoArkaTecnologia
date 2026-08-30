@@ -308,11 +308,11 @@ const TEXTO_MENU =
   );
 
   const bolhas = enviados.filter((e) => e.tipo === "poll" || e.tipo === "buttons");
-  check(bolhas.length === 1, `4 opcoes -> 1 card interativo unico com todos os botoes juntos (veio ${bolhas.length})`);
-  const valoresEnquete = bolhas[0]?.payload.values || bolhas[0]?.payload.buttons?.map(b => b.displayText);
-  check(valoresEnquete.length === 4, `card com todos os 4 botoes juntos (veio ${valoresEnquete.length})`);
+  check(bolhas.length === 1, `3 opcoes -> 1 bolha de botoes (veio ${bolhas.length})`);
+  const valoresEnquete = bolhas[0]?.payload.values || bolhas[0]?.payload.buttons?.map(b => b.displayText || b.id);
+  check(valoresEnquete.length === 3, `card com os 3 botoes juntos (veio ${valoresEnquete.length})`);
   check(
-    valoresEnquete.join(",") === "🛠️ Setor Técnico,💼 Comercial,💰 Adm/Financeiro,👋 Encerrar",
+    valoresEnquete.join(",") === "🛠️ Setor Técnico,💼 Comercial,💰 Adm/Financeiro",
     `opcoes exatas e completas juntas: ${valoresEnquete.join(",")}`
   );
 
