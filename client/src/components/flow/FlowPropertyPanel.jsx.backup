@@ -1184,6 +1184,100 @@ export function FlowPropertyPanel({
                 ))}
               </div>
             )}
+                  <div key={op.id || i} className="p-2.5 rounded-xl bg-grafite-700 border border-linha space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="text-[11px] font-semibold text-white break-words flex-1">
+                        {op.rotulo || (op.esperaEscolha ? '(sem rótulo)' : 'Qualquer resposta')}
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (window.confirm('Deseja remover esta ramificação?')) {
+                            const novasOpcoes = opcoes.filter((_, idx) => idx !== i);
+                            onChangeNode({
+                              ...node,
+                              config: { ...(node.config || {}), opcoes: novasOpcoes },
+                            });
+                          }
+                        }}
+                        className="p-1 rounded-lg text-slate-400 hover:text-falha-400 hover:bg-falha-400/10 transition-colors shrink-0"
+                        title="Remover ramificação"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                    {Array.isArray(op.palavrasChave) && op.palavrasChave.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {op.palavrasChave.map((p, j) => (
+                          <span key={j} className="text-[9px] px-1.5 py-0.5 rounded-md bg-grafite-900 border border-linha text-slate-400 font-mono break-all">
+                            {p}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="text-[10px] text-slate-400 flex items-center gap-1">
+                      <span className="text-blue-400">→</span> {descreverDestino(op)}
+                    </div>
+
+                    {/* Texto no Botão do WhatsApp */}
+                    <div className="pt-1.5 border-t border-linha/50">
+                      <div className="flex items-center justify-between text-[10px] text-slate-300 mb-1">
+                        <span className="font-semibold">Texto do Botão (WhatsApp):</span>
+                        <span className={`text-[9px] ${String(op.botao || '').length > 20 ? 'text-falha-400 font-bold' : 'text-slate-400'}`}>
+                          {String(op.botao || '').length}/20 chars
+                        </span>
+                      </div>
+                      <input
+                        type="text"
+                        maxLength={24}
+                        value={op.botao || ''}
+                        placeholder={op.rotulo?.split(',')[1] || op.rotulo?.split(',')[0] || 'Texto do botão'}
+                        onChange={(e) => {
+                          const novasOpcoes = [...opcoes];
+                          novasOpcoes[i] = { ...op, botao: e.target.value };
+                          onChangeNode({
+                            ...node,
+                            config: { ...(node.config || {}), opcoes: novasOpcoes },
+                          });
+                        }}
+                        className="w-full bg-grafite-800 border border-linha rounded-lg px-2.5 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 font-sans"
+                      />
+                    </div>
+
+                    {/* O QUE ESTA OPCAO DECIDE, alem de para onde ela vai. */}
+                    {(op.setor || op.limparCnpj) && (
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        {op.setor && (
+                          <span
+                            title="Ao escolher esta opção, a conversa passa a ser deste setor"
+                            className="text-[9px] px-1.5 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/30 text-blue-300 font-bold"
+                          >
+                            define setor: {op.setor}
+                          </span>
+                        )}
+                        {op.limparCnpj && (
+                          <span
+                            title="Desassocia o CNPJ desta conversa (o cadastro da empresa não é tocado) e pede outro"
+                            className="text-[9px] px-1.5 py-0.5 rounded-md bg-espera/10 border border-espera/30 text-espera-400 font-bold"
+                          >
+                            desassocia CNPJ
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {op.mensagemEncerramento && (
+                      <div className="text-[10px] text-slate-500 italic line-clamp-2 break-words">
+                        “{op.mensagemEncerramento}”
+                      </div>
+                    )}
+                    {op.mensagemHandoff && (
+                      <div className="text-[10px] text-slate-500 italic line-clamp-2 break-words">
+                        “{op.mensagemHandoff}”
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="p-3 rounded-xl bg-grafite-700 border border-linha text-xs text-slate-400 space-y-1">
               <div className="font-semibold text-slate-200 flex items-center gap-1">
