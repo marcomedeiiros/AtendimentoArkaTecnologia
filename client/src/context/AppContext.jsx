@@ -285,7 +285,7 @@ export function AppProvider({ children }) {
   }, [recarregarConversas]);
 
   /**
-   * CONFERÊNCIA DE ESTADO -- de minuto em minuto, e barata.
+   * CONFERÊNCIA DE ESTADO -- a cada 10 segundos, e barata.
    *
    * A rede de segurança acima só roda a cada 5 minutos porque a listagem
    * completa é caríssima. Isso deixava um buraco de até 5 minutos: se o SSE
@@ -297,12 +297,19 @@ export function AppProvider({ children }) {
    *
    * `/conversas/estados` devolve apenas o que decide ABA e BADGE (status, setor,
    * responsável, não-lidas e versão), sem mensagem nenhuma: alguns bytes por
-   * conversa. Dá para conferir de minuto em minuto sem competir com o tráfego
+   * conversa. Dá para conferir frequentemente sem competir com o tráfego
    * real de mensagens.
    *
-   * Quando um retrato vem com versão MAIOR que a da tela, buscamos aquela
-   * conversa inteira -- só ela. Assim o custo alto acontece uma vez, na conversa
-   * que de fato ficou atrás, em vez de a cada minuto em todas.
+   * MELHORIAS APLICADAS:
+   * 1. INTERVALO REDUZIDO para 10 segundos (era 60s)
+   * 2. DETECTA TRANSFERÊNCIAS DE SETOR: se uma conversa não vem mais no estado
+   *    (porque foi transferida para outro setor), ela é removida automaticamente
+   *    da tela, sem precisar de F5
+   * 3. ATUALIZA VERSÕES: quando detecta versão desatualizada, busca só aquela
+   *    conversa completa, mantendo o custo baixo
+   *
+   * Com isto, transferências de setor aparecem em até 10 segundos, mesmo que
+   * o SSE perca o evento `conversa:saiu-do-setor`.
    */
   useEffect(() => {
     let ativo = true;
@@ -312,6 +319,17 @@ export function AppProvider({ children }) {
         const estados = await ConversasAPI.estados();
         if (!ativo || !Array.isArray(estados)) return;
         const porId = new Map(conversasRef.current.map(c => [c.id, c]));
+        
+        // 1. DETECTAR CONVERSAS QUE SAÍRAM (não vieram no estado = transferidas/removidas)
+        const idsNoServidor = new Set(estados.map(e => e.id));
+        const idsNaTela = Array.from(porId.keys());
+        const removidas = idsNaTela.filter(id => !idsNoServidor.has(id));
+        
+        if (removidas.length > 0) {
+          setConversas(prev => prev.filter(c => !removidas.includes(c.id)));
+        }
+        
+        // 2. DETECTAR CONVERSAS COM VERSÃO DESATUALIZADA
         const atrasadas = estados
           .filter(e => {
             const atual = porId.get(e.id);
@@ -340,7 +358,7 @@ export function AppProvider({ children }) {
         }
       } catch { /* back-end offline: mantem estado atual */ }
     };
-    const id = setInterval(conferir, 60000);
+    const id = setInterval(conferir, 10000);
     return () => { ativo = false; clearInterval(id); };
   }, []);
 

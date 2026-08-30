@@ -27,7 +27,7 @@ Como podemos ajudar você hoje?
 
 1️⃣ Técnico
 2️⃣ Comercial
-3️⃣ Administrativo / Financeiro`;
+3️⃣ Financeiro`;
 
       await prisma.passoFluxo.update({
         where: { id: passo.id },
