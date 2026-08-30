@@ -1158,39 +1158,18 @@ class ChatbotEngine {
     try {
       let r;
       if (comoBotoes) {
-        const grupos = [];
-        for (let i = 0; i < itens.length; i += 3) grupos.push(itens.slice(i, i + 3));
-        // A PRIMEIRA bolha e a que vale: se ela falhar, o catch la embaixo manda
-        // o texto numerado inteiro e o cliente nao fica sem menu. As seguintes
-        // falham em silencio REGISTRADO -- cair para texto ali duplicaria um menu
-        // que o cliente acabou de receber clicavel.
-        for (let g = 0; g < grupos.length; g++) {
-          // Evolution v2 exige title/description/footer nao-vazios.
-          const payload = {
-            title: "Atendimento",
-            description: g === 0 ? corpo : "Mais opções:",
-            footer: "Selecione uma opção",
-            buttons: grupos[g].map((i) => ({
-              type: "reply",
-              displayText: this._cortarRotulo(i.titulo, 20),
-              id: i.id,
-            })),
-          };
-          if (g === 0) {
-            r = await this.deps.evolutionApi.sendButtons(telefone, payload, inst);
-            continue;
-          }
-          try {
-            await this.deps.evolutionApi.sendButtons(telefone, payload, inst);
-          } catch (error) {
-            logger.warn("Falha ao enviar a continuacao do menu de botoes", {
-              conversaId,
-              grupo: g + 1,
-              de: grupos.length,
-              message: error.message,
-            });
-          }
-        }
+        // Envia todos os botões juntos na mesma mensagem para não dividir em "Mais opções"
+        const payload = {
+          title: "Atendimento",
+          description: corpo,
+          footer: "Selecione uma opção",
+          buttons: itens.map((i) => ({
+            type: "reply",
+            displayText: this._cortarRotulo(i.titulo, 20),
+            id: i.id,
+          })),
+        };
+        r = await this.deps.evolutionApi.sendButtons(telefone, payload, inst);
       } else {
         // Evolution v2 exige title + footerText, e a `description` de CADA linha
         // nao pode ser vazia (validado pela API).

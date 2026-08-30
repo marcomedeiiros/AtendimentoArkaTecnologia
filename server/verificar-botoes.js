@@ -308,9 +308,8 @@ const TEXTO_MENU =
 
   const bolhas = enviados.filter((e) => e.tipo === "buttons");
   check(enviados.every((e) => e.tipo === "buttons"), `so mensagens de botao (veio: ${enviados.map((e) => e.tipo).join(", ")})`);
-  check(bolhas.length === 2, `4 opcoes -> 2 bolhas (veio ${bolhas.length})`);
-  check(bolhas[0]?.payload.buttons.length === 3, `1a bolha com 3 botoes (veio ${bolhas[0]?.payload.buttons.length})`);
-  check(bolhas[1]?.payload.buttons.length === 1, `2a bolha com 1 botao (veio ${bolhas[1]?.payload.buttons.length})`);
+  check(bolhas.length === 1, `4 opcoes -> 1 bolha com todos os botoes juntos (veio ${bolhas.length})`);
+  check(bolhas[0]?.payload.buttons.length === 4, `1a bolha com todos os 4 botoes juntos (veio ${bolhas[0]?.payload.buttons.length})`);
 
   const todos = bolhas.flatMap((b) => b.payload.buttons);
   check(todos.length === 4, "as 4 opcoes viraram botao, nenhuma sumiu");
@@ -327,40 +326,9 @@ const TEXTO_MENU =
   const corpo1 = bolhas[0]?.payload.description || "";
   check(!/[1-9]️⃣/.test(corpo1), "corpo da 1a bolha SEM a lista numerada");
   check(/ARKA/i.test(corpo1), "corpo da 1a bolha mantem a saudacao");
-  check(bolhas[1]?.payload.description === "Mais opções:", `2a bolha nao repete o menu (veio: ${JSON.stringify(bolhas[1]?.payload.description)})`);
-
-  // E o caminho da falha: se a PRIMEIRA bolha cai, o cliente recebe o texto
-  // numerado inteiro. Se cair a SEGUNDA, nao -- reenviar o texto duplicaria um
-  // menu que ele acabou de receber clicavel.
-  const enviados2 = [];
-  const motorFalha = new ChatbotEngine({
-    evolutionApi: {
-      sendButtons: async (numero, payload) => {
-        enviados2.push({ tipo: "buttons", payload });
-        if (enviados2.length === 2) throw new Error("Maximum of 3 reply buttons allowed");
-        return { key: { id: "wa1" } };
-      },
-      sendText: async (numero, texto) => { enviados2.push({ tipo: "text", texto }); return { key: { id: "wa-texto" } }; },
-    },
-    conversaRepository: {
-      addMensagem: async () => ({ id: "msg-2" }),
-      vincularWaMessageId: async () => {},
-      findByIdParaEvento: async () => null,
-    },
-    bus: { emitConversa: () => {} },
-  });
-  await motorFalha.enviarBotComOpcoes("conv-2", "5541999999999", MENU_REAL.texto, MENU_REAL.config.opcoes, "inst", {
-    exibicao: "buttons",
-  });
-  check(
-    enviados2.filter((e) => e.tipo === "text").length === 0,
-    "falha na 2a bolha NAO duplica o menu em texto"
-  );
 
   // E O PADRAO, que e o que vale em PRODUCAO: o banco de producao nao tem
-  // `exibicao` gravado, entao todo menu chega aqui como "auto". Antes disso
-  // virar botao, os menus de 4 opcoes caiam no "Ver opcoes" mesmo com os
-  // botoes ligados -- exatamente o que o Marco viu na tela.
+  // `exibicao` gravado, entao todo menu chega aqui como "auto".
   const fazerMotor = (registro) =>
     new ChatbotEngine({
       evolutionApi: {
@@ -379,7 +347,7 @@ const TEXTO_MENU =
   const opcoesFalsas = (n) =>
     Array.from({ length: n }, (_, i) => ({ id: `op_${i + 1}`, botao: `Opção ${i + 1}`, palavrasChave: [String(i + 1)] }));
 
-  for (const [n, esperado, bolhasEsperadas] of [[4, "buttons", 2], [6, "buttons", 2], [7, "list", 1]]) {
+  for (const [n, esperado, bolhasEsperadas] of [[4, "buttons", 1], [6, "buttons", 1], [7, "list", 1]]) {
     const reg = [];
     await fazerMotor(reg).enviarBotComOpcoes("c", "5541999999999", "Escolha:", opcoesFalsas(n), "inst");
     const tipos = [...new Set(reg.map((e) => e.tipo))];
@@ -491,7 +459,7 @@ const TEXTO_MENU =
     "inst"
   );
   const btnNota = regNota.flatMap((e) => e.payload.buttons || []);
-  check(regNota.length === 2, `5 notas -> 2 bolhas (veio ${regNota.length})`);
+  check(regNota.length === 1, `5 notas -> 1 bolha com todos os 5 botões juntos (veio ${regNota.length})`);
   check(btnNota.map((b) => b.id).join(",") === "1,2,3,4,5", `ids 1..5 (veio: ${btnNota.map((b) => b.id).join(",")})`);
   check(
     btnNota.every((b, i) => engine.interpretarNota(b.id) === i + 1),
