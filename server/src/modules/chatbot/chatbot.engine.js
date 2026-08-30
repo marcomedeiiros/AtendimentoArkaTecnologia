@@ -1052,6 +1052,10 @@ class ChatbotEngine {
    * Limites do WhatsApp: 2 a 12 opcoes, e cada opcao com no maximo 100
    * caracteres. Com menos de 2 opcoes nao ha enquete possivel -- cai para texto.
    */
+  /**
+   * Envia um menu com 2 a 12 opções juntas em um ÚNICO card interativo clicável (Enquete/Poll).
+   * Elimina qualquer divisão de "Mais opções:" e permite clicar diretamente na opção desejada.
+   */
   async _enviarMenuEnquete(conversaId, telefone, texto, opcoes, instanceName) {
     const inst = instanceName || env.evolutionApi.instance;
     const itens = opcoes
@@ -1060,25 +1064,31 @@ class ChatbotEngine {
       // Enquete nao aceita opcao repetida; duas com o mesmo rotulo viram uma.
       .filter((v, i, a) => v && a.indexOf(v) === i);
 
-    // O texto do passo primeiro: e o que sobra se o voto nao voltar legivel.
-    await this.enviarBot(conversaId, telefone, texto, instanceName);
+    if (itens.length < 2) return this.enviarBot(conversaId, telefone, texto, instanceName);
 
-    if (itens.length < 2) return texto;
+    const corpo = this._corpoInterativo(texto);
+    const msg = await this.deps.conversaRepository.addMensagem(conversaId, "bot", texto, null, null, {
+      status: "enviando",
+    });
 
     try {
-      await this.deps.evolutionApi.sendPoll(
+      const r = await this.deps.evolutionApi.sendPoll(
         telefone,
-        { name: "Toque na sua opção", values: itens, selectableCount: 1 },
+        {
+          name: corpo.slice(0, 255) || "Como podemos ajudar você hoje?",
+          values: itens,
+          selectableCount: 1,
+        },
         inst
       );
-      logger.info("Menu enviado como enquete", { conversaId, opcoes: itens.length });
+      await this.deps.conversaRepository.vincularWaMessageId(msg.id, r?.key?.id || null, "enviada");
+      logger.info("Menu enviado como enquete clicável", { conversaId, opcoes: itens.length });
     } catch (error) {
-      // Sem fallback aqui de proposito: o texto numerado JA foi enviado acima.
-      // Mandar outra coisa agora seria uma segunda mensagem dizendo o mesmo.
-      logger.warn("Falha ao enviar a enquete do menu; o texto numerado ja foi enviado", {
+      logger.warn("Falha ao enviar enquete; caindo para texto numerado", {
         conversaId,
         message: error.message,
       });
+      await this.enviarBot(conversaId, telefone, texto, instanceName);
     }
     return texto;
   }
@@ -1086,8 +1096,7 @@ class ChatbotEngine {
   /**
    * @param {object} [opcoes2]
    * @param {"buttons"|"list"|"text"|"enquete"|"auto"} [opcoes2.exibicao] forma pedida pelo NO do
-   *   fluxo (`config.exibicao`). Sem isso, decide pela contagem: ate 3 botoes,
-   *   acima lista.
+   *   fluxo (`config.exibicao`).
    */
   async enviarBotComOpcoes(conversaId, telefone, texto, opcoes, instanceName, { exibicao = "auto" } = {}) {
     // 1. Se o passo pede "text" / "texto" no bloco do fluxo, envia mensagem de texto com números (1️⃣, 2️⃣...) para o cliente falar ou digitar.
@@ -1095,8 +1104,15 @@ class ChatbotEngine {
       return this.enviarBot(conversaId, telefone, texto, instanceName);
     }
 
-    // 2. Se o passo pede enquete explicitamente ou se a flag global estiver ativa:
-    if (exibicao === "enquete" || exibicao === "poll" || process.env.WHATSAPP_MENU_ENQUETE === "true") {
+    // 2. Se o passo pede enquete explicitamente, ou se a flag global estiver ativa,
+    // ou se tem mais de 3 opções (pois o WhatsApp limita quick reply a 3 por mensagem, enquanto enquete aceita até 12 juntos):
+    if (
+      exibicao === "enquete" ||
+      exibicao === "poll" ||
+      process.env.WHATSAPP_MENU_ENQUETE === "true" ||
+      (exibicao === "buttons" && opcoes.length > 3) ||
+      (exibicao === "auto" && opcoes.length > 3 && opcoes.length <= 12)
+    ) {
       return this._enviarMenuEnquete(conversaId, telefone, texto, opcoes, instanceName);
     }
 

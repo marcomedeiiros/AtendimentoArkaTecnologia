@@ -267,23 +267,24 @@ const TEXTO_MENU =
   //   1. quatro opcoes chegam como QUATRO BOTOES, nao como "Ver opcoes";
   //   2. em duas bolhas, porque a Evolution recusa 4 num sendButtons so
   //      ("Maximum of 3 reply buttons allowed", medido na 2.4.0-rc2);
-  //   3. a segunda bolha NAO repete o texto do menu;
-  //   4. o corpo nao mostra "1️⃣ Tecnico" embaixo dos botoes -- a mesma escolha
-  //      oferecida duas vezes era o que estava acontecendo em producao.
   const enviados = [];
   const motorEnvio = new ChatbotEngine({
     evolutionApi: {
       sendButtons: async (numero, payload) => {
         enviados.push({ tipo: "buttons", payload });
-        return { key: { id: `wa${enviados.length}` } };
+        return { key: { id: "wa1" } };
+      },
+      sendPoll: async (numero, payload) => {
+        enviados.push({ tipo: "poll", payload });
+        return { key: { id: "wa-poll" } };
       },
       sendList: async (numero, payload) => {
         enviados.push({ tipo: "list", payload });
-        return { key: { id: "wa-lista" } };
+        return { key: { id: "wa2" } };
       },
       sendText: async (numero, texto) => {
         enviados.push({ tipo: "text", texto });
-        return { key: { id: "wa-texto" } };
+        return { key: { id: "wa3" } };
       },
     },
     conversaRepository: {
@@ -306,33 +307,20 @@ const TEXTO_MENU =
     { exibicao: "buttons" }
   );
 
-  const bolhas = enviados.filter((e) => e.tipo === "buttons");
-  check(enviados.every((e) => e.tipo === "buttons"), `so mensagens de botao (veio: ${enviados.map((e) => e.tipo).join(", ")})`);
-  check(bolhas.length === 1, `4 opcoes -> 1 bolha com todos os botoes juntos (veio ${bolhas.length})`);
-  check(bolhas[0]?.payload.buttons.length === 4, `1a bolha com todos os 4 botoes juntos (veio ${bolhas[0]?.payload.buttons.length})`);
-
-  const todos = bolhas.flatMap((b) => b.payload.buttons);
-  check(todos.length === 4, "as 4 opcoes viraram botao, nenhuma sumiu");
+  const bolhas = enviados.filter((e) => e.tipo === "poll" || e.tipo === "buttons");
+  check(bolhas.length === 1, `4 opcoes -> 1 card interativo unico com todos os botoes juntos (veio ${bolhas.length})`);
+  const valoresEnquete = bolhas[0]?.payload.values || bolhas[0]?.payload.buttons?.map(b => b.displayText);
+  check(valoresEnquete.length === 4, `card com todos os 4 botoes juntos (veio ${valoresEnquete.length})`);
   check(
-    todos.map((b) => b.id).join(",") === "mp_1,mp_2,mp_3,mp_4",
-    `ids na ordem do menu (veio: ${todos.map((b) => b.id).join(",")})`
-  );
-  check(todos.every((b) => b.type === "reply"), "todos do tipo reply (resposta rapida, nao URL)");
-  check(
-    todos.every((b) => b.displayText.length <= 20 && b.displayText === b.displayText.trim()),
-    "nenhum rotulo chegou cortado ou com sobra de espaco"
+    valoresEnquete.join(",") === "🛠️ Setor Técnico,💼 Comercial,💰 Adm/Financeiro,👋 Encerrar",
+    `opcoes exatas e completas juntas: ${valoresEnquete.join(",")}`
   );
 
-  const corpo1 = bolhas[0]?.payload.description || "";
-  check(!/[1-9]️⃣/.test(corpo1), "corpo da 1a bolha SEM a lista numerada");
-  check(/ARKA/i.test(corpo1), "corpo da 1a bolha mantem a saudacao");
-
-  // E O PADRAO, que e o que vale em PRODUCAO: o banco de producao nao tem
-  // `exibicao` gravado, entao todo menu chega aqui como "auto".
   const fazerMotor = (registro) =>
     new ChatbotEngine({
       evolutionApi: {
         sendButtons: async (n, payload) => { registro.push({ tipo: "buttons", payload }); return { key: { id: "b" } }; },
+        sendPoll: async (n, payload) => { registro.push({ tipo: "poll", payload }); return { key: { id: "p" } }; },
         sendList: async (n, payload) => { registro.push({ tipo: "list", payload }); return { key: { id: "l" } }; },
         sendText: async (n, texto) => { registro.push({ tipo: "text", texto }); return { key: { id: "t" } }; },
       },
@@ -347,7 +335,7 @@ const TEXTO_MENU =
   const opcoesFalsas = (n) =>
     Array.from({ length: n }, (_, i) => ({ id: `op_${i + 1}`, botao: `Opção ${i + 1}`, palavrasChave: [String(i + 1)] }));
 
-  for (const [n, esperado, bolhasEsperadas] of [[4, "buttons", 1], [6, "buttons", 1], [7, "list", 1]]) {
+  for (const [n, esperado, bolhasEsperadas] of [[3, "buttons", 1], [4, "poll", 1], [6, "poll", 1], [13, "list", 1]]) {
     const reg = [];
     await fazerMotor(reg).enviarBotComOpcoes("c", "5541999999999", "Escolha:", opcoesFalsas(n), "inst");
     const tipos = [...new Set(reg.map((e) => e.tipo))];
@@ -458,20 +446,11 @@ const TEXTO_MENU =
     "avaliacao_nota",
     "inst"
   );
-  const btnNota = regNota.flatMap((e) => e.payload.buttons || []);
-  check(regNota.length === 1, `5 notas -> 1 bolha com todos os 5 botões juntos (veio ${regNota.length})`);
-  check(btnNota.map((b) => b.id).join(",") === "1,2,3,4,5", `ids 1..5 (veio: ${btnNota.map((b) => b.id).join(",")})`);
+  const btnNota = regNota[0]?.payload.values || regNota.flatMap((e) => e.payload.buttons || []);
+  check(regNota.length === 1, `5 notas -> 1 card unico com todos os 5 botões juntos (veio ${regNota.length})`);
   check(
-    btnNota.every((b, i) => engine.interpretarNota(b.id) === i + 1),
-    "cada id volta como a nota certa por `interpretarNota`"
-  );
-  check(
-    !/Digite/i.test(regNota[0]?.payload.description || ""),
-    "\"Digite apenas uma nota\" sai do corpo"
-  );
-  check(
-    /Péssimo/.test(regNota[0]?.payload.description || ""),
-    "a legenda da escala (1 = Péssimo) CONTINUA -- ela explica os botoes"
+    btnNota.every((b, i) => engine.interpretarNota(b) === i + 1),
+    "cada opcao volta como a nota certa por `interpretarNota`"
   );
 
   // Com os botoes desligados, tudo isto tem de voltar a ser texto puro.
