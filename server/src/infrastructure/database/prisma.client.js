@@ -36,7 +36,10 @@ if (!ehPostgresOuMysql) {
     await pragma("PRAGMA journal_mode=WAL;");
     await pragma("PRAGMA busy_timeout=5000;");
     await pragma("PRAGMA synchronous=NORMAL;");
-    logger.info("SQLite otimizado: WAL + busy_timeout + synchronous=NORMAL");
+    await pragma("PRAGMA cache_size=10000;");      // Cache maior (10MB)
+    await pragma("PRAGMA temp_store=MEMORY;");     // Temporários em RAM
+    await pragma("PRAGMA mmap_size=30000000000;"); // Memory-mapped I/O (30GB)
+    logger.info("SQLite otimizado: WAL + busy_timeout + synchronous=NORMAL + cache + mmap");
   })();
 }
 

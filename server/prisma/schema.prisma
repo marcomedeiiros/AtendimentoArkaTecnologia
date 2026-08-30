@@ -337,6 +337,7 @@ model Conversa {
 
   @@index([telefone])
   @@index([statusAtendimento])
+  @@index([cnpj])
   // NAO ha @@unique([instanciaId, telefone]) de proposito.
   //
   // A regra "uma conversa por cliente" e garantida no codigo: a busca por

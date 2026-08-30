@@ -15,8 +15,11 @@ class ParceiroRepository {
     return prisma.parceiro.findUnique({ where: { cnpj } });
   }
 
-  findAtivoByCnpj(cnpj) {
-    return prisma.parceiro.findFirst({ where: { cnpj, status: "ativo" } });
+  async findAtivoByCnpj(cnpj) {
+    // Otimização: findUnique (usa PK/índice único) é mais rápido que findFirst
+    // Valida status em memória depois
+    const parceiro = await prisma.parceiro.findUnique({ where: { cnpj } });
+    return parceiro?.status === "ativo" ? parceiro : null;
   }
 
   upsert(cnpj, data) {
