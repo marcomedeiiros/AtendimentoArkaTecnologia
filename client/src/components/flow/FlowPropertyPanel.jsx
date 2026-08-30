@@ -826,16 +826,88 @@ export function FlowPropertyPanel({
             {/* Ramificacoes / Opções */}
             {opcoes.length > 0 && (
               <div className="space-y-2">
-                <div className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                  <GitBranch size={13} className="text-blue-400" /> Ramificações ({opcoes.length})
+                <div className="text-xs font-semibold text-slate-300 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <GitBranch size={13} className="text-blue-400" /> Ramificações ({opcoes.length})
+                  </div>
+                  <button
+                    onClick={() => {
+                      const novaOpcao = {
+                        id: `op_${Date.now()}`,
+                        rotulo: `Opção ${opcoes.length + 1}`,
+                        palavrasChave: [],
+                        acao: 'seguir',
+                        targetId: null,
+                        botao: ''
+                      };
+                      const novasOpcoes = [...opcoes, novaOpcao];
+                      onChangeNode({
+                        ...node,
+                        config: { ...(node.config || {}), opcoes: novasOpcoes },
+                      });
+                    }}
+                    className="px-2 py-1 rounded-lg text-[10px] font-semibold bg-blue-500/10 border border-blue-500/30 text-blue-300 hover:bg-blue-500/20 transition-colors"
+                  >
+                    + Adicionar
+                  </button>
                 </div>
+                
+                {/* Modo de exibição das opções no WhatsApp */}
+                <div className="p-2.5 rounded-xl bg-grafite-800 border border-linha space-y-2">
+                  <div className="text-[10px] font-semibold text-slate-300">Exibição no WhatsApp:</div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => onChangeNode({ ...node, config: { ...(node.config || {}), exibicao: 'buttons' } })}
+                      className={`flex-1 px-2 py-1.5 rounded-lg text-[10px] font-semibold transition-colors ${
+                        (node.config?.exibicao || 'buttons') === 'buttons'
+                          ? 'bg-blue-500/20 border border-blue-500/50 text-blue-300'
+                          : 'bg-grafite-700 border border-linha text-slate-400 hover:border-slate-500'
+                      }`}
+                    >
+                      🔘 Botões
+                    </button>
+                    <button
+                      onClick={() => onChangeNode({ ...node, config: { ...(node.config || {}), exibicao: 'list' } })}
+                      className={`flex-1 px-2 py-1.5 rounded-lg text-[10px] font-semibold transition-colors ${
+                        node.config?.exibicao === 'list'
+                          ? 'bg-blue-500/20 border border-blue-500/50 text-blue-300'
+                          : 'bg-grafite-700 border border-linha text-slate-400 hover:border-slate-500'
+                      }`}
+                    >
+                      📋 Lista
+                    </button>
+                  </div>
+                  <p className="text-[9px] text-slate-500 leading-relaxed">
+                    {(node.config?.exibicao || 'buttons') === 'buttons' 
+                      ? '🔘 Botões: máximo 3 diretos. Com 4+, divide em múltiplas mensagens.'
+                      : '📋 Lista: todas as opções aparecem em "Ver opções" (mais compacto).'}
+                  </p>
+                </div>
+
                 <p className="text-[10px] text-slate-500 leading-relaxed">
                   Opções deste menu. Você pode ajustar o texto do botão exibido no WhatsApp.
                 </p>
                 {opcoes.map((op, i) => (
                   <div key={op.id || i} className="p-2.5 rounded-xl bg-grafite-700 border border-linha space-y-2">
-                    <div className="text-[11px] font-semibold text-white break-words">
-                      {op.rotulo || (op.esperaEscolha ? '(sem rótulo)' : 'Qualquer resposta')}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="text-[11px] font-semibold text-white break-words flex-1">
+                        {op.rotulo || (op.esperaEscolha ? '(sem rótulo)' : 'Qualquer resposta')}
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (window.confirm('Deseja remover esta ramificação?')) {
+                            const novasOpcoes = opcoes.filter((_, idx) => idx !== i);
+                            onChangeNode({
+                              ...node,
+                              config: { ...(node.config || {}), opcoes: novasOpcoes },
+                            });
+                          }
+                        }}
+                        className="p-1 rounded-lg text-slate-400 hover:text-falha-400 hover:bg-falha-400/10 transition-colors shrink-0"
+                        title="Remover ramificação"
+                      >
+                        <X size={14} />
+                      </button>
                     </div>
                     {Array.isArray(op.palavrasChave) && op.palavrasChave.length > 0 && (
                       <div className="flex flex-wrap gap-1">

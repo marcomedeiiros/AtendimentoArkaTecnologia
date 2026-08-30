@@ -1137,25 +1137,14 @@ class ChatbotEngine {
     // A Evolution recusa 4 botoes numa mensagem: `400 Maximum of 3 reply buttons
     // allowed` (medido em 29/08/2026 na 2.4.0-rc2, chamando o endpoint direto).
     // O limite e do protocolo do WhatsApp, nao da Evolution -- vale igual na
-    // Cloud API oficial da Meta. A lista cabe 10, mas esconde tudo atras de um
-    // "Ver opcoes", que e precisamente o toque a mais que o menu de botoes
-    // existe para eliminar.
+    // Cloud API oficial da Meta. 
     //
-    // Entao as opcoes vao em MENSAGENS DE 3: 4 opcoes = 3 + 1. Duas bolhas,
-    // quatro botoes, nenhum "Ver opcoes".
-    //
-    // O PADRAO E BOTAO, e a lista virou opt-in (`exibicao: "list"`). Era o
-    // contrario -- `auto` mandava lista acima de 3 --, e o efeito pratico era
-    // que os menus de producao, que nao tem `exibicao` gravado no banco,
-    // caiam todos no "Ver opcoes" mesmo com os botoes ligados. Decisao do
-    // Marco (29/08): o cliente deve ver as opcoes ao entrar na conversa.
-    //
-    // Acima de 6, `auto` volta para lista: tres ou mais bolhas seguidas de
-    // botao viram spam, e ai a lista realmente le melhor. Um NO que pedir
-    // `buttons` explicitamente continua mandando botao -- quem escreveu o fluxo
-    // sabe o que quer --, e o log registra o tamanho.
-    const MAX_OPCOES_EM_BOTAO = 6;
+    // Com MAIS DE 3 OPÇÕES no modo AUTO, usa LISTA ("Ver opções") para não 
+    // dividir em múltiplas mensagens. O usuário pode forçar "buttons" ou "list"
+    // explicitamente no fluxo.
+    const MAX_OPCOES_EM_BOTAO = 3;
     let comoBotoes = itens.length <= MAX_OPCOES_EM_BOTAO;
+    
     if (exibicao === "buttons") {
       comoBotoes = true;
       if (itens.length > MAX_OPCOES_EM_BOTAO) {
@@ -1166,6 +1155,9 @@ class ChatbotEngine {
         });
       }
     } else if (exibicao === "list") {
+      comoBotoes = false;
+    } else if (exibicao === "auto" && itens.length > MAX_OPCOES_EM_BOTAO) {
+      // Modo automático: mais de 3 opções = lista (Ver opções)
       comoBotoes = false;
     }
 
