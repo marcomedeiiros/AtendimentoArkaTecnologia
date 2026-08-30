@@ -1104,14 +1104,12 @@ class ChatbotEngine {
       return this.enviarBot(conversaId, telefone, texto, instanceName);
     }
 
-    // 2. Se o passo pede enquete explicitamente, ou se a flag global estiver ativa,
-    // ou se tem mais de 3 opções (pois o WhatsApp limita quick reply a 3 por mensagem, enquanto enquete aceita até 12 juntos):
+    // 2. Se o passo pede enquete explicitamente, ou se a flag global estiver ativa:
+    // REMOVIDA a verificação de > 3 opções, pois agora o padrão é sempre usar botões divididos em mensagens
     if (
       exibicao === "enquete" ||
       exibicao === "poll" ||
-      process.env.WHATSAPP_MENU_ENQUETE === "true" ||
-      (exibicao === "buttons" && opcoes.length > 3) ||
-      (exibicao === "auto" && opcoes.length > 3 && opcoes.length <= 12)
+      process.env.WHATSAPP_MENU_ENQUETE === "true"
     ) {
       return this._enviarMenuEnquete(conversaId, telefone, texto, opcoes, instanceName);
     }
