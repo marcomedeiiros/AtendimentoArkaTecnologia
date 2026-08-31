@@ -125,8 +125,30 @@ function titulo(t) {
     } else if (aguardar === "texto") {
       veredito = "SEGUE SEM ESPERAR (o motor deste código não conhece aguardar:\"texto\")";
       problemas.push(`"${p.titulo}" declara aguardar:"texto" mas o motor é antigo: não vai esperar`);
-    } else if (aguardar === "cnpj" || (!opcoes.length && eng.passoAguardaCnpj(p))) {
+    } else if (aguardar === "cnpj") {
       veredito = "texto puro, e PARA esperando o CNPJ";
+    } else if (!opcoes.length && eng.passoAguardaCnpj(p)) {
+      // ── HEURISTICA DE CNPJ: ESPERA "AS VEZES", E ISSO ENGANA ──────────────
+      //
+      // Sem `aguardar` declarado, `passoAguardaCnpj` adivinha pelo TEXTO (a
+      // palavra "cnpj" no titulo/descricao/texto) -- um encaixe para os fluxos
+      // anteriores ao campo. Mas o motor so espera se o CNPJ AINDA NAO foi
+      // validado nesta volta:
+      //
+      //     } else if (this.passoAguardaCnpj(passo) && !contexto.cnpjValidacao?.valido) {
+      //
+      // Ou seja: o MESMO bloco espera quando alcancado antes da validacao e
+      // SEGUE RETO quando alcancado depois dela. Foi exatamente o caso do bloco
+      // "IDENTIFICA CONTRATO" do fluxo de producao -- o cliente confirmava o
+      // cadastro e recebia identificacao e descricao de uma vez.
+      //
+      // Este diagnostico dizia "PARA esperando o CNPJ" e escondia a metade que
+      // importava. Agora ele diz as duas, e cobra a declaracao explicita.
+      veredito = "PARA so se o CNPJ ainda nao foi validado -- senao SEGUE SEM ESPERAR";
+      problemas.push(
+        `"${p.titulo}" nao declara nada e o motor adivinha CNPJ pelo texto: ele espera antes da ` +
+          `validacao e SEGUE RETO depois dela. Declare config.aguardar ("cnpj" ou "texto").`
+      );
     } else if (aguardar === "nada") {
       veredito = engine.passoNaoAguarda
         ? "fala e ENTREGA na mesma volta"
