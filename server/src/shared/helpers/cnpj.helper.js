@@ -63,6 +63,73 @@ function normalizarTelefoneBr(valor) {
   return null;
 }
 
+/**
+ * AS FORMAS COMPARAVEIS DE UM TELEFONE BRASILEIRO.
+ *
+ * Existe para uma pergunta que parece trivial e nao e: "este numero que chegou
+ * do WhatsApp e o mesmo que esta no cadastro do parceiro?".
+ *
+ * As duas pontas escrevem diferente. O WhatsApp entrega `5527999998888` (DDI +
+ * DDD + 9 digitos). O cadastro guarda `(27)99999-8888` -- e, em 183 parceiros
+ * reais, tambem `(27)9999-8888`, com OITO digitos: numeros anteriores ao nono
+ * digito, que a Anatel prefixou com 9 em 2012 e que nunca foram reescritos no
+ * cadastro.
+ *
+ * Comparar string com string erra os dois casos. Comparar "os ultimos 8 digitos"
+ * -- a saida facil -- casaria `(27)9999-8888` com `(27)99999-8888` de graca, mas
+ * tambem casaria dois assinantes DIFERENTES do mesmo DDD que por acaso
+ * terminassem igual. Num fluxo que ADOTA o CNPJ do parceiro casado, isso
+ * significaria atender uma empresa como se fosse outra.
+ *
+ * Entao: normaliza para `DDD + local` e devolve as duas grafias legitimas do
+ * MESMO assinante -- com e sem o nono digito. Duas listas casam quando tem algum
+ * elemento em comum, o que e casamento exato, e nao aproximado.
+ *
+ * @param {string} valor  telefone em qualquer formatacao, com ou sem DDI
+ * @returns {Set<string>} formas normalizadas; vazio se nao parece telefone
+ */
+function variantesTelefoneBr(valor) {
+  const formas = new Set();
+  let d = limparTelefone(valor).replace(/^0+/, "");
+  if (!d) return formas;
+
+  // DDI 55 fora: o cadastro nao o usa, e e ele que faz as duas pontas diferirem.
+  if (d.length > 11 && d.startsWith("55")) d = d.slice(2);
+  // Numero longo demais (DDI de outro pais, ou digitacao errada): nao arrisca.
+  if (d.length < 10 || d.length > 11) return formas;
+
+  const ddd = d.slice(0, 2);
+  const local = d.slice(2);
+  formas.add(ddd + local);
+
+  // ── AS DUAS GRAFIAS, E A SIMETRIA QUE ELAS EXIGEM ──────────────────────────
+  //
+  // Celular movel no Brasil sempre foi (8 digitos comecando em 6..9); em 2012 a
+  // Anatel prefixou um 9. Entao a mesma linha aparece como `9XXXXXXXX` (nova) ou
+  // `XXXXXXXX` (antiga), e a conversao vale nos DOIS sentidos -- desde que a
+  // parte de 8 digitos seja de MOVEL.
+  //
+  // A condicao sobre o resto e o que impede o erro que o teste pegou: sem ela,
+  // `(27)93222-8888` (movel) perdia o 9 e virava `3222-8888`, que e FIXO -- dois
+  // assinantes diferentes tratados como o mesmo. Num fluxo que ADOTA o CNPJ do
+  // parceiro casado, isso significaria atender uma empresa como se fosse outra.
+  const ehMovel8 = (n) => n.length === 8 && /^[6-9]/.test(n);
+  if (local.length === 9 && local.startsWith("9") && ehMovel8(local.slice(1))) {
+    formas.add(ddd + local.slice(1));
+  }
+  if (ehMovel8(local)) formas.add(ddd + "9" + local);
+
+  return formas;
+}
+
+// Duas escritas do MESMO assinante? Ver variantesTelefoneBr.
+function mesmoTelefoneBr(a, b) {
+  const va = variantesTelefoneBr(a);
+  if (!va.size) return false;
+  for (const forma of variantesTelefoneBr(b)) if (va.has(forma)) return true;
+  return false;
+}
+
 // Sempre no fuso de Brasilia: o servidor costuma rodar em UTC (nuvem/Docker), e
 // sem fixar o timeZone a hora saia adiantada (ex.: 3h a frente). Aceita Date ou
 // string ISO.
@@ -205,6 +272,8 @@ module.exports = {
   cnpjValido,
   limparTelefone,
   normalizarTelefoneBr,
+  variantesTelefoneBr,
+  mesmoTelefoneBr,
   formatarHora,
   dataBrasilia,
   partesBrasilia,

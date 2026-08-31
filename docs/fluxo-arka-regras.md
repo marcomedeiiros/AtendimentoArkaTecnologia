@@ -123,7 +123,7 @@ Nenhum tem botão, nenhum tem opção no `config`, e nenhum mostra o rodapé
 
 | Bloco | Declaração | Coleta | Segue para |
 |---|---|---|---|
-| CNPJ | `aguardar: "cnpj"` | o CNPJ | CONFIRMA CNPJ (ou AVULSO, se fora da base) |
+| CNPJ | `aguardar: "cnpj"` | o CNPJ — **só de quem não é reconhecido pelo telefone** (ver §4b) | CONFIRMA CNPJ (ou AVULSO, se fora da base) |
 | IDENTIFICAÇÃO | `aguardar: "texto"` | nome + setor | DESCRIÇÃO |
 | DESCRIÇÃO DA SOLICITAÇÃO | `aguardar: "texto"` | o que o cliente precisa | FILA TÉCNICA |
 | AVULSO — DADOS | `aguardar: "texto"` | nome + demanda | FILA TÉCNICA |
@@ -175,6 +175,62 @@ que ninguém tinha motivo para mandar.
 Com a declaração a ambiguidade acaba: quem pergunta diz `"texto"`, quem entrega
 diz `"nada"`. Fluxos antigos, que não declaram nada, continuam caindo na regra
 conservadora de antes.
+
+## 4b. Memória do perfil — quem já é cliente não digita o CNPJ
+
+`memoriaCnpj: "fluxo"` no bloco de CNPJ. Duas fontes, nesta ordem:
+
+1. **o cadastro de parceiros** (`Parceiro.telefones`) — a forte, e a que funciona
+   no **primeiro** contato. Medido na base real: **179 dos 183** parceiros têm
+   telefone cadastrado, contra **4** conversas com CNPJ confirmado;
+2. **a conversa anterior** (`ultimoCnpjDoTelefone`) — cobre quem informou o CNPJ
+   digitando, sem estar no cadastro.
+
+Reconhecido, o fluxo pula o pedido do CNPJ e vai direto para CONFIRMA CNPJ:
+
+```
+CLIENTE > Tenho contrato
+    bot > 🔐 Confirmação do cadastro
+          Encontramos este cadastro:
+          🏢 CNPJ: 11.222.333/0001-81
+          🏢 Empresa: METALURGICA HORIZONTE LTDA
+          O CNPJ continua sendo este?      [✅ Sim, é esse]  [🔄 Não, outro CNPJ]
+```
+
+### Os três valores de `memoriaCnpj`, e por que são três
+
+| Valor | Quem confirma | Uso |
+|---|---|---|
+| `false` | ninguém — o cliente digita | quando não se quer memória |
+| `true` | o **motor**, com os botões fixos dele, antes de o fluxo seguir | comportamento histórico, preservado |
+| `"fluxo"` | o **bloco seguinte do desenho** | este fluxo |
+
+`"fluxo"` existe por um defeito que a matriz de testes pegou: com `true` e um
+bloco de confirmação no desenho, o cliente confirmava **duas vezes seguidas** —
+tocava "Sim, é esse" nos botões do motor e o bloco seguinte perguntava a mesma
+coisa. Com `"fluxo"` a pergunta acontece uma vez, no bloco cujo texto o operador
+controla no editor.
+
+### O que a memória NÃO faz
+
+- **Não adivinha entre duas empresas.** Número cadastrado em mais de um parceiro
+  (contador, matriz e filial) devolve nada, e o fluxo pede o CNPJ — que é a
+  pergunta certa nesse caso. Escolher uma abriria o chamado no CNPJ errado.
+- **Não presume nada por ser lembrado.** O CNPJ adotado passa pela **mesma**
+  validação de quem digita: se a empresa saiu da lista de clientes, o cliente é
+  avisado e segue pelo caminho avulso.
+- **Não reoferece o que foi recusado.** "Não, outro CNPJ" marca a recusa no ciclo
+  (`cnpjRecusado` na sessão). Sem isso a opção virava laço: desassocia a conversa,
+  volta ao bloco de CNPJ, consulta o cadastro pelo telefone e acha o mesmo
+  parceiro — para sempre. `_desassociarCnpj` solta a conversa, mas não pode apagar
+  o telefone do cadastro.
+- **Não casa telefone por aproximação.** `(27)9999-8888` e `(27)99999-8888` são a
+  mesma linha (nono dígito da Anatel, 2012) e casam; `(27)3222-8888` (fixo) e
+  `(27)93222-8888` (móvel) **não**. Comparar "os últimos 8 dígitos" — a saída
+  fácil — casaria os dois, e num fluxo que adota o CNPJ isso é atender uma empresa
+  como se fosse outra. Ver `variantesTelefoneBr`.
+
+---
 
 ### A palavra do cliente é dado, não comando
 

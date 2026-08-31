@@ -171,7 +171,21 @@ function paramsCnpj(passo) {
     ),
     mensagemPedirOutro: texto(c.mensagemPedirOutroCnpj, p.mensagemPedirOutro),
     mensagemCadastrado: texto(c.mensagemCnpjCadastrado, p.mensagemCadastrado),
-    memoria: booleano(c.memoriaCnpj, p.memoria),
+    // ── TRÊS VALORES, porque há três respostas legítimas para "quem confirma?" ─
+    //
+    //   false     não usa memória; o cliente digita o CNPJ.
+    //   true      o MOTOR confirma, com os dois botões fixos, antes de seguir.
+    //             É o comportamento histórico, e continua intacto.
+    //   "fluxo"   o motor ADOTA o CNPJ lembrado e segue; quem confirma é o
+    //             próximo bloco do desenho.
+    //
+    // O terceiro nasceu de um defeito que a matriz de testes pegou: com `true` e
+    // um bloco de confirmação no fluxo, o cliente confirmava DUAS vezes seguidas.
+    // Qualquer outro valor cai no padrão -- um typo não liga meia memória.
+    memoria:
+      c.memoriaCnpj === "fluxo"
+        ? "fluxo"
+        : booleano(c.memoriaCnpj, p.memoria),
   };
 }
 

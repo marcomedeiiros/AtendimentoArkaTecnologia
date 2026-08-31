@@ -1457,10 +1457,103 @@ class ChatbotEngine {
   // Configuravel PELO FLUXO (passo.config), portanto guardado no banco:
   //   memoriaCnpj: false            -> desliga a memoria neste passo
   //   mensagemConfirmarCnpj: "..."  -> texto proprio; aceita {{cnpj}} e {{empresa}}
-  async _pedirOuConfirmarCnpj(conversa, textoDoPasso, passo = null) {
+  /**
+   * O CNPJ FOI LEMBRADO DO PERFIL: adota, grava e diz para onde ir.
+   *
+   * Extraído porque os dois blocos que pedem CNPJ (`mensagem` com a heurística e
+   * `condicao`) precisam do mesmo tratamento -- e duplicar isso deixaria os dois
+   * caminhos divergindo na primeira correção.
+   *
+   * "Adotar" é rodar a MESMA validação de quem digitou (`validarCnpjRecebido`):
+   * ela consulta o cadastro, grava `cnpj`/`empresa`/`cnpjVerificado`/`clienteTipo`
+   * na conversa e devolve o estado. Nada é presumido por ser lembrado -- se a
+   * empresa saiu da lista de clientes desde o último atendimento, o cliente é
+   * avisado e segue pelo caminho avulso, igual a quem digita.
+   *
+   * @returns {{proximo: object|null, resposta: string|null}}
+   */
+  async _adotarCnpjLembrado(cnpj, passo, contexto) {
+    const { conversa, fluxo } = contexto;
+    const validacao = await this.validarCnpjRecebido(conversa, cnpj, paramsCnpj(passo));
+
+    if (!validacao.valido) {
+      // O CNPJ guardado não vale mais (base mudou, cadastro corrigido). Pede
+      // digitado em vez de seguir com um dado que acabou de ser reprovado.
+      logger.info("CNPJ lembrado nao passou na validacao: pedindo digitado", {
+        conversaId: conversa.id,
+        estado: validacao.estado,
+      });
+      return { pedirDigitado: true };
+    }
+
+    contexto.cnpjValidacao = validacao;
+    // A conversa em memória tem de refletir o que acabou de ser gravado: é dela
+    // que sai `{{empresa.nome}}` no bloco de confirmação, no MESMO turno.
+    const atualizada = await this.deps.conversaRepository.findById(conversa.id);
+    if (atualizada) {
+      Object.assign(conversa, atualizada);
+      contexto.conversa = conversa;
+    }
+
+    return {
+      proximo: this._proximoDepoisDoCnpj(fluxo.passos, passo, validacao),
+      // Só fala se houver o que dizer: parceiro reconhecido segue calado, e quem
+      // ficou fora da base ouve a mensagem de avulso.
+      resposta: validacao.mensagem || null,
+    };
+  }
+
+  /**
+   * ── A MEMÓRIA DO PERFIL: O CLIENTE NÃO DEVERIA DIGITAR O QUE JÁ SABEMOS ────
+   *
+   * Duas fontes, e a ordem entre elas importa:
+   *
+   *   1. o CADASTRO DE PARCEIROS (`telefones`). É a mais forte, e a que faltava:
+   *      ela funciona no PRIMEIRO contato. Medido na base real: 179 dos 183
+   *      parceiros têm telefone cadastrado, contra 4 conversas com CNPJ
+   *      confirmado. Quem tem contrato e escreve pela primeira vez já é
+   *      reconhecido.
+   *   2. a CONVERSA ANTERIOR (`ultimoCnpjDoTelefone`). Cobre quem informou o CNPJ
+   *      digitando, sem estar no cadastro -- ou cujo número no cadastro está
+   *      escrito de um jeito que não casa.
+   *
+   * ── E QUEM PERGUNTA "É ESTE MESMO?" ───────────────────────────────────────
+   *
+   * `memoriaCnpj` tem três valores, porque há três respostas legítimas:
+   *
+   *   false     não usa memória; o cliente digita o CNPJ.
+   *   true      o MOTOR confirma, com os dois botões fixos (BOTOES_FIXOS), ANTES
+   *             de o fluxo seguir. É o comportamento histórico.
+   *   "fluxo"   o motor ADOTA o CNPJ e segue; quem confirma é o próximo bloco do
+   *             desenho.
+   *
+   * O terceiro existe por um defeito que a matriz de testes pegou: com `true` e
+   * um bloco de confirmação no fluxo, o cliente confirmava DUAS vezes seguidas --
+   * tocava "Sim, é esse" nos botões do motor e o bloco seguinte perguntava
+   * exatamente a mesma coisa. Com `"fluxo"` a pergunta acontece uma vez, no bloco
+   * que o operador vê no editor e cujo texto ele controla.
+   *
+   * @param {object} [opcoes]
+   * @param {object} [opcoes.contexto] contexto da execução; lê `cnpjRecusado`
+   */
+  async _pedirOuConfirmarCnpj(conversa, textoDoPasso, passo = null, { contexto = null } = {}) {
     const pedirNormal = { aguardando: AGUARDANDO.CNPJ, resposta: textoDoPasso };
     const cfg = paramsCnpj(passo);
     if (!cfg.memoria) return pedirNormal;
+
+    // ── O CLIENTE JÁ DISSE QUE NÃO É ESSE ───────────────────────────────────
+    //
+    // Sem isto, "Não, outro CNPJ" virava laço infinito: a opção desassocia o
+    // CNPJ da conversa e volta para este bloco, que consulta o cadastro pelo
+    // telefone, acha o MESMO parceiro e oferece de novo. `_desassociarCnpj` solta
+    // a conversa, mas não pode (nem deve) apagar o telefone do cadastro.
+    if (contexto?.cnpjRecusado) {
+      logger.debug("Memoria de CNPJ ignorada: o cliente recusou o sugerido neste ciclo", {
+        conversaId: conversa.id,
+      });
+      return pedirNormal;
+    }
+
     try {
       // POR QUE A CONVERSA ATUAL CONTA COMO MEMORIA.
       //
@@ -1479,14 +1572,47 @@ class ChatbotEngine {
       // telefone (outra instancia, ou duplicata ainda nao consolidada).
       const daPropriaConversa =
         conversa.cnpjVerificado && conversa.cnpj
-          ? { cnpj: conversa.cnpj, empresa: conversa.empresa }
+          ? { cnpj: conversa.cnpj, empresa: conversa.empresa, origem: "esta conversa" }
           : null;
+
+      // ── O CADASTRO, PELO TELEFONE -- a fonte que funciona no PRIMEIRO contato ─
+      //
+      // Vem antes da conversa anterior porque é mais confiável: o cadastro é
+      // mantido pela equipe, enquanto o CNPJ de uma conversa antiga é o que
+      // ALGUÉM digitou naquele dia. E é a única que reconhece quem nunca falou
+      // com o bot.
+      //
+      // `findAtivoByTelefone` devolve null quando o número está em MAIS DE UM
+      // parceiro -- caso real (contador, matriz e filial). Aí não há o que
+      // lembrar, e o fluxo pede o CNPJ, que é a pergunta certa nesse caso.
+      let doCadastro = null;
+      if (!daPropriaConversa && this.deps.parceiroRepository.findAtivoByTelefone) {
+        const p = await this.deps.parceiroRepository.findAtivoByTelefone(conversa.telefone);
+        if (p?.cnpj) doCadastro = { cnpj: p.cnpj, empresa: p.razaoSocial, origem: "cadastro de clientes" };
+      }
+
       const anterior =
         daPropriaConversa ||
+        doCadastro ||
         (await this.deps.conversaRepository.ultimoCnpjDoTelefone(conversa.telefone));
       if (!anterior?.cnpj) return pedirNormal;
 
       const parceiro = await this.deps.parceiroRepository.findAtivoByCnpj(anterior.cnpj);
+
+      // ── "fluxo": ADOTA e deixa a confirmação para o bloco seguinte ──────────
+      //
+      // Nada é enviado aqui. Quem chama valida o CNPJ (grava empresa/tipo na
+      // conversa) e segue pelo `targetId` -- e o bloco de confirmação do desenho
+      // mostra CNPJ e empresa com os botões que o fluxo declara.
+      if (cfg.memoria === "fluxo") {
+        logger.info("CNPJ lembrado do perfil: o fluxo confirma", {
+          conversaId: conversa.id,
+          origem: anterior.origem || "conversa anterior",
+          cadastrado: !!parceiro,
+        });
+        return { adotar: anterior.cnpj };
+      }
+
       const cnpjFmt = mascararCnpj(anterior.cnpj);
       // `anterior.empresa` e a razao social gravada quando o CNPJ foi
       // identificado: ela sobrevive mesmo se a empresa sair do cadastro depois.
@@ -2444,11 +2570,21 @@ class ChatbotEngine {
           // `aguardar: "texto"` ja foi tratado acima; aqui so sobra o CNPJ.
           !contexto.cnpjValidacao?.valido
         ) {
-          // Contato recorrente: oferece o CNPJ ja usado antes (ver memoria).
-          const pedido = await this._pedirOuConfirmarCnpj(conversa, resposta, passo);
-          aguardando = pedido.aguardando;
-          resposta = pedido.resposta;
-          if (pedido.cnpjSugerido) contextoSessao = { cnpjSugerido: pedido.cnpjSugerido };
+          // Memória do perfil: o cliente pode nem precisar digitar o CNPJ.
+          const pedido = await this._pedirOuConfirmarCnpj(conversa, resposta, passo, { contexto });
+          if (pedido.adotar) {
+            const adotado = await this._adotarCnpjLembrado(pedido.adotar, passo, contexto);
+            if (adotado.pedirDigitado) {
+              aguardando = AGUARDANDO.CNPJ;
+            } else {
+              proximo = adotado.proximo;
+              resposta = adotado.resposta;
+            }
+          } else {
+            aguardando = pedido.aguardando;
+            resposta = pedido.resposta;
+            if (pedido.cnpjSugerido) contextoSessao = { cnpjSugerido: pedido.cnpjSugerido };
+          }
         } else {
           proximo = this.proximoPasso(fluxo.passos, passo);
         }
@@ -2465,11 +2601,22 @@ class ChatbotEngine {
           // O texto tem que vir do passo. So caimos no padrao do motor quando
           // as respostas automaticas estao ligadas.
           const textoPasso = this.textoDoPasso(passo, contexto) || "";
-          // Contato recorrente: oferece o CNPJ ja usado antes (ver memoria).
-          const pedido = await this._pedirOuConfirmarCnpj(conversa, textoPasso, passo);
-          aguardando = pedido.aguardando;
-          resposta = pedido.resposta;
-          if (pedido.cnpjSugerido) contextoSessao = { cnpjSugerido: pedido.cnpjSugerido };
+          // Memória do perfil: o cliente pode nem precisar digitar o CNPJ.
+          const pedido = await this._pedirOuConfirmarCnpj(conversa, textoPasso, passo, { contexto });
+          if (pedido.adotar) {
+            const adotado = await this._adotarCnpjLembrado(pedido.adotar, passo, contexto);
+            if (adotado.pedirDigitado) {
+              aguardando = AGUARDANDO.CNPJ;
+              resposta = textoPasso;
+            } else {
+              proximo = adotado.proximo;
+              resposta = adotado.resposta;
+            }
+          } else {
+            aguardando = pedido.aguardando;
+            resposta = pedido.resposta;
+            if (pedido.cnpjSugerido) contextoSessao = { cnpjSugerido: pedido.cnpjSugerido };
+          }
         }
         break;
       }
@@ -2816,7 +2963,19 @@ class ChatbotEngine {
     // serve. Mesma acao do "NAO" na confirmacao -- desassocia a conversa, sem
     // tocar no cadastro da empresa -- e por isso reusa o mesmo metodo. Sem
     // isto, a etapa de CNPJ ofereceria de volta exatamente o CNPJ recusado.
-    if (opcao.limparCnpj) await this._desassociarCnpj(conversa);
+    // "INFORMAR OUTRO CNPJ" marca a RECUSA, e não só desassocia.
+    //
+    // Sem a marca, a opção virava laço: desassocia a conversa, volta para o bloco
+    // que pede o CNPJ, e a memória consulta o cadastro pelo telefone, acha o
+    // MESMO parceiro e oferece de novo. `_desassociarCnpj` solta a conversa, mas
+    // não pode apagar o telefone do cadastro -- nem deveria.
+    //
+    // No CONTEXTO porque o bloco seguinte roda neste mesmo turno; e persistida na
+    // sessão logo abaixo, para valer nos turnos seguintes.
+    if (opcao.limparCnpj) {
+      await this._desassociarCnpj(conversa);
+      contexto.cnpjRecusado = true;
+    }
 
     if (opcao.acao === "encerrar") {
       const despedida = opcao.mensagemEncerramento || globais?.farewellMessage?.message || null;
@@ -2872,7 +3031,14 @@ class ChatbotEngine {
       aguardando: resultado.aguardando,
       ativo: !!resultado.aguardando,
       ...this._marcasDeEspera(resultado.aguardando, { concluido: !resultado.aguardando, cobraResposta: resultado.cobraResposta !== false }),
-      contexto: resultado.contextoSessao || { ...(sessao.contexto || {}), tentativasOpcao: 0, tentativasCnpj: 0 },
+      contexto: {
+        ...(resultado.contextoSessao || { ...(sessao.contexto || {}), tentativasOpcao: 0, tentativasCnpj: 0 }),
+        // A RECUSA DO CNPJ LEMBRADO SOBREVIVE AO TURNO. Ela vale para o ciclo
+        // inteiro: sem isso, a proxima mensagem do cliente cairia no bloco de
+        // CNPJ com a memoria "esquecida" e o mesmo cadastro seria oferecido
+        // outra vez. Ver _pedirOuConfirmarCnpj.
+        ...(contexto.cnpjRecusado ? { cnpjRecusado: true } : {}),
+      },
     });
 
     return {
@@ -2900,6 +3066,9 @@ class ChatbotEngine {
       // passos seguintes poderem cita-las ({{resposta.<nome>}}). Vem da sessao,
       // e nao da memoria do processo: o atendimento atravessa varios webhooks.
       respostas: sessao.contexto?.respostas || {},
+      // "o cliente ja recusou o CNPJ lembrado neste ciclo" -- ver
+      // _pedirOuConfirmarCnpj. Vem da sessao porque o ciclo atravessa turnos.
+      cnpjRecusado: sessao.contexto?.cnpjRecusado === true,
     };
 
     let passoAtual = sessao.passoAtualId

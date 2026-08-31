@@ -355,44 +355,138 @@ function conferirUmaPerguntaPorTurno(rotulo, r) {
     `o avulso vindo do CNPJ nao cadastrado deveria terminar na fila tecnica, veio ${r.turnos[5].setor}`
   );
 
-  // ── CONTATO RECORRENTE: UMA confirmacao, e nao duas ───────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  //  MEMÓRIA DO PERFIL: quem tem o número no cadastro não digita o CNPJ
+  // ══════════════════════════════════════════════════════════════════════════
   //
-  // O motor tem memoria de CNPJ (oferecer o numero ja usado, com dois botoes,
-  // ANTES de pedir). Este fluxo a DESLIGA (`memoriaCnpj: false`), e o teste
-  // existe para provar que a decisao vale: com ela ligada o cliente confirmava o
-  // cadastro na memoria e o bloco CONFIRMA CNPJ perguntava a mesma coisa de novo
-  // -- duas confirmacoes seguidas, que foi o que a matriz pegou.
+  // `memoriaCnpj: "fluxo"` liga as duas coisas que precisavam caber juntas:
   //
-  // Aqui o cenario passa `cnpjAnterior` de proposito: mesmo com atendimento
-  // anterior no mesmo telefone, o bot PEDE o CNPJ como texto livre.
+  //   - o cliente reconhecido pelo TELEFONE não digita o CNPJ;
+  //   - a confirmação acontece UMA vez, no bloco CONFIRMA CNPJ do desenho.
+  //
+  // Com `true` (o modo histórico) o motor confirmaria com os botões fixos DELE e
+  // o bloco seguinte perguntaria a mesma coisa -- duas confirmações seguidas.
+  const PARCEIRO_COM_TEL = { ...PARCEIRO, telefones: "(27)99999-8888" };
+  const TEL_DO_CADASTRO = "5527999998888";
+
+  r = await simulador.simular(
+    fluxo,
+    ["oi", "1", "1", "1", "David TI", "Impressora sem rede."],
+    { nomeCliente: "David", filas: FILAS, parceiro: PARCEIRO_COM_TEL, telefone: TEL_DO_CADASTRO }
+  );
+  mostrar("memoria do perfil: telefone no cadastro -> nao pede CNPJ", r);
+  conferirUmaPerguntaPorTurno("memoria/cadastro", r);
+
+  // O PULO DO GATO: depois de "Tenho contrato" o bot NÃO pede o CNPJ -- ele já
+  // sabe, e vai direto para a confirmação do cadastro.
+  check(
+    r.turnos[2].passoAtualTitulo === "CONFIRMA CNPJ",
+    `com o telefone no cadastro, "Tenho contrato" deveria ir direto para a confirmação; foi para ${r.turnos[2].passoAtualTitulo}`
+  );
+  check(
+    r.turnos[2].aguardando === AGUARDANDO.OPCAO,
+    `deveria aguardar a escolha dos 2 botões, veio ${r.turnos[2].aguardando}`
+  );
+  check(
+    !/informe o CNPJ da empresa/i.test(tudoQueOBotFalou(r)),
+    "o bot pediu o CNPJ apesar de o telefone estar no cadastro"
+  );
+  // E a confirmação mostra o cadastro que ele encontrou.
+  const confirmaMemoria = r.turnos[2].respostas.join("\n");
+  check(
+    /11\.222\.333\/0001-81/.test(confirmaMemoria) && /METALURGICA HORIZONTE LTDA/.test(confirmaMemoria),
+    `a confirmação não mostrou CNPJ e empresa do cadastro: ${confirmaMemoria}`
+  );
+  // UMA confirmação em toda a conversa.
+  const confirmacoesMemoria = r.turnos.filter((t) =>
+    t.respostas.some((x) => /O CNPJ continua sendo este\?/.test(x))
+  ).length;
+  check(
+    confirmacoesMemoria === 1,
+    `o cliente recebeu ${confirmacoesMemoria} confirmações de cadastro, esperado 1`
+  );
+  // E o caminho segue normalmente até a fila.
+  check(
+    r.turnos[3].passoAtualTitulo === "IDENTIFICAÇÃO" && r.turnos[3].aguardando === AGUARDANDO.TEXTO,
+    `após confirmar deveria ir para a identificação, foi para ${r.turnos[3].passoAtualTitulo}`
+  );
+  check(
+    r.turnos[5].transferido && r.turnos[5].setor === "Técnico" && r.turnos[5].filaId === 33,
+    `deveria terminar na fila técnica, veio setor=${r.turnos[5].setor} fila=${r.turnos[5].filaId}`
+  );
+  console.log("  OK    telefone no cadastro -> confirma o cadastro sem pedir o CNPJ");
+
+  // ── O NÚMERO NÃO ESTÁ NO CADASTRO: pede o CNPJ, como antes ────────────────
+  //
+  // O outro lado da regra. A memória é um atalho para quem ela reconhece; quem
+  // não é reconhecido cai no bloco de texto livre, sem botão nenhum.
   r = await simulador.simular(
     fluxo,
     ["oi", "1", "1", CNPJ_CLIENTE, "1", "David TI", "Impressora sem rede."],
-    { nomeCliente: "David", filas: FILAS, cnpjAnterior: PARCEIRO.cnpj, parceiro: PARCEIRO }
+    { nomeCliente: "David", filas: FILAS, parceiro: PARCEIRO_COM_TEL, telefone: "5511777776666" }
   );
-  mostrar("contato recorrente: o bot pede o CNPJ (memoria desligada)", r);
-  conferirUmaPerguntaPorTurno("tecnico/recorrente", r);
+  mostrar("telefone fora do cadastro: pede o CNPJ (texto livre)", r);
+  conferirUmaPerguntaPorTurno("memoria/desconhecido", r);
   check(
     r.turnos[2].aguardando === AGUARDANDO.CNPJ,
-    `com a memoria desligada o bot deveria PEDIR o CNPJ, veio ${r.turnos[2].aguardando}`
+    `telefone desconhecido deveria PEDIR o CNPJ, veio ${r.turnos[2].aguardando}`
   );
   check(
-    !r.turnos[2].respostas.join("\n").includes("continua sendo este"),
-    "a memoria de CNPJ voltou a agir: o cliente recebeu duas confirmacoes"
+    /informe o CNPJ da empresa/i.test(r.turnos[2].respostas.join("\n")),
+    `o pedido do CNPJ não saiu: ${r.turnos[2].respostas.map(linha1).join(" | ")}`
   );
-  // Exatamente UMA confirmacao de cadastro em toda a conversa.
-  const confirmacoes = r.turnos.filter((t) =>
+  console.log("  OK    telefone desconhecido -> pede o CNPJ por texto livre");
+
+  // ── MESMO NÚMERO EM DUAS EMPRESAS: não adivinha ───────────────────────────
+  //
+  // Caso real (contador, matriz e filial). Escolher uma seria abrir o chamado no
+  // CNPJ errado, e o atendente só descobriria depois. O repositório devolve null
+  // quando há mais de um, e o fluxo pede o CNPJ -- a pergunta certa nesse caso.
+  {
+    const eng = new ChatbotEngine();
+    const repo = {
+      findAtivoByCnpj: async () => null,
+      findAtivoByTelefone: async () => null, // é o que o repo real faz no ambíguo
+    };
+    const conversa = { id: "c", telefone: TEL_DO_CADASTRO, cnpj: null, cnpjVerificado: false };
+    const engAmb = new ChatbotEngine({
+      parceiroRepository: repo,
+      conversaRepository: { ultimoCnpjDoTelefone: async () => null },
+    });
+    const pedido = await engAmb._pedirOuConfirmarCnpj(conversa, "informe o CNPJ", {
+      config: { memoriaCnpj: "fluxo" },
+    });
+    check(
+      pedido.aguardando === AGUARDANDO.CNPJ && !pedido.adotar,
+      `telefone ambíguo deveria pedir o CNPJ digitado, veio ${JSON.stringify(pedido)}`
+    );
+    console.log("  OK    número em mais de uma empresa -> pede o CNPJ, não escolhe");
+  }
+
+  // ── A RECUSA NÃO VIRA LAÇO ────────────────────────────────────────────────
+  //
+  // "Não, outro CNPJ" desassocia a conversa -- mas não pode apagar o telefone do
+  // CADASTRO. Sem a marca de recusa, o bloco de CNPJ consultaria o cadastro de
+  // novo, acharia o MESMO parceiro e ofereceria outra vez, para sempre.
+  r = await simulador.simular(
+    fluxo,
+    ["oi", "1", "1", "2", "22.333.444/0001-55"],
+    { nomeCliente: "David", filas: FILAS, parceiro: PARCEIRO_COM_TEL, telefone: TEL_DO_CADASTRO }
+  );
+  mostrar("recusa o cadastro lembrado -> pede digitado, e NAO reoferece", r);
+  check(
+    r.turnos[3].aguardando === AGUARDANDO.CNPJ,
+    `"Não, outro CNPJ" deveria pedir o número digitado, veio ${r.turnos[3].aguardando}`
+  );
+  check(
+    !/Encontramos este cadastro/.test(r.turnos[3].respostas.join("\n")),
+    "a memória reofereceu o cadastro que o cliente acabou de recusar (laço)"
+  );
+  const ofertas = r.turnos.filter((t) =>
     t.respostas.some((x) => /O CNPJ continua sendo este\?/.test(x))
   ).length;
-  check(confirmacoes === 1, `o cliente recebeu ${confirmacoes} confirmacoes de cadastro, esperado 1`);
-  check(
-    r.turnos[4].passoAtualTitulo === "IDENTIFICAÇÃO",
-    `apos confirmar deveria ir para a identificacao, foi para ${r.turnos[4].passoAtualTitulo}`
-  );
-  check(
-    r.turnos[6].transferido && r.turnos[6].filaId === 33,
-    `o recorrente deveria terminar na fila 33, veio ${r.turnos[6].filaId}`
-  );
+  check(ofertas === 1, `o cadastro foi oferecido ${ofertas} vezes, esperado 1`);
+  console.log("  OK    recusa -> pede digitado, e o cadastro não é oferecido de novo");
 
   // ── "NÃO, OUTRO CNPJ" -> volta a pedir o CNPJ ─────────────────────────────
   //

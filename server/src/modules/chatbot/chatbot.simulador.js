@@ -12,18 +12,21 @@
 // para expirar, vazar ou colidir entre dois operadores testando ao mesmo tempo.
 const { ChatbotEngine } = require("./chatbot.engine");
 const AppError = require("../../shared/errors/AppError");
+// O MESMO casamento de telefone da producao (nono digito, formatacao livre):
+// uma versao simplificada aqui faria o teste concordar consigo mesmo.
+const { mesmoTelefoneBr } = require("../../shared/helpers/cnpj.helper");
 
 const TELEFONE_TESTE = "0000000000";
 const MAX_MENSAGENS = 40;
 
-function criarAmbiente({ fluxo, nomeCliente, horario, filas, agora, pesquisaAtiva = true, cnpjAnterior = null, parceiro = null }) {
+function criarAmbiente({ fluxo, nomeCliente, horario, filas, agora, pesquisaAtiva = true, cnpjAnterior = null, parceiro = null, telefone = TELEFONE_TESTE }) {
   const respostas = [];
   const estado = {
     conversa: {
       id: "sim-conversa",
       instanciaId: "sim-instancia",
       cliente: nomeCliente,
-      telefone: TELEFONE_TESTE,
+      telefone,
       statusAtendimento: "pendente",
       setor: "Geral",
       cnpj: null,
@@ -129,6 +132,17 @@ function criarAmbiente({ fluxo, nomeCliente, horario, filas, agora, pesquisaAtiv
         const soDigitos = (v) => String(v || "").replace(/[^0-9]/g, "");
         return soDigitos(cnpj) === soDigitos(parceiro.cnpj) ? parceiro : null;
       },
+      // MEMORIA DO PERFIL: o cadastro reconhece o cliente pelo TELEFONE, no
+      // primeiro contato. O cenario liga isso passando `parceiro.telefones` --
+      // e o casamento usa o helper real (nono digito e formatacao inclusos), e
+      // nao uma comparacao simplificada que mentiria sobre producao.
+      findAtivoByTelefone: async (telefone) => {
+        if (!parceiro?.telefones) return null;
+        const casou = String(parceiro.telefones)
+          .split(/[,;/|\r\n]+/)
+          .some((n) => mesmoTelefoneBr(telefone, n));
+        return casou ? parceiro : null;
+      },
     },
     mockErp: {
       aplicarDescontoParceiro: async () => ({ mensagem: "[simulação] desconto de parceiro aplicado" }),
@@ -223,9 +237,20 @@ class ChatbotSimulador {
       cnpjAnterior: opcoes.cnpjAnterior || null,
       // Cadastro inventado para o cenario: permite testar o caminho do cliente
       // COM contrato. Ver parceiroRepository acima.
+      // TELEFONE DO CENARIO. Ele era fixo, e por isso nao havia como exercitar a
+      // MEMORIA DO PERFIL -- que casa o numero do cliente com o `telefones` do
+      // cadastro do parceiro. Sem poder trocar o numero, o teste nao distinguia
+      // "reconhecido pelo cadastro" de "desconhecido".
+      telefone: String(opcoes.telefone || "").trim() || TELEFONE_TESTE,
       parceiro:
         opcoes.parceiro && opcoes.parceiro.cnpj
-          ? { cnpj: String(opcoes.parceiro.cnpj), razaoSocial: String(opcoes.parceiro.razaoSocial || "") }
+          ? {
+              cnpj: String(opcoes.parceiro.cnpj),
+              razaoSocial: String(opcoes.parceiro.razaoSocial || ""),
+              // `telefones` liga a memoria por perfil no cenario. Como no
+              // cadastro real, e texto livre e pode ter mais de um numero.
+              telefones: opcoes.parceiro.telefones ? String(opcoes.parceiro.telefones) : null,
+            }
           : null,
     });
 
@@ -237,7 +262,7 @@ class ChatbotSimulador {
       const resultado = await engine.processarMensagemEntrada({
         instanciaId: estado.conversa.instanciaId,
         instanceName: "simulacao",
-        telefone: TELEFONE_TESTE,
+        telefone: estado.conversa.telefone,
         texto: entrada,
         nomeCliente: estado.conversa.cliente,
       });

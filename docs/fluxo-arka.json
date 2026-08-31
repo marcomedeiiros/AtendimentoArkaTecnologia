@@ -205,7 +205,7 @@
       "config": {
         "aguardar": "cnpj",
         "variavel": "cnpj_contrato",
-        "memoriaCnpj": false,
+        "memoriaCnpj": "fluxo",
         "maxTentativasCnpj": 2,
         "aoEsgotarTentativasCnpj": "avulso",
         "mensagemCnpjInvalido": "Hmm, o número informado parece estar incorreto. Poderia conferir o CNPJ e tentar novamente?",
