@@ -14,7 +14,7 @@ services:
   evolution-api:
     # A imagem antiga (atendai/evolution-api) foi despublicada do Docker Hub;
     # o projeto agora e distribuido em evoapicloud/evolution-api.
-    image: evoapicloud/evolution-api:v2.3.7
+    image: evoapicloud/evolution-api:v2.4.0
     container_name: arka-evolution
     restart: unless-stopped
     depends_on:
