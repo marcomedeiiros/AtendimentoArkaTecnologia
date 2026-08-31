@@ -1,6 +1,9 @@
 const prisma = require("../../infrastructure/database/prisma.client");
 const env = require("../../config/env");
 const logger = require("../../config/logger");
+// Quem INTERPRETA o expediente e o modulo do chatbot; aqui so se le a chave.
+// Ver `horarioAtendimento` mais abaixo.
+const horarioChatbot = require("../chatbot/chatbot.horario");
 
 // Chaves suportadas e de onde vem o valor padrao (.env) quando o banco esta vazio.
 const DEFINICOES = {
@@ -24,11 +27,32 @@ const DEFINICOES = {
   // camada gratuita. A chave e OpenAI-compativel, entao trocar para a OpenAI e so
   // mudar a chave/URL. Vem do .env (GROQ_API_KEY) quando o banco esta vazio.
   "transcricao.apiKey": { padrao: () => process.env.GROQ_API_KEY || process.env.TRANSCRICAO_API_KEY || "", segredo: true },
-  // Horario de atendimento, usado pelo motor de fluxos para o "fora de horario".
-  // JSON: { "ativo": bool, "inicio": "08:00", "fim": "18:00", "dias": [1..5],
-  //         "mensagem": "texto enviado fora do horario" }
-  // `dias` segue Date#getDay (0=domingo). Vazio/desligado = atende sempre, que e
-  // o padrao para nao mudar o comportamento de quem ja usa o sistema.
+  // ── HORARIO DE ATENDIMENTO ────────────────────────────────────────────────
+  //
+  // Uma configuracao, INDEPENDENTE DO FLUXO: o expediente nao e um passo do bot,
+  // e escrever os horarios dentro de um bloco de mensagem criaria duas fontes
+  // que discordam (troca-se o expediente na tela e o cliente continua ouvindo o
+  // texto antigo). Quem interpreta este JSON e `chatbot/chatbot.horario.js`.
+  //
+  // FORMA ATUAL -- um objeto por dia, com quantos periodos precisar:
+  //   {
+  //     "ativo": true,
+  //     "timezone": "America/Sao_Paulo",
+  //     "dias": {
+  //       "1": { "ativo": true, "periodos": [{ "inicio": "08:00", "fim": "18:00" }] },
+  //       "6": { "ativo": false, "periodos": [] }
+  //     },
+  //     "excecoes": [{ "data": "2026-12-25", "fechado": true, "descricao": "Natal" }],
+  //     "mensagem": "... {{horarios}} ...",
+  //     "reavisarAposMin": 120
+  //   }
+  //
+  // FORMA ANTIGA, ainda aceita (e o que esta gravado em producao hoje):
+  //   { "ativo": bool, "inicio": "08:00", "fim": "18:00", "dias": [1..5], "mensagem": "..." }
+  //
+  // `dias` segue Date#getDay (0=domingo) nas duas formas. Vazio/desligado =
+  // atende sempre, que e o padrao para nao mudar o comportamento de quem ja usa
+  // o sistema.
   "chatbot.horario":    { padrao: () => process.env.CHATBOT_HORARIO || "", segredo: false },
   // Mapa fila -> setor. O `queueId` dos fluxos importados nao existe aqui; este
   // mapa e o que permite a transferencia cair no setor certo do HelpDesk.
@@ -130,15 +154,37 @@ class ConfiguracaoService {
     }
   }
 
+  /**
+   * O EXPEDIENTE EFETIVO, sempre na forma nova.
+   *
+   * A normalizacao (e a conversao da forma antiga) mora em `chatbot.horario.js`,
+   * que e o modulo que decide o que ela SIGNIFICA. Aqui so se le a chave e se
+   * entrega o objeto pronto -- assim o motor, a tela e os testes recebem
+   * exatamente a mesma estrutura, independentemente de qual forma esta gravada.
+   */
   async horarioAtendimento() {
     const c = await this._carregar();
-    const h = this._json(c["chatbot.horario"], {});
+    return horarioChatbot.normalizarHorario(this._json(c["chatbot.horario"], {}));
+  }
+
+  /**
+   * O expediente para a TELA: o mesmo objeto, mais o retrato legivel.
+   *
+   * A tela precisa de duas coisas que o motor nao usa: os dias FECHADOS (para
+   * desenhar a linha "Sábado — fechado") e a previa da mensagem que o cliente
+   * receberia. Calcular isso no front duplicaria a regra em JavaScript de
+   * navegador -- e uma copia que envelhece sozinha.
+   */
+  async horarioAtendimentoParaUi() {
+    const horario = await this.horarioAtendimento();
     return {
-      ativo: h.ativo === true,
-      inicio: typeof h.inicio === "string" ? h.inicio : "08:00",
-      fim: typeof h.fim === "string" ? h.fim : "18:00",
-      dias: Array.isArray(h.dias) ? h.dias.map(Number).filter((d) => d >= 0 && d <= 6) : [1, 2, 3, 4, 5],
-      mensagem: typeof h.mensagem === "string" ? h.mensagem : "",
+      horario,
+      resumo: horarioChatbot.resumoHorario(horario, { incluirFechados: true }),
+      mensagemPrevia: horarioChatbot.mensagemFora(horario),
+      // Regra ATIVA sem periodo legivel nenhum e configuracao pela metade, nao
+      // "nunca atender": a tela avisa em vez de o bot calar em silencio.
+      semPeriodos: horario.ativo && !horarioChatbot.temAlgumPeriodo(horario),
+      mensagemPadrao: horarioChatbot.MENSAGEM_PADRAO,
     };
   }
 

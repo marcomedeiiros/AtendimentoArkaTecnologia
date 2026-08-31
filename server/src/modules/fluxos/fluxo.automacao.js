@@ -382,6 +382,74 @@ function resumoAutomacoes(fluxo) {
     });
   }
 
+  // ── ONDE O CLIENTE ESCREVE, E ONDE ELE TOCA ──────────────────────────────
+  //
+  // As duas regras de INTERFACE do fluxo, no painel, porque nenhuma das duas era
+  // visível em lugar nenhum -- e as duas produziram defeito na tela do cliente:
+  //
+  //   1. um bloco que PEDE INFORMAÇÃO era montado com uma opção curinga, e a
+  //      opção virava um botão ("resposta livre") debaixo da pergunta;
+  //   2. um bloco com 4 botões não é recusado por ninguém ao salvar -- a
+  //      Evolution recusa na hora do envio (`400 Maximum of 3 reply buttons`) e o
+  //      cliente recebe texto numerado, enquanto quem montou o fluxo continua
+  //      achando que mandou botões.
+  //
+  // O painel não bloqueia nada: ele mostra. Quem monta o fluxo vê a lista de
+  // blocos que esperam texto e o aviso do bloco fora do limite.
+  const LIMITE_BOTOES = 3;
+  const livres = [];
+  const excessos = [];
+  for (const passo of passos) {
+    const opcoes = Array.isArray(passo.config?.opcoes) ? passo.config.opcoes : [];
+    // Uma opção "vira botão" quando ela é uma ESCOLHA (tem palavra-chave ou o
+    // flag). Curinga não conta: ele não é oferecido ao cliente.
+    const escolhas = opcoes.filter(
+      (o) => o?.esperaEscolha === true || (o?.palavrasChave || []).some((k) => String(k || "").trim())
+    );
+    if (escolhas.length > LIMITE_BOTOES) {
+      excessos.push({
+        rotulo: `"${passo.titulo}"`,
+        valor: `${escolhas.length} opções — acima do limite de ${LIMITE_BOTOES}; será enviado como lista`,
+      });
+    }
+    if (passo.config?.aguardar === "texto") {
+      livres.push({
+        rotulo: `"${passo.titulo}"`,
+        valor: opcoes.length
+          ? `espera o cliente escrever — ATENÇÃO: o bloco ainda tem ${opcoes.length} opção(ões) no config`
+          : "espera o cliente escrever (sem botões)",
+      });
+    }
+  }
+  if (livres.length) {
+    itens.push({
+      grupo: "Respostas livres do cliente",
+      passoId: "respostas-livres",
+      passoTitulo: "Blocos que aguardam texto",
+      regras: [
+        {
+          rotulo: "Como funciona",
+          valor: "O bot envia a mensagem e PARA. A próxima mensagem do cliente faz o fluxo seguir pela saída do bloco.",
+        },
+        ...livres,
+      ],
+    });
+  }
+  if (excessos.length) {
+    itens.push({
+      grupo: "Limite de botões",
+      passoId: "limite-botoes",
+      passoTitulo: "Blocos acima de 3 opções",
+      regras: [
+        {
+          rotulo: "Limite do WhatsApp",
+          valor: `${LIMITE_BOTOES} botões por mensagem — é do protocolo, não da configuração`,
+        },
+        ...excessos,
+      ],
+    });
+  }
+
   // ENTREGA PARA A FILA -- o texto de cada saída "transferir".
   //
   // Fica no painel porque é a última coisa que o cliente ouve do bot, e era

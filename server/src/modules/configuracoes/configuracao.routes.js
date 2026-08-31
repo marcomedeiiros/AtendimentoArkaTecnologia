@@ -43,6 +43,14 @@ router.get(
 
     return success(res, {
       valores,
+      // HORARIO DE ATENDIMENTO ja interpretado.
+      //
+      // `valores["chatbot.horario"]` e a string JSON crua, e a tela precisa do
+      // objeto (para desenhar dia a dia) e do retrato legivel. Reinterpretar a
+      // string no navegador seria reescrever `chatbot.horario.js` em outra
+      // linguagem -- duas regras para o mesmo expediente, e a do bot e a que
+      // vale.
+      horario: await configuracaoService.horarioAtendimentoParaUi(),
       sistema: {
         banco,
         servidor: {

@@ -16,7 +16,7 @@ const AppError = require("../../shared/errors/AppError");
 const TELEFONE_TESTE = "0000000000";
 const MAX_MENSAGENS = 40;
 
-function criarAmbiente({ fluxo, nomeCliente, horario, filas, agora, pesquisaAtiva = true, cnpjAnterior = null }) {
+function criarAmbiente({ fluxo, nomeCliente, horario, filas, agora, pesquisaAtiva = true, cnpjAnterior = null, parceiro = null }) {
   const respostas = [];
   const estado = {
     conversa: {
@@ -112,9 +112,24 @@ function criarAmbiente({ fluxo, nomeCliente, horario, filas, agora, pesquisaAtiv
         return { count: 1 };
       },
     },
-    // Sem consulta de parceiro nem ERP na simulacao: o teste e do desenho do
-    // fluxo, e bater no banco de parceiros traria dado real para dentro do teste.
-    parceiroRepository: { findAtivoByCnpj: async () => null },
+    // ── PARCEIRO: NENHUM POR PADRAO, E UM FALSO QUANDO O TESTE PEDIR ────────
+    //
+    // A consulta real ao banco de parceiros continua fora: ela traria dado de
+    // cliente para dentro de um teste. O que faltava era conseguir exercitar o
+    // caminho de quem ESTA cadastrado -- sem isso, todo CNPJ da simulacao caia
+    // em "avulso" e a metade do fluxo tecnico (confirmacao do cadastro ->
+    // identificacao -> descricao) nunca era percorrida por ninguem.
+    //
+    // `opcoes.parceiro` e um cadastro INVENTADO pelo cenario ({ cnpj,
+    // razaoSocial }). Casa por digitos, para o teste poder escrever o CNPJ com
+    // ou sem pontuacao como o cliente faz.
+    parceiroRepository: {
+      findAtivoByCnpj: async (cnpj) => {
+        if (!parceiro) return null;
+        const soDigitos = (v) => String(v || "").replace(/[^0-9]/g, "");
+        return soDigitos(cnpj) === soDigitos(parceiro.cnpj) ? parceiro : null;
+      },
+    },
     mockErp: {
       aplicarDescontoParceiro: async () => ({ mensagem: "[simulação] desconto de parceiro aplicado" }),
       gerarBoleto: async () => ({
@@ -158,6 +173,13 @@ function criarAmbiente({ fluxo, nomeCliente, horario, filas, agora, pesquisaAtiv
     },
     // Nada de SSE: nao existe conversa real para empurrar ao front.
     bus: { emitConversa: () => {} },
+    // O INSTANTE EM QUE O MOTOR DECIDE -- e o mesmo dos carimbos acima.
+    //
+    // Sem isto, `agora` servia so para datar as mensagens do teste, e a checagem
+    // de expediente do motor continuava lendo o relogio real: o cenario "sexta
+    // as 20h, fora do horario" passava ou falhava conforme a HORA em que alguem
+    // rodasse o script. Ver ChatbotEngine.agora.
+    agora: () => new Date(agoraMs()),
   };
 
   return { engine: new ChatbotEngine(deps), estado, respostas };
@@ -191,9 +213,20 @@ class ChatbotSimulador {
       horario: opcoes.respeitarHorario ? opcoes.horario : { ativo: false },
       filas: opcoes.filas || {},
       pesquisaAtiva: opcoes.pesquisaSatisfacao !== false,
+      // AQUI O PARAMETRO SE PERDIA. `criarAmbiente` aceita `agora` desde sempre,
+      // mas `simular` nunca o repassava -- entao passar `agora` nas opcoes nao
+      // tinha efeito nenhum, e nao havia como testar "fora do horario" ou
+      // "mudanca de dia" num instante fixo.
+      agora: opcoes.agora instanceof Date ? opcoes.agora : null,
       // Permite testar o contato recorrente: `cnpjAnterior` simula um CNPJ ja
       // confirmado por este telefone em atendimento anterior.
       cnpjAnterior: opcoes.cnpjAnterior || null,
+      // Cadastro inventado para o cenario: permite testar o caminho do cliente
+      // COM contrato. Ver parceiroRepository acima.
+      parceiro:
+        opcoes.parceiro && opcoes.parceiro.cnpj
+          ? { cnpj: String(opcoes.parceiro.cnpj), razaoSocial: String(opcoes.parceiro.razaoSocial || "") }
+          : null,
     });
 
     const turnos = [];

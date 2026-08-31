@@ -1037,8 +1037,101 @@ export function FlowPropertyPanel({
             </div>
             )}
 
+            {/* ── O QUE ESTE BLOCO ESPERA DO CLIENTE ───────────────────────
+                A escolha que decidia o defeito relatado, e que não existia em
+                lugar nenhum da tela.
+
+                Um bloco que PEDE INFORMAÇÃO ("informe seu nome e setor",
+                "descreva sua solicitação") só conseguia parar e esperar se
+                tivesse uma ramificação curinga -- e essa ramificação virava um
+                BOTÃO debaixo da pergunta, com o texto interno do fluxo
+                ("resposta livre"). Tirar a ramificação resolvia o botão e criava
+                o outro defeito: sem ramificação o bloco não parava, e o cliente
+                recebia três perguntas de uma vez.
+
+                Agora é uma declaração de três estados. Ver `config.aguardar` no
+                motor (chatbot.engine: passoAguardaTexto / passoNaoAguarda). */}
+            {node.tipo === 'mensagem' && (
+              <div className="p-3.5 rounded-xl bg-grafite-700/80 border border-linha space-y-2.5">
+                <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <span>⏸️</span> O que este bloco espera do cliente
+                </label>
+                <div className="space-y-1.5">
+                  {[
+                    {
+                      id: 'opcoes',
+                      label: '🔘 Uma escolha',
+                      sub: 'O cliente toca num botão. Use as Ramificações abaixo (máximo 3).',
+                    },
+                    {
+                      id: 'texto',
+                      label: '⌨️ Uma resposta escrita',
+                      sub: 'O bot envia a mensagem e PARA. Sem botões. A próxima mensagem do cliente faz o fluxo seguir.',
+                    },
+                    {
+                      id: 'nada',
+                      label: '➡️ Nada — entrega na hora',
+                      sub: 'Fala com o cliente e executa a saída (transferir/encerrar) na mesma volta. Para o bloco de "Solicitação recebida".',
+                    },
+                  ].map((modo) => {
+                    const atual = node.config?.aguardar === 'texto'
+                      ? 'texto'
+                      : node.config?.aguardar === 'nada'
+                        ? 'nada'
+                        : 'opcoes';
+                    const ativo = atual === modo.id;
+                    return (
+                      <button
+                        key={modo.id}
+                        type="button"
+                        onClick={() => {
+                          const config = { ...(node.config || {}) };
+                          // "Uma escolha" é a ausência da declaração: é assim que
+                          // todo fluxo montado antes deste campo se comporta, e
+                          // gravar `aguardar: "opcoes"` inventaria um valor que o
+                          // motor não conhece.
+                          if (modo.id === 'opcoes') delete config.aguardar;
+                          else config.aguardar = modo.id;
+                          onChangeNode({ ...node, config });
+                        }}
+                        className={`w-full p-2.5 rounded-xl border text-left transition-all ${
+                          ativo
+                            ? 'bg-acao/15 border-acao/50 text-white shadow-sm'
+                            : 'bg-grafite-800 border-linha text-slate-300 hover:border-slate-500'
+                        }`}
+                      >
+                        <div className="text-xs font-bold flex items-center justify-between">
+                          <span>{modo.label}</span>
+                          {ativo && <span className="w-1.5 h-1.5 rounded-full bg-acao-200" />}
+                        </div>
+                        <div className="text-[9px] text-slate-400 mt-0.5 leading-relaxed">{modo.sub}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+                {node.config?.aguardar === 'texto' && !node.targetId && (
+                  <p className="text-[10px] text-espera-400 bg-espera/10 border border-espera/30 rounded-lg p-2 leading-relaxed">
+                    Este bloco espera uma resposta mas não tem saída ligada no canvas.
+                    Sem ela, o cliente escreve e a conversa vai direto para um atendente.
+                  </p>
+                )}
+                {node.config?.aguardar === 'texto' && opcoes.length > 0 && (
+                  <p className="text-[10px] text-falha-400 bg-falha/10 border border-falha/30 rounded-lg p-2 leading-relaxed">
+                    Este bloco tem {opcoes.length} ramificação(ões). Elas ficam inertes
+                    (nenhum botão é enviado), mas confundem quem ler o fluxo remova-as.
+                  </p>
+                )}
+                {node.config?.aguardar === 'nada' && !opcoes.some(o => o.acao === 'transferir' || o.acao === 'encerrar') && (
+                  <p className="text-[10px] text-espera-400 bg-espera/10 border border-espera/30 rounded-lg p-2 leading-relaxed">
+                    "Entrega na hora" precisa de uma ramificação que transfira ou encerre
+                    sem ela o fluxo termina sem abrir chamado.
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* MODO DE INTERAÇÃO COM O CLIENTE */}
-            {(opcoes.length > 0 || node.tipo === 'mensagem' || node.tipo === 'gatilho') && (
+            {node.config?.aguardar !== 'texto' && (opcoes.length > 0 || node.tipo === 'mensagem' || node.tipo === 'gatilho') && (
               <div className="p-3.5 rounded-xl bg-grafite-700/80 border border-linha space-y-2.5">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-white flex items-center gap-1.5">
@@ -1148,10 +1241,27 @@ export function FlowPropertyPanel({
                     </button>
                   </div>
                   <p className="text-[9px] text-slate-500 leading-relaxed">
-                    {(node.config?.exibicao || 'buttons') === 'buttons' 
-                      ? '🔘 Botões: máximo 3 diretos. Com 4+, divide em múltiplas mensagens.'
+                    {(node.config?.exibicao || 'buttons') === 'buttons'
+                      ? '🔘 Botões: no máximo 3 por mensagem. É limite do WhatsApp, não da configuração.'
                       : '📋 Lista: todas as opções aparecem em "Ver opções" (mais compacto).'}
                   </p>
+                  {/* ── O TETO DE 3 BOTÕES, DITO ANTES DE O CLIENTE DESCOBRIR ──
+                      Aqui não havia aviso nenhum, e o texto acima prometia que
+                      com 4+ opções o bot "divide em múltiplas mensagens" nada
+                      dividia: os 4 botões iam num payload só, a Evolution
+                      devolvia `400 Maximum of 3 reply buttons allowed`, e o
+                      cliente recebia texto numerado. Quem montou o fluxo
+                      continuava achando que tinha mandado botões.
+
+                      O motor agora manda LISTA nesse caso (e registra em warn);
+                      este aviso é para a decisão ser consciente. */}
+                  {opcoes.filter(o => o?.esperaEscolha === true || (o?.palavrasChave || []).some(k => String(k || '').trim())).length > 3 && (
+                    <p className="text-[10px] text-espera-400 bg-espera/10 border border-espera/30 rounded-lg p-2 leading-relaxed">
+                      Este bloco tem {opcoes.length} opções acima do limite de 3 botões.
+                      O bot vai enviá-las como <strong>lista</strong> ("Ver opções").
+                      Para manter botões, divida a escolha em duas etapas.
+                    </p>
+                  )}
                 </div>
 
                 <p className="text-[10px] text-slate-500 leading-relaxed">

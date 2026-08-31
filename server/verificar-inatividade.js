@@ -219,7 +219,12 @@ function ambiente(fluxo) {
   return { engine, est, doBot, cliente, envelhecer, varrer, inatividadesEnviadas };
 }
 
-// Caminho completo do fluxo da ARKA ate o handoff ("Chamado aberto com sucesso").
+// Caminho completo do fluxo da ARKA ate o handoff.
+//
+// Sete respostas: menu -> Tecnico -> tenho contrato -> CNPJ -> confirma ->
+// nome/setor -> descricao. O que este arquivo mede e se a automacao chega ao
+// handoff MARCADA COMO CONCLUIDA (e portanto imune a inatividade); o texto de
+// cada bolha e o desenho do fluxo sao assunto de verificar-fluxo-arka.js.
 const ATE_O_FIM = ["oi", "1", "1", "11222333000181", "1", "Marco - TI", "meu sistema nao funciona"];
 
 async function rodarAteConcluir(a) {
@@ -247,7 +252,7 @@ async function rodarAteConcluir(a) {
   {
     const a = ambiente(fluxo);
     const fim = await rodarAteConcluir(a);
-    check(fim?.transferido === true, "a automacao terminou em handoff (Chamado aberto com sucesso)");
+    check(fim?.transferido === true, "a automacao terminou em handoff (entregue a equipe)");
     check(!!a.est.sessao?.concluidoEm, "a sessao ficou marcada como CONCLUIDA");
     check(a.est.conversa.statusAtendimento === "pendente", "a conversa continua Pendente (fila do tecnico)");
     a.envelhecer(30);
@@ -595,6 +600,29 @@ async function rodarAteConcluir(a) {
 
   // ── PARTE B: a varredura real, com Prisma ────────────────────────────────
   console.log("\n=== PARTE B -- a varredura real contra o banco ===");
+
+  // SEM BANCO, A PARTE B NAO CORRE -- e diz isso em voz alta.
+  //
+  // Ela precisa de `dev.db` com fluxo ativo e instancia. Numa maquina que so tem
+  // o repositorio (sem `.env`), o Prisma estourava erro de conexao e derrubava o
+  // script INTEIRO -- levando embora as 70 verificacoes da Parte A, que nao
+  // dependem de banco nenhum. Um teste que morre por falta de ambiente e
+  // indistinguivel de um teste que reprovou.
+  //
+  // Pular e registrar e a alternativa honesta. `erros` nao e tocado: nada
+  // reprovou. Quem roda com banco continua exercitando a varredura real.
+  if (!process.env.DATABASE_URL) {
+    console.log("  PULADA: DATABASE_URL nao esta definida (a Parte B exige o dev.db).");
+    console.log("  Para rodar: defina DATABASE_URL e garanta um fluxo ativo + instancia no banco.");
+    console.log(
+      "\n" +
+        (erros.length
+          ? `FALHAS (${erros.length}):\n  ` + erros.join("\n  ")
+          : "PARTE A: TODAS AS VERIFICACOES PASSARAM (Parte B pulada: sem banco)")
+    );
+    process.exit(erros.length ? 1 : 0);
+  }
+
   const prisma = new PrismaClient();
   const inatividade = require("./src/modules/chatbot/chatbot.inatividade");
   const criados = [];

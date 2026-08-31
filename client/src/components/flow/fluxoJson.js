@@ -78,13 +78,21 @@ export function sanitizarPassosImportados(passos) {
 
   return limpos.map(p => {
     const limpo = { ...p, targetId: valido(p.targetId) };
-    if (Array.isArray(p.config?.opcoes)) {
-      limpo.config = {
-        ...p.config,
-        opcoes: p.config.opcoes
+    if (p.config && typeof p.config === 'object') {
+      limpo.config = { ...p.config };
+      if (Array.isArray(p.config.opcoes)) {
+        limpo.config.opcoes = p.config.opcoes
           .filter(op => op && typeof op === 'object')
-          .map(op => ({ ...op, targetId: valido(op.targetId) })),
-      };
+          .map(op => ({ ...op, targetId: valido(op.targetId) }));
+      }
+      // Saida alternativa do bloco de CNPJ (o cliente cujo CNPJ nao esta na base
+      // segue pelo caminho avulso). Mesma limpeza do targetId principal: apontar
+      // para um bloco descartado viraria fio fantasma -- e aqui o efeito seria
+      // pior, porque a ligacao nao aparece no canvas para alguem notar.
+      // Espelha LIGACOES_NO_CONFIG em server/.../fluxo.repository.js.
+      if (p.config.targetIdNaoCadastrado !== undefined) {
+        limpo.config.targetIdNaoCadastrado = valido(p.config.targetIdNaoCadastrado);
+      }
     }
     return limpo;
   });

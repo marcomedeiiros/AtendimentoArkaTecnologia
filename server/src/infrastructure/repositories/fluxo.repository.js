@@ -1,19 +1,41 @@
 const crypto = require("crypto");
 const prisma = require("../database/prisma.client");
 
-// Fluxos importados guardam as ramificacoes em `config.opcoes`, e cada opcao
-// tem seu proprio `targetId`. Toda vez que um id de passo muda, esses destinos
-// precisam do mesmo remapeamento do targetId principal - senao as ramificacoes
-// apontam para passos inexistentes no primeiro reload.
+// ── TODA LIGACAO ENTRE BLOCOS PRECISA SER REMAPEADA. TODA. ──────────────────
+//
+// Fluxos importados guardam as ramificacoes em `config.opcoes`, e cada opcao tem
+// seu proprio `targetId`. Toda vez que um id de passo muda -- e no IMPORT muda
+// sempre, porque ids de fora nao sao nossos --, esses destinos precisam do mesmo
+// remapeamento do targetId principal; senao as ramificacoes apontam para passos
+// inexistentes no primeiro reload.
+//
+// A lista de campos de ligacao esta declarada em `LIGACOES_NO_CONFIG` de
+// proposito. Antes, o unico campo tratado era `config.opcoes[].targetId`, e a
+// funcao inclusive DESISTIA cedo (`if (!Array.isArray(config.opcoes)) return
+// config`) -- entao qualquer ligacao nova guardada fora de `opcoes` era
+// silenciosamente esquecida, e o defeito so aparecia na conversa do cliente. O
+// campo `targetIdNaoCadastrado` (a saida do CNPJ que nao esta na base) e o
+// primeiro caso; o proximo entra nesta lista e passa a funcionar de graca.
+const LIGACOES_NO_CONFIG = ["targetIdNaoCadastrado"];
+
 function remapearConfig(config, alvo) {
   if (!config || typeof config !== "object" || Array.isArray(config)) return config;
-  if (!Array.isArray(config.opcoes)) return config;
-  return {
-    ...config,
-    opcoes: config.opcoes.map((op) =>
+
+  const saida = { ...config };
+
+  if (Array.isArray(config.opcoes)) {
+    saida.opcoes = config.opcoes.map((op) =>
       op && typeof op === "object" ? { ...op, targetId: alvo(op.targetId) } : op
-    ),
-  };
+    );
+  }
+
+  for (const campo of LIGACOES_NO_CONFIG) {
+    // So mexe no que EXISTE: gravar `targetIdNaoCadastrado: null` em todo bloco
+    // sujaria o config de fluxos que nao usam a saida alternativa.
+    if (config[campo] !== undefined) saida[campo] = alvo(config[campo]);
+  }
+
+  return saida;
 }
 
 // Traduz um passo do formato do editor para o das colunas. `alvo` resolve as

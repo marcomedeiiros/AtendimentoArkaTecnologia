@@ -1,3 +1,31 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// SCRIPT OBSOLETO -- DESATIVADO DE PROPÓSITO.
+//
+// apesar do nome "ver", ele faz update no bloco do menu.
+//
+// Ele mexia em bloco do fluxo por UUID chumbado, um campo por vez. Os ids que
+// ele usa CONTINUAM existindo (o fluxo novo os preserva para não orfanar sessões
+// e logs de execução), então rodá-lo hoje não daria erro: daria o defeito de
+// volta, em silêncio.
+//
+// O caminho atual é publicar o fluxo INTEIRO, validado e com confirmação:
+//
+//     node publicar-fluxo-arka.js --dry     confere sem gravar
+//     node publicar-fluxo-arka.js           mostra o plano e pede confirmação
+//
+// Ele valida o teto de 3 botões, que bloco de texto livre não tem opção, e que
+// todo destino existe -- as invariantes que este script violava.
+//
+// O arquivo fica aqui em vez de ser apagado porque o histórico dele explica de
+// onde vieram os defeitos. Se você precisa MESMO do que ele fazia, o git tem a
+// versão anterior.
+// ─────────────────────────────────────────────────────────────────────────────
+console.error(
+  "Este script está obsoleto e desativado. Use: node publicar-fluxo-arka.js\n" +
+    "Motivo: apesar do nome "ver", ele faz update no bloco do menu."
+);
+process.exit(1);
+
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 

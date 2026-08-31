@@ -8,7 +8,6 @@ const {
   limparCnpj,
   cnpjValido,
   mascararCnpj,
-  partesBrasilia,
   sleep,
   tipoClienteDaOpcaoEscolhida,
 } = require("../../shared/helpers/cnpj.helper");
@@ -35,6 +34,9 @@ const bus = require("../../shared/events/event-bus");
 const logger = require("../../config/logger");
 const env = require("../../config/env");
 const { sessao: cfgSessao, limites, palavrasChave } = require("./chatbot.config");
+// HORARIO DE ATENDIMENTO: a regra de expediente e um modulo puro, do lado do
+// varredor de inatividade -- o outro relogio do bot. Ver chatbot.horario.js.
+const horarioAtendimento = require("./chatbot.horario");
 
 // Blocos que NAO sao passos da conversa: sao regras SOBRE ela. O motor nunca
 // "entra" neles -- a anotacao e um post-it, e o bloco de espera e um relogio
@@ -65,6 +67,9 @@ const DEPENDENCIAS_PADRAO = {
 //   menu   -> proxima mensagem e tratada como escolha numerica do menu de FLUXOS
 //   opcao  -> proxima mensagem e casada com as opcoes do passo atual
 //             (`config.opcoes`, vindo de fluxos importados)
+//   texto  -> proxima mensagem e a RESPOSTA LIVRE que o passo pediu (nome, setor,
+//             descricao do problema). Nao ha opcao para casar: o passo avanca com
+//             o que o cliente escrever. Ver AGUARDANDO.TEXTO abaixo.
 //   humano -> conversa transferida; o bot fica calado ate expirar ou ser atendida
 //   avaliacao_nota       -> proxima mensagem e a nota (1..5) da pesquisa de satisfacao
 //   avaliacao_comentario -> proxima mensagem e o comentario livre da pesquisa
@@ -75,6 +80,33 @@ const AGUARDANDO = {
   CNPJ_CONFIRMA: "cnpj_confirma",
   MENU: "menu",
   OPCAO: "opcao",
+  // ── RESPOSTA LIVRE: O BOT PERGUNTA E ESPERA, SEM OFERECER BOTAO ───────────
+  //
+  // Ate aqui o motor tinha UM jeito de parar e esperar: o passo precisava ter
+  // `config.opcoes`. Como boa parte do fluxo pede INFORMACAO e nao escolha
+  // ("informe seu nome e setor", "descreva sua solicitacao", "informe seu nome e
+  // o que precisa"), esses passos eram montados com uma opcao CURINGA -- uma
+  // opcao sem palavra-chave, que casa com qualquer coisa.
+  //
+  // O efeito colateral era visivel na tela do cliente: em `executarPasso`, todo
+  // passo com opcoes e `aguardando: "opcao"` vai por `enviarBotComOpcoes`. A
+  // opcao curinga, portanto, virava UM BOTAO -- e como ela nao tem rotulo, o
+  // botao saia com o texto interno do fluxo: "resposta livre", "transferir para
+  // o técnico". Debaixo da mensagem que pedia para o cliente ESCREVER, aparecia
+  // um botao e o rodape "Selecione uma opção".
+  //
+  // A alternativa que se tentou -- tirar as opcoes e deixar so o `targetId` --
+  // e pior: sem opcoes o passo nao estaciona, `percorrer` segue para o proximo
+  // na mesma volta, e o cliente recebe a identificacao, a descricao e a
+  // confirmacao em sequencia, sem chance de responder nada. Foi o outro defeito
+  // relatado.
+  //
+  // Este estado resolve os dois: o passo declara `config.aguardar: "texto"`, o
+  // motor envia a mensagem como TEXTO (nenhum botao existe para casar), grava
+  // `aguardando: "texto"` e para. A proxima mensagem do cliente e a resposta, e
+  // e ela que faz o fluxo andar pelo `targetId` -- que continua sendo a saida
+  // desenhada no canvas.
+  TEXTO: "texto",
   HUMANO: "humano",
   AVALIACAO_NOTA: "avaliacao_nota",
   AVALIACAO_COMENTARIO: "avaliacao_comentario",
@@ -99,6 +131,11 @@ const AGUARDA_RESPOSTA_DO_CLIENTE = [
   AGUARDANDO.CNPJ_CONFIRMA,
   AGUARDANDO.MENU,
   AGUARDANDO.OPCAO,
+  // Resposta livre E uma pergunta em aberto: "descreva sua solicitacao" sem
+  // resposta nenhuma e exatamente o abandono que o prazo de inatividade existe
+  // para tratar. O desfecho (encerrar ou devolver para a fila) continua saindo
+  // do bloco de espera do fluxo, como nos outros estados.
+  AGUARDANDO.TEXTO,
 ];
 
 // ── BOTAO ONDE A RESPOSTA E FIXA (nao vem de opcao de menu) ──────────────────
@@ -131,6 +168,18 @@ const BOTOES_FIXOS = {
 
 // Gatilho que casa com qualquer primeira mensagem (fluxo de boas-vindas).
 const GATILHO_CURINGA = "*";
+
+// ── TRES BOTOES. NAO E PREFERENCIA, E O PROTOCOLO ───────────────────────────
+//
+// O WhatsApp aceita no maximo 3 botoes de resposta rapida por mensagem, e a
+// Evolution recusa o quarto na porta: `400 Maximum of 3 reply buttons allowed`
+// (medido em 29/08/2026 na 2.4.0-rc2, chamando o endpoint direto). O limite e do
+// protocolo, e vale igual na Cloud API oficial da Meta.
+//
+// A constante mora aqui, e nao dentro de `enviarBotComOpcoes`, porque tres
+// lugares precisam do MESMO numero: o envio (que nunca pode estourar), o painel
+// de automacoes (que avisa quem monta o fluxo) e os testes.
+const MAX_BOTOES_POR_MENSAGEM = 3;
 
 function escaparRegex(texto) {
   return texto.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -182,8 +231,25 @@ class ChatbotEngine {
       // Fuso de Brasilia: esta variavel vai no TEXTO que o cliente recebe.
       "data.hoje": new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }),
       "atendente.nome": conversa.atendente?.nome || "",
-      "empresa.nome": "",
+      // AQUI ISTO ERA `""` FIXO -- a variavel existia na lista e nunca tinha
+      // valor. Qualquer texto de fluxo que citasse {{empresa.nome}} (a
+      // confirmacao do cadastro, por exemplo) saia com a linha em branco, e
+      // parecia dado faltando no cadastro em vez de um placeholder morto.
+      //
+      // `conversa.empresa` e a razao social gravada quando o CNPJ foi
+      // identificado (ver validarCnpjRecebido); o parceiro recem-consultado
+      // cobre o mesmo turno em que a identificacao acabou de acontecer.
+      "empresa.nome": conversa.empresa || parceiro?.razaoSocial || "",
     };
+
+    // ── AS RESPOSTAS LIVRES JA COLETADAS ────────────────────────────────────
+    //
+    // `{{resposta.<nome>}}`, onde `<nome>` e o `config.variavel` do passo que
+    // pediu a informacao. Namespace proprio de proposito: uma variavel de fluxo
+    // nunca pode sombrear `cliente.nome` ou `parceiro.status`, que sao do motor.
+    for (const [chave, valor] of Object.entries(contexto.respostas || {})) {
+      valores[`resposta.${chave}`] = valor;
+    }
 
     return str.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_tudo, chave) => {
       const valor = valores[chave];
@@ -347,6 +413,42 @@ class ChatbotEngine {
     return opcoes.find((o) => !o.esperaEscolha) || null;
   }
 
+  /**
+   * PARA ONDE IR DEPOIS DE UM CNPJ VALIDO -- e o unico ponto onde o RESULTADO da
+   * consulta muda o caminho.
+   *
+   * `validarCnpjRecebido` sempre soube distinguir os dois desfechos
+   * (`estado: "cadastrado" | "avulso"`), mas o motor seguia o mesmo `targetId`
+   * nos dois: quem NAO estava na base de clientes ouvia "você será atendido como
+   * cliente avulso" e, na linha seguinte, caia na confirmacao de cadastro e na
+   * coleta de contrato -- o caminho de quem TEM contrato.
+   *
+   * `config.targetIdNaoCadastrado` no passo de CNPJ e a saida alternativa. Segue
+   * a mesma mecanica de `targetId` (um id de passo do proprio fluxo, validado
+   * contra a lista) para nao inventar um segundo conceito de ligacao: quem le o
+   * JSON ja sabe o que e. Sem o campo, o comportamento e o de antes.
+   */
+  _proximoDepoisDoCnpj(passos, passoAtual, cnpjValidacao) {
+    if (!passoAtual) return null;
+    const alternativo = passoAtual.config?.targetIdNaoCadastrado;
+    if (cnpjValidacao?.estado === "avulso" && alternativo) {
+      const destino = passos.find((p) => p.id === alternativo);
+      if (destino) {
+        logger.info("CNPJ valido fora da base de clientes: seguindo pelo caminho avulso", {
+          passoId: passoAtual.id,
+          destinoId: destino.id,
+          destinoTitulo: destino.titulo,
+        });
+        return destino;
+      }
+      logger.warn("targetIdNaoCadastrado aponta para um passo que nao existe", {
+        passoId: passoAtual.id,
+        targetIdNaoCadastrado: alternativo,
+      });
+    }
+    return this.proximoPasso(passos, passoAtual);
+  }
+
   proximoPasso(passos, passoAtual) {
     if (!passoAtual) return passos[0] || null;
     if (passoAtual.targetId) {
@@ -471,7 +573,25 @@ class ChatbotEngine {
    */
   decidirEsperaDoPasso(passo, passos = []) {
     const opcoes = this.opcoesDoPasso(passo);
+    // A OPCAO TERMINAL DESTE PASSO -- ela carrega setor, fila e o texto do
+    // handoff. Devolvida junto de `estaciona: false` porque e
+    // `_entregarNoFimDoFluxo` que a usa; o comentario de la sempre disse que ela
+    // chegava ("a opcao curinga que transfere pode trazer setor e fila do
+    // proprio no"), mas este metodo devolvia `opcao: null` em todos os ramos e o
+    // parametro nunca recebia nada. Resultado: um fim de fluxo caia na fila
+    // GERAL, perdendo a triagem que o desenho do fluxo ja tinha feito.
+    const terminal = opcoes.find((o) => o.acao === "transferir" || o.acao === "encerrar") || null;
+
     if (!opcoes.length) return { estaciona: false, cobraResposta: false, opcao: null };
+
+    // ── O BLOCO DECLAROU QUE NAO ESPERA NADA ────────────────────────────────
+    //
+    // E o bloco de ENTREGA PARA A FILA: ele fala com o cliente e o desfecho
+    // acontece na mesma volta. Vem antes de tudo porque a declaracao vence
+    // qualquer leitura da topologia -- ver passoNaoAguarda.
+    if (this.passoNaoAguarda(passo)) {
+      return { estaciona: false, cobraResposta: false, opcao: terminal };
+    }
 
     // Menu: ha o que escolher.
     if (opcoes.some((o) => this._opcaoEhEscolha(o))) {
@@ -484,9 +604,11 @@ class ChatbotEngine {
     );
     if (roteia) return { estaciona: true, cobraResposta: true, opcao: null };
 
-    // Sem saida nenhuma: fim do fluxo.
+    // Sem saida nenhuma: fim do fluxo. `terminal` e null aqui por definicao
+    // (nao ha opcao que transfira nem encerre), e e isso que faz a conversa cair
+    // na fila geral -- o que esta certo: nao ha triagem declarada para herdar.
     if (!this.temSaidaAcionavel(passo, passos)) {
-      return { estaciona: false, cobraResposta: false, opcao: null };
+      return { estaciona: false, cobraResposta: false, opcao: terminal };
     }
 
     // Todas curinga e todas transferem: o desfecho ja esta decidido, a resposta
@@ -508,44 +630,105 @@ class ChatbotEngine {
     return alvo.includes("cnpj");
   }
 
-  // ----------------------------------------------- horario de atendimento ---
-
-  // "18:30" -> 1110 minutos. Fora do formato devolve null e a checagem e
-  // ignorada, em vez de bloquear o atendimento por causa de um typo na config.
-  _minutosDoDia(hhmm) {
-    const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || "").trim());
-    if (!m) return null;
-    const h = Number(m[1]);
-    const min = Number(m[2]);
-    if (h > 23 || min > 59) return null;
-    return h * 60 + min;
+  /**
+   * ESTE PASSO PEDE UMA RESPOSTA ESCRITA (e nao uma escolha)?
+   *
+   * DECLARACAO, e nunca heuristica. `passoAguardaCnpj` ainda adivinha pelo texto
+   * porque existiam fluxos anteriores ao campo `config.aguardar`; aqui nao ha
+   * legado para acomodar, e adivinhar seria pior: qualquer passo cujo texto
+   * contenha "informe" ou "descreva" viraria uma parada, inclusive um menu.
+   *
+   * `config.aguardar: "texto"` e o unico jeito. Quem monta o fluxo diz
+   * explicitamente "aqui o cliente escreve", e o editor expoe isso como uma
+   * chave ("Aguardar resposta escrita do cliente").
+   */
+  passoAguardaTexto(passo) {
+    return passo?.config?.aguardar === AGUARDANDO.TEXTO;
   }
 
-  // Fora do horario definido em Configuracoes. Desligado por padrao: quem nao
-  // configurar nada continua sendo atendido a qualquer hora, como antes.
-  // Suporta janela que atravessa a meia-noite (ex.: 22:00 as 06:00).
-  foraDoHorario(horario, agora = new Date()) {
-    if (!horario?.ativo) return false;
+  /**
+   * ESTE PASSO DECLARA QUE NAO AGUARDA NADA?
+   *
+   * `config.aguardar` responde "o que este bloco espera do cliente?", e "nada" e
+   * uma resposta legitima -- o terceiro valor, ao lado de `"cnpj"` e `"texto"`.
+   *
+   * ── O PROBLEMA QUE ISTO RESOLVE ──────────────────────────────────────────
+   *
+   * O bloco de ENTREGA PARA A FILA ("✅ Solicitação recebida! ... encaminhamos
+   * para nossa equipe técnica") tem uma unica opcao curinga com
+   * `acao: "transferir"`. Pela topologia, ele e indistinguivel de um bloco que
+   * PERGUNTA e transfere com a resposta ("descreva sua solicitação"), e
+   * `decidirEsperaDoPasso` documenta essa ambiguidade em detalhe: na duvida ela
+   * ESTACIONA sem cobrar resposta, porque transferir na hora quebraria a
+   * pergunta.
+   *
+   * O preco disso, no fluxo da ARKA, era o cliente receber "encaminhamos seu
+   * atendimento para a equipe técnica" e o bot ficar parado esperando uma
+   * mensagem que ninguem tinha motivo para mandar -- a transferencia real so
+   * acontecia se ele escrevesse mais alguma coisa.
+   *
+   * Com `aguardar` no bloco, a ambiguidade acaba: quem PERGUNTA declara
+   * `"texto"`, quem ENTREGA declara `"nada"`. Nenhum dos dois depende mais de o
+   * motor adivinhar pela forma das opcoes -- e fluxos antigos, que nao declaram
+   * coisa alguma, continuam caindo na regra conservadora de antes.
+   */
+  passoNaoAguarda(passo) {
+    return passo?.config?.aguardar === "nada";
+  }
 
-    const inicio = this._minutosDoDia(horario.inicio);
-    const fim = this._minutosDoDia(horario.fim);
-    if (inicio === null || fim === null) return false;
+  // Sob que nome a resposta livre deste passo fica guardada na sessao.
+  //
+  // `config.variavel` ja existia -- o import do editor de origem o grava a
+  // partir do `variableKey` do no (client/src/components/flow/fluxoJson.js) --
+  // mas NADA no motor o lia: era um campo que viajava do JSON para o banco e
+  // morria ali. Agora ele nomeia a resposta capturada, e o texto dos passos
+  // seguintes pode cita-la com {{resposta.<nome>}}.
+  variavelDoPasso(passo) {
+    const nome = String(passo?.config?.variavel || "").trim();
+    return /^[\w.-]{1,60}$/.test(nome) ? nome : null;
+  }
 
-    const dias = horario.dias?.length ? horario.dias : [1, 2, 3, 4, 5];
-    // Hora e dia da semana no fuso de BRASILIA, nao do processo: o container roda
-    // em UTC, e com getHours() um expediente de 08:00-18:00 valia das 05:00 as
-    // 15:00 -- o bot calava no meio da tarde. Na sexta as 21h, getDay() ja dizia
-    // sabado e o expediente "acabava" um dia antes.
-    const { minutosDoDia: minutos, diaSemana } = partesBrasilia(agora);
+  // ----------------------------------------------- horario de atendimento ---
+  //
+  // AQUI VIVIAM `foraDoHorario` e `_minutosDoDia`, com UMA janela por semana
+  // (`{ inicio, fim, dias: [1..5] }`). A regra cresceu -- dia ligado/desligado
+  // individualmente, mais de um periodo por dia (o almoco), fuso proprio,
+  // feriado numa data -- e crescer dentro deste arquivo significaria enfiar mais
+  // aritmetica de calendario num modulo que ja passa de 3.400 linhas e que so da
+  // para exercitar com conversa, sessao e repositorios montados.
+  //
+  // Ela agora mora em `chatbot.horario.js`: puro, sem banco, sem WhatsApp, e por
+  // isso provavel caso a caso (verificar-horario.js). Estes metodos ficam como
+  // FACHADA -- e nao como copia -- porque o motor e o unico chamador que importa
+  // e trocar a chamada em quatro lugares nao valeria quebrar a assinatura que os
+  // testes existentes ja usam.
 
-    if (inicio <= fim) {
-      return !dias.includes(diaSemana) || minutos < inicio || minutos >= fim;
-    }
-    // Janela virando o dia: o "dia" vale para o trecho depois do inicio.
-    const dentro =
-      (minutos >= inicio && dias.includes(diaSemana)) ||
-      (minutos < fim && dias.includes((diaSemana + 6) % 7));
-    return !dentro;
+  /**
+   * O INSTANTE EM QUE O MOTOR ESTA DECIDINDO -- injetavel.
+   *
+   * Existe por uma razao de teste, e vale dizer qual: a checagem de expediente e
+   * a unica regra do motor cujo resultado depende de QUANDO o script roda. Sem
+   * poder fixar o instante, o teste de integracao do horario ou passava so em
+   * dias uteis as 10h, ou tinha de usar um expediente 24x7 -- que nao prova
+   * nada. `deps.agora` deixa o cenario dizer "sexta as 20h" e valer sempre.
+   *
+   * NAO e um relogio geral do motor: `Date.now()` continua sendo usado em
+   * inatividade, prazos e carimbos. Trocar tudo por aqui seria uma refatoracao
+   * grande para um ganho que so o horario precisa.
+   */
+  agora() {
+    return typeof this.deps.agora === "function" ? this.deps.agora() : new Date();
+  }
+
+  foraDoHorario(horario, agora = this.agora()) {
+    return horarioAtendimento.foraDoHorario(horario, agora);
+  }
+
+  // O texto que o cliente recebe fora do expediente, com os horarios da
+  // CONFIGURACAO dentro dele ({{horarios}}). Nunca com hora escrita a mao: o
+  // ponto todo do modulo e existir uma fonte so.
+  mensagemForaDoHorario(horario, agora = this.agora()) {
+    return horarioAtendimento.mensagemFora(horario, agora);
   }
 
   // ------------------------------------------------------- inatividade ---
@@ -1132,32 +1315,40 @@ class ChatbotEngine {
     const marcar = (r, status) =>
       this.deps.conversaRepository.vincularWaMessageId(msg.id, r?.key?.id || null, status);
 
-    // BOTAO ou LISTA -- e, pedindo botao com mais de 3 opcoes, botao MESMO ASSIM.
+    // ── BOTAO OU LISTA -- E O TETO DE TRES E INEGOCIAVEL ─────────────────────
     //
     // A Evolution recusa 4 botoes numa mensagem: `400 Maximum of 3 reply buttons
     // allowed` (medido em 29/08/2026 na 2.4.0-rc2, chamando o endpoint direto).
     // O limite e do protocolo do WhatsApp, nao da Evolution -- vale igual na
-    // Cloud API oficial da Meta. 
+    // Cloud API oficial da Meta.
     //
-    // Com MAIS DE 3 OPÇÕES no modo AUTO, usa LISTA ("Ver opções") para não 
-    // dividir em múltiplas mensagens. O usuário pode forçar "buttons" ou "list"
-    // explicitamente no fluxo.
-    const MAX_OPCOES_EM_BOTAO = 3;
-    let comoBotoes = itens.length <= MAX_OPCOES_EM_BOTAO;
-    
-    if (exibicao === "buttons") {
+    // AQUI O CODIGO MENTIA. Pedindo `exibicao: "buttons"` com mais de 3 opcoes,
+    // ele registrava "vai em varias bolhas" -- e nenhuma linha dividia coisa
+    // alguma: os 4 botoes iam num payload so, a Evolution devolvia 400, e o
+    // `catch` la embaixo caia no texto puro. O cliente recebia um menu numerado
+    // para digitar, o log dizia que tinha mandado duas bolhas de botoes, e quem
+    // montou o fluxo ficava sem entender por que os botoes "nao apareciam".
+    //
+    // Duas opcoes existiam: dividir de verdade em bolhas de 3, ou usar LISTA.
+    // A lista ganha por dois motivos -- ela e um card unico (dividir a mesma
+    // pergunta em duas bolhas faz a segunda parecer outra pergunta) e o motor ja
+    // sabe montar uma. Entao: pedir botao com mais de 3 opcoes ENTREGA LISTA, e
+    // avisa no log em nivel `warn`, porque e o fluxo que esta fora da regra.
+    let comoBotoes = itens.length <= MAX_BOTOES_POR_MENSAGEM;
+
+    if (exibicao === "buttons" && itens.length > MAX_BOTOES_POR_MENSAGEM) {
+      logger.warn("Bloco pede botoes com mais de 3 opcoes: enviando como lista", {
+        conversaId,
+        opcoes: itens.length,
+        limite: MAX_BOTOES_POR_MENSAGEM,
+      });
+      comoBotoes = false;
+    } else if (exibicao === "buttons") {
       comoBotoes = true;
-      if (itens.length > MAX_OPCOES_EM_BOTAO) {
-        logger.info("Passo pediu botoes com muitas opcoes: vai em varias bolhas", {
-          conversaId,
-          opcoes: itens.length,
-          bolhas: Math.ceil(itens.length / 3),
-        });
-      }
     } else if (exibicao === "list") {
       comoBotoes = false;
-    } else if (exibicao === "auto" && itens.length > MAX_OPCOES_EM_BOTAO) {
-      // Modo automático: mais de 3 opções = lista (Ver opções)
+    } else if (exibicao === "auto" && itens.length > MAX_BOTOES_POR_MENSAGEM) {
+      // Modo automatico: mais de 3 opcoes = lista ("Ver opções").
       comoBotoes = false;
     }
 
@@ -1169,7 +1360,10 @@ class ChatbotEngine {
           title: "Atendimento",
           description: corpo,
           footer: "Selecione uma opção",
-          buttons: itens.map((i) => ({
+          // `slice` como ULTIMA barreira: se algum caminho novo chegar aqui com
+          // 4 itens, a mensagem sai com 3 em vez de morrer no 400 da Evolution.
+          // A decisao correta ja foi tomada acima; isto e o cinto de seguranca.
+          buttons: itens.slice(0, MAX_BOTOES_POR_MENSAGEM).map((i) => ({
             type: "reply",
             displayText: this._cortarRotulo(i.titulo, 20),
             id: i.id,
@@ -1452,9 +1646,24 @@ class ChatbotEngine {
 
   // ------------------------------------------------------------ handoff ---
 
+  /**
+   * @param {object} [opcoes]
+   * @param {object} [opcoes.contextoExtra] pares que sobrevivem na sessao junto
+   *   de `fluxoOrigemId`. Existe por um caso concreto: o aviso de FORA DO
+   *   HORARIO precisa lembrar QUANDO avisou para nao repetir a cada mensagem, e
+   *   este metodo reescreve o `contexto` da sessao inteiro -- sem o parametro, a
+   *   marca era apagada no mesmo instante em que era gravada.
+   */
   async transferirParaHumano(
     ctx,
-    { avisar = true, motivo = "solicitado", setor = null, filaId = null, opcao = null } = {}
+    {
+      avisar = true,
+      motivo = "solicitado",
+      setor = null,
+      filaId = null,
+      opcao = null,
+      contextoExtra = null,
+    } = {}
   ) {
     const { conversa, telefone, instanciaId, instanceName } = ctx;
 
@@ -1521,7 +1730,7 @@ class ChatbotEngine {
       // `fluxoOrigemId` fica guardado porque `fluxoAtualId` e zerado aqui (o bot
       // parou de conduzir). Sem essa pista, a varredura nao saberia de QUAL
       // fluxo vem a regra de espera na fila -- nem se ele esta pausado.
-      contexto: { fluxoOrigemId: ctx.fluxo?.id || null },
+      contexto: { fluxoOrigemId: ctx.fluxo?.id || null, ...(contextoExtra || {}) },
     });
 
     await this._emitirConversa(conversa.id);
@@ -2202,6 +2411,20 @@ class ChatbotEngine {
 
       case "mensagem": {
         resposta = this.textoDoPasso(passo, contexto);
+        // ── RESPOSTA LIVRE, ANTES DE TUDO ────────────────────────────────────
+        //
+        // Vem na frente do teste de opcoes de proposito. Um passo de resposta
+        // livre nao deveria ter opcoes -- mas fluxos montados antes deste estado
+        // tem a opcao CURINGA que existia para forcar a parada, e ela e
+        // exatamente o que virava botao ("resposta livre") debaixo da pergunta.
+        //
+        // Com a declaracao vindo primeiro, `aguardando` sai como "texto" e o
+        // envio la embaixo cai no caminho de TEXTO PURO: nenhum botao e montado,
+        // e o curinga velho fica inerte em vez de aparecer na tela do cliente.
+        if (this.passoAguardaTexto(passo)) {
+          aguardando = AGUARDANDO.TEXTO;
+          break;
+        }
         // Passo com menu (fluxo importado): envia o texto e PARA aqui. Sem isso
         // o motor seguiria o targetId na hora e o cliente receberia o fluxo
         // inteiro de uma vez, sem chance de escolher nada.
@@ -2216,7 +2439,11 @@ class ChatbotEngine {
             fimDoFluxo = true;
             opcaoFinal = espera.opcao;
           }
-        } else if (this.passoAguardaCnpj(passo) && !contexto.cnpjValidacao?.valido) {
+        } else if (
+          this.passoAguardaCnpj(passo) &&
+          // `aguardar: "texto"` ja foi tratado acima; aqui so sobra o CNPJ.
+          !contexto.cnpjValidacao?.valido
+        ) {
           // Contato recorrente: oferece o CNPJ ja usado antes (ver memoria).
           const pedido = await this._pedirOuConfirmarCnpj(conversa, resposta, passo);
           aguardando = pedido.aguardando;
@@ -2281,7 +2508,11 @@ class ChatbotEngine {
         } else {
           resposta = this.textoDoPasso(passo, contexto);
         }
-        if (this.opcoesDoPasso(passo).length) {
+        // Mesma precedencia do passo de mensagem: a declaracao de resposta
+        // livre vence as opcoes, e nenhum botao e montado.
+        if (this.passoAguardaTexto(passo)) {
+          aguardando = AGUARDANDO.TEXTO;
+        } else if (this.opcoesDoPasso(passo).length) {
           const espera = this.decidirEsperaDoPasso(passo, fluxo.passos);
           if (espera.estaciona) {
             aguardando = AGUARDANDO.OPCAO;
@@ -2302,6 +2533,12 @@ class ChatbotEngine {
       const opcoesMenu = this.opcoesDoPasso(passo);
       // Menu (esperando escolha) -> tenta botoes/lista interativos, com o texto
       // do passo como corpo (fallback visivel). Demais mensagens -> texto normal.
+      //
+      // A condicao `aguardando === OPCAO` e o que garante a regra de interface:
+      // um passo de RESPOSTA LIVRE sai daqui com `aguardando: "texto"` e nunca
+      // entra neste ramo, mesmo que ainda carregue a opcao curinga de um fluxo
+      // antigo. Nenhum botao, nenhum rodape "Selecione uma opção" -- so a
+      // pergunta e o campo de texto do WhatsApp.
       if (opcoesMenu.length && aguardando === AGUARDANDO.OPCAO) {
         // `config.exibicao` do PASSO ("buttons" | "list"); sem ele, a contagem
         // decide (ate 3 botoes, acima lista).
@@ -2346,6 +2583,24 @@ class ChatbotEngine {
    * o passo final nao cria OS nem timer duplicado.
    */
   async _entregarNoFimDoFluxo(contexto, opcao = null) {
+    // FIM DE FLUXO QUE ENCERRA, em vez de entregar.
+    //
+    // Um bloco terminal pode declarar `acao: "encerrar"` (a despedida do fluxo).
+    // Antes isto nao acontecia porque `opcao` chegava sempre null e o unico
+    // desfecho possivel era a fila -- entao um bloco de encerramento alcancado
+    // pelo fim do fluxo, e nao por escolha do cliente, jogava a conversa na fila
+    // dizendo tchau. O texto do bloco JA foi enviado, por isso `mensagem` aqui e
+    // so o que a opcao declarar a mais.
+    if (opcao?.acao === "encerrar") {
+      const globais = this.configuracoesGlobais(contexto.fluxo);
+      const despedida = opcao.mensagemEncerramento || globais?.farewellMessage?.message || null;
+      return this.encerrarAtendimento(
+        contexto,
+        despedida ? this.interpolar(despedida, contexto) : null,
+        { motivo: "fim_do_fluxo" }
+      );
+    }
+
     // A opcao curinga que transfere pode trazer setor e fila do proprio no; sem
     // isso a conversa cairia na fila geral, perdendo a triagem que o desenho do
     // fluxo ja fazia. Mesmo tratamento que `aplicarOpcao` da a `acao:
@@ -2641,11 +2896,80 @@ class ChatbotEngine {
     const contexto = {
       ...ctx,
       fluxo: { ...fluxo, passos },
+      // As respostas livres ja coletadas neste atendimento, para os textos dos
+      // passos seguintes poderem cita-las ({{resposta.<nome>}}). Vem da sessao,
+      // e nao da memoria do processo: o atendimento atravessa varios webhooks.
+      respostas: sessao.contexto?.respostas || {},
     };
 
     let passoAtual = sessao.passoAtualId
       ? passos.find((p) => p.id === sessao.passoAtualId)
       : passos[0];
+
+    // ── A RESPOSTA LIVRE CHEGOU: E AGORA O FLUXO ANDA ────────────────────────
+    //
+    // Este e o outro lado do `AGUARDANDO.TEXTO`. O passo perguntou e parou; a
+    // mensagem que acabou de chegar E a resposta, qualquer que seja ela. Nao ha
+    // opcao para casar, nao ha tentativa a contar e nao ha resposta "errada":
+    // "David / TI" e "meu computador nao liga" sao as duas validas.
+    //
+    // Quem decide para onde ir e o `targetId` do passo -- a mesma saida
+    // desenhada no canvas que qualquer outro bloco usa. A diferenca em relacao
+    // ao comportamento antigo e o INSTANTE: antes o motor seguia esse targetId
+    // na mesma volta em que enviava a pergunta (por isso o cliente recebia tres
+    // perguntas seguidas); agora ele o segue aqui, depois de o cliente escrever.
+    if (sessao.aguardando === AGUARDANDO.TEXTO) {
+      const resposta = String(textoEntrada || "").trim();
+
+      // A resposta guardada com o nome que o passo declarou (`config.variavel`).
+      // Fica em `contexto.respostas` para os textos seguintes poderem cita-la
+      // ({{resposta.nome_setor}}) -- ver interpolar.
+      const chave = passoAtual ? this.variavelDoPasso(passoAtual) : null;
+      const respostas = { ...(sessao.contexto?.respostas || {}) };
+      if (chave && resposta) respostas[chave] = resposta.slice(0, 500);
+      contexto.respostas = respostas;
+
+      const destino = passoAtual ? this.proximoPasso(passos, passoAtual) : null;
+      if (!destino) {
+        // O passo pediu a informacao e nao tem para onde seguir. O cliente
+        // acabou de escrever: calar aqui seria pior do que qualquer alternativa,
+        // e um atendente resolve. Mesmo desfecho de `ramificacao_sem_destino`.
+        logger.warn("Passo de resposta livre sem saida: entregando para a fila", {
+          fluxoId: fluxo.id,
+          conversaId: conversa.id,
+          passoId: passoAtual?.id || null,
+          passoTitulo: passoAtual?.titulo || null,
+        });
+        return this.transferirParaHumano(contexto, { motivo: "resposta_livre_sem_destino" });
+      }
+
+      const resultado = await this.percorrer(destino, contexto);
+      if (resultado.fimDoFluxo) {
+        return { fluxoId: fluxo.id, ...(await this._entregarNoFimDoFluxo(contexto, resultado.opcaoFinal)) };
+      }
+
+      await this.deps.sessaoRepository.update(sessao.id, {
+        passoAtualId: resultado.passoAtual?.id || null,
+        aguardando: resultado.aguardando,
+        ativo: !!resultado.aguardando,
+        ...this._marcasDeEspera(resultado.aguardando, {
+          concluido: !resultado.aguardando,
+          cobraResposta: resultado.cobraResposta !== false,
+        }),
+        contexto: {
+          ...(resultado.contextoSessao || { tentativasCnpj: 0, tentativasOpcao: 0 }),
+          // As respostas ja coletadas atravessam o passo seguinte: sem isto, a
+          // segunda pergunta livre apagaria a primeira.
+          respostas,
+        },
+      });
+
+      return {
+        fluxoId: fluxo.id,
+        aguardando: resultado.aguardando,
+        concluido: !resultado.aguardando,
+      };
+    }
 
     // Cliente parado num menu do fluxo: a mensagem dele e a escolha da opcao.
     if (sessao.aguardando === AGUARDANDO.OPCAO) {
@@ -2710,8 +3034,10 @@ class ChatbotEngine {
           }
           contexto.cnpjValidacao = cnpjValidacao;
           contexto.conversa = await this.deps.conversaRepository.findById(conversa.id);
-          // O passo que pediu o CNPJ cumpriu seu papel; segue para o proximo.
-          const seguinte = passoAtual ? this.proximoPasso(passos, passoAtual) : null;
+          // O passo que pediu o CNPJ cumpriu seu papel; segue para o proximo --
+          // que pode ser OUTRO quando o CNPJ nao esta na base de clientes. Ver
+          // _proximoDepoisDoCnpj.
+          const seguinte = this._proximoDepoisDoCnpj(passos, passoAtual, cnpjValidacao);
           const resultado = await this.percorrer(seguinte, contexto);
           if (resultado.fimDoFluxo) {
             return { fluxoId: fluxo.id, ...(await this._entregarNoFimDoFluxo(contexto, resultado.opcaoFinal)) };
@@ -2850,9 +3176,11 @@ class ChatbotEngine {
       contexto.cnpjValidacao = cnpjValidacao;
       contexto.conversa = await this.deps.conversaRepository.findById(conversa.id);
 
-      // O passo que pediu o CNPJ ja cumpriu seu papel; segue para o proximo.
+      // O passo que pediu o CNPJ ja cumpriu seu papel; segue para o proximo --
+      // que pode ser OUTRO quando o CNPJ e valido mas nao esta na base de
+      // clientes (o caminho avulso). Ver _proximoDepoisDoCnpj.
       if (passoAtual) {
-        passoAtual = this.proximoPasso(passos, passoAtual);
+        passoAtual = this._proximoDepoisDoCnpj(passos, passoAtual, cnpjValidacao);
       }
     }
 
@@ -3141,38 +3469,77 @@ class ChatbotEngine {
       return { processado: true, motivo: "midia_recebida", conversaId: conversa.id };
     }
 
-    // Fora do horario de atendimento: o bot nao inicia fluxo nenhum. Vale so
-    // para conversa nova/parada - quem ja esta no meio de um menu continua, para
-    // nao abandonar o cliente no meio do caminho quando o expediente vira.
+    // ── FORA DO HORARIO DE ATENDIMENTO ───────────────────────────────────────
+    //
+    // O bot nao inicia fluxo nenhum, avisa o cliente e PRESERVA o atendimento na
+    // fila de Pendentes -- que e a estrutura que o sistema ja tem para "chegou,
+    // ninguem assumiu ainda". Nao existe fila "fechada" separada, e inventar uma
+    // exigiria mexer no banco e em toda a Central; a conversa de madrugada fica
+    // exatamente onde a equipe vai olhar quando abrir.
+    //
+    // Vale so para conversa nova/parada: quem ja esta no meio de um menu, de uma
+    // resposta livre ou da pesquisa continua, para o expediente virar sem
+    // abandonar o cliente na metade do caminho.
     const horario = await this.deps.configuracaoService.horarioAtendimento();
     if (this.foraDoHorario(horario)) {
       const sessaoEmCurso = await this.deps.sessaoRepository.findByTelefone(instanciaId, telefone);
-      // Nao interrompe quem ja esta no meio de um menu OU respondendo a pesquisa
-      // de satisfacao: joga-los na fila por causa do expediente abandona o fluxo.
       const emCurso =
         sessaoEmCurso?.ativo &&
         [
           AGUARDANDO.OPCAO,
           AGUARDANDO.CNPJ,
           AGUARDANDO.CNPJ_CONFIRMA,
+          // Resposta livre entra na lista pelo mesmo motivo que o menu: o
+          // cliente esta no meio de escrever o que precisa.
+          AGUARDANDO.TEXTO,
           AGUARDANDO.AVALIACAO_NOTA,
           AGUARDANDO.AVALIACAO_COMENTARIO,
         ].includes(sessaoEmCurso.aguardando);
       if (!emCurso) {
-        if (horario.mensagem) {
+        // ── O AVISO NAO SE REPETE A CADA MENSAGEM ──────────────────────────
+        //
+        // Aqui a mensagem saia SEMPRE. Depois do primeiro aviso a sessao fica em
+        // `aguardando: "humano"` -- que nao esta (nem deve estar) na lista de
+        // "em curso" acima --, entao "oi", "alguem aí?", "preciso de ajuda" as
+        // 22h produziam tres bolhas identicas em trinta segundos. Foi o
+        // comportamento relatado.
+        //
+        // A marca do ultimo aviso vive na SESSAO, e nao em memoria do processo:
+        // ela precisa sobreviver a restart e a duas instancias. Ver
+        // chatbot.horario.deveAvisar para a janela (padrao: 2 h -- cobre a noite
+        // inteira e volta a avisar quem escreve no dia seguinte).
+        const avisadoEm = sessaoEmCurso?.contexto?.foraHorarioEm || null;
+        const avisar = horarioAtendimento.deveAvisar(horario, avisadoEm, this.agora());
+        // O texto vem da CONFIGURACAO, com os horarios configurados dentro dele.
+        // Nada de "08:00 as 18:00" escrito num passo do fluxo: trocar o
+        // expediente na tela tem de trocar o que o cliente le.
+        const texto = this.mensagemForaDoHorario(horario);
+
+        if (avisar && texto) {
           await this.enviarBot(
             conversa.id,
             telefone,
-            this.interpolar(horario.mensagem, { conversa }),
+            this.interpolar(texto, { conversa }),
             instanceName
           );
         }
         logger.info("Mensagem recebida fora do horario de atendimento", {
           conversaId: conversa.id,
+          avisou: avisar && !!texto,
+          avisadoEm,
         });
         return this.transferirParaHumano(
           { conversa, telefone, instanciaId, instanceName },
-          { avisar: false, motivo: "fora_do_horario" }
+          {
+            avisar: false,
+            motivo: "fora_do_horario",
+            // Quando o aviso foi enviado agora, o carimbo e agora; quando nao
+            // foi, o carimbo ANTIGO e preservado -- senao a proxima mensagem
+            // veria "nunca avisado" e o aviso voltaria a repetir.
+            contextoExtra: {
+              foraHorarioEm: avisar && texto ? this.agora().toISOString() : avisadoEm,
+            },
+          }
         );
       }
     }
@@ -3208,11 +3575,23 @@ class ChatbotEngine {
       //
       // `cicloReaberto` preserva o caminho oposto: cliente que volta com um
       // chamado NOVO (conversa estava fechada) continua sendo atendido pelo bot.
+      // AQUI HAVIA TAMBEM `&& !conversa.atendenteId`. A intencao era "so vale
+      // para quem ainda esta na fila", mas o efeito era o oposto do desejado:
+      // uma conversa JA RECLAMADA por um atendente (atendenteId gravado) e ainda
+      // em `pendente` -- o estado entre assumir e abrir -- caia FORA do guard, a
+      // sessao era zerada e o gatilho curinga reexecutava o fluxo do zero. O
+      // cliente recebia o menu de boas-vindas por cima do colega que acabara de
+      // pegar o chamado.
+      //
+      // O criterio certo e o estado da CONVERSA: `pendente` + sessao em
+      // `humano` significa "esperando uma pessoa", com dono ou sem dono. Isso
+      // nao expira -- termina quando alguem abre (`aberta`) ou quando o ciclo
+      // fecha. `cicloReaberto` preserva o caminho oposto: cliente que volta com
+      // um chamado NOVO (conversa estava fechada) continua sendo atendido pelo bot.
       const naFilaDoAtendente =
         sessao.aguardando === AGUARDANDO.HUMANO &&
         !cicloReaberto &&
-        conversa.statusAtendimento === "pendente" &&
-        !conversa.atendenteId;
+        conversa.statusAtendimento === "pendente";
 
       if (naFilaDoAtendente) {
         logger.info("Sessao expirada, mas a conversa segue na fila: bot nao reinicia o fluxo", {
@@ -3261,15 +3640,33 @@ class ChatbotEngine {
 
       const comandoBruto = this.detectarComando(textoLimpo);
 
-      // Com o cliente parado num menu do fluxo, as palavras-chave globais do
-      // motor colidem de frente com os rotulos do menu: `palavrasChave.menu` tem
-      // "voltar" e "inicio", `palavrasChave.sair` tem "encerrar" e "sair", e um
-      // menu tipico traz "3,voltar,menu inicial,inicio" e "encerrar,sair,4".
-      // Nesse estado a opcao do fluxo ganha - senao o cliente que digita
-      // "voltar" cai na fila em vez de voltar ao inicio do bot, e quem digita
-      // "encerrar" nao recebe a mensagem de despedida que o fluxo definiu.
-      // O pedido explicito de atendente continua atropelando o fluxo.
-      const noMenuDoFluxo = sessao?.ativo && sessao.aguardando === AGUARDANDO.OPCAO;
+      // ── QUANDO A MENSAGEM DO CLIENTE É RESPOSTA, E NÃO COMANDO ──────────────
+      //
+      // MENU: as palavras-chave globais do motor colidem de frente com os
+      // rotulos do menu. `palavrasChave.menu` tem "voltar" e "inicio",
+      // `palavrasChave.sair` tem "encerrar" e "sair", e um menu tipico traz
+      // "3,voltar,menu inicial,inicio". Nesse estado a opcao do fluxo ganha --
+      // senao quem digita "voltar" cai na fila em vez de voltar ao inicio, e
+      // quem digita "encerrar" nao recebe a despedida que o fluxo definiu.
+      //
+      // RESPOSTA LIVRE: o mesmo problema, mais grave. Aqui o cliente esta
+      // ESCREVENDO o que precisa, em portugues corrido, e `detectarComando` casa
+      // por palavra inteira em qualquer posicao da frase. Medido:
+      //
+      //   "Preciso encerrar meu contrato de internet"  -> sair
+      //   "quero cancelar um pedido"                   -> sair
+      //   "preciso voltar a usar o sistema antigo"     -> menu
+      //
+      // Sem esta linha, cada uma dessas descricoes -- todas legitimas, e as duas
+      // primeiras justamente do tipo que chega no Financeiro e no Comercial --
+      // ENCERRARIA o atendimento em vez de ser coletada. O cliente contaria o
+      // problema e o bot responderia "atendimento encerrado".
+      //
+      // Nos dois estados o pedido explicito de atendente continua atropelando o
+      // fluxo: quem pede uma pessoa deve conseguir uma pessoa.
+      const respostaEhDoFluxo =
+        sessao?.ativo &&
+        [AGUARDANDO.OPCAO, AGUARDANDO.TEXTO].includes(sessao.aguardando);
 
       // ETAPA OBRIGATORIA NAO SE PULA POR ACIDENTE.
       //
@@ -3281,7 +3678,15 @@ class ChatbotEngine {
       // espera o CNPJ recebe o fallback e continua na etapa.
       const emEtapaObrigatoria =
         sessao?.ativo &&
-        [AGUARDANDO.CNPJ, AGUARDANDO.CNPJ_CONFIRMA, AGUARDANDO.OPCAO].includes(sessao.aguardando);
+        [
+          AGUARDANDO.CNPJ,
+          AGUARDANDO.CNPJ_CONFIRMA,
+          AGUARDANDO.OPCAO,
+          // Resposta livre tambem e etapa obrigatoria: sem o nome/setor ou sem a
+          // descricao, o chamado chega vazio na fila. Quem escrever "menu" ali
+          // so pula a etapa se o fluxo permitir (permitirComandosGlobais).
+          AGUARDANDO.TEXTO,
+        ].includes(sessao.aguardando);
       let permiteAtalhos = true;
       if (emEtapaObrigatoria && sessao.fluxoAtualId) {
         const fluxoAtual = await this.deps.fluxoRepository.findById(sessao.fluxoAtualId);
@@ -3290,7 +3695,7 @@ class ChatbotEngine {
 
       const comando = !permiteAtalhos
         ? null
-        : noMenuDoFluxo && comandoBruto !== "atendente"
+        : respostaEhDoFluxo && comandoBruto !== "atendente"
           ? null
           : comandoBruto;
 
@@ -3407,3 +3812,8 @@ module.exports = engine;
 module.exports.ChatbotEngine = ChatbotEngine;
 module.exports.AGUARDANDO = AGUARDANDO;
 module.exports.GATILHO_CURINGA = GATILHO_CURINGA;
+// O teto de botoes e uma regra de INTERFACE que o fluxo tem de respeitar, e por
+// isso ela precisa ser citavel de fora: o painel de automacoes avisa quem monta
+// o fluxo, e os testes conferem o numero em vez de repeti-lo.
+module.exports.MAX_BOTOES_POR_MENSAGEM = MAX_BOTOES_POR_MENSAGEM;
+module.exports.AGUARDA_RESPOSTA_DO_CLIENTE = AGUARDA_RESPOSTA_DO_CLIENTE;

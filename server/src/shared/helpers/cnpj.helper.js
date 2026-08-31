@@ -92,24 +92,70 @@ function dataBrasilia(date = new Date()) {
 // pratica, das 05:00 as 15:00 de Brasilia: o bot calava no meio da tarde e
 // respondia de madrugada. Na sexta as 21h o `getDay()` ja dizia sabado.
 const DIAS_SEMANA = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
-const formatadorPartes = new Intl.DateTimeFormat("en-US", {
-  timeZone: "America/Sao_Paulo",
-  weekday: "short",
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: false,
-});
+const FUSO_PADRAO = "America/Sao_Paulo";
 
-function partesBrasilia(date = new Date()) {
+// ── UM FORMATADOR POR FUSO, e nao um por chamada ────────────────────────────
+//
+// `new Intl.DateTimeFormat` custa caro (carrega dados de ICU) e esta funcao roda
+// em TODA mensagem que chega. O fuso deixou de ser fixo porque o horario de
+// atendimento passou a ser configuravel (ver chatbot.horario.js) -- entao o
+// formatador virou um cache por fuso, em vez de uma constante de modulo.
+const formatadores = new Map();
+function formatadorDe(timeZone) {
+  const tz = String(timeZone || "").trim() || FUSO_PADRAO;
+  let f = formatadores.get(tz);
+  if (f) return f;
+  try {
+    f = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+  } catch {
+    // Fuso invalido (typo na configuracao) nao pode derrubar o atendimento: cai
+    // no de Brasilia, que e o do resto do sistema.
+    if (tz === FUSO_PADRAO) throw new Error("fuso padrao invalido");
+    return formatadorDe(FUSO_PADRAO);
+  }
+  formatadores.set(tz, f);
+  return f;
+}
+
+/**
+ * Hora/minuto e dia da semana NO FUSO PEDIDO.
+ *
+ * Generalizacao de `partesBrasilia`: a regra de expediente passou a ter fuso
+ * proprio na configuracao, e o resto do sistema (agenda, SLA) continua em
+ * Brasilia. Fuso desconhecido cai em Brasilia em vez de estourar.
+ */
+function partesEmFuso(date = new Date(), timeZone = FUSO_PADRAO) {
   const d = date instanceof Date ? date : new Date(date);
   const partes = {};
-  for (const p of formatadorPartes.formatToParts(d)) partes[p.type] = p.value;
+  for (const p of formatadorDe(timeZone).formatToParts(d)) partes[p.type] = p.value;
   // Meia-noite sai como "24" em alguns ICU: o % 24 normaliza.
   const hora = Number(partes.hour) % 24;
   return {
     minutosDoDia: hora * 60 + Number(partes.minute),
     diaSemana: DIAS_SEMANA[partes.weekday] ?? 0,
   };
+}
+
+function partesBrasilia(date = new Date()) {
+  return partesEmFuso(date, FUSO_PADRAO);
+}
+
+// "2026-08-31" no fuso pedido. E a chave das EXCECOES de horario (feriado numa
+// data especifica), e por isso ela nao pode sair do fuso do processo: em UTC,
+// as 22h de 24/12 em Brasilia ja seriam 25/12.
+function dataISOEmFuso(date = new Date(), timeZone = FUSO_PADRAO) {
+  const d = date instanceof Date ? date : new Date(date);
+  try {
+    return d.toLocaleDateString("en-CA", { timeZone: String(timeZone || "").trim() || FUSO_PADRAO });
+  } catch {
+    return d.toLocaleDateString("en-CA", { timeZone: FUSO_PADRAO });
+  }
 }
 
 function sleep(ms) {
@@ -162,6 +208,9 @@ module.exports = {
   formatarHora,
   dataBrasilia,
   partesBrasilia,
+  partesEmFuso,
+  dataISOEmFuso,
+  FUSO_PADRAO,
   sleep,
   tipoClienteDaOpcaoEscolhida,
 };

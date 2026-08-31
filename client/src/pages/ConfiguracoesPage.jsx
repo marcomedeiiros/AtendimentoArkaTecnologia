@@ -4,6 +4,7 @@ import {
   Database, Server, MessageCircle, Workflow, FileText
 } from 'lucide-react';
 import { ConfiguracoesAPI } from '../services/api';
+import HorarioAtendimento from '../components/HorarioAtendimento';
 
 const CAMPOS = {
   evolution: [
@@ -84,6 +85,10 @@ function CardServico({ titulo, Icon, campos, valores, onChange, onTestar, teste,
 export default function ConfiguracoesPage() {
   const [valores, setValores] = useState({});
   const [sistema, setSistema] = useState(null);
+  // O expediente JA INTERPRETADO pelo servidor (objeto + resumo por extenso +
+  // previa da mensagem). A chave crua continua em `valores['chatbot.horario']`; e
+  // ela que o PUT grava. Ver configuracao.service.horarioAtendimentoParaUi.
+  const [horario, setHorario] = useState(null);
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState(false);
@@ -97,6 +102,7 @@ export default function ConfiguracoesPage() {
       const d = await ConfiguracoesAPI.obter();
       setValores(Object.fromEntries(Object.entries(d.valores).map(([k, v]) => [k, v.valor])));
       setSistema(d.sistema);
+      setHorario(d.horario || null);
     } catch (e) {
       setErro(e.message);
     } finally {
@@ -116,6 +122,14 @@ export default function ConfiguracoesPage() {
     try {
       const d = await ConfiguracoesAPI.salvar(valores);
       setValores(Object.fromEntries(Object.entries(d).map(([k, v]) => [k, v.valor])));
+      // RECARREGA O EXPEDIENTE INTERPRETADO. O PUT devolve so os valores crus, e
+      // o resumo/previa do horario e calculado pelo servidor -- deixar o bloco
+      // "o que esta valendo agora" com o retrato anterior seria mostrar ao
+      // operador uma regra diferente da que acabou de ser gravada.
+      try {
+        const atual = await ConfiguracoesAPI.obter();
+        setHorario(atual.horario || null);
+      } catch { /* a previa fica com o retrato anterior; o valor salvo esta certo */ }
       setSalvo(true);
       setTimeout(() => setSalvo(false), 3000);
     } catch (e) {
@@ -220,6 +234,23 @@ export default function ConfiguracoesPage() {
             onTestar={() => testar('n8n')} teste={testes.n8n} testando={testando === 'n8n'}
           />
         </div>
+      )}
+
+      {/* ── HORÁRIO DE ATENDIMENTO ──────────────────────────────────────────
+          `key` amarrado ao retrato do servidor: o componente guarda os dias e as
+          exceções em estado local (é um formulário), e sem a chave ele não
+          reinicializaria depois de um Salvar -- a tela continuaria mostrando o
+          rascunho anterior mesmo com outra configuração gravada. */}
+      {!carregando && horario && (
+        <HorarioAtendimento
+          key={JSON.stringify(horario.horario || {})}
+          horario={horario.horario}
+          resumo={horario.resumo}
+          mensagemPrevia={horario.mensagemPrevia}
+          semPeriodos={horario.semPeriodos}
+          mensagemPadrao={horario.mensagemPadrao}
+          onChange={onChange}
+        />
       )}
 
       {!carregando && (

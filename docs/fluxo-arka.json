@@ -1,7 +1,7 @@
 {
-  "versao": 1,
-  "exportadoEm": "2026-08-27T04:00:00.000Z",
-  "nome": "ARKA - Atendimento com validação de contrato",
+  "versao": 2,
+  "exportadoEm": "2026-08-31",
+  "nome": "ARKA - Atendimento",
   "gatilho": "*",
   "ativo": true,
   "passos": [
@@ -10,20 +10,19 @@
       "tipo": "gatilho",
       "titulo": "Início",
       "desc": "Abre em qualquer primeira mensagem do cliente (gatilho curinga).",
-      "targetId": "d70e3322-5760-49c6-98e9-c60550093310",
-      "ordem": 0,
+      "texto": null,
+      "config": null,
       "x": 40,
-      "y": 120,
-      "w": 220,
-      "h": 96
+      "y": 300,
+      "targetId": "d70e3322-5760-49c6-98e9-c60550093310",
+      "ordem": 0
     },
     {
       "id": "0abb83d6-8f39-4f03-b90a-d60e8b01bc07",
       "tipo": "comentario",
       "titulo": "Configurações do bot",
-      "desc": "Textos de fallback do bot. Os tempos moram nos blocos \"espera\" do canvas, e a confirmação de encaminhamento em handoffMessage (ou no próprio nó que transfere).",
-      "targetId": null,
-      "ordem": 1,
+      "desc": "Textos de fallback e os dois relógios do fluxo. Não é um passo da conversa.",
+      "texto": null,
       "config": {
         "configuracoesGlobais": {
           "notOptionsSelectMessage": {
@@ -34,20 +33,12 @@
             "message": "✅ *Solicitação registrada*\n\nRecebemos suas informações e encaminhamos sua solicitação para a nossa equipe.\n\nUm de nossos atendentes dará continuidade ao atendimento por aqui."
           },
           "farewellMessage": {
-            "message": "Seu atendimento foi encerrado! Se precisar nos envie uma nova mensagem!"
+            "message": "Seu atendimento foi encerrado! Se precisar, nos envie uma nova mensagem."
           },
           "maxRetryBotMessage": {
             "number": 3,
             "type": 3,
             "destiny": 41
-          },
-          "outOpenHours": {
-            "type": 1,
-            "destiny": 42
-          },
-          "firstInteraction": {
-            "type": 1,
-            "destiny": null
           },
           "keyword": {
             "message": ""
@@ -70,21 +61,20 @@
           "permitirComandosGlobais": true
         }
       },
-      "x": 490,
-      "y": -60,
-      "w": 240,
-      "h": 120
+      "x": 40,
+      "y": 40,
+      "targetId": null,
+      "ordem": 1
     },
     {
       "id": "d70e3322-5760-49c6-98e9-c60550093310",
       "tipo": "mensagem",
-      "titulo": "Boas Vindas",
-      "desc": "Menu inicial.",
-      "targetId": "de723e94-ac45-4ed4-b9c8-4d9e71a6c84f",
-      "ordem": 2,
-      "texto": "🤖Olá, {{cliente.nome}}. Bem-vindo(a) à ARKA TECNOLOGIA. Agradecemos seu contato. Por favor, escolha uma das opções abaixo para direcionar seu atendimento:\n\n1️⃣- Setor Técnico\n2️⃣- Comercial\n3️⃣- Adm/Financeiro",
+      "titulo": "MENU PRINCIPAL",
+      "desc": "Triagem por setor. É AQUI que o setor da conversa é definido.",
+      "texto": "👋 Olá! Seja bem-vindo à ARKA Tecnologia.\n\nComo podemos ajudar?\n\n1️⃣ Técnico\n2️⃣ Comercial\n3️⃣ Financeiro",
       "config": {
-        "variavel": "boas_vindas",
+        "variavel": "menu_principal",
+        "exibicao": "buttons",
         "opcoes": [
           {
             "id": "mp_1",
@@ -101,8 +91,8 @@
             ],
             "acao": "ir",
             "targetId": "de723e94-ac45-4ed4-b9c8-4d9e71a6c84f",
-            "setor": "Técnico",
-            "botao": "🛠️ Setor Técnico"
+            "botao": "🔧 Técnico",
+            "setor": "Técnico"
           },
           {
             "id": "mp_2",
@@ -116,8 +106,8 @@
             ],
             "acao": "ir",
             "targetId": "64b85687-198c-49ef-b7a7-827fdb8a456a",
-            "setor": "Comercial",
-            "botao": "💼 Comercial"
+            "botao": "💼 Comercial",
+            "setor": "Comercial"
           },
           {
             "id": "mp_3",
@@ -133,30 +123,28 @@
             ],
             "acao": "ir",
             "targetId": "4f5f1646-5441-4afd-974d-dd4fa639f958",
-            "setor": "Financeiro",
-            "botao": "💰 Adm/Financeiro"
+            "botao": "💰 Financeiro",
+            "setor": "Financeiro"
           }
-        ],
-        "exibicao": "buttons"
+        ]
       },
-      "x": 40,
+      "x": 340,
       "y": 300,
-      "w": 220,
-      "h": 96
+      "targetId": "de723e94-ac45-4ed4-b9c8-4d9e71a6c84f",
+      "ordem": 2
     },
     {
       "id": "de723e94-ac45-4ed4-b9c8-4d9e71a6c84f",
       "tipo": "mensagem",
-      "titulo": "SUPORTE",
-      "desc": "Contrato x avulso.",
-      "targetId": "8d01304a-ef09-49cf-bc6a-4f97c9a32d74",
-      "ordem": 3,
-      "texto": "🤖 Você selecionou o Setor Técnico. Para melhor atendê-lo, por favor escolha uma das opções abaixo\n\n1️⃣- TENHO CONTRATO\n2️⃣- SOU CLIENTE AVULSO\n3️⃣- VOLTAR AO MENU INICIAL",
+      "titulo": "TÉCNICO",
+      "desc": "Contrato x avulso. Três botões (o terceiro volta ao menu).",
+      "texto": "🔧 *Atendimento Técnico*\n\nComo podemos ajudar?\n\n1️⃣ Tenho contrato\n2️⃣ Atendimento avulso\n3️⃣ Voltar ao menu",
       "config": {
-        "variavel": "suporte",
+        "variavel": "tecnico",
+        "exibicao": "buttons",
         "opcoes": [
           {
-            "id": "sup_1",
+            "id": "tec_1",
             "ordem": 0,
             "esperaEscolha": true,
             "rotulo": "1,contrato,tenho contrato",
@@ -167,231 +155,205 @@
             ],
             "acao": "ir",
             "targetId": "8d01304a-ef09-49cf-bc6a-4f97c9a32d74",
-            "botao": "📄 Tenho contrato"
+            "botao": "Tenho contrato"
           },
           {
-            "id": "sup_2",
+            "id": "tec_2",
             "ordem": 1,
             "esperaEscolha": true,
-            "rotulo": "2,cliente avulso,avulso,novo cliente",
+            "rotulo": "2,avulso,atendimento avulso,cliente avulso,novo cliente",
             "palavrasChave": [
               "2",
-              "cliente avulso",
               "avulso",
+              "atendimento avulso",
+              "cliente avulso",
               "novo cliente"
             ],
             "acao": "ir",
             "targetId": "8619e80e-47a4-4a05-80fd-be50e7649756",
-            "botao": "🙋 Cliente avulso"
+            "botao": "Atendimento avulso"
           },
           {
-            "id": "sup_3",
+            "id": "tec_3",
             "ordem": 2,
             "esperaEscolha": true,
-            "rotulo": "3,voltar ao inicio,menu inicial,voltar",
+            "rotulo": "3,voltar,menu inicial,voltar ao menu,inicio",
             "palavrasChave": [
               "3",
-              "voltar ao inicio",
+              "voltar",
               "menu inicial",
-              "voltar"
+              "voltar ao menu",
+              "inicio"
             ],
             "acao": "ir",
             "targetId": "d70e3322-5760-49c6-98e9-c60550093310",
-            "botao": "🏠 Voltar ao menu"
+            "botao": "Voltar ao menu"
           }
-        ],
-        "exibicao": "buttons"
+        ]
       },
-      "x": 340,
-      "y": 300,
-      "w": 220,
-      "h": 96
+      "x": 640,
+      "y": 180,
+      "targetId": "8d01304a-ef09-49cf-bc6a-4f97c9a32d74",
+      "ordem": 3
     },
     {
       "id": "8d01304a-ef09-49cf-bc6a-4f97c9a32d74",
       "tipo": "condicao",
-      "titulo": "VALIDA CONTRATO (CNPJ)",
-      "desc": "Recebe o CNPJ, confere os dígitos verificadores e consulta a base de Parceiros. Após 2 tentativas inválidas (maxTentativasCnpj) o motor confirma o encaminhamento e transfere para um atendente.",
-      "targetId": "14fe8be5-ffb5-47ee-b2cf-0475e2883554",
-      "ordem": 4,
-      "texto": "🤖 Certo! Para confirmar seu contrato, me informe o *CNPJ da empresa contratante* (pode enviar com ou sem pontuação).\n\nExemplo: 12.345.678/0001-90",
+      "titulo": "CNPJ",
+      "desc": "Pede o CNPJ e aguarda. Normaliza, valida os dígitos e consulta a base de clientes.",
+      "texto": "🔐 *Confirmação do cadastro*\n\nPara localizar seu cadastro, informe o CNPJ da empresa.\n\nVocê pode enviar com ou sem pontuação.",
       "config": {
         "aguardar": "cnpj",
         "variavel": "cnpj_contrato",
-        "memoriaCnpj": true,
-        "mensagemConfirmarCnpj": "🤖 Vi que você já foi atendido por aqui. O CNPJ continua sendo este?\n\n📄 {{cnpj}}{{empresa}}\n\nResponda *SIM* para confirmar ou *NÃO* para informar outro.",
+        "memoriaCnpj": false,
         "maxTentativasCnpj": 2,
-        "aoEsgotarTentativasCnpj": "transferir",
+        "aoEsgotarTentativasCnpj": "avulso",
         "mensagemCnpjInvalido": "Hmm, o número informado parece estar incorreto. Poderia conferir o CNPJ e tentar novamente?",
         "mensagemCnpjUltimaTentativa": "O número informado parece estar incorreto. Você tem mais uma tentativa: confira o CNPJ e envie novamente.",
-        "mensagemCnpjNaoCadastrado": "Não encontramos esse CNPJ em nossa lista de Clientes. Você será atendido como cliente avulso.",
+        "mensagemCnpjNaoCadastrado": "Não encontramos esse CNPJ em nossa lista de clientes.\n\nVocê poderá continuar como cliente avulso.",
         "mensagemRespostaInvalida": "Hmm, não entendemos o que você falou. Poderia repetir?",
-        "mensagemPedirOutroCnpj": "Sem problema. Por favor, informe o *CNPJ* (pode enviar com ou sem pontuação)."
+        "mensagemPedirOutroCnpj": "Sem problema. Por favor, informe o *CNPJ* (pode enviar com ou sem pontuação).",
+        "targetIdNaoCadastrado": "8619e80e-47a4-4a05-80fd-be50e7649756"
       },
-      "x": 640,
-      "y": 220,
-      "w": 220,
-      "h": 96
+      "x": 940,
+      "y": 120,
+      "targetId": "14fe8be5-ffb5-47ee-b2cf-0475e2883554",
+      "ordem": 4
     },
     {
       "id": "14fe8be5-ffb5-47ee-b2cf-0475e2883554",
       "tipo": "mensagem",
-      "titulo": "RESULTADO DA CONSULTA",
-      "desc": "Mostra o que veio da base de Parceiros e ramifica.",
-      "targetId": "f083aed3-0296-499e-af69-9dfcde346d4a",
-      "ordem": 5,
-      "texto": "🤖 Resultado da consulta na nossa base:\n\n▪️ CNPJ: {{cliente.cnpj}}\n▪️ Situação: {{parceiro.status}}\n\nComo deseja seguir?\n\n1️⃣- CONFIRMAR E ABRIR CHAMADO\n2️⃣- INFORMAR OUTRO CNPJ\n3️⃣- SEGUIR COMO ATENDIMENTO AVULSO\n4️⃣- VOLTAR AO MENU INICIAL",
+      "titulo": "CONFIRMA CNPJ",
+      "desc": "Mostra o cadastro encontrado e aguarda a confirmação. Dois botões.",
+      "texto": "🔐 *Confirmação do cadastro*\n\nEncontramos este cadastro:\n\n🏢 CNPJ: {{cliente.cnpj}}\n🏢 Empresa: {{empresa.nome}}\n\nO CNPJ continua sendo este?\n\n1️⃣ Sim, é esse\n2️⃣ Não, informar outro CNPJ",
       "config": {
-        "variavel": "resultado_contrato",
+        "variavel": "confirma_cnpj",
+        "exibicao": "buttons",
         "opcoes": [
           {
-            "id": "res_1",
+            "id": "cnf_1",
             "ordem": 0,
             "esperaEscolha": true,
-            "rotulo": "1,confirmar,abrir chamado,sim",
+            "rotulo": "1,sim,confirmar,isso,correto",
             "palavrasChave": [
               "1",
+              "sim",
               "confirmar",
-              "abrir chamado",
-              "sim"
+              "isso",
+              "correto"
             ],
             "acao": "ir",
             "targetId": "f083aed3-0296-499e-af69-9dfcde346d4a",
-            "botao": "✅ Abrir chamado"
+            "botao": "✅ Sim, é esse"
           },
           {
-            "id": "res_2",
+            "id": "cnf_2",
             "ordem": 1,
             "esperaEscolha": true,
-            "rotulo": "2,outro cnpj,corrigir,errado",
+            "rotulo": "2,nao,não,outro,outro cnpj,errado",
             "palavrasChave": [
               "2",
+              "nao",
+              "não",
+              "outro",
               "outro cnpj",
-              "corrigir",
               "errado"
             ],
             "acao": "ir",
             "targetId": "8d01304a-ef09-49cf-bc6a-4f97c9a32d74",
-            "limparCnpj": true,
-            "botao": "🔁 Outro CNPJ"
-          },
-          {
-            "id": "res_3",
-            "ordem": 2,
-            "esperaEscolha": true,
-            "rotulo": "3,avulso,atendimento avulso",
-            "palavrasChave": [
-              "3",
-              "avulso",
-              "atendimento avulso"
-            ],
-            "acao": "ir",
-            "targetId": "8619e80e-47a4-4a05-80fd-be50e7649756",
-            "botao": "🙋 Cliente avulso"
-          },
-          {
-            "id": "res_4",
-            "ordem": 3,
-            "esperaEscolha": true,
-            "rotulo": "4,voltar ao menu inicial,menu inicial,voltar",
-            "palavrasChave": [
-              "4",
-              "voltar ao menu inicial",
-              "menu inicial",
-              "voltar"
-            ],
-            "acao": "ir",
-            "targetId": "d70e3322-5760-49c6-98e9-c60550093310",
-            "botao": "🏠 Voltar ao menu"
+            "botao": "🔄 Não, outro CNPJ",
+            "limparCnpj": true
           }
-        ],
-        "exibicao": "buttons"
+        ]
       },
-      "x": 940,
-      "y": 220,
-      "w": 220,
-      "h": 96
+      "x": 1240,
+      "y": 120,
+      "targetId": "f083aed3-0296-499e-af69-9dfcde346d4a",
+      "ordem": 5
     },
     {
       "id": "f083aed3-0296-499e-af69-9dfcde346d4a",
       "tipo": "mensagem",
-      "titulo": "IDENTIFICA CONTRATO",
-      "desc": "A empresa já veio do CNPJ; aqui só faltam nome e setor de quem fala.",
-      "targetId": "9bbec3f6-9a9a-4f09-a0b9-b0d8fd973dd9",
-      "ordem": 6,
-      "texto": "🤖 Perfeito. Agora me informe:\n\n▪️ Seu Nome\n▪️ Seu Setor",
+      "titulo": "IDENTIFICAÇÃO",
+      "desc": "Nome e setor do solicitante. TEXTO LIVRE: envia a mensagem e aguarda a resposta.",
+      "texto": "👤 *Identificação*\n\nPara encaminharmos seu atendimento corretamente, envie:\n\n• Seu nome\n• Seu setor\n\nVocê pode enviar as duas informações na mesma mensagem.",
       "config": {
-        "variavel": "identifica_contrato",
-        "opcoes": [
-          {
-            "id": "dc_livre",
-            "ordem": 0,
-            "esperaEscolha": false,
-            "rotulo": "resposta livre",
-            "palavrasChave": [],
-            "acao": "ir",
-            "targetId": "9bbec3f6-9a9a-4f09-a0b9-b0d8fd973dd9"
-          }
-        ]
+        "aguardar": "texto",
+        "variavel": "identificacao"
       },
-      "x": 1240,
-      "y": 220,
-      "w": 220,
-      "h": 96
+      "x": 1540,
+      "y": 120,
+      "targetId": "9bbec3f6-9a9a-4f09-a0b9-b0d8fd973dd9",
+      "ordem": 6
     },
     {
       "id": "9bbec3f6-9a9a-4f09-a0b9-b0d8fd973dd9",
       "tipo": "mensagem",
-      "titulo": "IDENTIFICA PROBLEMA",
-      "desc": "Último passo do bot: confirma a abertura e entrega para a fila técnica (queueId 33).",
-      "targetId": null,
-      "ordem": 7,
-      "texto": "🤖*AGORA DESCREVA SUA SOLICITAÇÃO*",
+      "titulo": "DESCRIÇÃO DA SOLICITAÇÃO",
+      "desc": "O que o cliente precisa. TEXTO LIVRE: envia a mensagem e aguarda a resposta.",
+      "texto": "📝 *Descreva sua solicitação*\n\nConte brevemente o que você precisa.\n\nSe possível, informe o equipamento, sistema ou serviço envolvido.",
       "config": {
-        "variavel": "identifica_problema",
+        "aguardar": "texto",
+        "variavel": "descricao_problema"
+      },
+      "x": 1840,
+      "y": 120,
+      "targetId": "a1f0c7e2-4b58-4c31-9a6d-1e7b2c9d4f01",
+      "ordem": 7
+    },
+    {
+      "id": "a1f0c7e2-4b58-4c31-9a6d-1e7b2c9d4f01",
+      "tipo": "mensagem",
+      "titulo": "FILA TÉCNICA",
+      "desc": "Confirma e transfere para a equipe técnica. Não aguarda resposta.",
+      "texto": "✅ *Solicitação recebida!*\n\nRecebemos suas informações e encaminhamos seu atendimento para nossa equipe técnica.\n\nEm breve um de nossos atendentes dará continuidade ao atendimento.",
+      "config": {
+        "aguardar": "nada",
+        "variavel": "fila_tecnica",
         "opcoes": [
           {
-            "id": "dp_transfere",
+            "id": "fila_tec",
             "ordem": 0,
             "esperaEscolha": false,
-            "rotulo": "transferir para o técnico",
+            "rotulo": "entregar para a equipe técnica",
             "palavrasChave": [],
             "acao": "transferir",
             "targetId": null,
             "filaId": 33,
-            "setor": "Técnico",
-            "mensagemHandoff": "✅ *Chamado aberto com sucesso*\n\nSua solicitação foi registrada e encaminhada para a equipe técnica.\n\nAssim que um técnico estiver disponível, ele dará continuidade ao atendimento por aqui."
+            "setor": "Técnico"
           }
         ]
       },
-      "x": 1240,
-      "y": 420,
-      "w": 220,
-      "h": 96
+      "x": 2140,
+      "y": 120,
+      "targetId": null,
+      "ordem": 8
     },
     {
       "id": "8619e80e-47a4-4a05-80fd-be50e7649756",
       "tipo": "mensagem",
-      "titulo": "C_AVULSO",
-      "desc": "Cliente sem contrato.",
-      "targetId": "9bbec3f6-9a9a-4f09-a0b9-b0d8fd973dd9",
-      "ordem": 8,
-      "texto": "🤖 Será um prazer atendê-lo, mas antes preciso te informar os valores do atendimento:\n\n💻 Atendimento Remoto: R$ 120,00\n🛠 Atendimento in Loco: R$ 180,00/h\n\nCaso seja necessário algum outro tipo de serviço ou projeto, o valor será informado mediante consulta. Podemos seguir com o seu atendimento?\n\n1️⃣- SIM\n2️⃣- NÃO\n3️⃣- VOLTAR AO MENU INICIAL",
+      "titulo": "AVULSO — VALORES",
+      "desc": "Valores do atendimento avulso e a confirmação. Três botões.",
+      "texto": "🙋 *Atendimento avulso*\n\nSerá um prazer atendê-lo! Antes, precisamos informar os valores:\n\n💻 Atendimento remoto: R$ 120,00\n🛠 Atendimento in loco: R$ 180,00/h\n\nOutros serviços ou projetos têm valor informado mediante consulta.\n\nPodemos seguir com o seu atendimento?\n\n1️⃣ Sim, seguir\n2️⃣ Não, obrigado\n3️⃣ Voltar ao menu",
       "config": {
-        "variavel": "avulso",
+        "variavel": "avulso_valores",
+        "exibicao": "buttons",
         "opcoes": [
           {
             "id": "av_1",
             "ordem": 0,
             "esperaEscolha": true,
-            "rotulo": "1,sim",
+            "rotulo": "1,sim,seguir,pode seguir",
             "palavrasChave": [
               "1",
-              "sim"
+              "sim",
+              "seguir",
+              "pode seguir"
             ],
             "acao": "ir",
-            "targetId": "9bbec3f6-9a9a-4f09-a0b9-b0d8fd973dd9",
-            "botao": "✅ Sim"
+            "targetId": "a1f0c7e2-4b58-4c31-9a6d-1e7b2c9d4f02",
+            "botao": "✅ Sim, seguir",
+            "clienteTipo": "avulso"
           },
           {
             "id": "av_2",
@@ -406,163 +368,138 @@
             ],
             "acao": "encerrar",
             "targetId": null,
-            "mensagemEncerramento": "Certo, de qualquer forma agradecemos seu contato, e se mudar de idéia, basta nos chamar novamente! ",
-            "botao": "❌ Não"
+            "botao": "❌ Não, obrigado",
+            "mensagemEncerramento": "Certo! De qualquer forma, agradecemos seu contato. Se mudar de ideia, basta nos chamar novamente."
           },
           {
             "id": "av_3",
             "ordem": 2,
             "esperaEscolha": true,
-            "rotulo": "3,voltar ao menu inicial,menu inicial,voltar",
+            "rotulo": "3,voltar,menu inicial,voltar ao menu,inicio",
             "palavrasChave": [
               "3",
-              "voltar ao menu inicial",
+              "voltar",
               "menu inicial",
-              "voltar"
+              "voltar ao menu",
+              "inicio"
             ],
             "acao": "ir",
             "targetId": "d70e3322-5760-49c6-98e9-c60550093310",
             "botao": "🏠 Voltar ao menu"
           }
-        ],
-        "exibicao": "buttons"
+        ]
       },
-      "x": 640,
-      "y": 470,
-      "w": 220,
-      "h": 96
+      "x": 940,
+      "y": 440,
+      "targetId": "a1f0c7e2-4b58-4c31-9a6d-1e7b2c9d4f02",
+      "ordem": 9
+    },
+    {
+      "id": "a1f0c7e2-4b58-4c31-9a6d-1e7b2c9d4f02",
+      "tipo": "mensagem",
+      "titulo": "AVULSO — DADOS",
+      "desc": "Nome e o que o cliente precisa. TEXTO LIVRE.",
+      "texto": "👤 *Seus dados*\n\nPara encaminharmos seu atendimento corretamente, envie:\n\n• Seu nome\n• O que você precisa\n\nVocê pode enviar as duas informações na mesma mensagem.",
+      "config": {
+        "aguardar": "texto",
+        "variavel": "avulso_dados"
+      },
+      "x": 1240,
+      "y": 440,
+      "targetId": "a1f0c7e2-4b58-4c31-9a6d-1e7b2c9d4f01",
+      "ordem": 10
     },
     {
       "id": "64b85687-198c-49ef-b7a7-827fdb8a456a",
       "tipo": "mensagem",
-      "titulo": "COMERCIAL",
-      "desc": "",
-      "targetId": "98273bfb-4099-4020-a61c-ebba61ea1f44",
-      "ordem": 9,
-      "texto": "🤖 Você selecionou o Setor Comercial. Para melhor atendê-lo, por favor escolha uma das opções abaixo:\n\n1️⃣- PRODUTOS\n2️⃣- SERVIÇOS\n3️⃣- VOLTAR AO INICIO",
+      "titulo": "COMERCIAL — DADOS",
+      "desc": "Nome e demanda. TEXTO LIVRE: nenhum botão, nenhuma opção.",
+      "texto": "💼 *Atendimento Comercial*\n\nPara encaminharmos seu atendimento corretamente, envie:\n\n• Seu nome\n• O que você precisa\n\nVocê pode enviar as duas informações na mesma mensagem.",
       "config": {
-        "variavel": "comercial",
-        "opcoes": [
-          {
-            "id": "com_1",
-            "ordem": 0,
-            "esperaEscolha": true,
-            "rotulo": "1,produtos,computador,notebook",
-            "palavrasChave": [
-              "1",
-              "produtos",
-              "computador",
-              "notebook"
-            ],
-            "acao": "ir",
-            "targetId": "98273bfb-4099-4020-a61c-ebba61ea1f44",
-            "botao": "🖥️ Produtos"
-          },
-          {
-            "id": "com_2",
-            "ordem": 1,
-            "esperaEscolha": true,
-            "rotulo": "2,servico,serviço,serviços",
-            "palavrasChave": [
-              "2",
-              "servico",
-              "serviço",
-              "serviços"
-            ],
-            "acao": "ir",
-            "targetId": "98273bfb-4099-4020-a61c-ebba61ea1f44",
-            "botao": "🔧 Serviços"
-          },
-          {
-            "id": "com_3",
-            "ordem": 2,
-            "esperaEscolha": true,
-            "rotulo": "3,voltar,menu inicial,inicio",
-            "palavrasChave": [
-              "3",
-              "voltar",
-              "menu inicial",
-              "inicio"
-            ],
-            "acao": "ir",
-            "targetId": "d70e3322-5760-49c6-98e9-c60550093310",
-            "botao": "🏠 Voltar ao início"
-          }
-        ],
-        "exibicao": "buttons"
+        "aguardar": "texto",
+        "variavel": "comercial_dados"
       },
-      "x": 340,
-      "y": 640,
-      "w": 220,
-      "h": 96
+      "x": 640,
+      "y": 620,
+      "targetId": "98273bfb-4099-4020-a61c-ebba61ea1f44",
+      "ordem": 11
     },
     {
       "id": "98273bfb-4099-4020-a61c-ebba61ea1f44",
       "tipo": "mensagem",
-      "titulo": "VENDEDOR",
-      "desc": "Coleta a necessidade, confirma e entrega para a fila comercial (queueId 35).",
-      "targetId": null,
-      "ordem": 10,
-      "texto": "Entendi, para melhor direcionar seu atendimento pode nos dizer um pouco mais sobre sua demanda?\n",
+      "titulo": "FILA COMERCIAL",
+      "desc": "Confirma e transfere para a equipe comercial. Não aguarda resposta.",
+      "texto": "✅ *Solicitação recebida!*\n\nRecebemos suas informações e encaminhamos seu atendimento para nossa equipe comercial.\n\nEm breve um de nossos atendentes dará continuidade ao atendimento.",
       "config": {
-        "variavel": "vendedor",
+        "aguardar": "nada",
+        "variavel": "fila_comercial",
         "opcoes": [
           {
-            "id": "ven_transfere",
+            "id": "fila_com",
             "ordem": 0,
             "esperaEscolha": false,
-            "rotulo": "transferir para o vendedor",
+            "rotulo": "entregar para a equipe comercial",
             "palavrasChave": [],
             "acao": "transferir",
             "targetId": null,
             "filaId": 35,
-            "setor": "Comercial",
-            "mensagemHandoff": "✅ *Solicitação comercial registrada*\n\nRecebemos as informações que você enviou e encaminhamos sua solicitação para nossa equipe comercial.\n\nUm de nossos atendentes dará continuidade ao atendimento por aqui."
+            "setor": "Comercial"
           }
         ]
       },
-      "x": 640,
-      "y": 640,
-      "w": 220,
-      "h": 96
+      "x": 940,
+      "y": 620,
+      "targetId": null,
+      "ordem": 12
     },
     {
       "id": "4f5f1646-5441-4afd-974d-dd4fa639f958",
       "tipo": "mensagem",
-      "titulo": "FINANCEIRO",
-      "desc": "Coleta nome e necessidade, confirma e entrega para o Financeiro. ATENÇÃO: o queueId 35 abaixo é o mesmo do Comercial e precisa ser trocado pelo ID real da fila financeira desta instalação. Enquanto isso, o \"setor\" declarado na opção é o que garante o roteamento certo.",
-      "targetId": null,
-      "ordem": 11,
-      "texto": "🤖 Você selecionou o Setor Administrativo/Financeiro. Para melhor atendê-lo, por favor, informe seu nome e descreva o que deseja para melhor direcionarmos seu atendimento!",
+      "titulo": "FINANCEIRO — DADOS",
+      "desc": "Nome e demanda. TEXTO LIVRE: nenhum botão, nenhuma opção.",
+      "texto": "💰 *Administrativo / Financeiro*\n\nPara encaminharmos seu atendimento corretamente, envie:\n\n• Seu nome\n• O que você precisa\n\nVocê pode enviar as duas informações na mesma mensagem.",
       "config": {
-        "variavel": "financeiro",
+        "aguardar": "texto",
+        "variavel": "financeiro_dados"
+      },
+      "x": 640,
+      "y": 800,
+      "targetId": "a1f0c7e2-4b58-4c31-9a6d-1e7b2c9d4f03",
+      "ordem": 13
+    },
+    {
+      "id": "a1f0c7e2-4b58-4c31-9a6d-1e7b2c9d4f03",
+      "tipo": "mensagem",
+      "titulo": "FILA FINANCEIRO",
+      "desc": "Confirma e transfere para a equipe administrativa/financeira. Não aguarda resposta.",
+      "texto": "✅ *Solicitação recebida!*\n\nRecebemos suas informações e encaminhamos seu atendimento para nossa equipe administrativa/financeira.\n\nEm breve um de nossos atendentes dará continuidade ao atendimento.",
+      "config": {
+        "aguardar": "nada",
+        "variavel": "fila_financeiro",
         "opcoes": [
           {
-            "id": "fin_transfere",
+            "id": "fila_fin",
             "ordem": 0,
             "esperaEscolha": false,
-            "rotulo": "transferir para o financeiro",
+            "rotulo": "entregar para a equipe administrativa/financeira",
             "palavrasChave": [],
             "acao": "transferir",
             "targetId": null,
-            "filaId": 35,
-            "setor": "Financeiro",
-            "mensagemHandoff": "✅ *Solicitação encaminhada*\n\nRecebemos suas informações e encaminhamos sua solicitação para nossa equipe administrativa/financeira.\n\nUm de nossos atendentes dará continuidade ao atendimento por aqui."
+            "setor": "Financeiro"
           }
         ]
       },
-      "x": 340,
-      "y": 810,
-      "w": 220,
-      "h": 96
+      "x": 940,
+      "y": 800,
+      "targetId": null,
+      "ordem": 14
     },
     {
       "id": "bd0fb1d0-fc23-432d-825d-9a2b9a8cd45f",
       "tipo": "avaliacao",
       "titulo": "Pesquisa de Satisfação",
-      "desc": "Pergunta a nota (1-5), pede o comentário, agradece e encerra o atendimento.",
-      "targetId": null,
-      "ordem": 12,
+      "desc": "Disparada no ENCERRAMENTO do atendimento (não por ligação do desenho).",
+      "texto": null,
       "config": {
         "mensagemNota": "Antes de encerrar: de 1 a 5, que nota você dá para este atendimento? (1 = péssimo, 5 = ótimo)",
         "pedirComentario": true,
@@ -573,36 +510,34 @@
         "timeoutAvaliacaoMin": 5,
         "mensagemTimeoutAvaliacao": "Agradecemos o seu contato! Caso precise de mais alguma coisa, estaremos à disposição."
       },
-      "x": 40,
-      "y": 470,
-      "w": 220,
-      "h": 96
+      "x": 1540,
+      "y": 800,
+      "targetId": null,
+      "ordem": 15
     },
     {
       "id": "6b7d685b-4a57-4959-902b-4d0d0366f64c",
       "tipo": "espera",
       "titulo": "Sem resposta",
-      "desc": "O bot perguntou e o cliente sumiu.",
-      "targetId": null,
-      "ordem": 13,
+      "desc": "TIMEOUT A: o bot perguntou e o cliente sumiu. Vale para menu, CNPJ e resposta livre.",
+      "texto": null,
       "config": {
         "modo": "sem_resposta",
         "minutos": 5,
         "mensagem": "Não entendemos a sua demanda. Por favor, abra um chamado novamente.",
         "acao": "encerrar"
       },
-      "x": 40,
-      "y": 966,
-      "w": 220,
-      "h": 96
+      "x": 340,
+      "y": 800,
+      "targetId": null,
+      "ordem": 16
     },
     {
       "id": "8d9e7965-a0ff-499b-abef-c94194a407fd",
       "tipo": "espera",
       "titulo": "Espera na fila",
-      "desc": "Ninguem assumiu a conversa em Pendentes.",
-      "targetId": null,
-      "ordem": 14,
+      "desc": "TIMEOUT B: ninguém assumiu a conversa na fila de Pendentes. Avisa uma vez.",
+      "texto": null,
       "config": {
         "modo": "fila_pendentes",
         "ativo": true,
@@ -610,10 +545,10 @@
         "mensagem": "Ei {{cliente}}! Estamos com uma demanda alta no momento, mas fique tranquilo! Em breve, um dos nossos atendentes estará disponível para atendê-lo.",
         "repetir": false
       },
-      "x": 40,
-      "y": 1096,
-      "w": 220,
-      "h": 96
+      "x": 340,
+      "y": 960,
+      "targetId": null,
+      "ordem": 17
     }
   ]
 }
