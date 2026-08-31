@@ -76,7 +76,7 @@ services:
   # rede -- para abrir do seu PC use um tunel SSH (veja DEPLOY.md).
   # ------------------------------------------------------------------------
   evolution-api:
-    image: evoapicloud/evolution-api:v2.3.7
+    image: evoapicloud/evolution-api:v2.4.0
     container_name: arka-evolution
     restart: unless-stopped
     depends_on:
