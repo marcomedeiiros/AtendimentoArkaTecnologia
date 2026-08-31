@@ -30,6 +30,11 @@
 //
 // Uso: npm test        (ou node verificar-tudo.js)
 //      node verificar-tudo.js --lista     só lista o que seria rodado
+//
+// NÃO confunda com `diagnosticar-instalacao.js`: este arquivo prova o CÓDIGO e o
+// fluxo do repositório; aquele confere uma INSTALAÇÃO (o motor que subiu contra o
+// fluxo que está no banco dela) e é o que responde "por que o bot não está
+// esperando nesta VM".
 // O `.env`, como os scripts filhos fazem. Sem isto o runner não vê
 // `DATABASE_URL` e a NOTA no fim do resumo dizia que a Parte B tinha sido pulada
 // mesmo quando ela havia rodado contra o banco -- um relatório que mente sobre a
