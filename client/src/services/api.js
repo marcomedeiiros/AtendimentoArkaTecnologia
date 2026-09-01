@@ -668,6 +668,9 @@ export const ConversasAPI = {
   iniciarConversa: ({ telefone, nome, setor, texto }) =>
     request('/conversas/iniciar', { method: 'POST', body: JSON.stringify({ telefone, nome, setor, texto }) }),
   enviarMensagem: (id, texto, respondendoAId = null) => request(`/conversas/${id}/mensagens`, { method: 'POST', body: JSON.stringify({ texto, respondendoAId }) }),
+  // Nota interna: rota própria, e não um parâmetro do enviarMensagem. O que não
+  // sai para o cliente não compartilha caminho com o que sai.
+  adicionarNota: (id, texto) => request(`/conversas/${id}/notas`, { method: 'POST', body: JSON.stringify({ texto }) }),
   editarMensagem: (mensagemId, texto) => request(`/conversas/mensagens/${mensagemId}`, { method: 'PATCH', body: JSON.stringify({ texto }) }),
   transcreverAudio: (mensagemId) => request(`/conversas/mensagens/${mensagemId}/transcrever`, { method: 'POST' }),
   apagarMensagem: (mensagemId) => request(`/conversas/mensagens/${mensagemId}`, { method: 'DELETE' }),
@@ -703,7 +706,10 @@ export const ConversasAPI = {
   avaliarAtendimento: (id, avaliacao, feedback) => request(`/conversas/${id}/avaliacao`, { method: 'POST', body: JSON.stringify({ avaliacao, feedback }) }),
   // Atalhos de status (os 3 estados da Central).
   pendente: (id) => request(`/conversas/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'pendente' }) }),
-  fechar: (id) => request(`/conversas/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'fechada' }) }),
+  // Fechar exige o motivo do encerramento: o servidor recusa sem ele
+  // (MOTIVO_OBRIGATORIO) e recusa o que não estiver na lista (MOTIVO_INVALIDO).
+  fechar: (id, motivo) => request(`/conversas/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'fechada', motivo }) }),
+  motivosEncerramento: () => request('/conversas/motivos-encerramento'),
   reabrir: (id) => request(`/conversas/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'aberta' }) }),
   marcarLido: (id) => request(`/conversas/${id}/lido`, { method: 'PATCH' }),
   // Favoritar / fixar / arquivar / ocultar persistido no banco (nao apaga nada).

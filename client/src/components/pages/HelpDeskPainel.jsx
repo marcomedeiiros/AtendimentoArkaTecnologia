@@ -7,7 +7,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Inbox, Timer, CheckCircle2, Gauge, Star, RefreshCw,
-  Loader2, AlertTriangle, Clock, TrendingUp, SlidersHorizontal, Save, Lock
+  Loader2, AlertTriangle, Clock, TrendingUp, SlidersHorizontal, Save, Lock, Tag,
+  X, Plus, RotateCcw
 } from 'lucide-react';
 import { HelpDeskAPI, ConfiguracoesAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -112,6 +113,168 @@ function ConfigIndicadores({ sla, onSalvo }) {
   );
 }
 
+// Mesmos limites do servidor (configuracao.service.motivosEncerramento). Estão
+// repetidos aqui de propósito, e não é duplicação de regra: o servidor é a
+// autoridade e continua rejeitando o que passar. Isto é só para o erro aparecer
+// enquanto a pessoa digita, em vez de depois de um round-trip.
+const MOTIVO_MAX_CHARS = 60;
+const MOTIVOS_MAX = 30;
+
+/**
+ * EDITOR DA TAXONOMIA DE MOTIVOS.
+ *
+ * Vive ao lado da quebra "por que procuraram", e não na tela de Configurações,
+ * porque quem revisa a lista é quem acabou de ler o gráfico: você percebe que
+ * "Erro ou indisponibilidade" virou 40% do volume e precisa quebrar em dois
+ * exatamente nesse instante. Editar num lugar e conferir em outro é o que faz a
+ * revisão trimestral nunca acontecer.
+ *
+ * ── A LISTA CURTA É A FUNCIONALIDADE ────────────────────────────────────────
+ *
+ * O aviso sobre tamanho não é decoração. Toda taxonomia grande é preenchida no
+ * automático pelo primeiro item que serve, e o relatório que sai dela continua
+ * bonito enquanto mente. Por isso o teto de 30 é do servidor, e por isso a tela
+ * avisa antes disso.
+ */
+function ConfigMotivos({ motivos, onSalvo }) {
+  const { usuario } = useAuth();
+  const permissoes = usuario?.permissoes;
+  const podeEditar = !Array.isArray(permissoes) || permissoes.includes('configuracoes');
+
+  const [lista, setLista] = useState(motivos || []);
+  const [novo, setNovo] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const [salvo, setSalvo] = useState(false);
+  const [erro, setErro] = useState('');
+
+  // Reflete o servidor quando as métricas recarregam (inclusive depois de
+  // outra pessoa salvar). `join` como dependência: a identidade do array muda a
+  // cada resposta HTTP, o conteúdo não -- comparar a referência reabriria a
+  // lista do zero a cada 1,5s e apagaria o que a pessoa está digitando.
+  const assinatura = (motivos || []).join('|');
+  useEffect(() => { setLista(motivos || []); }, [assinatura]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const adicionar = () => {
+    const v = novo.trim();
+    if (!v) return;
+    if (v.length > MOTIVO_MAX_CHARS) { setErro(`Motivo muito longo (máximo ${MOTIVO_MAX_CHARS} caracteres).`); return; }
+    // Comparação sem caixa: "Boleto" e "boleto" viram duas fatias do mesmo
+    // assunto no relatório, e ninguém consegue somar as duas de volta depois.
+    if (lista.some(m => m.toLowerCase() === v.toLowerCase())) { setErro('Esse motivo já está na lista.'); return; }
+    if (lista.length >= MOTIVOS_MAX) { setErro(`A lista chegou ao limite de ${MOTIVOS_MAX} motivos.`); return; }
+    setLista([...lista, v]);
+    setNovo('');
+    setErro('');
+  };
+
+  const remover = (m) => { setLista(lista.filter(x => x !== m)); setErro(''); };
+
+  async function salvar(novaLista) {
+    const alvo = novaLista ?? lista;
+    setSalvando(true); setErro(''); setSalvo(false);
+    try {
+      await ConfiguracoesAPI.salvar({ 'atendimento.motivos': JSON.stringify(alvo) });
+      setSalvo(true);
+      setTimeout(() => setSalvo(false), 3000);
+      onSalvo?.();
+    } catch (e) {
+      setErro(e.message);
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  // RESTAURAR O PADRÃO = gravar lista vazia.
+  //
+  // O servidor devolve MOTIVOS_PADRAO quando a chave está vazia ou ilegível, e
+  // é essa regra que se usa aqui. A alternativa seria mandar a lista padrão de
+  // volta pelo navegador -- e aí existiriam duas cópias dela, uma no servidor e
+  // outra no bundle, livres para divergir no primeiro dia em que alguém
+  // editasse só uma.
+  const restaurarPadrao = () => { setLista([]); salvar([]); };
+
+  const campo = 'flex-1 min-w-0 bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50';
+
+  return (
+    <div className="glass-panel rounded-2xl p-5 border border-linha space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-bold text-white font-display flex items-center gap-2">
+          <Tag size={15} className="text-acao-200" /> Motivos de encerramento
+        </h3>
+        {!podeEditar && (
+          <span className="text-[10px] text-slate-500 flex items-center gap-1 shrink-0">
+            <Lock size={11} /> somente leitura
+          </span>
+        )}
+      </div>
+      <p className="text-[11px] text-slate-400 leading-relaxed">
+        A lista que o atendente escolhe ao fechar. Mantenha curta — de 8 a 12 itens.
+        Lista grande é preenchida no automático, e o relatório continua bonito enquanto mente.
+        Revisar por trimestre: divida o motivo que ficou grande demais, junte o que ninguém usa.
+      </p>
+
+      <div className="flex flex-wrap gap-1.5">
+        {lista.length === 0 ? (
+          <p className="text-[11px] text-slate-500 italic py-1">
+            Lista vazia — ao salvar assim, o sistema volta aos 12 motivos padrão.
+          </p>
+        ) : lista.map(m => (
+          <span key={m} className="inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-xl bg-grafite-700 border border-linha text-xs text-slate-200">
+            {m}
+            {podeEditar && (
+              <button onClick={() => remover(m)} title={`Remover "${m}"`}
+                className="p-0.5 rounded-lg text-slate-500 hover:text-falha-400 hover:bg-falha/10 transition-colors">
+                <X size={12} />
+              </button>
+            )}
+          </span>
+        ))}
+      </div>
+
+      {podeEditar && (
+        <div className="flex gap-2">
+          <input
+            className={campo}
+            value={novo}
+            maxLength={MOTIVO_MAX_CHARS}
+            placeholder="Novo motivo (ex: Migração de servidor)"
+            onChange={e => { setNovo(e.target.value); setErro(''); }}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); adicionar(); } }}
+          />
+          <button onClick={adicionar} disabled={!novo.trim()}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-grafite-700 border border-linha text-slate-300 hover:text-white hover:border-linha-forte text-xs font-bold transition-colors disabled:opacity-40 shrink-0">
+            <Plus size={13} /> Adicionar
+          </button>
+        </div>
+      )}
+
+      {/* O QUE ACONTECE COM O HISTÓRICO. É a primeira dúvida de quem vai apagar
+          um item, e não saber a resposta é o que trava a revisão. */}
+      <p className="text-[10px] text-slate-500 leading-relaxed">
+        Remover um motivo <strong className="text-slate-400">não altera atendimentos já fechados</strong>:
+        eles mantêm o motivo escolhido na época e continuam aparecendo na quebra acima.
+        A mudança vale só para os próximos fechamentos.
+      </p>
+
+      {erro && <p className="text-[11px] text-falha-400">{erro}</p>}
+
+      {podeEditar && (
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={() => salvar()} disabled={salvando}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold transition-all disabled:opacity-60">
+            {salvando ? <Loader2 size={14} className="animate-spin" /> : salvo ? <CheckCircle2 size={14} /> : <Save size={14} />}
+            {salvando ? 'Salvando...' : salvo ? 'Salvo!' : 'Salvar lista'}
+          </button>
+          <button onClick={restaurarPadrao} disabled={salvando}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-grafite-700 border border-linha text-slate-400 hover:text-white hover:border-linha-forte text-xs font-bold transition-colors disabled:opacity-60">
+            <RotateCcw size={13} /> Restaurar padrão
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function fmtDuracao(seg, amostra = 1) {
   if (!amostra) return '-';
   if (!seg || seg < 0) return '-';
@@ -123,6 +286,21 @@ function fmtDuracao(seg, amostra = 1) {
   if (h < 24) return `${h}h ${m % 60}m`;
   const d = Math.floor(h / 24);
   return `${d}d ${h % 24}h`;
+}
+
+/**
+ * Subtítulo dos KPIs de tempo. A MÉDIA continua no número grande; os percentis
+ * entram aqui embaixo.
+ *
+ * Os três juntos é que contam a história: quando a média está colada no p50, a
+ * operação é regular e o número grande pode ser lido sem ressalva. Quando ela
+ * está bem acima do p50, existe uma cauda de casos ruins escondida atrás dela —
+ * e o p90 mostra o tamanho dessa cauda. É esse cliente, e não o do meio, que
+ * liga reclamando.
+ */
+function fmtPercentis(p50, p90, amostra, unidade) {
+  if (!amostra) return 'sem base de cálculo ainda';
+  return `p50 ${fmtDuracao(p50, amostra)} · p90 ${fmtDuracao(p90, amostra)} · base: ${amostra} ${unidade}`;
 }
 
 function fmtIdade(min) {
@@ -223,12 +401,15 @@ export default function HelpDeskPainel() {
               sub={dados.backlog.pendente ? 'conversa mais antiga na fila' : 'fila vazia'} />
             <Kpi icon={Timer} cor="blue" titulo="Tempo médio de 1ª resposta"
               valor={fmtDuracao(dados.tempos.respostaMedioSeg, dados.tempos.respostaAmostra)}
-              sub={`base: ${dados.tempos.respostaAmostra} atendimento(s)`} />
+              sub={fmtPercentis(dados.tempos.respostaP50Seg, dados.tempos.respostaP90Seg, dados.tempos.respostaAmostra, 'atendimento(s)')} />
             <Kpi icon={CheckCircle2} cor="emerald" titulo="Tempo médio de resolução"
               valor={fmtDuracao(dados.tempos.resolucaoMedioSeg, dados.tempos.resolucaoAmostra)}
-              sub={`base: ${dados.tempos.resolucaoAmostra} fechado(s)`} />
+              sub={fmtPercentis(dados.tempos.resolucaoP50Seg, dados.tempos.resolucaoP90Seg, dados.tempos.resolucaoAmostra, 'fechado(s)')} />
             <Kpi icon={Gauge} cor="orange" titulo={`SLA de resposta (≤ ${dados.sla.respostaLimiteMin} min)`}
               valor={dados.sla.respostaPct == null ? '-' : `${dados.sla.respostaPct}%`}
+              sub={`dentro da meta · base: ${dados.tempos.respostaAmostra} atendimento(s)`} />
+            <Kpi icon={Gauge} cor="orange" titulo={`SLA de resolução (≤ ${dados.sla.resolucaoLimiteHoras} h)`}
+              valor={dados.sla.resolucaoPct == null ? '-' : `${dados.sla.resolucaoPct}%`}
               sub={`taxa de resolução: ${dados.taxaResolucao}%`} />
             <Kpi icon={Star} cor="yellow" titulo="Satisfação (CSAT)"
               valor={dados.csat.total ? dados.csat.media.toFixed(1) : '-'}
@@ -257,6 +438,50 @@ export default function HelpDeskPainel() {
               <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-ativo" /> {dados.status.aberta} em atendimento</span>
               <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-quieto" /> {dados.status.fechada} fechados</span>
             </div>
+          </div>
+
+          {/* POR QUE OS CLIENTES PROCURAM.
+              Esta é a única tabela do painel que responde a uma pergunta de
+              CAUSA, e não de volume: as outras dizem quanto e quão rápido, esta
+              diz o quê. É a lista que se usa para fazer um chamado deixar de
+              existir, em vez de só atendê-lo mais rápido. */}
+          <div className="glass-panel rounded-2xl p-5 border border-linha">
+            <h3 className="text-sm font-bold text-white font-display mb-1 flex items-center gap-2">
+              <Tag size={15} className="text-acao-200" /> Por que procuraram
+            </h3>
+            <p className="text-[11px] text-slate-500 mb-4">
+              Motivo escolhido no fechamento · base: {dados.status.fechada} atendimento(s) fechado(s)
+            </p>
+            {dados.porMotivo.length === 0 ? (
+              <p className="text-xs text-slate-400 py-4 text-center">
+                Nenhum atendimento fechado ainda — o motivo é escolhido no fechamento.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {dados.porMotivo.map(m => (
+                  <div key={m.motivo} className="flex items-center gap-3">
+                    <div className="w-44 sm:w-56 shrink-0 text-xs truncate" title={m.motivo}>
+                      {/* "Não informado" é dado faltando, não uma categoria de
+                          negócio: fica em cinza para não disputar leitura com os
+                          motivos reais, mas continua visível -- o tamanho dessa
+                          barra é o termômetro da qualidade do próprio relatório. */}
+                      <span className={m.motivo === 'Não informado' ? 'text-slate-500 italic' : 'text-white font-semibold'}>
+                        {m.motivo}
+                      </span>
+                    </div>
+                    <div className="flex-1 h-2 rounded-full bg-grafite-700 overflow-hidden min-w-0">
+                      <div
+                        className={`h-full rounded-full ${m.motivo === 'Não informado' ? 'bg-slate-600' : 'bg-acao'}`}
+                        style={{ width: `${Math.max(m.pct, 2)}%` }}
+                      />
+                    </div>
+                    <div className="w-20 shrink-0 text-right text-xs font-mono text-slate-300">
+                      {m.total} <span className="text-slate-500">· {m.pct}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="glass-panel rounded-2xl p-5 border border-linha">
@@ -296,6 +521,8 @@ export default function HelpDeskPainel() {
               </div>
             )}
           </div>
+
+          <ConfigMotivos motivos={dados.motivosDisponiveis} onSalvo={carregar} />
 
           <ConfigIndicadores sla={dados.sla} onSalvo={carregar} />
 

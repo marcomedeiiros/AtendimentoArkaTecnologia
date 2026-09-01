@@ -1,4 +1,5 @@
 const conversaService = require("./conversa.service");
+const configuracaoService = require("../configuracoes/configuracao.service");
 const { success } = require("../../shared/helpers/response.helper");
 const { validarTokenMidia } = require("../../shared/helpers/midiaToken.helper");
 const { prepararRespostaMidia, interpretarRange } = require("../../shared/helpers/midiaResposta.helper");
@@ -35,6 +36,20 @@ class ConversaController {
       // atendente quando a conversa ainda nao tem responsavel.
       .enviarMensagem(req.params.id, req.body.texto, "equipe", req.body.respondendoAId, req.user?.cargo, req.user)
       .then((data) => success(res, data));
+  }
+
+  // Motivos de encerramento disponiveis, para o modal de fechamento montar a
+  // lista. Leitura pura da configuracao.
+  listarMotivos(req, res) {
+    return configuracaoService.motivosEncerramento().then((data) => success(res, data));
+  }
+
+  // Nota interna: nao sai para o cliente. `req.user` vai junto para a autoria
+  // ficar gravada no metadata da mensagem.
+  adicionarNota(req, res) {
+    return conversaService
+      .adicionarNota(req.params.id, req.body.texto, req.user?.cargo, req.user)
+      .then((data) => success(res, data, 201));
   }
 
   // Conversa nova a partir de um numero digitado. Quem envia fica como
@@ -150,7 +165,9 @@ class ConversaController {
   }
 
   atualizarStatus(req, res) {
-    return conversaService.atualizarStatus(req.params.id, req.body.status, req.user?.cargo, req.user).then((data) => success(res, data));
+    return conversaService
+      .atualizarStatus(req.params.id, req.body.status, req.user?.cargo, req.user, req.body.motivo)
+      .then((data) => success(res, data));
   }
 
   atualizarSetor(req, res) {

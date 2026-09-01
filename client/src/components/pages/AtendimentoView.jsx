@@ -9,7 +9,7 @@ import {
   FileText, MapPin, Contact, Paperclip, Smile, Loader2,
   SlidersHorizontal, Star, Archive, EyeOff, MoreVertical,
   ZoomIn, ZoomOut, Maximize2, Download, CornerUpLeft, CornerUpRight, Share2, Pencil, MoreHorizontal, Mic, Tag, PenLine,
-  Sun, Moon, Bot
+  Sun, Moon, Bot, StickyNote
 } from 'lucide-react';
 import { EmojiIcon, FormattedMessage, TextoFormatado } from './EmojiIcon';
 import { useMensagensRapidas } from './MensagensRapidas';
@@ -598,6 +598,99 @@ function PainelFiltros({ extras, setExtras, visib, setVisib, onLimpar, totalAtiv
 // responder quem escreveu primeiro. Quem precisava chamar um cliente ia ao
 // Envio em Massa (que dispara mas nao registra a conversa) ou abria o WhatsApp
 // no celular, fora do sistema, sem historico nem setor.
+/**
+ * MOTIVO DO ENCERRAMENTO -- perguntado no fechamento, e obrigatório.
+ *
+ * O atrito é o ponto, não um efeito colateral. Este é o único instante em que
+ * alguém sabe por que o cliente procurou: quem atendeu, com o caso fresco. Um
+ * relatório de causa raiz montado depois, por quem lê a conversa fria, erra --
+ * e um campo opcional é preenchido justamente pelos atendimentos que menos
+ * precisavam ser classificados.
+ *
+ * NENHUMA OPÇÃO VEM MARCADA. Um valor pré-selecionado transforma "escolher" em
+ * "confirmar", e a lista inteira desanda para o primeiro item -- que é o modo
+ * mais discreto de encher o banco de dado falso, porque o relatório continua
+ * saindo bonito.
+ */
+function ModalMotivoEncerramento({ motivos, carregando, erro, salvando, onConfirmar, onFechar }) {
+  const [escolhido, setEscolhido] = useState('');
+
+  useEffect(() => {
+    const onTecla = (e) => { if (e.key === 'Escape' && !salvando) onFechar(); };
+    window.addEventListener('keydown', onTecla);
+    return () => window.removeEventListener('keydown', onTecla);
+  }, [onFechar, salvando]);
+
+  return (
+    <Portal>
+    <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
+      <div className="glass-panel border border-linha rounded-2xl w-full max-w-md shadow-2xl fade-in my-auto flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh]">
+        <div className="p-4 bg-grafite-600 border-b border-linha flex items-center justify-between shrink-0 rounded-t-2xl">
+          <div className="flex items-center gap-2 font-bold text-sm text-white min-w-0">
+            <CheckCircle2 size={16} className="text-ativo-400 shrink-0" />
+            <span className="truncate">Fechar atendimento</span>
+          </div>
+          <button onClick={onFechar} disabled={salvando}
+            className="text-slate-400 hover:text-white shrink-0 ml-2 disabled:opacity-50">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="p-4 flex-1 overflow-y-auto min-h-0">
+          <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
+            Por que este cliente procurou? É o que permite descobrir o que mais
+            gera chamado — e reduzir, em vez de só atender.
+          </p>
+
+          {carregando ? (
+            <div className="flex items-center gap-2 text-xs text-slate-400 py-6 justify-center">
+              <Loader2 size={14} className="animate-spin" /> Carregando motivos...
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+              {motivos.map(m => (
+                <button
+                  key={m}
+                  onClick={() => setEscolhido(m)}
+                  aria-pressed={escolhido === m}
+                  className={`text-left px-3 py-2 rounded-xl border text-xs transition-colors ${
+                    escolhido === m
+                      ? 'bg-acao/15 border-acao/50 text-white font-semibold'
+                      : 'bg-grafite-700 border-linha text-slate-300 hover:border-linha-forte hover:text-white'
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {erro && (
+            <div className="mt-3 p-2.5 rounded-xl bg-falha/10 border border-falha/30 text-[11px] text-falha-400">
+              {erro}
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 border-t border-linha flex items-center justify-end gap-2 shrink-0">
+          <button onClick={onFechar} disabled={salvando}
+            className="px-4 py-2 rounded-xl bg-grafite-700 border border-linha text-slate-300 hover:text-white text-xs font-bold transition-colors disabled:opacity-50">
+            Cancelar
+          </button>
+          <button
+            onClick={() => escolhido && onConfirmar(escolhido)}
+            disabled={!escolhido || salvando}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-ativo hover:bg-ativo-400 disabled:opacity-40 text-slate-950 text-xs font-bold transition-colors">
+            {salvando ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+            Fechar atendimento
+          </button>
+        </div>
+      </div>
+    </div>
+    </Portal>
+  );
+}
+
 function ModalNovaConversa({ onFechar, onEnviar, enviando, erro, inicial }) {
   // `inicial` vem do contato escolhido na busca da lista: numero e nome ja
   // preenchidos, so falta escrever a mensagem.
@@ -1752,7 +1845,7 @@ function arquivoPermitido(file) {
 
 function PainelChat({
   conversa, parceiros,
-  texto, setTexto, scrollRef, onEnviar, onEnviarMidia, onFechar, onPendente, onReabrir,
+  texto, setTexto, scrollRef, onEnviar, onAdicionarNota, onEnviarMidia, onFechar, onPendente, onReabrir,
   onMarcarLido, onSolicitarCnpj, onValidarCnpjModal,
   onVoltar, atendente, onTransferir,
   onEditar, onEncaminharPara, conversas, onAtender,
@@ -1765,6 +1858,15 @@ function PainelChat({
   const [encaminhando, setEncaminhando] = useState(null);   // mensagem a encaminhar
   const [editando, setEditando] = useState(null);           // { id, textoOriginal }
   const [gravandoAudio, setGravandoAudio] = useState(false);
+  // MODO NOTA: a mesma caixa de texto, escrevendo para dentro em vez de para o
+  // cliente. Um estado, e não uma segunda caixa, porque duas caixas na mesma
+  // barra é o desenho que faz a pessoa digitar na errada.
+  //
+  // O risco desta escolha é o inverso: esquecer o modo ligado e "responder" o
+  // cliente numa nota, que ele nunca recebe. Por isso o modo ligado muda a cor
+  // da caixa, o texto de exemplo e a cor do botão de enviar ao mesmo tempo --
+  // três sinais, não um selo discreto.
+  const [modoNota, setModoNota] = useState(false);
   // Quantos atendimentos (OS) estão carregados na conversa, do mais recente para
   // trás. Começa em 1: o chat abre no atendimento em curso, e os anteriores
   // entram DENTRO da mesma conversa conforme o operador rola para cima.
@@ -1776,6 +1878,10 @@ function PainelChat({
   const iniciarEdicao = useCallback((m) => {
     setEditando({ id: m.id, textoOriginal: m.texto });
     setRespondendoA(null);
+    // Sai do modo nota: `enviar` testa o modo ANTES da edição, então editar uma
+    // mensagem com o modo ligado gravaria uma nota nova e deixaria a mensagem
+    // original intacta -- sem nenhum aviso de que a edição não aconteceu.
+    setModoNota(false);
     setTexto(m.texto);
   }, [setTexto]);
 
@@ -1933,6 +2039,16 @@ function PainelChat({
     if (anexo) { enviarAnexo(); return; }
     if (!texto.trim()) return;
 
+    // A NOTA VEM ANTES DE TUDO. Se o modo está ligado, nada mais nesta função
+    // pode levar o texto ao cliente -- nem a assinatura, nem a citação, nem o
+    // caminho de edição.
+    if (modoNota) {
+      onAdicionarNota(texto);
+      setRespondendoA(null);
+      setTimeout(() => irParaFim(true), 0);
+      return;
+    }
+
     if (editando) {
       onEditar(editando.id, texto.trim());
       setEditando(null);
@@ -1944,7 +2060,7 @@ function PainelChat({
     setRespondendoA(null);
     // Envio do operador sempre desce a conversa.
     setTimeout(() => irParaFim(true), 0);
-  }, [anexo, enviarAnexo, onEnviar, onEditar, texto, irParaFim, respondendoA, editando, setTexto]);
+  }, [anexo, enviarAnexo, onEnviar, onEditar, texto, irParaFim, respondendoA, editando, setTexto, modoNota, onAdicionarNota]);
 
   // Mesma regra da badge da lista, e pela mesma função: quando isto era um
   // `some(...)` próprio aqui, o cabeçalho e o cartão podiam discordar sobre o
@@ -2005,6 +2121,13 @@ function PainelChat({
 
   // Trocou de conversa: volta a abrir no atendimento em curso.
   useEffect(() => { setOsCarregadas(1); }, [conversa.id]);
+
+  // TROCOU DE CONVERSA: o modo nota NÃO acompanha.
+  //
+  // Um modo que sobrevive à troca é o jeito de anotar na conversa errada -- ou,
+  // pior, de achar que se está anotando quando já se voltou a falar com um
+  // cliente. Cada conversa começa no estado normal, respondendo.
+  useEffect(() => { setModoNota(false); }, [conversa.id]);
 
   // Puxa o atendimento anterior para dentro da conversa, mantendo o ponto de
   // leitura: sem a âncora, o conteúdo novo entra ACIMA e a tela salta.
@@ -2193,7 +2316,7 @@ function PainelChat({
               <span className="flex-1 h-px bg-linha" />
             </div>
           )}
-          <div className={`group flex items-center gap-1 ${m.de === 'cliente' ? 'justify-start' : m.de === 'sistema' ? 'justify-center' : 'justify-end'}`}>
+          <div className={`group flex items-center gap-1 ${m.de === 'cliente' ? 'justify-start' : m.de === 'sistema' || m.de === 'nota' ? 'justify-center' : 'justify-end'}`}>
             {m.deletada ? (
               /* "Apagar para todos": some para o cliente no WhatsApp e vira este
                  aviso no chat ao vivo. O texto original continua no Registro
@@ -2205,8 +2328,13 @@ function PainelChat({
               </div>
             ) : (
             <>
-            {/* Nas mensagens enviadas por nos (direita), o menu fica a ESQUERDA da bolha */}
-            {m.de !== 'cliente' && m.de !== 'sistema' && (
+            {/* Nas mensagens enviadas por nos (direita), o menu fica a ESQUERDA da bolha.
+                A NOTA fica de fora: "responder" e "encaminhar" são recursos do
+                WhatsApp, e encaminhar uma nota a levaria para o cliente. O
+                servidor recusa esse encaminhamento de qualquer forma (ver
+                encaminharMensagem) -- aqui o botão nem aparece, para ninguém
+                tentar. */}
+            {m.de !== 'cliente' && m.de !== 'sistema' && m.de !== 'nota' && (
               <MenuMensagem
                 m={m}
                 ehPropria
@@ -2216,7 +2344,27 @@ function PainelChat({
                 onApagar={onApagarMensagem}
               />
             )}
-            {m.de === 'sistema' ? (
+            {m.de === 'nota' ? (
+              /* NOTA INTERNA -- precisa ser IMPOSSÍVEL de confundir com uma
+                 mensagem enviada. Por isso ela não usa nada do vocabulário das
+                 bolhas: não fica do lado direito, não tem o verde de enviada,
+                 não tem risquinhos de entrega. Fica no meio, em âmbar, com o
+                 aviso escrito por extenso.
+
+                 O risco que isso cobre não é estético: um atendente que lê
+                 "cliente já deu golpe antes" numa bolha igual às outras acredita
+                 que o cliente leu aquilo, e responde a partir dessa suposição. */
+              <div className="max-w-[85%] sm:max-w-[75%] px-3 py-2 rounded-lg text-[12.5px] bg-espera/10 border border-espera/30 border-l-2 border-l-espera space-y-1 break-words">
+                <div className="text-[10px] font-semibold text-espera-400 flex items-center gap-1 flex-wrap">
+                  <StickyNote size={10} className="shrink-0" />
+                  Nota interna
+                  <span className="font-normal text-texto-fraco">· só a equipe vê</span>
+                  {m.notaAutor && <span className="font-normal text-texto-suave">· {m.notaAutor}</span>}
+                </div>
+                <TextoFormatado texto={m.texto} />
+                <div className="text-[9px] text-texto-fraco text-right">{m.hora}</div>
+              </div>
+            ) : m.de === 'sistema' ? (
               <div className="text-[10px] text-texto-suave bg-grafite-700/90 border border-linha px-3 py-1.5 rounded-full">
                 {m.texto}
               </div>
@@ -2568,17 +2716,49 @@ function PainelChat({
                 enviar();
               }
             }}
-            placeholder={anexo ? 'Legenda (opcional)...' : 'Digite sua mensagem...  (Enter envia · Shift+Enter quebra linha)'}
-            className="order-first w-full sm:order-none sm:w-auto sm:flex-1 min-w-0 resize-none max-h-32 bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 transition-colors"
+            placeholder={
+              modoNota
+                ? 'Nota interna — o cliente NÃO recebe isto.  (Enter salva)'
+                : anexo ? 'Legenda (opcional)...' : 'Digite sua mensagem...  (Enter envia · Shift+Enter quebra linha)'
+            }
+            className={`order-first w-full sm:order-none sm:w-auto sm:flex-1 min-w-0 resize-none max-h-32 border rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none transition-colors ${
+              modoNota
+                ? 'bg-espera/10 border-espera/50 placeholder-espera-400/70 focus:border-espera'
+                : 'bg-grafite-700 border-linha placeholder-slate-500 focus:border-acao/50'
+            }`}
           />
+        )}
+        {/* Liga/desliga o modo nota. Fica DESABILITADO com anexo em mão: nota é
+            texto, e um botão que aceita o clique sem fazer nada ensina a pessoa
+            a desconfiar da barra inteira. */}
+        {!gravandoAudio && (
+        <button
+          onClick={() => setModoNota(v => !v)}
+          disabled={!!anexo}
+          title={modoNota ? 'Voltar a responder o cliente' : 'Escrever nota interna (só a equipe vê)'}
+          aria-pressed={modoNota}
+          className={`p-2.5 rounded-xl border transition-colors self-end disabled:opacity-40 ${
+            modoNota
+              ? 'bg-espera/20 border-espera/50 text-espera-400'
+              : 'bg-grafite-700 border-linha text-slate-400 hover:text-white hover:border-linha-forte'
+          }`}
+        >
+          <StickyNote size={15} />
+        </button>
         )}
         {!gravandoAudio && (
         <button
           onClick={enviar}
           disabled={enviandoMidia}
-          className="ml-auto sm:ml-0 p-2.5 rounded-xl bg-acao hover:bg-acao-200 disabled:opacity-50 text-slate-950 transition-colors shadow-md shadow-acao/20 self-end"
+          title={modoNota ? 'Salvar nota interna' : 'Enviar mensagem ao cliente'}
+          className={`ml-auto sm:ml-0 p-2.5 rounded-xl disabled:opacity-50 transition-colors shadow-md self-end ${
+            modoNota
+              ? 'bg-espera hover:bg-espera-400 text-slate-950 shadow-espera/20'
+              : 'bg-acao hover:bg-acao-200 text-slate-950 shadow-acao/20'
+          }`}
         >
-          {enviandoMidia ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+          {enviandoMidia ? <Loader2 size={15} className="animate-spin" />
+            : modoNota ? <StickyNote size={15} /> : <Send size={15} />}
         </button>
         )}
       </div>
@@ -2652,6 +2832,10 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   const [texto,         setTexto]        = useState('');
   const [espiandoChat,  setEspiandoChat] = useState(null);
   const [modalCnpj,     setModalCnpj]    = useState(false);
+  // Fechamento em curso: { id, motivos, carregando, erro, salvando } ou null.
+  // Um objeto só, e não cinco estados soltos, porque as cinco coisas nascem e
+  // morrem juntas -- e estado espalhado é como um modal fica meio aberto.
+  const [fechando,      setFechando]     = useState(null);
   const [inputCnpj,     setInputCnpj]    = useState('');
   // Conversa iniciada por nos (botao de enviar). `erroNova` fica no estado do
   // pai porque o erro vem da API -- o modal so o exibe.
@@ -3169,14 +3353,44 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     }
   }, [setConversas, setAbaAtual, aplicarConversa]);
 
-  const fecharConversa = useCallback(async (id) => {
-    setSelecionada(null);
-    setAbaAtual('fechadas');
-    setConversas(prev => prev.map(c =>
-      c.id === id ? { ...c, statusAtendimento: 'fechada', lido: true, naoLidas: 0 } : c
-    ));
-    try { aplicarConversa(await ConversasAPI.fechar(id)); } catch {}
-  }, [setConversas, aplicarConversa]);
+  /**
+   * Pedido de fechamento: abre o modal do motivo. NÃO fecha nada ainda.
+   *
+   * O fechamento em si virou `confirmarFechamento`, abaixo. Separar as duas
+   * coisas é o que impede a tela de afirmar "fechada" antes de o servidor ter
+   * aceitado -- e agora ele pode recusar, porque o motivo é obrigatório.
+   */
+  const fecharConversa = useCallback((id) => {
+    setFechando({ id, motivos: [], carregando: true, erro: '', salvando: false });
+    ConversasAPI.motivosEncerramento()
+      .then(motivos => setFechando(f => (f?.id === id ? { ...f, motivos, carregando: false } : f)))
+      .catch(e => setFechando(f => (f?.id === id
+        ? { ...f, carregando: false, erro: 'Não foi possível carregar os motivos: ' + e.message }
+        : f)));
+  }, []);
+
+  /**
+   * Fecha de verdade, com o motivo escolhido.
+   *
+   * Sem atualização otimista, ao contrário de quase todas as outras ações desta
+   * tela. A razão é que aqui o servidor PODE dizer não (motivo ausente ou fora
+   * da lista), e uma conversa que aparece como fechada sem ter fechado é pior
+   * que meio segundo de espera: ela some da fila de quem está trabalhando e
+   * ninguém volta a olhar para ela.
+   */
+  const confirmarFechamento = useCallback(async (motivo) => {
+    const id = fechando?.id;
+    if (!id) return;
+    setFechando(f => ({ ...f, salvando: true, erro: '' }));
+    try {
+      aplicarConversa(await ConversasAPI.fechar(id, motivo));
+      setFechando(null);
+      setSelecionada(null);
+      setAbaAtual('fechadas');
+    } catch (e) {
+      setFechando(f => ({ ...f, salvando: false, erro: e?.message || 'Não foi possível fechar o atendimento.' }));
+    }
+  }, [fechando, aplicarConversa]);
 
   const moverPendente = useCallback(async (id) => {
     setConversas(prev => prev.map(c =>
@@ -3248,6 +3462,29 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       window.alert('Não foi possível apagar: ' + e.message);
     }
   }, [aplicarConversa, conversa, setConversas]);
+
+  /**
+   * Grava uma NOTA INTERNA na conversa.
+   *
+   * Sem bolha otimista, ao contrário do envio de mensagem. A razão é a mesma que
+   * justifica a otimista lá: o que o operador precisa ver na hora. Numa resposta
+   * ao cliente, a espera pela rede é o que faz a pessoa clicar em enviar duas
+   * vezes. Numa nota não há rede externa nenhuma no caminho -- ela grava e
+   * volta -- e uma bolha otimista de nota criaria o risco pior: a anotação
+   * parecendo salva quando a gravação falhou, e a próxima pessoa do turno
+   * confiando numa informação que não está em lugar nenhum.
+   */
+  const adicionarNota = useCallback(async (txt) => {
+    const nota = txt.trim();
+    if (!nota || !conversa) return;
+    try {
+      aplicarConversa(await ConversasAPI.adicionarNota(conversa.id, nota));
+      setTexto('');
+    } catch (e) {
+      // O texto FICA na caixa: quem escreveu não perde o que digitou.
+      window.alert('A nota NÃO foi salva: ' + (e?.message || 'erro desconhecido'));
+    }
+  }, [aplicarConversa, conversa, setTexto]);
 
   const enviarResposta = useCallback(async (txt, respondendoAId = null) => {
     if (!txt.trim() || !conversa) return;
@@ -3601,6 +3838,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               setTexto={setTexto}
               scrollRef={scrollRef}
               onEnviar={enviarResposta}
+              onAdicionarNota={adicionarNota}
               onEnviarMidia={enviarMidia}
               onFechar={fecharConversa}
               onPendente={moverPendente}
@@ -3653,6 +3891,17 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
           </div>
         </div>
         </Portal>
+      )}
+
+      {fechando && (
+        <ModalMotivoEncerramento
+          motivos={fechando.motivos}
+          carregando={fechando.carregando}
+          erro={fechando.erro}
+          salvando={fechando.salvando}
+          onConfirmar={confirmarFechamento}
+          onFechar={() => setFechando(null)}
+        />
       )}
 
       {modalCnpj && (

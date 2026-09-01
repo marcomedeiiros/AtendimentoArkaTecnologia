@@ -1941,6 +1941,31 @@ class ChatbotEngine {
     return this.fecharConversa(ctx, { motivo });
   }
 
+  /**
+   * Traduz a razao INTERNA do encerramento no rotulo da taxonomia.
+   *
+   * Duas linguagens diferentes convivem no motor e nao podem se misturar. A
+   * razao interna ("sem_resposta", "fim_do_fluxo", "ramificacao_sem_destino") e
+   * escrita para quem le LOG e depura um fluxo: ela distingue casos que so
+   * importam para quem mexe no editor. O rotulo da taxonomia e escrito para quem
+   * le RELATORIO e decide onde investir -- e para essa pessoa "ramificacao sem
+   * destino" nao e um motivo de contato, e sim ruido.
+   *
+   * Por isso o mapeamento colapsa: so o abandono do cliente merece linha propria,
+   * porque ele significa uma coisa concreta e acionavel ("o cliente desistiu no
+   * meio"). Todo o resto e o robo tendo concluido o roteiro dele.
+   *
+   * Nenhum dos dois rotulos esta na lista editavel, e isso e de proposito: eles
+   * nao sao escolha de ninguem, e uma revisao de taxonomia que os apagasse
+   * devolveria as OS automaticas ao buraco de onde vieram.
+   */
+  _motivoAutomatico(motivoInterno) {
+    const { MOTIVOS_AUTOMATICOS } = require("../configuracoes/configuracao.service");
+    return motivoInterno === "sem_resposta"
+      ? MOTIVOS_AUTOMATICOS.INATIVIDADE
+      : MOTIVOS_AUTOMATICOS.FLUXO;
+  }
+
   // Fechamento efetivo: marca a conversa como fechada e desliga a sessao.
   async fecharConversa(ctx, { motivo = "fluxo" } = {}) {
     const { conversa, telefone, instanciaId } = ctx;
@@ -1959,6 +1984,18 @@ class ChatbotEngine {
       status: "fechada",
       fechadoEm,
     });
+    // MOTIVO DO CICLO, para o ciclo fechado pelo BOT nao virar buraco no
+    // relatorio. O `motivo` que chega aqui e a razao INTERNA do encerramento
+    // (uma string de log: "fluxo", "solicitado", "sem_resposta"); o que se grava
+    // e o rotulo da taxonomia, que e o vocabulario que a tela e o relatorio
+    // falam. Traduzir e o trabalho de `_motivoAutomatico`.
+    //
+    // "SeVazio": se uma pessoa ja escolheu o motivo ao fechar pela Central, a
+    // escolha dela vale mais que o rotulo do robo.
+    await this.deps.conversaRepository.definirMotivoAtualSeVazio(
+      conversa.id,
+      this._motivoAutomatico(motivo)
+    );
 
     await this.deps.sessaoRepository.upsert(instanciaId, conversa.id, telefone, {
       fluxoAtualId: null,
@@ -2117,6 +2154,15 @@ class ChatbotEngine {
         status: "fechada",
         fechadoEm,
       });
+      // Este ponto e alcancado por DOIS caminhos: o bot encerrando o roteiro
+      // (nao ha motivo escolhido, e este rotulo e o correto) e a pesquisa
+      // disparada logo depois de uma PESSOA fechar pela Central (ja ha motivo, e
+      // sobrescrever apagaria a escolha dela). "SeVazio" e o que separa os dois
+      // sem precisar saber de qual deles a chamada veio.
+      await this.deps.conversaRepository.definirMotivoSeVazio(
+        osAvaliada,
+        this._motivoAutomatico("fluxo")
+      );
     }
     await this._emitirConversa(conversa.id);
 
@@ -2477,6 +2523,11 @@ class ChatbotEngine {
         status: "fechada",
         fechadoEm,
       });
+      // Mesma regra dos outros dois pontos: rotula so o que ainda nao tem dono.
+      await this.deps.conversaRepository.definirMotivoAtualSeVazio(
+        conversa.id,
+        this._motivoAutomatico("fluxo")
+      );
     }
     await this._emitirConversa(conversa.id);
     logger.info("Pesquisa de satisfacao concluida", {

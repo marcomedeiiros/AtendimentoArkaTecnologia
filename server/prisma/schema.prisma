@@ -13,7 +13,10 @@ datasource db {
 //   StatusAtendimento: pendente | aberta | fechada
 //     (legado, migrado via backfill: aguardando->pendente, em_atendimento->aberta,
 //      finalizado/resolvido->fechada)
-//   OrigemMensagem:    cliente | equipe | sistema | bot
+//   OrigemMensagem:    cliente | equipe | sistema | bot | nota
+//     `nota` e a NOTA INTERNA: fica na linha do tempo, mas NUNCA sai para o
+//     WhatsApp. Ela nasce por uma rota propria (POST /conversas/:id/notas) e
+//     nao passa pelo enviarMensagem -- ver o comentario de `adicionarNota`.
 //   StatusParceiro:    ativo | inativo
 //   StatusEquipe:      online | offline
 //   TipoPassoFluxo:    gatilho | mensagem | condicao | delay | acao | comentario
@@ -370,6 +373,26 @@ model Atendimento {
   atendenteId   String?   @map("atendente_id")
   /// Nome gravado como historico: sobrevive a exclusao da conta.
   atendenteNome String?   @map("atendente_nome")
+  /// POR QUE o cliente procurou -- o motivo do contato, escolhido no fechamento.
+  ///
+  /// Fica no ATENDIMENTO, e nao na conversa: o mesmo cliente abre um chamado de
+  /// "Backup e restauracao" hoje e um de "Financeiro e boleto" mes que vem. Um
+  /// campo no fio permanente guardaria so o ultimo e destruiria a serie
+  /// historica, que e justamente o que este dado existe para formar.
+  ///
+  /// NAO e o `setor`. Setor e QUEM atende (roteamento); motivo e POR QUE ligaram
+  /// (causa raiz). Os quatro setores respondem "quem trabalhou"; nenhum deles
+  /// responde "o que fazer para este chamado nao existir da proxima vez".
+  ///
+  /// Texto livre no banco, e nao uma lista fechada em codigo: a taxonomia vive
+  /// na tabela de Configuracao (chave `atendimento.motivos`) para ser revista
+  /// por trimestre sem deploy. Um enum aqui congelaria a lista na migracao.
+  ///
+  /// Anulavel de proposito, e sao TRES coisas diferentes:
+  ///   null                   -> OS fechada antes de este campo existir
+  ///   um item da lista       -> escolhido por uma pessoa no fechamento
+  ///   "Encerrado por ..."    -> fechamento automatico (bot), fora da lista
+  motivo        String?
   avaliacao     Int?
   /// COMO a avaliacao terminou -- e diferente de "qual foi a nota".
   ///

@@ -27,7 +27,7 @@ function mapMensagem(m) {
     // `de` continua colapsando bot->equipe: e o que posiciona a bolha do lado
     // direito, e mudar isso mexeria em toda a renderizacao.
     de: m.origem === "bot" ? "equipe" : m.origem,
-    // ORIGEM REAL, sem colapsar: cliente | equipe | bot | sistema.
+    // ORIGEM REAL, sem colapsar: cliente | equipe | bot | sistema | nota.
     //
     // Sem este campo a Central nao tinha como distinguir o que o BOT mandou do
     // que um atendente digitou -- as duas coisas chegavam como "equipe". E e
@@ -37,6 +37,13 @@ function mapMensagem(m) {
     // Mensagem gerada por uma automacao do fluxo (pesquisa de satisfacao, aviso
     // de espera, timeout). Marcada na gravacao, nao deduzida na tela.
     automacao: m.origem === "bot" || !!meta.automacao,
+    // NOTA INTERNA: quem escreveu. Nome vem do metadata (a nota nunca embute a
+    // autoria no texto) e existe so nas notas -- null em todo o resto.
+    //
+    // Existe um segundo campo, e nao so o `origem === "nota"`, porque a bolha
+    // precisa dizer QUEM anotou: numa conversa que passou por tres turnos, uma
+    // nota sem autor nao ajuda ninguem a decidir se ainda vale.
+    notaAutor: m.origem === "nota" ? meta.autorNome || null : null,
     // Resposta do cliente a PESQUISA DE SATISFACAO (a nota, ou o comentario).
     //
     // Continua sendo mensagem do cliente para todo o resto -- aparece no chat,
@@ -84,6 +91,10 @@ function mapAtendimento(a) {
     // COMO a avaliacao terminou (respondida | sem_nota | sem_resposta |
     // aguardando). Sem isto, "sem nota" e "nao respondeu" ficavam iguais.
     avaliacaoStatus: a.avaliacaoStatus || null,
+    // POR QUE o cliente procurou, escolhido no fechamento. `null` em OS fechada
+    // antes deste campo existir -- e isso e diferente de qualquer motivo real,
+    // entao a tela mostra "nao informado" em vez de inventar uma categoria.
+    motivo: a.motivo || null,
     feedback: a.feedback || null,
     abertoEm: a.abertoEm ? a.abertoEm.toISOString?.() || a.abertoEm : null,
     atendidoEm: a.atendidoEm ? a.atendidoEm.toISOString?.() || a.atendidoEm : null,
