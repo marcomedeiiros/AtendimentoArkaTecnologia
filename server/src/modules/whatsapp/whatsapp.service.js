@@ -314,7 +314,7 @@ class WhatsAppService {
   }
 
   // Agenda uma tentativa de reconexao com backoff exponencial.
-  // `tentativa` começa em 1; espera = tentativa * 10 segundos.
+  // 1ª tentativa: 3s. Seguintes: dobra a cada vez (3s, 6s, 12s, 24s, 48s).
   _agendarReconexao(instanceName, tentativa) {
     const MAX_TENTATIVAS = 5;
     if (tentativa > MAX_TENTATIVAS) {
@@ -325,7 +325,7 @@ class WhatsAppService {
       return;
     }
 
-    const esperaMs = tentativa * 10_000; // 10s, 20s, 40s... (linear simples)
+    const esperaMs = 3_000 * Math.pow(2, tentativa - 1); // 3s, 6s, 12s, 24s, 48s
     logger.info(`Auto-reconexao tentativa ${tentativa}/${MAX_TENTATIVAS} em ${esperaMs / 1000}s`, {
       instance: instanceName,
     });
