@@ -560,6 +560,18 @@ export const WhatsAppAPI = {
   enviar: (telefone, texto, instance) => request('/whatsapp/enviar', { method: 'POST', body: JSON.stringify({ telefone, texto, instance }) }),
 };
 
+// ── Dashboard / painel de parede ──
+//
+// A Visao Geral calcula as proprias metricas a partir do que ja esta no
+// AppContext, e por isso nunca precisou de um cliente de API. O painel de
+// parede precisa: ele agrega o MES INTEIRO de atendimentos e a fila, coisas que
+// o contexto nao carrega -- e trazer isso para o navegador so para somar seria
+// repetir o erro que custou 87 MB por chamada na listagem da Central.
+export const DashboardAPI = {
+  metricas: () => request('/dashboard'),
+  painel: () => request('/dashboard/painel'),
+};
+
 // ── n8n API ──
 export const N8nAPI = {
   status: () => request('/n8n/status'),

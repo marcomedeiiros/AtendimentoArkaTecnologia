@@ -9,7 +9,7 @@ import React, { useState, useLayoutEffect } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { aplicarTema } from '../../utils/tema';
 import {
-  LayoutGrid, Users, Zap, MessageSquare, ShieldCheck,
+  LayoutGrid, Users, Zap, MessageSquare, ShieldCheck, MonitorPlay,
   GitFork, MessageCircle, CalendarDays, Send, Loader2, Menu, X, WifiOff, Settings, LogOut, Bug
 } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
@@ -30,6 +30,10 @@ const NAV_PRINCIPAL = [
 
 const NAV_MONITORAMENTO = [
   { to: '/dashboard',  label: 'Visão Geral',          icon: LayoutGrid, modulo: 'dashboard' },
+  // Painel de parede. Mesmo modulo da Visao Geral: sao a mesma informacao para
+  // publicos diferentes, e separar a permissao criaria a pergunta "quem pode
+  // ver o numero na TV mas nao no relatorio?", que nao tem resposta boa.
+  { to: '/painel',     label: 'Painel da Equipe',     icon: MonitorPlay, modulo: 'dashboard' },
 ];
 
 const NAV_FERRAMENTAS = [

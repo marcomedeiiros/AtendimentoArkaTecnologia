@@ -22,4 +22,19 @@ router.get("/", (req, res, next) =>
   dashboardController.obter(req, res).catch(next)
 );
 
+/**
+ * @openapi
+ * /api/dashboard/painel:
+ *   get:
+ *     tags: [Dashboard]
+ *     security: [{ bearerAuth: [] }]
+ *     summary: Painel de parede -- KPIs da equipe e fila de espera
+ *     responses:
+ *       200:
+ *         description: Ranking do mes, CSAT, tempos, meta do dia, equipe online e fila
+ */
+router.get("/painel", (req, res, next) =>
+  dashboardController.painel(req, res).catch(next)
+);
+
 module.exports = router;
