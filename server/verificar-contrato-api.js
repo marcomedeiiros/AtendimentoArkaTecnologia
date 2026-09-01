@@ -214,7 +214,56 @@ for (const { caminho, metodoHttp, linha } of caminhosPedidos) {
 check("nenhum caminho sem rota", caminhosSemRota);
 
 // ---------------------------------------------------------------------------
-titulo("3. O mapa foi lido de verdade (senao os testes acima passam vazios)");
+titulo("3. O corpo que a tela manda sobrevive ao schema do servidor");
+
+// ── A TERCEIRA FORMA DE METADE-DE-RECURSO ──────────────────────────────────
+//
+// As duas seções acima cobrem "o método não existe" e "a rota não existe". Falta
+// a que não aparece em nenhuma das duas, porque os dois lados EXISTEM e mesmo
+// assim o recurso não funciona: o campo que a tela manda no corpo não está
+// declarado no schema Zod, e `validate` faz `req.body = schema.parse(req.body)`
+// -- `z.object` DESCARTA chave desconhecida, calado, sem erro nenhum.
+//
+// Foi exatamente o que aconteceu com o "responder" da Central: ela mandava
+// `respondendoAId` em toda resposta, a rota existia, o service sabia montar o
+// `quoted`... e o campo era comido na porta. A resposta chegava ao cliente sem
+// citar nada e a própria Central não desenhava o trecho citado -- sintoma de
+// recurso quebrado no WhatsApp, causa a três camadas de distância.
+//
+// Um erro de validação é ruidoso e alguém conserta; uma chave apagada em
+// silêncio sobrevive a um deploy inteiro. Por isso a conferência é sobre
+// SOBREVIVÊNCIA da chave, e não sobre o schema aceitar o corpo.
+const corposDaTela = [
+  // rota                                  schema                    corpo montado em services/api.js
+  ["POST /conversas/:id/mensagens",        "enviarMensagemSchema",   { texto: "oi", respondendoAId: "m-1" }],
+  ["POST /conversas/:id/mensagens (sem citação)", "enviarMensagemSchema", { texto: "oi", respondendoAId: null }],
+  ["PATCH /conversas/mensagens/:id",       "editarMensagemSchema",   { texto: "corrigido" }],
+  ["POST /conversas/mensagens/encaminhar", "encaminharMensagemSchema", { mensagemId: "m-1", conversaDestinoId: "c-2" }],
+  ["PATCH /conversas/:id/status",          "atualizarStatusSchema",  { status: "aberta" }],
+  ["POST /conversas/:id/validar-cnpj",     "validarCnpjSchema",      { cnpj: "12345678000199" }],
+];
+
+const dto = require("./src/modules/conversas/conversa.dto");
+const camposcomidos = [];
+for (const [rota, nomeSchema, corpo] of corposDaTela) {
+  const schema = dto[nomeSchema];
+  if (!schema) { camposcomidos.push(`${rota}: schema ${nomeSchema} nao existe no dto`); continue; }
+  const r = schema.safeParse(corpo);
+  if (!r.success) {
+    camposcomidos.push(`${rota}: o corpo da tela nao passa em ${nomeSchema} -- ${r.error.issues[0]?.message}`);
+    continue;
+  }
+  // `null` sobrevive como null; o que não pode é a chave SUMIR.
+  for (const chave of Object.keys(corpo)) {
+    if (!(chave in r.data)) {
+      camposcomidos.push(`${rota}: ${nomeSchema} descarta "${chave}" -- a tela manda e o servidor nunca ve`);
+    }
+  }
+}
+check("nenhum campo do corpo e descartado pelo schema", camposcomidos);
+
+// ---------------------------------------------------------------------------
+titulo("4. O mapa foi lido de verdade (senao os testes acima passam vazios)");
 
 check("objetos de API encontrados", objetosApi.size > 0 ? [] : ["nenhum XxxAPI lido do api.js"]);
 check("rotas do servidor encontradas", rotasDoServidor.size > 0 ? [] : ["nenhuma rota lida do servidor"]);

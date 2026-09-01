@@ -23,6 +23,7 @@
 //
 // Então o que sobra aqui é o que o nome sempre prometeu: rodar tudo.
 //
+//   verificar-contrato-api.js      as duas pontas de cada chamada da tela (só leitura)
 //   verificar-horario.js           a regra de expediente, caso a caso (módulo puro)
 //   verificar-fluxo-arka.js        a matriz do fluxo, conversando com o motor real
 //   verificar-visual-whatsapp.js   o payload que chega ao WhatsApp (botão x texto)
@@ -49,6 +50,16 @@ const { existsSync } = require("fs");
 // regra de horário aparece no primeiro script, e não escondido dentro de uma
 // conversa de sete turnos.
 const VERIFICACOES = [
+  {
+    // Não fala com o motor nem com o banco: lê os dois lados do código. Vem
+    // primeiro porque é o mais barato, e porque o defeito que ele pega -- a tela
+    // manda um campo, o schema Zod o descarta calado -- não produz erro nenhum
+    // para os outros scripts verem. Foi assim que o "responder" da Central ficou
+    // quebrado com as duas pontas escritas e funcionando.
+    arquivo: "verificar-contrato-api.js",
+    titulo: "Contrato entre a tela e o servidor",
+    resumo: "método existe, rota existe, e o corpo que a tela manda sobrevive ao schema",
+  },
   {
     arquivo: "verificar-horario.js",
     titulo: "Horário de atendimento",

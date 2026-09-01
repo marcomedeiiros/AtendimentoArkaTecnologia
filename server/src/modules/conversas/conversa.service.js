@@ -327,6 +327,12 @@ class ConversaService {
     await this._registrarAtendente(conversa, origem, autor);
 
     // "Responder" do WhatsApp: cita a mensagem original na bolha do cliente.
+    //
+    // Duas coisas independentes saem daqui, e vale saber qual e qual quando o
+    // recurso "nao funciona": o `quoted` (a citacao no APARELHO do cliente,
+    // que exige o id da mensagem no WhatsApp) e o `respondendoAId` gravado na
+    // mensagem local (a citacao na CENTRAL, que nao depende do WhatsApp).
+    // A segunda vale mesmo quando a primeira nao e possivel.
     let quoted = null;
     if (respondendoAId) {
       const citada = await conversaRepository.findMensagem(respondendoAId);
@@ -339,6 +345,17 @@ class ConversaService {
           },
           message: { conversation: citada.texto },
         };
+      } else {
+        // SEM `waMessageId` NAO HA COMO CITAR NO WHATSAPP -- e isso e um dado,
+        // nao um detalhe. Acontece com mensagem que nunca chegou a sair (envio
+        // com erro) e com o historico anterior ao rastreio de id. A resposta
+        // segue normalmente, so que solta no aparelho do cliente; sem esta
+        // linha, "as vezes o responder nao marca" nao teria por onde comecar.
+        logger.warn("Resposta sem citacao no WhatsApp: a mensagem citada nao tem waMessageId", {
+          conversaId: id,
+          mensagemCitadaId: respondendoAId,
+          existe: !!citada,
+        });
       }
     }
 

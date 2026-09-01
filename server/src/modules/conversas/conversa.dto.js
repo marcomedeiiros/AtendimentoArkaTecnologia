@@ -2,8 +2,24 @@ const { z } = require("zod");
 
 const { SETORES } = require("../../shared/helpers/setor.helper");
 
+// ── O QUE O SCHEMA NAO DECLARA, O SCHEMA APAGA ──────────────────────────────
+//
+// `validate` faz `req.body = schema.parse(req.body)`, e `z.object` DESCARTA
+// chave que ele nao conhece. Este schema declarava so `texto` -- entao o
+// `respondendoAId` que a Central manda em toda resposta era removido do corpo
+// antes de o controller ler, silenciosamente e sem erro nenhum.
+//
+// O efeito era o "responder" do WhatsApp nao funcionar de ponta a ponta, e por
+// dois caminhos ao mesmo tempo: sem o id nao se monta o `quoted` do envio (a
+// mensagem chegava ao cliente solta, sem citar coisa nenhuma) e nada era gravado
+// em `Mensagem.respondendoAId` (entao a propria Central tambem nao desenhava o
+// trecho citado na bolha). Parecia recurso quebrado no WhatsApp; era campo comido
+// na porta de entrada.
 const enviarMensagemSchema = z.object({
   texto: z.string().min(1),
+  // `nullish`: a Central manda `respondendoAId: null` quando a resposta nao cita
+  // ninguem -- e null tem de passar, nao virar erro de validacao.
+  respondendoAId: z.string().min(1).nullish(),
 });
 
 // Conversa iniciada pelo painel (botao de enviar da Central).
