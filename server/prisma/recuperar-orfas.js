@@ -34,8 +34,22 @@
  *
  * ── USO ─────────────────────────────────────────────────────────────────────
  *
- *   node prisma/recuperar-orfas.js            simula e mostra o que faria
- *   node prisma/recuperar-orfas.js --aplicar  grava
+ *   node prisma/recuperar-orfas.js                        simula a reconstrucao
+ *   node prisma/recuperar-orfas.js --aplicar              reconstroi
+ *   node prisma/recuperar-orfas.js --descartar            simula o descarte
+ *   node prisma/recuperar-orfas.js --descartar --aplicar  descarta
+ *
+ * ── QUANDO DESCARTAR EM VEZ DE RECONSTRUIR ──────────────────────────────────
+ *
+ * Nem todo orfao e historico de cliente. Na producao da Arka, os 30 primeiros
+ * eram TRAFEGO DE TESTE: telefones 5500900000001 e 5500000000001, uma conversa
+ * roteirizada ("oi", "1", "1", "1") passeando pelo menu, sem contato
+ * cadastrado. Reconstruir aquilo teria enfiado duas conversas falsas na
+ * Central, com numero de ticket e OS de verdade.
+ *
+ * Por isso o script MOSTRA antes de agir, e o telefone aparece no relatorio:
+ * quem roda decide, olhando, se aquilo e cliente ou residuo. O padrao continua
+ * sendo reconstruir -- descartar dado exige pedir.
  *
  * IDEMPOTENTE: rodar de novo nao acha mais orfao e nao faz nada. E seguro
  * rodar em producao com a API no ar -- as escritas sao por conversa, dentro de
@@ -45,6 +59,7 @@ const { PrismaClient } = require("@prisma/client");
 
 const prisma = new PrismaClient({ log: [] });
 const APLICAR = process.argv.includes("--aplicar");
+const DESCARTAR = process.argv.includes("--descartar");
 
 async function idsOrfaos() {
   const linhas = await prisma.$queryRawUnsafe(`
@@ -110,8 +125,22 @@ async function main() {
     const nome = contato?.nome || `Recuperado ${telefone}`;
     const criadoEm = sessao?.criado_em ? new Date(sessao.criado_em) : new Date(Number(mensagens?.primeira) || Date.now());
 
-    console.log(`  ${id.slice(0, 8)}  tel ${telefone}  ${Number(mensagens?.n || 0)} mensagens  ${atendimentos.length} OS  -> "${nome}"`);
+    console.log(
+      `  ${id.slice(0, 8)}  tel ${telefone}  ${Number(mensagens?.n || 0)} mensagens  ${atendimentos.length} OS  -> ` +
+        (DESCARTAR ? "DESCARTAR (apaga tudo desta conversa)" : `"${nome}"`)
+    );
     if (atual) console.log(`              OS ${atual.numero_os} (${atual.setor || "sem setor"}, ${atual.status}) vira o atendimento atual`);
+
+    if (DESCARTAR) {
+      if (!APLICAR) continue;
+      // Ordem: filhos primeiro. Nao ha conversa para cascatear.
+      await prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe("DELETE FROM mensagens WHERE conversa_id = ?", id);
+        await tx.$executeRawUnsafe("DELETE FROM atendimentos WHERE conversa_id = ?", id);
+        await tx.$executeRawUnsafe("DELETE FROM sessoes_chatbot WHERE conversa_id = ?", id);
+      });
+      continue;
+    }
 
     if (!APLICAR) continue;
 

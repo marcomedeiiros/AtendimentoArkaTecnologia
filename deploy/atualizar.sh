@@ -38,5 +38,19 @@ $COMPOSE up -d
 echo "==> Limpando imagens antigas"
 docker image prune -f
 
+# ── E O CACHE DE BUILD, QUE NINGUEM LIMPAVA ─────────────────────────────────
+#
+# `docker image prune` nao toca no build cache. Ele so cresce: em 01/09/2026 a
+# VM tinha 7,9 GB acumulados em 852 registros -- mais do que todas as imagens
+# somadas, num disco de 48 GB que ja carrega 5 GB de backups.
+#
+# `--keep-storage 2GB` mantem o cache recente (o que de fato acelera o proximo
+# build) e descarta o resto. Zerar tudo a cada deploy trocaria disco por tempo
+# de build; um teto resolve os dois.
+#
+# O `||` cobre versoes de Docker sem `--keep-storage`: ali o corte e por idade.
+docker builder prune -f --keep-storage 2GB >/dev/null 2>&1 ||
+  docker builder prune -f --filter until=168h >/dev/null 2>&1 || true
+
 echo
 $COMPOSE ps
