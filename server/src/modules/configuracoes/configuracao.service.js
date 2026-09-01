@@ -43,6 +43,11 @@ const MOTIVOS_PADRAO = [
 const MOTIVOS_AUTOMATICOS = {
   INATIVIDADE: "Encerrado por inatividade",
   FLUXO: "Encerrado pelo fluxo",
+  // Linha propria, e nao "Encerrado pelo fluxo", porque responde uma pergunta de
+  // NEGOCIO que nenhuma outra responde: quanto do volume chega quando nao ha
+  // ninguem para atender. Se esse numero for grande, a decisao nao e melhorar o
+  // bot -- e esticar o expediente ou colocar plantao.
+  FORA_HORARIO: "Encerrado fora do horário",
 };
 
 // Chaves suportadas e de onde vem o valor padrao (.env) quando o banco esta vazio.

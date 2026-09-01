@@ -1961,9 +1961,9 @@ class ChatbotEngine {
    */
   _motivoAutomatico(motivoInterno) {
     const { MOTIVOS_AUTOMATICOS } = require("../configuracoes/configuracao.service");
-    return motivoInterno === "sem_resposta"
-      ? MOTIVOS_AUTOMATICOS.INATIVIDADE
-      : MOTIVOS_AUTOMATICOS.FLUXO;
+    if (motivoInterno === "sem_resposta") return MOTIVOS_AUTOMATICOS.INATIVIDADE;
+    if (motivoInterno === "fora_do_horario") return MOTIVOS_AUTOMATICOS.FORA_HORARIO;
+    return MOTIVOS_AUTOMATICOS.FLUXO;
   }
 
   // Fechamento efetivo: marca a conversa como fechada e desliga a sessao.
