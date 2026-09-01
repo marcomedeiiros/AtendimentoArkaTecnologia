@@ -24,6 +24,10 @@ const instanciaRepository = require("../../infrastructure/repositories/instancia
 const chatbotEngine = require("./chatbot.engine");
 const fluxoRepository = require("../../infrastructure/repositories/fluxo.repository");
 const configuracaoService = require("../configuracoes/configuracao.service");
+// A regra de expediente e do modulo de horario, e ela e consultada aqui pelo
+// mesmo motivo que no motor: quem decide se estamos fora do horario e sempre o
+// mesmo codigo, senao existiriam dois expedientes discordando.
+const horarioAtendimento = require("./chatbot.horario");
 const { comLock } = require("../../shared/helpers/lock.helper");
 const logger = require("../../config/logger");
 
@@ -85,6 +89,7 @@ async function varrer() {
     // importante, o criterio e outro -- aqui o que conta e ha quanto tempo a
     // conversa esta na fila, nao ha quanto tempo o cliente esta calado.
     tratadas += await varrerEsperaNaFila();
+    tratadas += await varrerForaDoHorario();
   } catch (error) {
     logger.warn("Falha na varredura de inatividade", { message: error.message });
   } finally {
@@ -204,6 +209,104 @@ async function varrerEsperaNaFila() {
     }
   }
   return avisadas;
+}
+
+/**
+ * ENCERRA O QUE CHEGOU FORA DO EXPEDIENTE.
+ *
+ * Antes, a mensagem que chegava as 22h recebia o aviso de fora do horario e a
+ * conversa ia para Pendentes -- e ficava. De manha a fila amanhecia com clientes
+ * da madrugada misturados aos de agora, todos com a mesma cara de "esperando
+ * atendimento", e a metrica de espera na fila contava a noite inteira como
+ * demora da equipe. O cliente, do lado dele, tinha lido que sua mensagem seria
+ * recebida e esperava um retorno que ninguem prometeu.
+ *
+ * Agora o aviso pede que ele volte no expediente e diz que o atendimento sera
+ * encerrado; este varredor cumpre o que aquele texto prometeu.
+ *
+ * ── POR QUE `foraDoHorario` E CHECADO DE NOVO AQUI ──────────────────────────
+ *
+ * Este e o guard que faz a diferenca entre "encerrar quem chegou de madrugada" e
+ * "descartar cliente as 08:01". Uma mensagem das 07:56 recebe o aviso (ainda
+ * fora do expediente) e ficaria marcada para encerrar as 08:01 -- quando a
+ * equipe JA CHEGOU e aquele cliente e o primeiro da fila. Sem esta checagem, o
+ * primeiro atendimento de toda manha seria fechado na cara de quem madrugou.
+ *
+ * Dentro do expediente o varredor nao faz nada, e a conversa segue na fila para
+ * ser atendida como qualquer outra.
+ */
+async function varrerForaDoHorario() {
+  const horario = await configuracaoService.horarioAtendimento();
+  // Prazo zerado desliga o recurso (e a mensagem some do aviso -- ver
+  // chatbot.horario.mensagemFora).
+  if (!horario.encerrarAposMin) return 0;
+  // Dentro do expediente nao ha nada a encerrar. Ver o bloco acima.
+  if (!horarioAtendimento.foraDoHorario(horario)) return 0;
+
+  const pendentes = await prisma.conversa.findMany({
+    where: { statusAtendimento: "pendente", atendenteId: null },
+    select: { id: true, instanciaId: true, telefone: true },
+    take: 200,
+  });
+  if (pendentes.length === 0) return 0;
+
+  const limite = Date.now() - horario.encerrarAposMin * 60 * 1000;
+  let encerradas = 0;
+
+  for (const { id, instanciaId, telefone } of pendentes) {
+    try {
+      const conversa = await conversaRepository.findById(id);
+      if (!conversa) continue;
+
+      // A MARCA E O CRITERIO, e nao "esta pendente ha X minutos".
+      //
+      // `foraHorarioEm` so existe em conversa que passou pelo bloco de fora do
+      // horario do motor -- ou seja, em cliente que RECEBEU o aviso. Usar a
+      // idade na fila fecharia tambem a conversa que entrou durante o
+      // expediente e atravessou o fim do dia esperando um atendente: essa
+      // pessoa nunca leu que seria encerrada, e fechar com ela na fila seria
+      // exatamente o descaso que este trabalho veio corrigir.
+      const foraHorarioEm = conversa.sessao?.contexto?.foraHorarioEm || null;
+      if (!foraHorarioEm) continue;
+
+      const marcado = new Date(foraHorarioEm).getTime();
+      if (Number.isNaN(marcado) || marcado > limite) continue;
+
+      const instancia = await instanciaRepository.findById(instanciaId);
+      // MESMA FILA do webhook e das outras automacoes: sem ela, a mensagem do
+      // cliente chegando neste exato instante corre em paralelo com o
+      // encerramento -- a corrida que `comLock` existe para eliminar.
+      await comLock(`${instanciaId}:${telefone}`, async () => {
+        // RELE dentro da fila: entre a listagem e a vez desta conversa, um
+        // atendente pode ter assumido (vira "aberta") ou o cliente pode ter
+        // escrito de novo. Decidir pelo retrato antigo fecharia um atendimento
+        // que ja tem gente dentro.
+        const atual = await conversaRepository.findById(id);
+        if (!atual || atual.statusAtendimento !== "pendente" || atual.atendenteId) return;
+
+        // `fecharConversa` encerra a conversa e a OS, desliga a sessao e grava o
+        // motivo automatico. NAO dispara pesquisa de satisfacao -- ela vive em
+        // `encerrarAtendimento`, um degrau acima, e perguntar "de 1 a 5, que
+        // nota voce da?" a quem nunca foi atendido envenenaria o CSAT com a
+        // opiniao de quem so viu o robo.
+        await chatbotEngine.fecharConversa(
+          { conversa: atual, telefone, instanciaId, instanceName: instancia?.nome },
+          { motivo: "fora_do_horario" }
+        );
+        encerradas += 1;
+        logger.info("Atendimento encerrado por chegar fora do horario", {
+          conversaId: id,
+          avisadoEm: foraHorarioEm,
+        });
+      });
+    } catch (error) {
+      logger.warn("Falha ao encerrar conversa fora do horario", {
+        conversaId: id,
+        message: error.message,
+      });
+    }
+  }
+  return encerradas;
 }
 
 function iniciar() {

@@ -82,13 +82,40 @@ const PADRAO_COMERCIAL = { inicio: "08:00", fim: "18:00" };
  * discordam (mudar o expediente na tela e o cliente continuar ouvindo "08:00 as
  * 18:00" porque o texto do bloco nao foi editado).
  */
+/**
+ * O AVISO DE FORA DO HORARIO.
+ *
+ * A versao anterior terminava com "sua mensagem sera recebida e poderemos dar
+ * continuidade no proximo periodo de atendimento" -- uma PROMESSA de retorno. E
+ * ela nao era verdade: a conversa caia em Pendentes e ficava a noite inteira,
+ * ate alguem de manha achar, no meio de uma fila cheia, um cliente que escreveu
+ * as 22h. Quem leu aquilo ficou esperando um retorno que ninguem tinha se
+ * comprometido a dar.
+ *
+ * Agora o texto pede a acao que resolve de fato ("escreva de novo no horario") e
+ * conta o que vai acontecer com a conversa. Dizer que sera encerrada parece
+ * duro, e e melhor do que a alternativa: o cliente que acha que ja esta na fila
+ * simplesmente nao volta a escrever, e o chamado dele nunca existe.
+ *
+ * `{{minutos}}` recebe o prazo REAL configurado (`encerrarAposMin`). Numero
+ * escrito a mao aqui viraria mentira no dia em que alguem mudasse o prazo na
+ * configuracao -- e ninguem lembraria de vir corrigir o texto.
+ */
 const MENSAGEM_PADRAO =
   "🌙 *Atendimento fora do horário*\n\n" +
   "Olá! Recebemos sua mensagem.\n\n" +
   "No momento, nossa equipe está fora do horário de atendimento.\n\n" +
   "Nosso horário de atendimento é:\n\n" +
   "{{horarios}}\n\n" +
-  "Sua mensagem será recebida e poderemos dar continuidade no próximo período de atendimento.";
+  "*Para ser atendido, entre em contato novamente dentro do horário acima.*\n\n" +
+  "Este atendimento será encerrado em {{minutos}} minutos. Seu histórico fica salvo — " +
+  "é só nos escrever no horário de atendimento que abrimos um novo chamado para você.";
+
+// Minutos entre o aviso de fora do horario e o encerramento automatico da
+// conversa. Cinco e curto de proposito: a conversa nao deve amanhecer numa fila
+// que ninguem podia atender, e o cliente acabou de ser avisado de que precisa
+// voltar no expediente.
+const ENCERRAR_APOS_MIN = 5;
 
 // Quanto tempo antes de repetir o aviso de fora de horario para o MESMO cliente.
 // Ver `deveAvisar`: 2 horas cobre a noite inteira sem repetir, e ainda avisa de
@@ -166,6 +193,9 @@ function normalizarHorario(bruto) {
   const timezone = String(h.timezone || h.fuso || "").trim() || FUSO_PADRAO;
   const mensagem = textoOuVazio(h.mensagem);
   const reavisarAposMin = inteiro(h.reavisarAposMin, REAVISAR_APOS_MIN, 0, 24 * 60);
+  // Minutos entre o aviso de fora do horario e o encerramento automatico.
+  // `0` desliga o encerramento: a conversa fica em Pendentes como antes.
+  const encerrarAposMin = inteiro(h.encerrarAposMin, ENCERRAR_APOS_MIN, 0, 24 * 60);
 
   // ── FORMA NOVA: um objeto por dia ───────────────────────────────────────
   const porDia = {};
@@ -236,6 +266,7 @@ function normalizarHorario(bruto) {
     excecoes,
     mensagem,
     reavisarAposMin,
+    encerrarAposMin,
   };
 }
 
@@ -398,6 +429,26 @@ function mensagemFora(horario, agora = new Date()) {
   const excecao = cfg.excecoes.find((e) => e.data === dataISO && e.descricao);
 
   let texto = template.replace(/\{\{\s*horarios\s*\}\}/g, horarios || "");
+
+  // ── O PRAZO REAL, OU PARAGRAFO NENHUM ───────────────────────────────────
+  //
+  // `encerrarAposMin: 0` desliga o encerramento automatico. Interpolar o zero
+  // faria o aviso prometer "encerrado em 0 minutos" -- pior que nao dizer nada,
+  // porque descreve um comportamento que nao vai acontecer.
+  //
+  // Entao com o recurso desligado o PARAGRAFO inteiro sai. O corte e por
+  // paragrafo (blocos separados por linha em branco) e nao por frase: e a
+  // unidade que a mensagem ja usa, e qualquer texto que alguem escreva na
+  // configuracao respeita a mesma regra sem precisar saber dela.
+  const MINUTOS = /\{\{\s*minutos\s*\}\}/;
+  if (cfg.encerrarAposMin > 0) {
+    texto = texto.replace(new RegExp(MINUTOS.source, "g"), String(cfg.encerrarAposMin));
+  } else {
+    texto = texto
+      .split(/\n{2,}/)
+      .filter((bloco) => !MINUTOS.test(bloco))
+      .join("\n\n");
+  }
   if (excecao) {
     texto = texto.replace(
       /\{\{\s*excecao\s*\}\}/g,
@@ -438,6 +489,7 @@ module.exports = {
   PADRAO_COMERCIAL,
   MENSAGEM_PADRAO,
   REAVISAR_APOS_MIN,
+  ENCERRAR_APOS_MIN,
   minutosDoDia,
   normalizarHorario,
   regraDoDia,
