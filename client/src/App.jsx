@@ -18,6 +18,7 @@ import CadastroPage from './pages/CadastroPage';
 import EsqueciSenhaPage from './pages/EsqueciSenhaPage';
 
 import DashboardPage    from './pages/DashboardPage';
+import PainelPage     from './pages/PainelPage';
 import AtendimentoPage  from './pages/AtendimentoPage';
 import ContatosPage     from './pages/ContatosPage';
 import FluxosPage       from './pages/FluxosPage';
@@ -57,6 +58,7 @@ export default function App() {
                 <Route path="/mensagens"   element={<MensagensPage />} />
                 <Route path="/massa"       element={<MassaPage />} />
                 <Route path="/dashboard"   element={<DashboardPage />} />
+                <Route path="/painel"      element={<PainelPage />} />
                 <Route path="/fluxos"      element={<FluxosPage />} />
                 <Route path="/whatsapp"    element={<WhatsAppPage />} />
                 <Route path="/configuracoes" element={<ConfiguracoesPage />} />

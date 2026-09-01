@@ -63,6 +63,14 @@ const DEFINICOES = {
   // toda conversa daquela fila cair em "Geral", porque e nisso que
   // normalizarSetor converte o que nao reconhece.
   "chatbot.filas":      { padrao: () => process.env.CHATBOT_FILAS || "", segredo: false },
+  // Meta diaria de atendimentos FECHADOS, exibida no painel de parede.
+  //
+  // Numero puro, gravado como texto (e o formato de todas as chaves aqui).
+  // Zero ou vazio = SEM meta: o painel mostra so a contagem do dia, sem barra
+  // de progresso. E o padrao de proposito -- uma meta inventada por nos
+  // apareceria numa TV para a equipe inteira como se a empresa a tivesse
+  // definido, e ninguem saberia de onde veio.
+  "painel.metaDiaria":  { padrao: () => process.env.PAINEL_META_DIARIA || "", segredo: false },
   // Pesquisa de satisfacao (CSAT) que o bot dispara ao encerrar o atendimento:
   // pergunta a nota de 1 a 5 e, em seguida, um comentario livre. As respostas
   // vao para os campos `avaliacao`/`feedback` da conversa e alimentam a aba
@@ -230,6 +238,19 @@ class ConfiguracaoService {
       respostaMin: num(s.respostaMin, 15, 1, 24 * 60), // 1 min .. 24 h
       resolucaoHoras: num(s.resolucaoHoras, 24, 1, 24 * 30), // 1 h .. 30 dias
     };
+  }
+
+  /**
+   * Meta diaria do painel de parede. `null` = sem meta definida.
+   *
+   * Devolver `null` (e nao um numero de conforto) e o que permite ao painel
+   * distinguir "a meta e 30" de "ninguem definiu meta" e desenhar coisas
+   * diferentes nos dois casos.
+   */
+  async metaDiariaPainel() {
+    const c = await this._carregar();
+    const n = Number(String(c["painel.metaDiaria"] ?? "").trim());
+    return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
   }
 
   // { "33": "Técnico" } -> setor para onde a fila do fluxo importado aponta.
