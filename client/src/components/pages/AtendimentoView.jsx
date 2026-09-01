@@ -3276,7 +3276,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       setTexto(txt);
       window.alert('A mensagem NÃO foi enviada: ' + (e?.message || 'erro desconhecido'));
     }
-  }, [conversa, setConversas, setTexto, aplicarConversa, assinar, assinaturaNome, respondendoAId]);
+  }, [conversa, setConversas, setTexto, aplicarConversa, assinar, assinaturaNome]);
 
   // Envio de mídia com progresso/cancelamento. Devolve { promise, cancel } para
   // o PainelChat controlar a barra e o botão de cancelar. A conversa atualizada
