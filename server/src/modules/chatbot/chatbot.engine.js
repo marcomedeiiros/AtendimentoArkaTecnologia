@@ -181,6 +181,31 @@ const GATILHO_CURINGA = "*";
 // de automacoes (que avisa quem monta o fluxo) e os testes.
 const MAX_BOTOES_POR_MENSAGEM = 3;
 
+// ── A LINHA DE BAIXO DA LISTA VOLTA CARIMBADA NA RESPOSTA DO CLIENTE ────────
+//
+// Ao tocar numa linha da lista, o WhatsApp nao manda so o titulo: ele monta um
+// `listResponseMessage` com `title` E `description`, e desenha OS DOIS na bolha
+// que sai do aparelho do cliente. Com "Toque para selecionar" na descricao, quem
+// respondia a pesquisa de satisfacao via a propria nota assim:
+//
+//     5 (emoji)
+//     Toque para selecionar
+//
+// -- uma instrucao de menu grudada embaixo da resposta que o cliente acabou de
+// dar. Do NOSSO lado nada aparecia (`extrairTexto` le so o `title`), e por isso
+// isto sobreviveu tanto tempo: o defeito so existia na tela do cliente.
+//
+// A descricao tambem nao pode simplesmente sumir. A Evolution valida
+// `minLength: 1` em cada linha e devolve 400 sem ela -- foi essa medicao que
+// criou o texto de enchimento (ca20817) -- e o `catch` do envio derrubaria o
+// menu inteiro para texto puro. Entao ela vira um caractere INVISIVEL: satisfaz
+// a validacao da API e nao escreve nada na tela de ninguem.
+//
+// U+200B (zero-width space) e nao um espaco comum de proposito: `String#trim`
+// NAO remove o U+200B, entao nenhum passo intermediario que apare a string pode
+// esvazia-la de volta e reintroduzir o 400.
+const DESCRICAO_LINHA_INVISIVEL = "\u200B";
+
 function escaparRegex(texto) {
   return texto.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -1372,7 +1397,9 @@ class ChatbotEngine {
         r = await this.deps.evolutionApi.sendButtons(telefone, payload, inst);
       } else {
         // Evolution v2 exige title + footerText, e a `description` de CADA linha
-        // nao pode ser vazia (validado pela API).
+        // nao pode ser VAZIA (validado pela API). Ela vai invisivel: o cliente
+        // le a linha da lista, e a resposta dele nao volta com texto de menu
+        // colado embaixo. Ver DESCRICAO_LINHA_INVISIVEL.
         r = await this.deps.evolutionApi.sendList(
           telefone,
           {
@@ -1385,7 +1412,7 @@ class ChatbotEngine {
                 title: "Opções",
                 rows: itens.map((i) => ({
                   title: this._cortarRotulo(i.titulo, 24),
-                  description: "Toque para selecionar",
+                  description: DESCRICAO_LINHA_INVISIVEL,
                   rowId: i.id,
                 })),
               },
@@ -3985,4 +4012,5 @@ module.exports.GATILHO_CURINGA = GATILHO_CURINGA;
 // isso ela precisa ser citavel de fora: o painel de automacoes avisa quem monta
 // o fluxo, e os testes conferem o numero em vez de repeti-lo.
 module.exports.MAX_BOTOES_POR_MENSAGEM = MAX_BOTOES_POR_MENSAGEM;
+module.exports.DESCRICAO_LINHA_INVISIVEL = DESCRICAO_LINHA_INVISIVEL;
 module.exports.AGUARDA_RESPOSTA_DO_CLIENTE = AGUARDA_RESPOSTA_DO_CLIENTE;

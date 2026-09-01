@@ -29,9 +29,13 @@ const path = require("path");
 const { readFileSync, writeFileSync } = require("fs");
 
 const raiz = path.join(__dirname, "src");
-const { ChatbotEngine, MAX_BOTOES_POR_MENSAGEM } = require(
+const { ChatbotEngine, MAX_BOTOES_POR_MENSAGEM, AGUARDANDO, DESCRICAO_LINHA_INVISIVEL } = require(
   path.join(raiz, "modules/chatbot/chatbot.engine")
 );
+
+// "Sobrou alguma coisa LEGÍVEL aqui?" -- ignorando o zero-width space, que só
+// existe para a Evolution não recusar a linha (ver DESCRICAO_LINHA_INVISIVEL).
+const temTextoVisivel = (v) => String(v ?? "").replace(/[\u200B\s]/g, "") !== "";
 
 // ── o fluxo, convertido pelo import do front ─────────────────────────────────
 const fonte = readFileSync(
@@ -143,6 +147,11 @@ function ambiente({ parceiro = null } = {}) {
           rodape: payload.footerText,
           botao: payload.buttonText,
           botoes: (payload.sections?.[0]?.rows || []).map((r) => r.title),
+          // A DESCRIÇÃO DE CADA LINHA IMPORTA, e não é detalhe de payload: o
+          // WhatsApp devolve `title` + `description` na resposta do cliente e
+          // desenha OS DOIS na bolha dele. Sem guardar isto aqui, o teste não
+          // teria como ver o texto que sobra grudado na resposta.
+          descricoes: (payload.sections?.[0]?.rows || []).map((r) => r.description),
         });
         return { key: { id: "x" } };
       },
@@ -330,6 +339,77 @@ const CENARIOS = [
     const m3 = amb.enviados[amb.enviados.length - 1];
     check(m3.tipo === "botoes" && m3.botoes.length === 3, `3 opções deveriam sair como 3 botões, veio ${m3.tipo}/${m3.botoes.length}`);
     console.log(`  ${m3.tipo === "botoes" ? "OK   " : "FALHA"} 3 opções + exibicao:"buttons"  ->  ${m3.tipo} com ${m3.botoes.length} botões`);
+  }
+
+  // ── A LISTA NÃO CARIMBA TEXTO DE MENU NA RESPOSTA DO CLIENTE ───────────────
+  //
+  // Ao tocar numa linha, o WhatsApp monta a resposta com o `title` E a
+  // `description` da linha, e desenha os dois na bolha que sai do aparelho do
+  // cliente. Com "Toque para selecionar" ali, a pesquisa de satisfação chegava
+  // assim no celular de quem tinha acabado de responder:
+  //
+  //     5 (emoji)
+  //     Toque para selecionar
+  //
+  // Do nosso lado nada aparecia -- `extrairTexto` lê só o `title` --, e é por
+  // isso que o defeito sobreviveu: ele existia inteiro na tela do cliente. E a
+  // descrição não pode simplesmente sumir: a Evolution valida `minLength: 1` e
+  // devolve 400 sem ela, o `catch` derruba o menu para texto puro. Daí o
+  // invisível, que satisfaz a API sem escrever nada.
+  console.log("\n╔══ a lista não carimba texto de menu na resposta do cliente ══");
+  {
+    const amb = ambiente();
+
+    // A PESQUISA DE SATISFAÇÃO é o caso do relato: 5 notas não cabem em 3
+    // botões, então ela SEMPRE sai como lista.
+    await amb.engine._enviarComBotoesFixos(
+      "c-visual",
+      "5527999990000",
+      "Antes de encerrar: de 1 a 5, que nota você dá para este atendimento?",
+      AGUARDANDO.AVALIACAO_NOTA,
+      "arka",
+      { exibicao: "auto" }
+    );
+    const nota = amb.enviados[amb.enviados.length - 1];
+    check(nota.tipo === "lista", `as 5 notas deveriam sair como LISTA, saiu ${nota.tipo}`);
+    check(nota.botoes.length === 5, `a lista de notas deveria ter 5 linhas, tem ${nota.botoes.length}`);
+    const notaSuja = (nota.descricoes || []).filter(temTextoVisivel);
+    const okNota = check(
+      notaSuja.length === 0,
+      `a resposta do cliente sairia com texto colado embaixo da nota: ${JSON.stringify(notaSuja)}`
+    );
+    console.log(
+      `  ${okNota ? "OK   " : "FALHA"} pesquisa 1..5  ->  lista com ${nota.botoes.length} ` +
+        `linhas e nenhuma descrição visível`
+    );
+
+    // E o mesmo vale para QUALQUER lista, não só a da pesquisa.
+    const opcoes = [1, 2, 3, 4].map((i) => ({
+      id: `y${i}`, ordem: i - 1, esperaEscolha: true,
+      rotulo: `${i},opcao ${i}`, palavrasChave: [String(i)], acao: "ir",
+      targetId: null, botao: `Opção ${i}`,
+    }));
+    await amb.engine.enviarBotComOpcoes(
+      "c-visual", "5527999990000", "Escolha:", opcoes, "arka", { exibicao: "list" }
+    );
+    const menu = amb.enviados[amb.enviados.length - 1];
+    const menuSujo = (menu.descricoes || []).filter(temTextoVisivel);
+    const okMenu = check(
+      menuSujo.length === 0,
+      `menu em lista deixaria texto colado na resposta do cliente: ${JSON.stringify(menuSujo)}`
+    );
+    console.log(`  ${okMenu ? "OK   " : "FALHA"} menu de 4 opções em lista  ->  nenhuma descrição visível`);
+
+    // A OUTRA METADE, e ela é a razão de o texto de enchimento ter existido: a
+    // Evolution recusa a linha com descrição VAZIA. Um invisível que um `trim()`
+    // no caminho apagasse reintroduziria o 400 -- e o menu inteiro cairia para
+    // texto puro, calado. U+200B sobrevive ao trim; um espaço comum, não.
+    const okTrim = check(
+      DESCRICAO_LINHA_INVISIVEL.trim().length >= 1,
+      `a descrição invisível vira vazia num trim() e a Evolution devolveria 400: ` +
+        `${JSON.stringify(DESCRICAO_LINHA_INVISIVEL)}`
+    );
+    console.log(`  ${okTrim ? "OK   " : "FALHA"} a descrição invisível ainda satisfaz o minLength:1 da Evolution`);
   }
 
   // ══════════════════════════════════════════════════════════════════════════
