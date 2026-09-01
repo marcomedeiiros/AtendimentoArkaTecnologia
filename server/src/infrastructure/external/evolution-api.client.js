@@ -2,6 +2,21 @@ const env = require("../../config/env");
 const logger = require("../../config/logger");
 const AppError = require("../../shared/errors/AppError");
 
+/**
+ * O TEXTO DO ERRO DA EVOLUTION, onde quer que ela o tenha posto.
+ *
+ * A v2 responde `{status, error, response: {message: [...]}}` -- uma LISTA,
+ * aninhada. O codigo lia `data.message` e nao achava nada, entao toda falha
+ * chegava ao painel como "Falha na comunicacao com Evolution API", escondendo
+ * justamente a frase que dizia o que houve ("The X instance does not exist").
+ */
+function mensagemDaEvolution(data) {
+  const bruto = data?.response?.message ?? data?.message ?? data?.error;
+  if (Array.isArray(bruto)) return bruto.filter(Boolean).join("; ");
+  if (typeof bruto === "string") return bruto;
+  return "";
+}
+
 class EvolutionApiClient {
   constructor() {
     // Valores do .env sao apenas o fallback: a config efetiva vem do banco
@@ -53,8 +68,25 @@ class EvolutionApiClient {
 
       if (!response.ok) {
         logger.warn("Evolution API erro", { status: response.status, data });
+        const detalhe = mensagemDaEvolution(data);
+
+        // INSTANCIA QUE NAO EXISTE E UM CASO A PARTE, e nao "falha de
+        // comunicacao". Sem distingui-lo, o painel recebia 502 com texto
+        // generico nas tres rotas que dependem da instancia (qrcode, conectar,
+        // reiniciar) e nao tinha como oferecer o unico caminho que resolve:
+        // criar a instancia de novo. Foi o que deixou o atendimento 4h30 fora
+        // do ar em 01/09/2026 -- alguem excluiu a instancia e o painel virou um
+        // beco sem saida, com 26 cliques em "Reconectar" levando 502.
+        if (response.status === 404 && /instance/i.test(path)) {
+          throw new AppError(
+            `A instancia nao existe mais na Evolution${detalhe ? ` (${detalhe})` : ""}.`,
+            404,
+            "INSTANCIA_INEXISTENTE"
+          );
+        }
+
         throw new AppError(
-          data?.message || "Falha na comunicacao com Evolution API",
+          detalhe || "Falha na comunicacao com Evolution API",
           502,
           "EVOLUTION_API_ERROR"
         );

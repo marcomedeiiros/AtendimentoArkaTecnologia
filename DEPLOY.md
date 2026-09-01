@@ -253,9 +253,31 @@ Com o tunel aberto, acesse `http://localhost:8080/manager` no seu navegador.
   O `instalar.sh` ja sorteia um codigo.
 - **Segredos trocados.** Os valores que estao em `server/.env.example` sao
   publicos no GitHub e nao servem para producao. O `instalar.sh` gera novos.
+- **`TURNSTILE_SITE_KEY` e `TURNSTILE_SECRET_KEY` preenchidas.** Sao elas que
+  protegem o login e o cadastro contra robo. **Vazias, a protecao fica
+  desligada em silencio**: o servidor aprova toda verificacao e a tela continua
+  funcionando igual, sem nenhum aviso. As chaves saem do painel da Cloudflare
+  (Turnstile -> Add site). O `instalar.sh` **nao** as sorteia -- elas vem de
+  fora, e precisam ser coladas no `.env` a mao.
+- **Segredo nenhum entra no Git.** `server/.env` foi versionado por engano
+  entre 22 e 30/07/2026, com `JWT_SECRET`, `EVOLUTION_API_KEY`,
+  `WEBHOOK_SECRET` e `ADMIN_PASSWORD` dentro. Apagar o arquivo num commit
+  posterior **nao o tira do historico**, e o repositorio e publico: aqueles
+  quatro valores seguem legiveis por qualquer pessoa. Nenhum deles vale nesta
+  producao (o `instalar.sh` sorteou outros), mas se algum ambiente ainda usar
+  os antigos, troque hoje.
 - **Sem HTTPS.** Como combinado, o acesso e por IP na rede interna, entao senha
   e token de sessao trafegam em texto claro dentro da rede. Se um dia o painel
   for para a internet, e obrigatorio por um dominio com certificado na frente.
+- **Duas vulnerabilidades de dependencia estao ACEITAS, e nao esquecidas**
+  (conferido em 01/09/2026). `npm audit` acusa `deepmerge-ts` (3 high, via
+  `@prisma/config`) e `esbuild` (via `vite`). Nenhuma das duas alcanca a
+  producao: a primeira roda no CLI do Prisma, ao ler um arquivo de configuracao
+  que e nosso, e a segunda so afeta o SERVIDOR DE DESENVOLVIMENTO do Vite, que
+  nunca sobe na VM (o painel vai para o nginx ja buildado). As correcoes
+  disponiveis sao Prisma 8 (release candidate) e Vite 8 (quebra
+  compatibilidade) -- os dois saltos trazem mais risco do que os defeitos.
+  Reavalie quando sair uma versao estavel.
 - **`ADMIN_PASSWORD` e reaplicada a cada subida.** O seed ressincroniza a senha
   do administrador com o `.env` toda vez que o container inicia. Uma troca de
   senha feita pelo painel seria desfeita no proximo restart troque no `.env`.

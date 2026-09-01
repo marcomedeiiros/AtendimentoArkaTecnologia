@@ -186,6 +186,15 @@ const GRADES_LIBERADAS = new Map([
   // a linha precisa de 286px e tem 286px -- inclusive com os números de uma
   // operação grande (12.847 avaliações, 87,4%). Não transborda e não corta.
   ["components/pages/Dashboard.jsx:384", "3 números curtos, medidos em 320px"],
+  // O seletor de emoji não é uma grade de conteúdo: é uma paleta dentro de um
+  // popup de LARGURA FIXA (`w-72`, 288px, declarado no container em
+  // AtendimentoView.jsx:1642). Ela não precisa virar uma coluna porque nunca
+  // depende da largura da tela -- 288px cabem no menor celular (320px), e cada
+  // célula fica com 36px, acima dos 24px do alvo de toque confortável.
+  //
+  // Quebrar em pontos de ruptura aqui pioraria: a paleta viraria uma tira alta
+  // e estreita dentro de um popup que continua com 288px.
+  ["components/pages/AtendimentoView.jsx:1668", "paleta de emoji em popup de largura fixa w-72"],
 ]);
 
 const gradeRigida = [];

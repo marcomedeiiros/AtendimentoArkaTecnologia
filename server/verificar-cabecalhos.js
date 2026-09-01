@@ -193,11 +193,35 @@ function lerCsp(texto) {
     .map((l) => l.trim().slice(0, 60) + "...");
   check("todo add_header do nginx usa `always`", semAlways, []);
 
-  // O include tem de estar nos DOIS lugares: um bloco com add_header proprio
-  // descarta os herdados, e o /assets/ tem o Cache-Control dele.
+  // ── TODO BLOCO COM add_header PROPRIO REPOE OS CABECALHOS DE SEGURANCA ────
+  //
+  // A regra do nginx: declarar um `add_header` dentro de um `location` DESCARTA
+  // todos os herdados do `server`. Um bloco que poe o seu Cache-Control e
+  // esquece o include serve o painel sem CSP, sem HSTS e sem protecao contra
+  // enquadramento -- e nada avisa.
+  //
+  // Este teste contava includes e exigia exatamente 2. Quando o
+  // `location = /index.html` nasceu (com o seu proprio Cache-Control E o
+  // include, ou seja, CERTO), a contagem virou 3 e o teste reprovou uma
+  // configuracao correta. Numero magico responde "quantos?"; a pergunta util e
+  // "algum bloco esqueceu?".
   const nginxPrincipal = fs.readFileSync(path.join(RAIZ_CLIENTE, "nginx.conf"), "utf8");
-  const includes = (nginxPrincipal.match(/include .*seguranca-headers\.conf/g) || []).length;
-  check("o include aparece no server E no /assets/", includes, 2);
+
+  const temIncludeNoServer = /^\s*include\s+.*seguranca-headers\.conf/m.test(
+    nginxPrincipal.split(/location\s/)[0]
+  );
+  check("o server declara o include (base herdada por quem nao redefine)", temIncludeNoServer, true);
+
+  const blocos = nginxPrincipal.split(/^\s*location\s/m).slice(1);
+  const esquecidos = blocos
+    .filter((b) => /add_header/.test(b) && !/seguranca-headers\.conf/.test(b))
+    // O `split` consome a palavra `location`, entao o bloco comeca no caminho.
+    .map((b) => "location " + b.split("{")[0].trim());
+  check(
+    "todo location que declara add_header repoe os cabecalhos de seguranca",
+    esquecidos,
+    []
+  );
 
   // Sanidade estrutural. Nao substitui o `nginx -t` (que roda no deploy, ver
   // deploy/atualizar.sh) -- pega o engano grosseiro aqui, onde e barato, em vez

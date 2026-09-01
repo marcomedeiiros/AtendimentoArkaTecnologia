@@ -103,6 +103,37 @@ async function start() {
 start();
 
 
+// ── REDE DE SEGURANCA DO PROCESSO ───────────────────────────────────────────
+//
+// No Node 20 uma promessa rejeitada sem `catch` DERRUBA o processo. Nao e
+// hipotese distante: ha trabalho disparado sem `await` de proposito neste
+// sistema -- a sincronizacao de contatos logo depois do pareamento, os
+// temporizadores de inatividade, o watchdog do WhatsApp. Uma unica rejeicao
+// solta ali dentro mata a API inteira, e o `restart: unless-stopped` a reergue
+// sem que nada explique o que houve.
+//
+// Registrar os dois handlers troca "o container reiniciou sozinho e ninguem
+// sabe por que" por uma linha de log com a pilha. O processo CONTINUA no ar: um
+// defeito num temporizador nao e motivo para tirar o atendimento do ar.
+//
+// `uncaughtException` e o caso mais grave -- o estado do processo pode estar
+// inconsistente depois dele. Ainda assim, seguir servindo com um erro
+// registrado e melhor do que a queda seca, e o watchdog e o healthcheck do
+// compose continuam observando o processo por fora.
+process.on("unhandledRejection", (motivo) => {
+  logger.error("Promessa rejeitada sem tratamento", {
+    erro: motivo instanceof Error ? motivo.message : String(motivo),
+    stack: motivo instanceof Error ? motivo.stack : undefined,
+  });
+});
+
+process.on("uncaughtException", (erro) => {
+  logger.error("Excecao nao capturada -- a API segue no ar, mas investigue", {
+    erro: erro?.message,
+    stack: erro?.stack,
+  });
+});
+
 process.on("SIGINT", async () => {
   await prisma.$disconnect();
   process.exit(0);

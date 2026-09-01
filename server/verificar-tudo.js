@@ -80,6 +80,117 @@ const VERIFICACOES = [
     titulo: "Inatividade",
     resumo: "os dois relógios do bot; a Parte B roda contra o banco quando há DATABASE_URL",
   },
+  // ── OS QUE ESTAVAM DE FORA, E APODRECERAM POR ISSO ────────────────────────
+  //
+  // Ate 01/09/2026 este runner chamava cinco scripts, e outros trinta e cinco
+  // existiam sem que ninguem os executasse. Uma auditoria rodou os trinta e
+  // cinco: SEIS estavam quebrados. Dois deles nem carregavam (o recorte do
+  // VisualFlowEditor estourava `SyntaxError` desde 29/08, e um id de fluxo
+  // congelado no codigo estourava `TypeError`), e dois reprovavam edicoes
+  // legitimas de fluxo como se fossem regressao.
+  //
+  // Nenhum defeito era novo. Todos estavam ali havia dias, calados -- que e
+  // exatamente o diagnostico escrito no topo deste arquivo sobre a versao
+  // anterior dele ("ele ficou tempo demais sem ser executado e apodreceu em
+  // silencio"). Um teste fora do runner nao e uma protecao a menos: e uma
+  // protecao que MENTE, porque quem le o nome do arquivo acredita que ela roda.
+  //
+  // Estao aqui agora, em ordem crescente de custo.
+  {
+    arquivo: "verificar-cabecalhos.js",
+    titulo: "Cabeçalhos de segurança e CSP",
+    resumo: "CSP, HSTS, nosniff -- e a CSP do nginx igual a do Express",
+  },
+  {
+    arquivo: "verificar-responsivo.js",
+    titulo: "Responsividade do painel",
+    resumo: "tabela rolavel, grade que quebra, largura que encolhe, safe-area",
+  },
+  {
+    arquivo: "verificar-interface.js",
+    titulo: "Interface",
+    resumo: "os 64 arquivos de tela: imports, chaves e props usadas",
+  },
+  {
+    arquivo: "verificar-exposicao.js",
+    titulo: "Exposição de dados",
+    resumo: "o que a API devolve nao pode vazar campo interno",
+  },
+  {
+    arquivo: "verificar-escopo-dados.js",
+    titulo: "Escopo de dados entre setores",
+    resumo: "um setor nao enxerga a conversa de outro",
+  },
+  {
+    arquivo: "verificar-sessao-cookie.js",
+    titulo: "Sessão em cookie e CSRF",
+    resumo: "cookie de sessao, CSRF de duplo envio e a checagem de origem",
+  },
+  {
+    arquivo: "verificar-bloqueio.js",
+    titulo: "Bloqueio progressivo",
+    resumo: "bloqueio progressivo depois de tentativas de login erradas",
+  },
+  {
+    arquivo: "verificar-cadastro-turnstile.js",
+    titulo: "Cadastro com Turnstile",
+    resumo: "o cadastro exige o desafio antes de tocar no banco",
+  },
+  {
+    arquivo: "verificar-botoes.js",
+    titulo: "Botões, listas e rótulos do WhatsApp",
+    resumo: "botao x lista x enquete, rotulos dentro do limite do WhatsApp",
+  },
+  {
+    arquivo: "verificar-blocos-conteudo.js",
+    titulo: "Conteúdo dos blocos no editor",
+    resumo: "o card do editor mostra o conteudo real do bloco",
+  },
+  {
+    arquivo: "verificar-fluxos-crud.js",
+    titulo: "CRUD de fluxos e blocos",
+    resumo: "criar, editar e apagar fluxo e bloco sem perder passo",
+  },
+  {
+    arquivo: "verificar-midia.js",
+    titulo: "Envio de mídia",
+    resumo: "upload, token da URL, streaming e o Range do player",
+  },
+  {
+    arquivo: "verificar-transferencia.js",
+    titulo: "Transferência entre atendentes",
+    resumo: "passar a conversa para outro atendente",
+  },
+  {
+    arquivo: "verificar-destinos-transferencia.js",
+    titulo: "Destinos de transferência",
+    resumo: "quem aparece na lista de destinos, por cargo",
+  },
+  {
+    arquivo: "verificar-dois-atendentes.js",
+    titulo: "Dois atendentes na mesma conversa",
+    resumo: "duas abas na mesma conversa nao se sobrescrevem",
+  },
+  {
+    arquivo: "verificar-sair-de-todos.js",
+    titulo: "Sair de todos os atendimentos",
+    resumo: "sair de todos os atendimentos de uma vez",
+  },
+  {
+    arquivo: "verificar-cliente-avulso.js",
+    titulo: "Cliente cadastrado x avulso",
+    resumo: "cadastrado x avulso, e a badge que a Central mostra",
+  },
+  {
+    arquivo: "verificar-assinatura.js",
+    titulo: "Assinatura do atendente",
+    resumo: "a assinatura do atendente no texto que sai",
+  },
+  {
+    arquivo: "verificar-backup.js",
+    titulo: "Backup e restauração",
+    resumo: "o backup fecha o WAL e a restauracao volta o banco inteiro",
+  },
 ];
 
 const raiz = __dirname;

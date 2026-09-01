@@ -546,6 +546,16 @@ export const WhatsAppAPI = {
   desconectar: (instance) => request('/whatsapp/desconectar', { method: 'POST', body: JSON.stringify({ instance }) }),
   reiniciar: (instance) => request('/whatsapp/reiniciar', { method: 'POST', body: JSON.stringify({ instance }) }),
   excluir: (instance) => request('/whatsapp/instancia', { method: 'DELETE', body: JSON.stringify({ instance }) }),
+  // O PAR DO `excluir`. Faltava, e a falta custou 4h30 de atendimento parado em
+  // 01/09/2026: excluida a instancia, o botao de QR chamava `/instance/connect`
+  // num nome que nao existia mais, levava 404 da Evolution e devolvia erro. Nao
+  // havia, pela tela, nenhuma forma de criar a instancia de novo.
+  //
+  // `baseUrlPublica` fica de fora de proposito: nesta topologia quem entrega os
+  // eventos e o webhook GLOBAL da Evolution (`WEBHOOK_GLOBAL_URL`, apontando
+  // para `http://api:3000` dentro da rede do compose). Mandar aqui a URL do
+  // navegador gravaria na instancia um endereco que a Evolution nao alcanca.
+  criar: (instance) => request('/whatsapp/instancia', { method: 'POST', body: JSON.stringify({ instance }) }),
   // Envio avulso (um numero) usado pela tela de Envio em Massa, um a um.
   enviar: (telefone, texto, instance) => request('/whatsapp/enviar', { method: 'POST', body: JSON.stringify({ telefone, texto, instance }) }),
 };

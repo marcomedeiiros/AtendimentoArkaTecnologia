@@ -3,9 +3,16 @@ const prisma = new PrismaClient();
 
 async function verificarFluxo() {
   try {
-    // O ID do fluxo técnico vem do targetId da opção mp_1
+    // ── O FLUXO ATIVO, E NAO UM UUID CONGELADO ────────────────────────────
+    //
+    // Este script procurava o fluxo pelo id 'de723e94-...', anotado no dia em
+    // que foi escrito. Esse id nao existe em nenhuma instalacao alem daquela:
+    // reimportar o fluxo gera ids novos, e uma maquina de desenvolvimento nunca
+    // teve esse. Resultado: `findFirst` devolvia null, a linha seguinte
+    // estourava `Cannot read properties of null (reading 'nome')`, o catch
+    // imprimia o erro -- e o processo saia com codigo 0, dizendo "passou".
     const fluxoTecnico = await prisma.fluxo.findFirst({
-      where: { id: 'de723e94-ac45-4ed4-b9c8-4d9e71a6c84f' },
+      where: { ativo: true },
       include: {
         passos: {
           orderBy: { ordem: 'asc' }
@@ -38,7 +45,10 @@ async function verificarFluxo() {
     });
 
   } catch (error) {
-    console.error('❌ Erro:', error);
+    // SAIR COM 1. Sem isto o script imprimia o erro e devolvia sucesso ao
+    // shell -- um relatorio que mente sobre a propria execucao.
+    console.error('❌ Erro:', error.message);
+    process.exitCode = 1;
   } finally {
     await prisma.$disconnect();
   }

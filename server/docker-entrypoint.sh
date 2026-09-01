@@ -47,6 +47,13 @@ if ! node prisma/backfill-atendimentos.js; then
   echo "[arka] ================================================================"
 fi
 
+# CONFERE SE ALGUMA LINHA FICOU ORFA. Vem DEPOIS do backfill porque e ele quem
+# apaga conversas -- e foi apagando conversa que o banco de producao ganhou, em
+# 31/08/2026, 30 linhas apontando para conversas inexistentes (26 mensagens e 2
+# OS de clientes reais, invisiveis na Central por 32 horas sem um unico erro no
+# log). O passo so OBSERVA e nunca derruba a subida; ver o cabecalho do script.
+node prisma/checar-integridade.js || true
+
 echo "[arka] seed (instancia + usuario administrador)"
 node prisma/seed.js
 
