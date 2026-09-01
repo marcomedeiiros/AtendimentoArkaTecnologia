@@ -15,6 +15,7 @@ import { EmojiIcon, FormattedMessage, TextoFormatado } from './EmojiIcon';
 import { useMensagensRapidas } from './MensagensRapidas';
 import Avatar from '../Avatar';
 import Portal from '../Portal';
+import ModoTv from '../ModoTv';
 import AudioPlayer from '../AudioPlayer';
 import AudioRecorder from '../AudioRecorder';
 import { useAppContext } from '../../context/AppContext';
@@ -836,224 +837,6 @@ function ModalNovaConversa({ onFechar, onEnviar, enviando, erro, inicial }) {
         </div>
       </div>
     </div>
-    </Portal>
-  );
-}
-
-// Painel de parede: a fila numa TV, lida a varios metros. Tudo aqui e
-// dimensionado para distancia -- tipografia grande, poucos itens por tela e
-// nenhum controle pequeno. Atualiza sozinho pelo SSE, como a lista.
-//
-// Duas colunas, porque sao duas perguntas diferentes: a esquerda mostra quem
-// ainda nao foi atendido, a direita quem ja esta com alguem. Sem a segunda, uma
-// conversa assumida e esquecida some da parede e ninguem percebe.
-function PainelTv({ pendentes, abertas, parceiros, onFechar }) {
-  const [agora, setAgora] = useState(Date.now());
-
-  // 1s: o relogio da parede mostra segundos, entao precisa bater a cada tique.
-  // O mesmo estado recalcula o tempo de espera dos cartoes.
-  useEffect(() => {
-    const id = setInterval(() => setAgora(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  useEffect(() => {
-    const onTecla = (e) => { if (e.key === 'Escape') onFechar(); };
-    window.addEventListener('keydown', onTecla);
-    return () => window.removeEventListener('keydown', onTecla);
-  }, [onFechar]);
-
-  // Espera longa = vermelho. E o dado que importa numa parede: quem esta
-  // esperando demais precisa saltar aos olhos.
-  const urgencia = (iso) => {
-    if (!iso) return { cor: 'text-quieto', borda: 'border-linha' };
-    const min = (agora - new Date(iso).getTime()) / 60000;
-    if (min >= 15) return { cor: 'text-falha-400', borda: 'border-falha/60' };
-    if (min >= 5)  return { cor: 'text-espera',    borda: 'border-espera/50' };
-    return { cor: 'text-ativo-400', borda: 'border-linha' };
-  };
-
-  // Numa conversa ja assumida, "esperando ha 20 min" seria mentira -- alguem
-  // esta com ela. O que importa e outra coisa: a ultima mensagem e do cliente?
-  // Entao ela esta devendo resposta, e vale o mesmo alerta da fila. Se a ultima
-  // foi nossa, a bola esta com o cliente e o cartao fica calmo.
-  const devendoResposta = (c) => c.mensagens?.[c.mensagens.length - 1]?.de === 'cliente';
-
-  // Tempo SEMPRE relativo, e recontado a cada tique do relogio. A funcao da
-  // lista (`tempoDesde`) passa a data absoluta depois de uma semana, e na parede
-  // isso viraria "esperando 09/08/2026 21:49" -- que nao responde a pergunta que
-  // a parede existe para responder: faz quanto tempo?
-  const tempoEspera = (iso) => {
-    if (!iso) return 'sem registro';
-    const ms = new Date(iso).getTime();
-    if (Number.isNaN(ms)) return 'sem registro';
-    const s = Math.max(0, Math.floor((agora - ms) / 1000));
-    if (s < 60) return 'agora';
-    const m = Math.floor(s / 60);
-    if (m < 60) return `${m} min`;
-    const h = Math.floor(m / 60);
-    if (h < 24) return `${h} h`;
-    return `${Math.floor(h / 24)} d`;
-  };
-
-  const Cartao = ({ c, aberta }) => {
-    const cobrando = aberta ? devendoResposta(c) : true;
-    const u = cobrando
-      ? urgencia(c.ultimaMensagemEm)
-      : { cor: 'text-quieto', borda: 'border-linha' };
-    const ultima = c.mensagens?.[c.mensagens.length - 1];
-    const tempo = tempoEspera(c.ultimaMensagemEm);
-    const chipCliente = chipDoCliente(c, parceiros);
-    const setor = setorDaConversa(c);
-    const atendente = atendenteDaConversa(c);
-
-    return (
-      <div className={`bg-grafite-700 rounded-3xl border-2 ${u.borda} p-4 sm:p-5 2xl:p-7 flex flex-col gap-3 2xl:gap-4`}>
-        <div className="flex items-center gap-3 sm:gap-5 min-w-0">
-          <Avatar nome={c.cliente} size="lg" fotoUrl={c.fotoUrl} className="2xl:scale-150 2xl:ml-2 2xl:mr-3" />
-          <div className="min-w-0 flex-1">
-            <div className="text-xl sm:text-2xl 2xl:text-3xl font-bold text-white truncate">{c.cliente}</div>
-            <div className="text-base sm:text-lg 2xl:text-xl text-texto-suave font-mono truncate">{c.telefone}</div>
-          </div>
-          {c.naoLidas > 0 && (
-            <span className="shrink-0 min-w-[36px] h-[36px] 2xl:min-w-[52px] 2xl:h-[52px] px-3 rounded-full bg-espera text-grafite-900 text-lg 2xl:text-2xl font-extrabold flex items-center justify-center tabular-nums">
-              {c.naoLidas > 99 ? '99+' : c.naoLidas}
-            </span>
-          )}
-        </div>
-
-        {/* As mesmas badges do cartao da lista, em corpo de parede: quem olha a
-            TV decide para quem vai a conversa, e saber a empresa (ou que ela
-            ainda nao foi identificada) e o setor pedido e o que muda essa
-            decisao. O numero do CNPJ nunca vai para a parede. */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className={`inline-flex items-center max-w-full truncate text-sm 2xl:text-base font-bold px-2.5 py-0.5 rounded-lg border ${chipCliente.classe}`}
-            title={chipCliente.titulo}>
-            {chipCliente.label}
-          </span>
-          {setor && (
-            <span className={`inline-flex items-center text-sm 2xl:text-base font-bold px-2.5 py-0.5 rounded-lg border ${setor.classe}`}
-              title={setor.id === 'geral' ? 'Ainda sem triagem: o cliente nao escolheu setor no menu' : `Setor escolhido pelo cliente: ${setor.setor}`}>
-              {setor.label}
-            </span>
-          )}
-          {/* Quem esta atendendo: numa parede, saber o responsavel evita duas
-              pessoas pegarem a mesma conversa. So aparece quando ja assumida. */}
-          {atendente?.nome && (
-            <span className="inline-flex items-center gap-1.5 text-sm 2xl:text-base font-bold px-2.5 py-0.5 rounded-lg border bg-purple-500/15 text-purple-300 border-purple-500/30"
-              title={`Atendendo: ${atendente.nome}${atendente.cargo ? ' (' + atendente.cargo + ')' : ''}`}>
-              <UserCheck size={14} className="shrink-0 2xl:hidden" />
-              <UserCheck size={18} className="shrink-0 hidden 2xl:block" />
-              {atendente.nome}
-            </span>
-          )}
-        </div>
-
-        <p className="text-base sm:text-lg 2xl:text-xl text-texto-suave line-clamp-2 leading-snug">
-          {ultima ? (ultima.deletada ? 'Mensagem apagada' : ultima.texto) : 'Sem mensagens'}
-        </p>
-
-        <div className={`flex items-center gap-2 text-lg sm:text-xl 2xl:text-2xl font-bold ${u.cor}`}>
-          <Clock size={20} className="shrink-0 2xl:hidden" />
-          <Clock size={24} className="shrink-0 hidden 2xl:block" />
-          {!aberta && `esperando ${tempo}`}
-          {aberta && cobrando && `sem resposta ${tempo}`}
-          {aberta && !cobrando && `respondido ${tempo}`}
-        </div>
-      </div>
-    );
-  };
-
-  const Coluna = ({ titulo, itens, cor, aberta, vazio, className = '' }) => (
-    <section className={`flex min-h-0 flex-col gap-3 sm:gap-5 ${className}`}>
-      <header className="flex shrink-0 items-center gap-3 sm:gap-4">
-        <span className={`h-3 w-3 rounded-full shrink-0 ${cor}`} />
-        <h2 className="text-base sm:text-xl 2xl:text-2xl font-bold uppercase tracking-wider text-texto-suave">{titulo}</h2>
-        <span className="text-base sm:text-xl 2xl:text-2xl font-extrabold tabular-nums text-white">{itens.length}</span>
-      </header>
-      {itens.length === 0 ? (
-        <p className="rounded-3xl border-2 border-dashed border-linha p-6 sm:p-8 text-center text-lg sm:text-2xl text-texto-fraco">
-          {vazio}
-        </p>
-      ) : (
-        /* `auto-fit` e nao um numero fixo de colunas: as faixas se encaixam na
-           largura disponivel e as vazias somem. E o que faz UMA conversa ocupar
-           a coluna inteira em vez de metade dela com um buraco do lado -- e o que
-           faz uma TV 4K mostrar tres ou quatro por linha sem tocar no codigo. */
-        <div className="grid gap-4 sm:gap-6 grid-cols-[repeat(auto-fit,minmax(20rem,1fr))]">
-          {itens.map(c => <Cartao key={c.id} c={c} aberta={aberta} />)}
-        </div>
-      )}
-    </section>
-  );
-
-  const d = new Date(agora);
-  const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: FUSO_BR });
-  // "quinta-feira" -> "Quinta-feira"
-  const diaSemana = d.toLocaleDateString('pt-BR', { weekday: 'long', timeZone: FUSO_BR }).replace(/^./, l => l.toUpperCase());
-  const data = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: FUSO_BR });
-
-  return (
-    <Portal>
-      <div className="fixed inset-0 z-[70] bg-grafite-900 flex flex-col">
-        <div className="shrink-0 flex items-center justify-between gap-3 sm:gap-6 px-4 sm:px-6 2xl:px-10 py-3 sm:py-4 2xl:py-6 border-b border-linha bg-grafite-800">
-          <div className="flex items-center gap-3 sm:gap-5 min-w-0">
-            {/* O ponto pulsa so quando ha alguem sem atendimento. Piscando o
-                tempo todo, ele deixaria de significar qualquer coisa. */}
-            <span className="relative flex h-4 w-4 shrink-0">
-              {pendentes.length > 0 && (
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-espera opacity-60" />
-              )}
-              <span className={`relative inline-flex rounded-full h-4 w-4 ${pendentes.length > 0 ? 'bg-espera' : 'bg-ativo'}`} />
-            </span>
-            <h1 className="text-xl sm:text-2xl 2xl:text-4xl font-bold text-white tracking-tight font-display truncate">
-              Fila de atendimento
-            </h1>
-          </div>
-          <div className="flex items-center gap-3 sm:gap-6 shrink-0">
-            <div className="text-right leading-tight">
-              {/* tabular-nums evita o relogio "dancar" a cada segundo */}
-              <div className="text-xl sm:text-2xl 2xl:text-4xl font-bold text-texto tabular-nums">{hora}</div>
-              {/* O dia da semana escrito e a primeira coisa a sair numa janela
-                  estreita: a hora sozinha ja orienta, e o resto seria o que
-                  empurraria o botao Sair para fora da tela. */}
-              <div className="hidden sm:block text-sm 2xl:text-lg text-texto-suave">{diaSemana} · {data}</div>
-            </div>
-            <button onClick={onFechar}
-              className="px-3 sm:px-5 py-2 sm:py-3 rounded-xl bg-grafite-600 hover:bg-grafite-500 text-texto text-sm sm:text-base 2xl:text-lg font-bold flex items-center gap-2 transition-colors shrink-0">
-              <X size={20} /> <span className="hidden sm:inline">Sair</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 2xl:p-8">
-          {pendentes.length === 0 && abertas.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center gap-4 sm:gap-6 text-center px-4">
-              <div className="p-6 sm:p-10 rounded-full bg-ativo/10 border-4 border-ativo/30 text-ativo">
-                <CheckCircle2 className="w-14 h-14 sm:w-20 sm:h-20 2xl:w-[90px] 2xl:h-[90px]" />
-              </div>
-              <p className="text-3xl sm:text-4xl 2xl:text-5xl font-bold text-white font-display">Fila vazia</p>
-              <p className="text-lg sm:text-xl 2xl:text-2xl text-texto-suave">Nenhum cliente aguardando atendimento.</p>
-            </div>
-          ) : (
-            /* Sem `gap`: o respiro entre as colunas vem do padding de cada uma,
-               metade de cada lado, e a divisoria fica no meio exato. Com gap, a
-               borda encostaria na coluna da direita em vez de dividir a tela. */
-            <div className="grid grid-cols-1 xl:grid-cols-2">
-              <Coluna
-                titulo="Aguardando" cor="bg-espera" itens={pendentes}
-                vazio="Ninguém na fila."
-                className="pb-6 xl:pb-0 xl:border-r xl:border-linha xl:pr-6 2xl:pr-10"
-              />
-              <Coluna
-                titulo="Em atendimento" cor="bg-ativo" itens={abertas} aberta
-                vazio="Nenhuma conversa assumida."
-                className="border-t border-linha pt-6 xl:border-t-0 xl:pt-0 xl:pl-6 2xl:pl-10"
-              />
-            </div>
-          )}
-        </div>
-      </div>
     </Portal>
   );
 }
@@ -3592,16 +3375,17 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
 
           {/* Sino de notificacoes: abre o painel; NAO toca som ao clicar
               (o som so dispara quando chega mensagem, via AppContext). */}
-          {/* Modo TV: so na aba Pendentes, que e a fila projetada na parede. */}
-          {abaAtual === 'pendentes' && (
-            <button
-              onClick={abrirModoTv}
-              title="Exibir a fila em tela cheia (TV)"
-              className="flex items-center justify-center w-9 h-9 rounded-full border bg-grafite-700 border-linha text-texto-suave hover:text-white hover:border-acao/50 transition-colors"
-            >
-              <Tv size={16} />
-            </button>
-          )}
+          {/* Modo TV: o painel de parede da equipe (ranking, metas, tempos e a
+              fila) em tela cheia. Antes o botao aparecia so na aba Pendentes,
+              porque projetava aquela lista; agora o painel nao depende da aba
+              aberta, entao ele fica disponivel em qualquer uma. */}
+          <button
+            onClick={abrirModoTv}
+            title="Exibir o painel da equipe em tela cheia (TV)"
+            className="flex items-center justify-center w-9 h-9 rounded-full border bg-grafite-700 border-linha text-texto-suave hover:text-white hover:border-acao/50 transition-colors"
+          >
+            <Tv size={16} />
+          </button>
 
           <div className="relative" ref={sinoRef}>
             <button
@@ -3939,20 +3723,10 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
         />
       )}
 
-      {modoTv && (
-        <PainelTv
-          // Mais antiga primeiro nas duas colunas: na fila e quem espera ha
-          // mais tempo, no atendimento e quem esta parado ha mais tempo.
-          pendentes={conversas
-            .filter(c => c.statusAtendimento === 'pendente' && !c.arquivada && !c.oculta)
-            .sort((a, b) => new Date(a.ultimaMensagemEm || 0) - new Date(b.ultimaMensagemEm || 0))}
-          abertas={conversas
-            .filter(c => c.statusAtendimento === 'aberta' && !c.arquivada && !c.oculta)
-            .sort((a, b) => new Date(a.ultimaMensagemEm || 0) - new Date(b.ultimaMensagemEm || 0))}
-          parceiros={parceiros}
-          onFechar={fecharModoTv}
-        />
-      )}
+      {/* O painel de parede: numeros da equipe + fila, por cima de tudo. Nao
+          recebe as conversas por prop -- ele busca o proprio quadro na API
+          (`/dashboard/painel`), que ja entrega a fila filtrada por setor. */}
+      {modoTv && <ModoTv onFechar={fecharModoTv} />}
 
       {transferindo && (
         <Portal>

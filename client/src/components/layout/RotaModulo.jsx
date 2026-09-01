@@ -7,11 +7,6 @@ const ROTA_MODULO = {
   '/contatos': 'contatos',
   '/fluxos': 'fluxos',
   '/dashboard': 'dashboard',
-  // Mesmo modulo da Visao Geral: e a mesma informacao, para publicos
-  // diferentes. Sem esta linha o caminho caia no ramo "modulo indefinido",
-  // que LIBERA -- a tela abriria para qualquer perfil (vazia, porque a API
-  // barra com 403, mas abriria).
-  '/painel': 'dashboard',
   '/whatsapp': 'whatsapp',
   '/equipe': 'equipe',
   '/parceiros': 'parceiros',

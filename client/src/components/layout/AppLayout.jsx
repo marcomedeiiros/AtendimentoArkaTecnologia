@@ -9,7 +9,7 @@ import React, { useState, useLayoutEffect } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { aplicarTema } from '../../utils/tema';
 import {
-  LayoutGrid, Users, Zap, MessageSquare, ShieldCheck, MonitorPlay,
+  LayoutGrid, Users, Zap, MessageSquare, ShieldCheck,
   GitFork, MessageCircle, CalendarDays, Send, Loader2, Menu, X, WifiOff, Settings, LogOut, Bug
 } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
@@ -28,12 +28,11 @@ const NAV_PRINCIPAL = [
   { to: '/fluxos',      label: 'Fluxo de Automações',    icon: GitFork,       modulo: 'fluxos' },
 ];
 
+// O "Painel da Equipe" saiu daqui: ele nao e mais uma tela navegavel, e sim o
+// Modo TV da Central (botao da TV no cabecalho, ao lado do sino). Um item de
+// menu para uma tela que roda numa parede sem mouse nunca teve muito uso.
 const NAV_MONITORAMENTO = [
   { to: '/dashboard',  label: 'Visão Geral',          icon: LayoutGrid, modulo: 'dashboard' },
-  // Painel de parede. Mesmo modulo da Visao Geral: sao a mesma informacao para
-  // publicos diferentes, e separar a permissao criaria a pergunta "quem pode
-  // ver o numero na TV mas nao no relatorio?", que nao tem resposta boa.
-  { to: '/painel',     label: 'Painel da Equipe',     icon: MonitorPlay, modulo: 'dashboard' },
 ];
 
 const NAV_FERRAMENTAS = [

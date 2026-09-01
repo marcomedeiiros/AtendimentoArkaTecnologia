@@ -18,7 +18,6 @@ import CadastroPage from './pages/CadastroPage';
 import EsqueciSenhaPage from './pages/EsqueciSenhaPage';
 
 import DashboardPage    from './pages/DashboardPage';
-import PainelPage     from './pages/PainelPage';
 import AtendimentoPage  from './pages/AtendimentoPage';
 import ContatosPage     from './pages/ContatosPage';
 import FluxosPage       from './pages/FluxosPage';
@@ -46,17 +45,13 @@ export default function App() {
           <Route element={<RotaProtegida />}>
             <Route path="/" element={<Navigate to="/atendimento" replace />} />
 
-            {/* PAINEL DE PAREDE -- FORA do AppLayout, e de proposito.
+            {/* O PAINEL DE PAREDE NAO E MAIS UMA ROTA.
                 
-                Ele roda numa TV dedicada, sem teclado e sem mouse: nao ha para
-                onde navegar, entao a barra lateral so rouba 17rem de largura de
-                uma tela que existe para ser lida de longe. Continua atras do
-                portao de sessao e do gate de modulo -- o que sai e a moldura,
-                nao a protecao. */}
-            <Route element={<RotaModulo />}>
-              <Route path="/painel" element={<PainelPage />} />
-            </Route>
-
+                Ele era `/painel`, fora do AppLayout, para nao gastar 17rem de
+                barra lateral numa tela lida de longe. Hoje ele e o Modo TV: o
+                botao da TV, no cabecalho da Central, abre o mesmo painel em
+                tela cheia por cima de tudo -- sem moldura, sem rota e sem um
+                item de menu que ninguem clicava na TV. */}
             <Route element={<AppLayout />}>
               {/* Acesso por modulo, dirigido pela matriz de permissoes.
                   RotaModulo guarda no front; o servidor barra de verdade. */}
