@@ -487,7 +487,21 @@ export function AppProvider({ children }) {
       try {
         const lista = await EquipeAPI.listar();
         if (ativo && Array.isArray(lista)) setEquipe(lista);
-      } catch { /* back-end fora: mantem a ultima lista conhecida */ }
+      } catch (e) {
+        // SEM PERMISSAO NAO E FALHA PASSAGEIRA -- e resposta definitiva.
+        //
+        // `GET /api/equipe` exige o modulo "equipe", e este intervalo rodava
+        // para todo mundo. Quem nao tem o modulo levava 403 a cada 30 segundos
+        // pelo turno inteiro, e o `catch` engolia tudo: 669 respostas 403 num
+        // unico dia em producao (01/09/2026), a maior fonte de erro do log, sem
+        // nunca aparecer para ninguem.
+        //
+        // O cargo nao muda no meio da sessao -- e quando muda, o servidor
+        // derruba a sessao. Entao a primeira negativa encerra a repeticao;
+        // qualquer outro erro (back-end fora, rede) continua tentando, que e
+        // justamente o caso em que repetir faz sentido.
+        if (e?.status === 403) clearInterval(id);
+      }
     }, 30000);
     return () => { ativo = false; clearInterval(id); };
   }, []);

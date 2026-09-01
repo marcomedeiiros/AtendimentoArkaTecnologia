@@ -35,7 +35,15 @@ function comVersao(data) {
 }
 
 class ConversaRepository {
-  findAll(filtros = {}) {
+  /**
+   * @param {object} filtros
+   * @param {object} [opcoes]
+   * @param {number} [opcoes.cauda] quantas mensagens trazer por conversa (as
+   *   MAIS RECENTES). Sem isto, vem o historico inteiro -- que e o que o Help
+   *   Desk precisa para medir tempo ate a primeira resposta, e o que a Central
+   *   NAO precisa.
+   */
+  async findAll(filtros = {}, opcoes = {}) {
     const where = {};
     if (filtros.status) where.statusAtendimento = filtros.status;
     if (filtros.instanciaId) where.instanciaId = filtros.instanciaId;
@@ -53,11 +61,49 @@ class ConversaRepository {
       ];
     }
 
-    return prisma.conversa.findMany({
+    // ── A LISTAGEM LEVA A CAUDA, NAO O HISTORICO INTEIRO ──────────────────
+    //
+    // `INCLUDE_CONVERSA` traz `mensagens` sem limite, e por muito tempo esta
+    // consulta trouxe TODAS as mensagens de TODAS as conversas -- inclusive os
+    // blobs base64 da midia antiga, que vivem em `metadata`.
+    //
+    // Medido em producao em 01/09/2026, com 11 conversas e 1.975 mensagens:
+    //
+    //     2.633 ms e 87,18 MB materializados no servidor
+    //       142 KB de resposta na rede
+    //
+    // Ou seja: 600 vezes mais dado carregado do que entregue -- o DTO descarta
+    // quase tudo logo em seguida. E o custo cresce a cada mensagem nova; o
+    // comentario de `listarEstados` mediu 628 ms quando foi escrito.
+    //
+    // A tela nao precisa disso: ela desenha a previa da conversa na lista e,
+    // quando alguem ABRE uma, o `AtendimentoView` busca a conversa completa em
+    // `GET /conversas/:id`. `parcial: true` (posto pelo mapper a partir de
+    // `__parcial`) e o contrato que ja existia para dizer ao front "isto e um
+    // recorte, nao apague o que voce tem".
+    const cauda = Number(opcoes.cauda) > 0 ? Number(opcoes.cauda) : null;
+
+    const linhas = await prisma.conversa.findMany({
       where,
-      include: INCLUDE_CONVERSA,
+      include: cauda
+        ? {
+            ...INCLUDE_CONVERSA,
+            // `desc` + `take` pega as ULTIMAS: com `asc` o take pegaria o
+            // comeco da conversa, que e justamente a parte que a lista nao usa.
+            mensagens: { orderBy: { criadoEm: "desc" }, take: cauda },
+          }
+        : INCLUDE_CONVERSA,
       orderBy: { atualizadoEm: "desc" },
     });
+
+    if (!cauda) return linhas;
+
+    return linhas.map((c) => ({
+      ...c,
+      // Volta a ordem cronologica que o resto do codigo espera.
+      mensagens: c.mensagens.slice().reverse(),
+      __parcial: c.mensagens.length >= cauda,
+    }));
   }
 
   findById(id) {

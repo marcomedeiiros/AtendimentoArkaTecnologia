@@ -112,3 +112,21 @@ $COMPOSE ps
 echo
 echo "Pronto. Abra o painel, entre com o administrador e va em Integracao"
 echo "WhatsApp -> Gerar QR para parear o telefone."
+
+# ── O QUE O SCRIPT NAO CONSEGUE SORTEAR ─────────────────────────────────────
+#
+# Todo segredo daqui e gerado localmente, menos um: as chaves do Turnstile vem
+# da Cloudflare, de uma conta que so a pessoa que instala tem. Sem elas o
+# `turnstile.client` responde "desligado" e APROVA toda verificacao -- login e
+# cadastro ficam sem protecao contra robo, e nada em tela denuncia isso.
+#
+# Ate 01/09/2026 nem o `.env.example` citava essas variaveis. Quem seguia o
+# DEPLOY.md subia desprotegido sem ter como descobrir. O aviso abaixo existe
+# para que a omissao seja uma ESCOLHA, e nao um acidente.
+if ! grep -qE '^TURNSTILE_SECRET_KEY=.+' .env 2>/dev/null; then
+  echo
+  echo "  ATENCAO: TURNSTILE_SITE_KEY / TURNSTILE_SECRET_KEY estao vazias."
+  echo "           O login e o cadastro estao SEM protecao contra robo."
+  echo "           Pegue as chaves em Cloudflare -> Turnstile -> Add site,"
+  echo "           coloque no .env e rode: docker compose -f docker-compose.prod.yml up -d"
+fi

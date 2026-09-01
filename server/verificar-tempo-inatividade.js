@@ -3,8 +3,10 @@ const prisma = new PrismaClient();
 
 async function verificarTempoInatividade() {
   try {
+    // Mesmo defeito do verificar-fluxo-tecnico: o id era de uma instalacao so.
+    // Ver o comentario la para o historico completo.
     const fluxo = await prisma.fluxo.findFirst({
-      where: { id: '8b620944-b1ce-4ac0-beed-5f3cb2bd8e8d' }
+      where: { ativo: true }
     });
 
     console.log('=== CONFIGURAÇÃO DE INATIVIDADE ===\n');
@@ -56,6 +58,7 @@ async function verificarTempoInatividade() {
     });
 
   } catch (error) {
+    process.exitCode = 1;
     console.error('❌ Erro:', error);
   } finally {
     await prisma.$disconnect();

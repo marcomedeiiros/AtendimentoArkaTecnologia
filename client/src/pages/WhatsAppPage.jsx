@@ -76,17 +76,44 @@ export default function WhatsAppPage() {
     }
   }, [setWhatsAppConectado]);
 
-  const gerarQr = useCallback(async () => {
+  // Normaliza o base64 que a Evolution devolve com ou sem o prefixo data:.
+  const comoImagem = (b64) =>
+    b64 ? (String(b64).startsWith('data:') ? b64 : `data:image/png;base64,${b64}`) : null;
+
+  // `jaRecriou` corta a recursao: uma instancia recem-criada que ainda responda
+  // 404 nao pode virar um ciclo de criar/tentar/criar sem fim.
+  const gerarQr = useCallback(async (jaRecriou = false) => {
     setCarregandoQr(true); setAviso('');
     try {
       const r = await WhatsAppAPI.qrcode(instanciaRef.current);
-      // A Evolution devolve o base64 ja com ou sem o prefixo data:.
       const b64 = r?.qrcode || null;
-      setQrcode(b64 ? (String(b64).startsWith('data:') ? b64 : `data:image/png;base64,${b64}`) : null);
+      setQrcode(comoImagem(b64));
       setPairingCode(r?.pairingCode || null);
       if (!b64 && !r?.pairingCode) setAviso('A Evolution não retornou QR Code. Se a instância já estiver conectada, desconecte antes de gerar um novo.');
     } catch (e) {
-      erroEvolution(e);
+      // A INSTANCIA NAO EXISTE MAIS: cria e ja devolve o QR, em vez de exibir
+      // um erro que a tela nao ensina a resolver.
+      //
+      // `/instance/connect` PRESSUPOE a instancia. Depois de um "excluir" --
+      // ou de qualquer sumico do lado da Evolution -- este era o ponto onde o
+      // painel travava: erro na tela, e nenhum botao capaz de sair dali.
+      if (e?.codigo === 'INSTANCIA_INEXISTENTE' && !jaRecriou) {
+        try {
+          const nova = await WhatsAppAPI.criar(instanciaRef.current);
+          setQrcode(comoImagem(nova?.qrcode));
+          setPairingCode(null);
+          setAviso(
+            nova?.qrcode
+              ? 'A instância não existia mais e foi recriada. Escaneie o QR Code abaixo para parear o WhatsApp.'
+              : 'Instância recriada. Gerando o QR Code...'
+          );
+          if (!nova?.qrcode) await gerarQr(true);
+        } catch (erroCriar) {
+          erroEvolution(erroCriar);
+        }
+      } else {
+        erroEvolution(e);
+      }
     } finally {
       setCarregandoQr(false);
     }
@@ -128,7 +155,17 @@ export default function WhatsAppPage() {
     try {
       await WhatsAppAPI.reiniciar(instancia);
       await carregarDetalhes();
-    } catch (e) { erroEvolution(e); } finally { setOcupado(false); }
+    } catch (e) {
+      // "Reiniciar" nao existe para uma instancia que sumiu -- e este foi o
+      // botao apertado 26 vezes seguidas em 01/09/2026, sempre com erro. Cair
+      // para o caminho que RESOLVE (criar + QR) e o que o usuario quis dizer.
+      if (e?.codigo === 'INSTANCIA_INEXISTENTE') {
+        await gerarQr();
+        await carregarDetalhes();
+      } else {
+        erroEvolution(e);
+      }
+    } finally { setOcupado(false); }
   }
 
   async function excluirInstancia() {

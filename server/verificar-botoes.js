@@ -217,17 +217,29 @@ const TEXTO_MENU =
     fs.readFileSync(path.join(__dirname, "..", "docs", "fluxo-arka.json"), "utf8")
   );
   const passos = Object.fromEntries(fluxo.passos.map((p) => [p.id, p]));
-  // Os CINCO menus em botao, inclusive os de 4 opcoes: a Evolution recusa 4
-  // botoes numa mensagem ("Maximum of 3 reply buttons allowed", medido em
-  // 29/08/2026 na 2.4.0-rc2), entao o motor entrega em bolhas de 3 -- 4 = 3 + 1.
-  // A lista cabia 10, mas escondia tudo atras de "Ver opcoes".
-  const ESPERADO = {
-    "d70e3322-5760-49c6-98e9-c60550093310": "buttons",  // Boas Vindas (4 -> 3+1)
-    "de723e94-ac45-4ed4-b9c8-4d9e71a6c84f": "buttons",  // SUPORTE (3)
-    "14fe8be5-ffb5-47ee-b2cf-0475e2883554": "buttons",  // RESULTADO (4 -> 3+1)
-    "8619e80e-47a4-4a05-80fd-be50e7649756": "buttons",  // C_AVULSO (3)
-    "64b85687-198c-49ef-b7a7-827fdb8a456a": "buttons",  // COMERCIAL (3)
-  };
+
+  // ── OS MENUS SAO DESCOBERTOS, E NAO LISTADOS A MAO ────────────────────────
+  //
+  // Havia aqui um mapa de cinco UUIDs, cada um com o `exibicao` que se esperava
+  // dele. Um mapa desses envelhece a cada edicao no editor de fluxos: em
+  // 31/08/2026 o passo COMERCIAL virou texto livre e o teste passou a reprovar
+  // -- nao por defeito de codigo, mas porque alguem mudou o fluxo, que e
+  // exatamente o que o editor existe para permitir.
+  //
+  // O que este teste tem de proteger sao as REGRAS do WhatsApp, que valem para
+  // qualquer menu que exista hoje ou venha a existir: toda opcao precisa de
+  // rotulo, e nenhum rotulo pode passar do limite em que o WhatsApp CORTA.
+  // Entao: descobre quem e menu (tem opcoes declaradas) e cobra as regras de
+  // todos eles.
+  const ESPERADO = Object.fromEntries(
+    fluxo.passos
+      .filter((p) => (p.config?.opcoes || []).length >= 2)
+      .map((p) => [p.id, p.config?.exibicao === "list" ? "list" : "buttons"])
+  );
+  check(
+    Object.keys(ESPERADO).length > 0,
+    `o fluxo declara ${Object.keys(ESPERADO).length} menu(s) com opcoes`
+  );
   // Limite do WhatsApp: 20 caracteres no botao, 24 na linha da lista. Estourar
   // nao da erro -- o texto e CORTADO, e "SEGUIR COMO ATENDIMENTO AV" nao diz o
   // que a opcao faz. Por isso o teste cobra o limite em vez de confiar no olho.
@@ -254,10 +266,15 @@ const TEXTO_MENU =
 
   // E o texto numerado CONTINUA no fluxo -- ele e o fallback quando a Evolution
   // recusa o interativo. Limpar os "1️⃣-" deixaria o cliente sem opcao nenhuma.
-  const comNumero = Object.keys(ESPERADO).filter((id) => /[1-9]️⃣/.test(passos[id]?.texto || ""));
+  //
+  // Vale para os menus enviados como BOTAO. A lista tem rotulo proprio em cada
+  // linha e nao depende do texto numerado no corpo.
+  const menusEmBotao = Object.keys(ESPERADO).filter((id) => ESPERADO[id] === "buttons");
+  const semNumero = menusEmBotao.filter((id) => !/[1-9]️⃣/.test(passos[id]?.texto || ""));
   check(
-    comNumero.length === Object.keys(ESPERADO).length,
-    `os ${comNumero.length} menus mantem o texto numerado (fallback do interativo)`
+    semNumero.length === 0,
+    `os ${menusEmBotao.length} menus em botao mantem o texto numerado (fallback do interativo)` +
+      (semNumero.length ? ` -- sem numeracao: ${semNumero.map((id) => passos[id]?.titulo).join(", ")}` : "")
   );
 
   titulo("10. QUATRO opcoes viram 3 + 1 bolhas, e o corpo perde a lista numerada");
@@ -295,7 +312,11 @@ const TEXTO_MENU =
     bus: { emitConversa: () => {} },
   });
 
-  const MENU_REAL = passos["d70e3322-5760-49c6-98e9-c60550093310"];
+  // O MENU PRINCIPAL do fluxo, achado pelo papel que ele cumpre. Estava preso a
+  // um UUID -- e um fluxo reimportado, ou trocado, gera ids novos.
+  const MENU_REAL =
+    fluxo.passos.find((p) => /MENU PRINCIPAL/i.test(p.titulo || "")) ||
+    fluxo.passos.find((p) => (p.config?.opcoes || []).length >= 3);
   process.env.WHATSAPP_BOTOES_INTERATIVOS = "true";
   delete process.env.WHATSAPP_MENU_ENQUETE;
   await motorEnvio.enviarBotComOpcoes(
@@ -311,9 +332,17 @@ const TEXTO_MENU =
   check(bolhas.length === 1, `3 opcoes -> 1 bolha de botoes (veio ${bolhas.length})`);
   const valoresEnquete = bolhas[0]?.payload.values || bolhas[0]?.payload.buttons?.map(b => b.displayText || b.id);
   check(valoresEnquete.length === 3, `card com os 3 botoes juntos (veio ${valoresEnquete.length})`);
+  // AS OPCOES DO PROPRIO MENU, na ordem em que ele as declara.
+  //
+  // A comparacao era com tres rotulos escritos a mao ("🛠️ Setor Técnico,..."),
+  // congelados no dia em que o teste foi escrito. Renomear um botao no editor
+  // -- de "Setor Técnico" para "Técnico" -- reprovava o teste sem que nada
+  // tivesse quebrado para o cliente. O que importa e que saiam TODAS, INTEIRAS
+  // e NA ORDEM; quais sao elas e decisao de quem monta o fluxo.
+  const rotulosDoFluxo = (MENU_REAL.config?.opcoes || []).map((o) => o.botao);
   check(
-    valoresEnquete.join(",") === "🛠️ Setor Técnico,💼 Comercial,💰 Adm/Financeiro",
-    `opcoes exatas e completas juntas: ${valoresEnquete.join(",")}`
+    valoresEnquete.join(",") === rotulosDoFluxo.join(","),
+    `opcoes exatas, completas e na ordem do fluxo: ${valoresEnquete.join(",")}`
   );
 
   const fazerMotor = (registro) =>
@@ -335,7 +364,18 @@ const TEXTO_MENU =
   const opcoesFalsas = (n) =>
     Array.from({ length: n }, (_, i) => ({ id: `op_${i + 1}`, botao: `Opção ${i + 1}`, palavrasChave: [String(i + 1)] }));
 
-  for (const [n, esperado, bolhasEsperadas] of [[3, "buttons", 1], [4, "poll", 1], [6, "poll", 1], [13, "list", 1]]) {
+  // ── MAIS DE 3 OPCOES VAI COMO LISTA, E NAO COMO ENQUETE ──────────────────
+  //
+  // Esta tabela esperava `poll` para 4 e para 6, e o motor entrega `list` desde
+  // 29/08/2026 -- com o porque escrito por extenso em chatbot.engine
+  // (`enviarBotComOpcoes`): o WhatsApp recusa a quarta bolha de botao
+  // (`400 Maximum of 3 reply buttons allowed`), e das duas saidas possiveis a
+  // lista ganhou porque e um CARD UNICO. Enquete e outra coisa: ela nao carrega
+  // id, devolve o nome votado, e serve ao menu de notas.
+  //
+  // O teste ficou para tras porque nao esta no `npm test` -- ninguem o rodava.
+  // Ele acusava divergencia onde havia decisao registrada.
+  for (const [n, esperado, bolhasEsperadas] of [[3, "buttons", 1], [4, "list", 1], [6, "list", 1], [13, "list", 1]]) {
     const reg = [];
     await fazerMotor(reg).enviarBotComOpcoes("c", "5541999999999", "Escolha:", opcoesFalsas(n), "inst");
     const tipos = [...new Set(reg.map((e) => e.tipo))];

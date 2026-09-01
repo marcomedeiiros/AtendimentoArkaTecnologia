@@ -1,6 +1,26 @@
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import { hojeISO, FUSO_BR } from './data';
+
+// ── AS DUAS BIBLIOTECAS PESADAS SO CHEGAM QUANDO ALGUEM EXPORTA ────────────
+//
+// `jspdf` + `html2canvas` somam 544 KB -- mais do que TODO o codigo do painel
+// junto. Importados no topo, eles entravam no pacote que o navegador baixa para
+// abrir a Central, e a Central nao gera PDF nenhum: quem gera e o botao de
+// exportar do Dashboard e do Help Desk, que a maioria dos atendentes nunca
+// aperta.
+//
+// Com o import dinamico o download acontece no primeiro clique em "Exportar", e
+// fica em cache dali em diante. Quem nunca exporta, nunca paga.
+let _libs = null;
+async function libs() {
+  if (!_libs) {
+    const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
+      import('jspdf'),
+      import('html2canvas'),
+    ]);
+    _libs = { jsPDF, html2canvas };
+  }
+  return _libs;
+}
 
 const LOGO_URL = '/arka_tecnologia_logo-removebg-preview.png';
 const LARANJA = [249, 115, 22];
@@ -32,6 +52,7 @@ async function carregarLogo() {
  * @param {string}  opts.resumo        Paragrafo de resumo.
  */
 export async function exportarRelatorioPdf({ elemento, metricas = [], filtros = 'Nenhum', resumo = '' }) {
+  const { jsPDF } = await libs();
   const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
   const larguraPg = pdf.internal.pageSize.getWidth();
   const alturaPg = pdf.internal.pageSize.getHeight();
@@ -128,6 +149,7 @@ export async function exportarRelatorioPdf({ elemento, metricas = [], filtros = 
   // ---------- Graficos (captura da tela) ----------
   if (elemento) {
     try {
+      const { html2canvas } = await libs();
       const canvas = await html2canvas(elemento, {
         backgroundColor: '#0F1219',
         scale: 2,
@@ -198,6 +220,7 @@ function fmtDataHora(iso) {
  * @param {string} [opts.statusLabel] Rotulo do status (ex.: "Fechada").
  */
 export async function exportarTranscricaoPdf(conversa, { atendente = '-', statusLabel = '' } = {}) {
+  const { jsPDF } = await libs();
   const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
   const larguraPg = pdf.internal.pageSize.getWidth();
   const alturaPg = pdf.internal.pageSize.getHeight();

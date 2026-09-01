@@ -79,8 +79,24 @@ function carregarPreviaDoCard() {
   if (inicio === -1) {
     throw new Error("previaDoBloco nao encontrada no VisualFlowEditor -- foi renomeada?");
   }
-  const fim = fonte.indexOf("\nfunction formatNodesPositions", inicio);
-  const trecho = fonte.slice(inicio, fim);
+
+  // ONDE A FUNCAO ACABA: a PROXIMA declaracao de topo, seja ela qual for.
+  //
+  // Antes daqui o fim era o nome literal `\nfunction formatNodesPositions`. Em
+  // 29/08/2026 tres funcoes exportadas entraram entre uma e outra, o recorte
+  // passou a arrastar `export function getNodeDimensions` junto, e o
+  // `new Function` estourou `SyntaxError: Unexpected token 'export'`. O script
+  // ficou dias sem rodar sem que ninguem soubesse -- ele nao esta no `npm test`.
+  //
+  // Amarrar no VIZINHO era o erro: qualquer coisa inserida no meio quebrava.
+  // Procurar a proxima declaracao de topo (com ou sem `export`) sobrevive a
+  // insercao, a remocao e a renomeacao do que vier depois.
+  const resto = fonte.slice(inicio + 1);
+  const proxima = resto.search(/\n(?:export\s+)?(?:function|const|class)\s/);
+  if (proxima === -1) {
+    throw new Error("nao achei o fim de previaDoBloco no VisualFlowEditor");
+  }
+  const trecho = fonte.slice(inicio, inicio + 1 + proxima);
   const mod = {};
   new Function("exports", trecho + "\n;exports.previa = previaDoBloco;")(mod);
   return mod.previa;
@@ -130,15 +146,39 @@ async function main() {
   );
 
   // O caso concreto que foi reportado, citado pelo nome.
-  const comercial = fluxo.passos.find((p) => p.titulo === "COMERCIAL");
+  //
+  // Casado pelo PREFIXO, e nao pelo titulo exato: o passo virou
+  // "COMERCIAL — DADOS" em 31/08/2026 e a igualdade literal passou a nao achar
+  // nada, quebrando as tres assertivas abaixo de uma vez. O que este teste
+  // protege e a assimetria `desc` vazio + `texto` cheio, nao a redacao do
+  // titulo -- e renomear um bloco no editor nao pode reprovar o build.
+  const comercial = fluxo.passos.find((p) => String(p.titulo || "").startsWith("COMERCIAL"));
   check(!!comercial, "o passo COMERCIAL existe no fluxo canonico");
+
+  // A ASSIMETRIA QUE CAUSOU O DEFEITO, montada aqui em vez de procurada no
+  // fluxo.
+  //
+  // Este trecho lia o passo COMERCIAL do arquivo e exigia dele `desc` vazio com
+  // `texto` cheio. Era a forma que o passo tinha no dia do relato -- e ele
+  // deixou de ter: em 31/08/2026 o bloco ganhou uma descricao, e o teste passou
+  // a reprovar uma EDICAO DE FLUXO, que e trabalho legitimo de quem opera o
+  // sistema, como se fosse regressao de codigo.
+  //
+  // O que precisa ser protegido e o comportamento de `previaDoBloco`: bloco com
+  // `desc` vazio e `texto` preenchido nao pode aparecer como "por configurar".
+  // Montando o caso aqui, a protecao continua e o fluxo fica livre para mudar.
+  const assimetrico = {
+    ...(comercial || { tipo: "mensagem", titulo: "COMERCIAL" }),
+    desc: "",
+    texto: "*Atendimento Comercial*\n\nPara encaminharmos seu atendimento...",
+  };
   check(
-    !comercial.desc && !!comercial.texto,
-    "e ele tem desc vazio com texto preenchido (a assimetria que causava o defeito)"
+    !assimetrico.desc && !!assimetrico.texto,
+    "caso de regressao montado: desc vazio com texto preenchido"
   );
   check(
-    previaDoBloco(comercial).startsWith(comercial.texto.trim().slice(0, 20)),
-    `o card agora mostra o texto dele: "${previaDoBloco(comercial).slice(0, 45)}..."`
+    previaDoBloco(assimetrico).startsWith(assimetrico.texto.trim().slice(0, 20)),
+    `o card mostra o texto, e nao "por configurar": "${previaDoBloco(assimetrico).slice(0, 45)}..."`
   );
 
   // ─────────────────────────────────────────────────────────────────────────

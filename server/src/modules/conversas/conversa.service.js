@@ -49,9 +49,20 @@ function exigirAcessoSetor(userCargo, setorConversa) {
   }
 }
 
+// Quantas mensagens a listagem da Central carrega por conversa. Ela so usa a
+// ultima para a previa; o excedente e folga para o merge do front nao ficar sem
+// contexto quando um evento SSE chega junto.
+const MENSAGENS_NA_LISTAGEM = 40;
+
 class ConversaService {
   async listar(filtros = {}, userCargo = null) {
-    const conversas = await conversaRepository.findAll(filtros);
+    // A Central desenha a previa da conversa e busca o historico completo em
+    // `GET /conversas/:id` quando alguem ABRE uma. Pedir tudo aqui custava
+    // 2,6s e 87 MB por chamada em producao (medido em 01/09/2026) para entregar
+    // 142 KB -- ver o comentario em conversa.repository.findAll.
+    const conversas = await conversaRepository.findAll(filtros, {
+      cauda: MENSAGENS_NA_LISTAGEM,
+    });
     const dto = conversas.map(mapConversa);
     if (!userCargo || userCargo === "Administrador") return dto;
     return dto.filter((c) => podeAcessarSetor(userCargo, c.setor));
