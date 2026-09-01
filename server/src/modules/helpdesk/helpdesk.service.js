@@ -5,6 +5,34 @@ const DIA = 86_400_000;
 const ms = (d) => (d ? new Date(d).getTime() : null);
 const media = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0);
 
+/**
+ * PERCENTIL -- o numero que a media esconde.
+ *
+ * Um dia com dez respostas em 2 minutos e UMA em 6 horas fecha com media de 35
+ * minutos, e nenhum cliente esperou 35 minutos: dez esperaram 2 e um esperou
+ * 360. A media descreve um atendimento que nao aconteceu com ninguem.
+ *
+ * O p50 (mediana) responde "como foi para o cliente do meio" e o p90 responde
+ * "como foi para o cliente que se deu mal" -- e e o segundo que gera reclamacao,
+ * cancelamento e a ligacao do dono da empresa.
+ *
+ * Metodo: RANK MAIS PROXIMO, sem interpolar. O valor devolvido e sempre um tempo
+ * que existiu de verdade na amostra, e nao uma media entre dois vizinhos. Com as
+ * amostras pequenas desta operacao (dezenas, nao milhares), um numero real e
+ * mais facil de conferir contra a conversa do que um numero calculado.
+ *
+ * Ordena uma COPIA: `respostas` e `resolucoes` sao lidos depois pelo `media` e
+ * pelo tamanho da amostra, e ordenar no lugar mudaria a lista de quem chamou.
+ */
+const percentil = (arr, p) => {
+  if (!arr.length) return 0;
+  const ordenado = [...arr].sort((a, b) => a - b);
+  // Math.ceil sobre o tamanho, menos 1 para virar indice. O Math.max protege
+  // p=0 (ceil(0) = 0 => indice -1).
+  const i = Math.max(0, Math.ceil((p / 100) * ordenado.length) - 1);
+  return ordenado[i];
+};
+
 class HelpDeskService {
   /**
    * Painel de suporte. So leitura, tudo derivado do que ja existe no banco.
@@ -21,6 +49,19 @@ class HelpDeskService {
     // Metas de SLA configuraveis (tela do Help Desk); caem no padrao 15min/24h.
     const { respostaMin: SLA_RESPOSTA_MIN, resolucaoHoras: SLA_RESOLUCAO_HORAS } =
       await configuracaoService.slaHelpDesk();
+
+    // A TAXONOMIA VIGENTE vai junto das metricas, e nao numa rota propria.
+    //
+    // Quem edita a lista e quem esta olhando a quebra "por que procuraram" --
+    // mesma tela, mesma pessoa, mesmo instante. Uma segunda rota exigiria um
+    // segundo modulo na matriz de permissoes so para preencher um editor que
+    // vive ao lado de um dado ja carregado.
+    //
+    // E diferente de `porMotivo`: aquilo e o que JA foi usado; isto e o que
+    // PODE ser escolhido. Um motivo recem-criado aparece aqui com zero uso, e um
+    // motivo removido da lista continua aparecendo la, no historico -- que e o
+    // comportamento correto para os dois.
+    const motivosDisponiveis = await configuracaoService.motivosEncerramento();
 
     const [conversas, atendimentos] = await Promise.all([
       conversaRepository.findAll(),
@@ -66,6 +107,10 @@ class HelpDeskService {
     let avaliacaoQtd = 0;
     let maisAntigoPendente = null;
     const setores = {};
+    // Motivo de encerramento -> quantas OS fecharam por ele. So conta OS
+    // FECHADA: chamado em curso ainda nao tem desfecho, e somá-lo aqui faria a
+    // fatia "nao informado" crescer com o backlog em vez de com a falta de dado.
+    const motivos = new Map();
 
     for (const a of atendimentos) {
       // OS orfa (conversa apagada) nao entra: sem o fio nao ha o que medir.
@@ -126,6 +171,18 @@ class HelpDeskService {
         }
       }
 
+      if (st === "fechada") {
+        // NAO INFORMADO E UMA CATEGORIA, e nao uma linha escondida.
+        //
+        // Sao as OS fechadas antes de o campo existir, mais as que algum caminho
+        // fechou sem passar pela escolha. Some-las em silencio faria as fatias
+        // parecerem 100% de um total menor que o real -- e o relatorio
+        // sugeriria uma cobertura que ele nao tem. Aparecendo na lista, o
+        // tamanho desta fatia e o proprio termometro da qualidade do dado.
+        const chave = a.motivo || "Não informado";
+        motivos.set(chave, (motivos.get(chave) || 0) + 1);
+      }
+
       if (a.avaliacao != null && a.avaliacao > 0) {
         avaliacaoSoma += a.avaliacao;
         avaliacaoQtd++;
@@ -143,6 +200,18 @@ class HelpDeskService {
       }))
       .sort((a, b) => b.backlog - a.backlog || b.total - a.total);
 
+    // Motivos ordenados pelo que mais aparece: a leitura util desta lista e "o
+    // que mais gera chamado", e ela comeca pelo topo. O percentual vem calculado
+    // do servidor sobre o total de FECHADAS -- a mesma base para todas as
+    // fatias, para elas somarem 100 e ninguem precisar refazer a conta na tela.
+    const porMotivo = [...motivos.entries()]
+      .map(([motivo, total]) => ({
+        motivo,
+        total,
+        pct: fechada ? Math.round((total / fechada) * 100) : 0,
+      }))
+      .sort((a, b) => b.total - a.total || a.motivo.localeCompare(b.motivo));
+
     const totalOS = pendente + aberta + fechada;
 
     return {
@@ -159,6 +228,13 @@ class HelpDeskService {
         resolucaoMedioSeg: Math.round(media(resolucoes)),
         respostaAmostra: respostas.length,
         resolucaoAmostra: resolucoes.length,
+        // A media CONTINUA acima, de proposito: quem ja se acostumou com ela
+        // perderia a referencia se o numero sumisse de um deploy para o outro.
+        // Os percentis entram ao lado, e a tela e que decide qual tem destaque.
+        respostaP50Seg: Math.round(percentil(respostas, 50)),
+        respostaP90Seg: Math.round(percentil(respostas, 90)),
+        resolucaoP50Seg: Math.round(percentil(resolucoes, 50)),
+        resolucaoP90Seg: Math.round(percentil(resolucoes, 90)),
       },
       sla: {
         respostaPct: respostas.length ? Math.round((dentroSlaResposta / respostas.length) * 100) : null,
@@ -170,6 +246,8 @@ class HelpDeskService {
       status: { pendente, aberta, fechada },
       csat: { media: avaliacaoQtd ? avaliacaoSoma / avaliacaoQtd : 0, total: avaliacaoQtd },
       porSetor,
+      porMotivo,
+      motivosDisponiveis,
       // Quantos clientes distintos estao em atendimento (o fio, nao o ciclo).
       clientes: conversas.length,
     };

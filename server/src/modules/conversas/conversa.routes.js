@@ -7,6 +7,7 @@ const { exigirModulo } = require("../permissoes/modulo.middleware");
 const { midiaLimiter } = require("../../shared/middlewares/rateLimit.middleware");
 const {
   enviarMensagemSchema,
+  adicionarNotaSchema,
   iniciarConversaSchema,
   atualizarStatusSchema,
   validarCnpjSchema,
@@ -61,6 +62,18 @@ router.get("/estados", (req, res, next) =>
 router.get("/atendentes", (req, res, next) =>
   conversaController.listarAtendentes(req, res).catch(next)
 );
+// A LISTA DE MOTIVOS DE ENCERRAMENTO -- e ANTES de "/:id", pela mesma razao das
+// duas rotas acima: "motivos" seria lido como id de conversa.
+//
+// Vive aqui, e nao em /api/configuracoes, porque quem precisa dela e a tela de
+// ATENDIMENTO, no instante de fechar. A tela de configuracoes exige perfil de
+// Administrador; se a lista viesse de la, o atendente comum receberia 403 no
+// modal de fechamento e ficaria sem nenhuma opcao para escolher -- travado numa
+// acao obrigatoria. Mesmo raciocinio de "/atendentes" logo acima.
+router.get("/motivos-encerramento", (req, res, next) =>
+  conversaController.listarMotivos(req, res).catch(next)
+);
+
 // ANTES de "/:id": em Express a primeira rota que casa vence, e "/iniciar"
 // casaria com "/:id" se viesse depois.
 router.post("/iniciar", validate(iniciarConversaSchema), (req, res, next) =>
@@ -74,6 +87,11 @@ router.get("/:id/atendimentos", (req, res, next) =>
 );
 router.post("/:id/mensagens", validate(enviarMensagemSchema), (req, res, next) =>
   conversaController.enviarMensagem(req, res).catch(next)
+);
+// Nota interna. Rota SEPARADA de /mensagens de proposito: o que nao sai para o
+// cliente nao compartilha caminho com o que sai (ver adicionarNota no service).
+router.post("/:id/notas", validate(adicionarNotaSchema), (req, res, next) =>
+  conversaController.adicionarNota(req, res).catch(next)
 );
 router.post("/:id/midia", validate(enviarMidiaSchema), (req, res, next) =>
   conversaController.enviarMidia(req, res).catch(next)

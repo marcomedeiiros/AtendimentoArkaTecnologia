@@ -19,6 +19,9 @@ const {
 // de transferencia, e duas janelas diferentes fariam as duas telas discordarem
 // sobre a mesma pessoa.
 const { JANELA_ONLINE_MS } = require("../equipe/equipe.service");
+// Taxonomia de motivos de encerramento: a lista vive na Configuracao para ser
+// revista sem deploy, entao quem valida a escolha precisa consultá-la.
+const configuracaoService = require("../configuracoes/configuracao.service");
 const parceiroRepository = require("../../infrastructure/repositories/parceiro.repository");
 const usuarioRepository = require("../../infrastructure/repositories/usuario.repository");
 const bus = require("../../shared/events/event-bus");
@@ -501,6 +504,68 @@ class ConversaService {
     return dto;
   }
 
+  /**
+   * NOTA INTERNA -- o que a equipe escreve para a equipe, dentro da conversa.
+   *
+   * ── POR QUE UM CAMINHO PRÓPRIO, E NÃO UM PARÂMETRO DO `enviarMensagem` ──────
+   *
+   * `enviarMensagem` faz cinco coisas além de gravar texto: vincula CNPJ que
+   * apareça na frase, monta a citação (`quoted`) para o aparelho do cliente,
+   * grava a bolha com `status: "enviando"`, entrega na Evolution API e depois
+   * concilia o status pelos ACKs do WhatsApp. Nenhuma dessas cinco faz sentido
+   * para uma nota, e todas custam caro se saírem erradas.
+   *
+   * Passar um `ehNota` por dentro daquele método significaria um `if` novo em
+   * cada uma das cinco etapas -- e basta UM deles ser esquecido, hoje ou em
+   * qualquer mudança futura, para uma anotação interna ("cliente já deu golpe
+   * antes", "checar se o boleto dele voltou") aparecer no celular do cliente.
+   * Esse é o tipo de defeito que não dá para desfazer depois de acontecer.
+   *
+   * Aqui não existe caminho até a Evolution API. Não é uma checagem que pode
+   * falhar: é a ausência da chamada.
+   *
+   * ── VALE EM QUALQUER CONVERSA ───────────────────────────────────────────────
+   *
+   * De propósito NÃO chama `_exigirAberta`. Os dois momentos em que mais se tem
+   * o que anotar são justamente os que aquela regra barraria: a conversa ainda
+   * na fila (o que já se descobriu antes de assumir) e a conversa recém-fechada
+   * (o desfecho, que é o que a próxima pessoa precisa ler). O recorte por SETOR
+   * continua valendo -- quem não pode ver a conversa não anota nela.
+   */
+  async adicionarNota(id, texto, userCargo = null, autor = null) {
+    const conversa = await conversaRepository.findByIdBasico(id);
+    if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
+    exigirAcessoSetor(userCargo, conversa.setor);
+
+    // O AUTOR VAI NO METADATA, e não embutido no texto.
+    //
+    // Gravar "Marco: cliente já ligou 3x" faria o nome virar parte do conteúdo:
+    // não dá para reestilizar depois, não dá para filtrar por autor, e quem
+    // editar a nota apaga a autoria sem querer. Guardado à parte, o nome é dado
+    // e a tela decide como (e se) mostra.
+    await conversaRepository.addMensagem(id, "nota", texto.trim(), {
+      autorId: autor?.sub || null,
+      autorNome: autor?.nome || null,
+    });
+
+    logger.info("Nota interna registrada", {
+      conversaId: id,
+      autor: autor?.nome || null,
+    });
+
+    // DEVOLVE A CONVERSA, e não a mensagem crua.
+    //
+    // Mesmo contrato do `enviarMensagem`: a Central aplica CONVERSA (ver
+    // aplicarConversa / mesclarConversa, que dependem de `versao` para descartar
+    // retrato velho). Devolver só a mensagem obrigaria quem chamou a costurá-la
+    // no estado à mão, e essa costura é exatamente o que a versão monotônica
+    // existe para evitar.
+    //
+    // A mesma chamada emite o evento SSE, então quem mais estiver com a conversa
+    // aberta vê a nota sem F5.
+    return this._emitirLeve(id);
+  }
+
   // Envia mídia (imagem/vídeo/documento/áudio/localização) pela Evolution e
   // registra a mensagem. `media` aceita URL pública ou base64 (data URL). Para
   // a bolha do operador renderizar de volta, guardamos a própria mídia em
@@ -659,6 +724,25 @@ class ConversaService {
   async encaminharMensagem(mensagemId, conversaDestinoId, userCargo = null) {
     const original = await conversaRepository.findMensagem(mensagemId);
     if (!original) throw new AppError("Mensagem nao encontrada", 404, "NOT_FOUND");
+
+    // NOTA INTERNA NAO SE ENCAMINHA.
+    //
+    // `adicionarNota` nao tem caminho ate a Evolution API -- mas ESTE metodo
+    // tem, e ele aceita qualquer mensagem por id. Encaminhar uma nota cairia no
+    // `enviarMensagem` (ou no `enviarMidia`) logo abaixo e entregaria no
+    // WhatsApp do cliente exatamente o que a equipe escreveu para nao ser lido
+    // por ele. A porta dos fundos do mesmo comodo.
+    //
+    // Bloqueado no SERVICE, e nao so escondendo o botao na tela: a rota aceita
+    // um id qualquer, e "a interface nao oferece" nunca foi controle de acesso.
+    if (original.origem === "nota") {
+      throw new AppError(
+        "Nota interna nao pode ser encaminhada: ela nunca sai para o cliente",
+        400,
+        "NOTA_NAO_ENCAMINHAVEL"
+      );
+    }
+
     // Precisa poder ler a ORIGEM (senao encaminhar seria uma leitura disfarcada)
     // e escrever no DESTINO.
     await this._exigirAcessoMensagem(original, userCargo);
@@ -873,7 +957,7 @@ class ConversaService {
     }
   }
 
-  async atualizarStatus(id, status, userCargo = null, autor = null) {
+  async atualizarStatus(id, status, userCargo = null, autor = null, motivo = null) {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
     exigirAcessoSetor(userCargo, conversa.setor);
@@ -885,6 +969,42 @@ class ConversaService {
     // fica para tras.
     const dataOS = { status };
     if (status === "fechada") {
+      // MOTIVO OBRIGATORIO -- mas so quando quem fecha e uma PESSOA.
+      //
+      // `mudouStatus` importa: fechar o que ja esta fechado (duplo clique, ou o
+      // painel reenviando o estado) nao pode exigir motivo de novo nem apagar o
+      // que ja foi escolhido.
+      //
+      // E `autor` importa mais ainda: os fechamentos do bot NAO passam por aqui
+      // (o engine escreve direto no repositorio, ver _motivoAutomatico la), mas
+      // existem outras chamadas internas sem autor humano. Exigir motivo delas
+      // travaria o sistema numa regra que so faz sentido para quem tem uma tela
+      // na frente.
+      if (mudouStatus && autor?.sub) {
+        const permitidos = await configuracaoService.motivosEncerramento();
+        const escolhido = String(motivo || "").trim();
+        if (!escolhido) {
+          throw new AppError(
+            "Escolha o motivo do encerramento para fechar o atendimento",
+            400,
+            "MOTIVO_OBRIGATORIO"
+          );
+        }
+        // A LISTA E VALIDADA NO SERVIDOR, e nao so montada na tela.
+        //
+        // Sem isto, qualquer texto enviado direto para a rota viraria um "motivo"
+        // novo, e a taxonomia -- que existe justamente para ser um conjunto
+        // fechado e somavel -- viraria campo livre com grafias divergentes
+        // ("boleto", "Boleto", "financeiro/boleto") impossiveis de agrupar.
+        if (!permitidos.includes(escolhido)) {
+          throw new AppError(
+            "Motivo de encerramento invalido: escolha um da lista",
+            400,
+            "MOTIVO_INVALIDO"
+          );
+        }
+        dataOS.motivo = escolhido;
+      }
       data.fechadoEm = new Date();
       data.lido = true;
       data.naoLidas = 0;
@@ -895,6 +1015,14 @@ class ConversaService {
       // quando o cliente inicia um ciclo novo depois do fechamento.
       data.fechadoEm = null;
       dataOS.fechadoEm = null;
+      // O MOTIVO SAI JUNTO COM O FECHAMENTO.
+      //
+      // Reabrir continua a MESMA OS, e o motivo descreve como ela TERMINOU --
+      // um ciclo reaberto nao terminou. Mantê-lo aqui deixaria a OS aberta
+      // carregando um desfecho que ainda nao aconteceu, e o relatorio contaria
+      // como resolvido por "Backup e restauracao" um chamado que segue em curso.
+      // No proximo fechamento a pessoa escolhe de novo, ja sabendo como acabou.
+      dataOS.motivo = null;
       data.atendidoEm = conversa.atendidoEm || new Date();
       dataOS.atendidoEm = data.atendidoEm;
       // Quem reabre assume, se ninguem assumiu. Antes a conversa voltava a

@@ -22,6 +22,16 @@ const enviarMensagemSchema = z.object({
   respondendoAId: z.string().min(1).nullish(),
 });
 
+// Nota interna: texto e so isso. Sem `respondendoAId` de proposito -- citar uma
+// mensagem e um recurso do WhatsApp, e a nota nunca chega la.
+//
+// O teto de 2000 existe porque a nota vai para a MESMA linha do tempo das
+// mensagens: sem limite, um relatorio colado inteiro empurraria a conversa para
+// fora da tela e viajaria em toda cauda de evento enviada pelo SSE.
+const adicionarNotaSchema = z.object({
+  texto: z.string().min(1, "Escreva a nota").max(2000, "Nota muito longa (maximo 2000 caracteres)"),
+});
+
 // Conversa iniciada pelo painel (botao de enviar da Central).
 //
 // O telefone e validado de leve aqui (tamanho plausivel) e normalizado de
@@ -36,6 +46,16 @@ const iniciarConversaSchema = z.object({
 
 const atualizarStatusSchema = z.object({
   status: z.enum(["pendente", "aberta", "fechada"]),
+  // MOTIVO DO ENCERRAMENTO. Opcional AQUI de proposito, e exigido no service.
+  //
+  // A obrigatoriedade nao e do formato, e da situacao: so vale quando o status e
+  // "fechada". Escrever isso como um `superRefine` neste schema resolveria
+  // metade -- a outra metade e que o motivo tambem precisa EXISTIR na lista
+  // configurada, e essa lista mora no banco. Um schema nao consulta banco.
+  //
+  // Deixar as duas checagens juntas no service e o que impede a regra de valer
+  // pela metade em um dos dois lugares.
+  motivo: z.string().trim().min(1).max(60).optional(),
 });
 
 const validarCnpjSchema = z.object({
@@ -341,6 +361,7 @@ const avaliarAtendimentoSchema = z.object({
 
 module.exports = {
   enviarMensagemSchema,
+  adicionarNotaSchema,
   iniciarConversaSchema,
   atualizarStatusSchema,
   validarCnpjSchema,

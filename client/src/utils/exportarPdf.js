@@ -308,8 +308,21 @@ export async function exportarTranscricaoPdf(conversa, { atendente = '-', status
     y += 5;
   } else {
     mensagens.forEach((m) => {
+      // A NOTA INTERNA PRECISA GRITAR QUE É INTERNA.
+      //
+      // Sem este caso ela cairia no "Atendente" do final da expressão e sairia
+      // no PDF como se tivesse sido dita ao cliente. E a transcrição é
+      // justamente o arquivo que alguém um dia anexa num e-mail para o próprio
+      // cliente ("segue o histórico do seu atendimento") -- lá, uma anotação de
+      // bastidor lida como fala oficial da empresa.
+      //
+      // Ela continua saindo, e não some do arquivo: este PDF também serve de
+      // registro interno, e export que descarta dado em silêncio é pior. O que
+      // muda é que ninguém consegue confundir as duas coisas.
+      const ehNota = m.de === 'nota';
       const quem = m.de === 'cliente'
         ? (conversa.cliente || 'Cliente')
+        : ehNota ? 'NOTA INTERNA (nao enviada ao cliente)'
         : m.de === 'sistema' ? 'Sistema' : 'Atendente';
       const ehCliente = m.de === 'cliente';
       const prefixo = `[${m.hora || ''}] ${quem}: `;
@@ -319,8 +332,11 @@ export async function exportarTranscricaoPdf(conversa, { atendente = '-', status
       pdf.setFontSize(9);
       linhas.forEach((linha, i) => {
         quebraPagina(5);
-        // Cliente em cinza, equipe em laranja escuro, para diferenciar de relance.
-        pdf.setTextColor(...(ehCliente ? CINZA : [180, 83, 9]));
+        // Cliente em cinza, equipe em laranja escuro, para diferenciar de
+        // relance. A nota interna sai em vermelho: terceira cor, terceira
+        // categoria -- quem folheia o PDF não precisa ler o rótulo para ver que
+        // aquela linha não é da conversa com o cliente.
+        pdf.setTextColor(...(ehNota ? [153, 27, 27] : ehCliente ? CINZA : [180, 83, 9]));
         pdf.text(linha, margem, y);
         y += 4.6;
         if (i === 0) { /* mantem cor nas continuacoes */ }

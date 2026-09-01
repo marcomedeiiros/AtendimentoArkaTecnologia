@@ -509,6 +509,40 @@ class ConversaRepository {
   }
 
   /**
+   * Grava o motivo de encerramento SO SE a OS ainda nao tiver um.
+   *
+   * Existe porque um mesmo ciclo pode ser fechado por dois caminhos, e eles nao
+   * valem a mesma coisa. Quando o atendente fecha pela Central, ele ESCOLHE um
+   * motivo da lista; logo em seguida a pesquisa de satisfacao roda em segundo
+   * plano e toca a mesma OS. Uma escrita crua ali substituiria "Financeiro e
+   * boleto", dito por uma pessoa que atendeu o chamado, por "Encerrado pelo
+   * fluxo" -- e o relatorio passaria a atribuir ao robo o desfecho de todo
+   * atendimento humano que teve pesquisa.
+   *
+   * A condicao vai no WHERE, e nao num `if` depois de ler: entre a leitura e a
+   * escrita cabe o outro caminho de fechamento, e essa janela e exatamente o
+   * caso que este metodo existe para fechar. `updateMany` nao reclama quando
+   * nenhuma linha casa -- e "nenhuma linha casou" aqui e o resultado desejado.
+   */
+  async definirMotivoSeVazio(atendimentoId, motivo) {
+    if (!atendimentoId || !motivo) return 0;
+    const { count } = await prisma.atendimento.updateMany({
+      where: { id: atendimentoId, motivo: null },
+      data: { motivo },
+    });
+    return count;
+  }
+
+  // Mesma regra, mirando a OS em curso da conversa.
+  async definirMotivoAtualSeVazio(conversaId, motivo) {
+    const conversa = await prisma.conversa.findUnique({
+      where: { id: conversaId },
+      select: { atendimentoAtualId: true },
+    });
+    return this.definirMotivoSeVazio(conversa?.atendimentoAtualId, motivo);
+  }
+
+  /**
    * Garante que a conversa TEM uma OS, sem abrir ciclo novo.
    *
    * Rede de seguranca para linhas anteriores a esta mudanca (criadas quando

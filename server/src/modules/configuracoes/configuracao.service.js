@@ -5,6 +5,46 @@ const logger = require("../../config/logger");
 // Ver `horarioAtendimento` mais abaixo.
 const horarioChatbot = require("../chatbot/chatbot.horario");
 
+/**
+ * Taxonomia inicial de motivos de encerramento (chave `atendimento.motivos`).
+ *
+ * Doze itens, pensados para uma operacao de suporte de TI. Nao e uma lista
+ * definitiva -- e o ponto de partida que a operacao revisa depois de ver os
+ * primeiros meses de dado real.
+ *
+ * Os dois ultimos existem para PROTEGER os dez primeiros: sem uma saida honesta
+ * para "o cliente sumiu" e para "ligaram errado", esses casos sao marcados como
+ * um motivo tecnico qualquer, e o relatorio passa a contar chamado que nunca
+ * houve exatamente na linha que alguem usaria para decidir onde investir.
+ */
+const MOTIVOS_PADRAO = [
+  "Dúvida de uso",
+  "Erro ou indisponibilidade",
+  "Lentidão",
+  "Instalação ou configuração",
+  "Acesso e senha",
+  "Backup e restauração",
+  "Financeiro e boleto",
+  "Contrato e renovação",
+  "Orçamento",
+  "Pedido de melhoria",
+  "Cliente não respondeu",
+  "Engano ou spam",
+];
+
+/**
+ * Motivos gravados pelo SISTEMA, fora da lista editavel.
+ *
+ * Ficam separados porque nao sao escolha de ninguem: sao o desfecho que o proprio
+ * bot deu ao ciclo. Se morassem na lista editavel, alguem os apagaria numa
+ * revisao de taxonomia e as OS fechadas por automacao voltariam a ser um buraco
+ * no relatorio -- que e exatamente o problema que este campo veio resolver.
+ */
+const MOTIVOS_AUTOMATICOS = {
+  INATIVIDADE: "Encerrado por inatividade",
+  FLUXO: "Encerrado pelo fluxo",
+};
+
 // Chaves suportadas e de onde vem o valor padrao (.env) quando o banco esta vazio.
 const DEFINICOES = {
   "evolution.url":      { padrao: () => env.evolutionApi.url,      segredo: false },
@@ -84,6 +124,16 @@ const DEFINICOES = {
   // { "respostaMin": 15, "resolucaoHoras": 24 }
   // Antes eram constantes no codigo: mudar a meta exigia deploy.
   "helpdesk.sla": { padrao: () => process.env.HELPDESK_SLA || "", segredo: false },
+  // Taxonomia de motivos de encerramento (JSON: array de strings).
+  //
+  // PRECISA estar declarada aqui, e nao so ser lida da tabela: `_carregar` monta
+  // o cache percorrendo ESTE objeto, entao chave nao declarada tem o valor do
+  // banco descartado em silencio -- e `salvar` ignora o que nao esta aqui
+  // (`if (!(chave in DEFINICOES)) continue`). Sem esta linha a lista seria
+  // impossivel de ler E de gravar, sempre caindo no padrao, o que anularia
+  // justamente o motivo de ela morar em Configuracao: poder ser revista sem
+  // deploy. Padrao vazio -> `motivosEncerramento` devolve MOTIVOS_PADRAO.
+  "atendimento.motivos": { padrao: () => "", segredo: false },
 };
 
 // Mascara em ASCII puro: caracteres como "•" se corrompem dependendo da
@@ -241,6 +291,39 @@ class ConfiguracaoService {
   }
 
   /**
+   * MOTIVOS DE ENCERRAMENTO -- a taxonomia de "por que este cliente procurou".
+   *
+   * Vive na Configuracao, e nao numa lista em codigo, porque ela PRECISA mudar:
+   * a leitura correta e revisar por trimestre, dividindo o motivo que ficou
+   * grande demais e juntando o que ninguem usa. Uma lista congelada em deploy
+   * nao sobrevive a esse ciclo.
+   *
+   * CURTA DE PROPOSITO. Taxonomia grande e preenchida no automatico pelo
+   * primeiro item que serve, e o relatorio que sai dela mente com confianca. Doze
+   * cabe numa tela sem rolagem e ainda obriga a pensar dois segundos.
+   *
+   * "Cliente nao respondeu" e "Engano ou spam" nao sao enchimento: sem eles, o
+   * atendente que nao tem o que marcar marca um motivo tecnico qualquer, e a
+   * contaminacao entra justamente nas linhas que se usaria para decidir.
+   */
+  async motivosEncerramento() {
+    const c = await this._carregar();
+    const lista = this._json(c["atendimento.motivos"], null);
+    // Lista invalida (JSON quebrado, vazia, so lixo) cai no padrao: fechar
+    // atendimento e obrigatorio na operacao, e uma configuracao ruim nao pode
+    // deixar a equipe sem nenhuma opcao para escolher.
+    if (!Array.isArray(lista)) return [...MOTIVOS_PADRAO];
+    const limpos = lista
+      .map((m) => String(m || "").trim())
+      .filter((m) => m.length > 0 && m.length <= 60)
+      // Sem duplicata: dois itens iguais viram duas fatias do mesmo assunto no
+      // relatorio, e ninguem consegue somar as duas de volta.
+      .filter((m, i, arr) => arr.indexOf(m) === i)
+      .slice(0, 30);
+    return limpos.length ? limpos : [...MOTIVOS_PADRAO];
+  }
+
+  /**
    * Meta diaria do painel de parede. `null` = sem meta definida.
    *
    * Devolver `null` (e nao um numero de conforto) e o que permite ao painel
@@ -301,3 +384,7 @@ class ConfiguracaoService {
 }
 
 module.exports = new ConfiguracaoService();
+// Constantes exportadas a parte: o engine grava os motivos automaticos e a tela
+// de configuracao precisa do padrao para oferecer "restaurar a lista original".
+module.exports.MOTIVOS_PADRAO = MOTIVOS_PADRAO;
+module.exports.MOTIVOS_AUTOMATICOS = MOTIVOS_AUTOMATICOS;
