@@ -293,8 +293,68 @@ class WhatsAppService {
       }, 15000);
     }
 
+    // AUTO-RECONEXAO: quando a Evolution sinaliza que a conexao caiu (state
+    // "close" ou "refused"), tentamos reconectar automaticamente. Isso cobre o
+    // bug de keep-alive do 2.4.0-rc2 e qualquer queda temporaria de rede entre
+    // a Evolution e os servidores do WhatsApp.
+    //
+    // Estrategia: backoff exponencial com 5 tentativas (10s, 20s, 40s, 80s,
+    // 160s). Se na tentativa a instancia ja voltou (outra via), abortamos.
+    // So tentamos se a instancia existia antes (evita loop em instancias novas
+    // ainda sem QR escaneado).
+    if (!conectado && (state === "close" || state === "refused") && eraConectado) {
+      logger.warn("Conexao WhatsApp perdida -- iniciando auto-reconexao", {
+        instance: instanceName,
+        state,
+      });
+      this._agendarReconexao(instanceName, 1);
+    }
+
     return { recebido: true, evento: "connection.update", conectado, state };
   }
+
+  // Agenda uma tentativa de reconexao com backoff exponencial.
+  // `tentativa` começa em 1; espera = tentativa * 10 segundos.
+  _agendarReconexao(instanceName, tentativa) {
+    const MAX_TENTATIVAS = 5;
+    if (tentativa > MAX_TENTATIVAS) {
+      logger.error("Auto-reconexao desistiu apos tentativas maximas", {
+        instance: instanceName,
+        tentativas: MAX_TENTATIVAS,
+      });
+      return;
+    }
+
+    const esperaMs = tentativa * 10_000; // 10s, 20s, 40s... (linear simples)
+    logger.info(`Auto-reconexao tentativa ${tentativa}/${MAX_TENTATIVAS} em ${esperaMs / 1000}s`, {
+      instance: instanceName,
+    });
+
+    setTimeout(async () => {
+      try {
+        // Verifica se ja voltou por conta propria antes de forcar
+        const estadoAtual = await evolutionApi.getConnectionState(instanceName);
+        const estadoStr = estadoAtual?.instance?.state || estadoAtual?.state || "close";
+        if (estadoStr === "open") {
+          logger.info("Auto-reconexao: instancia ja voltou sozinha", { instance: instanceName });
+          return;
+        }
+
+        logger.info(`Auto-reconexao: chamando connect() (tentativa ${tentativa})`, {
+          instance: instanceName,
+        });
+        await evolutionApi.connect(instanceName);
+      } catch (err) {
+        logger.warn(`Auto-reconexao tentativa ${tentativa} falhou`, {
+          instance: instanceName,
+          message: err.message,
+        });
+        // Agenda proxima tentativa (backoff)
+        this._agendarReconexao(instanceName, tentativa + 1);
+      }
+    }, esperaMs);
+  }
+
 
   // ACK de entrega/leitura das mensagens que NOS enviamos. A Evolution manda o
   // status em maiusculas (Baileys); traduzimos para o vocabulario da UI.
