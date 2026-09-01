@@ -1754,7 +1754,7 @@ function PainelChat({
   conversa, parceiros,
   texto, setTexto, scrollRef, onEnviar, onEnviarMidia, onFechar, onPendente, onReabrir,
   onMarcarLido, onSolicitarCnpj, onValidarCnpjModal,
-  onExecutarFluxo, fluxoSugerido, onVoltar, atendente, onTransferir,
+  onVoltar, atendente, onTransferir,
   onEditar, onEncaminharPara, conversas, onAtender,
   assinar, onToggleAssinar, assinaturaNome, onApagarMensagem
 }) {
@@ -2323,21 +2323,7 @@ function PainelChat({
         </div>
       )}
 
-      {fluxoSugerido && (
-        <div className="mx-4 mb-2 p-3 rounded-xl bg-acao/10 border border-acao/30 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <EmojiIcon name="lightning" label="" size="sm" />
-            <div>
-              <div className="text-xs font-bold text-white">Executar: {fluxoSugerido.nome}</div>
-              <div className="text-[11px] text-slate-400">Gatilho "{fluxoSugerido.gatilho}" identificado.</div>
-            </div>
-          </div>
-          <button onClick={() => onExecutarFluxo(fluxoSugerido)}
-            className="px-3 py-1.5 rounded-lg bg-acao text-slate-950 text-xs font-bold flex items-center gap-1 hover:bg-acao-200 transition-colors shadow-sm">
-            <Play size={12} /> Disparar
-          </button>
-        </div>
-      )}
+
 
       {/* Respondendo a uma mensagem (citação) */}
       {respondendoA && (
@@ -3272,7 +3258,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     if (!final) return;
     // Otimista: mostra a mensagem da equipe na hora (ja assinada).
     setConversas(prev => prev.map(c =>
-      c.id === id ? { ...c, mensagens: [...c.mensagens, { de: 'equipe', texto: final, hora: horaAgora() }] } : c
+      c.id === id ? { ...c, mensagens: [...c.mensagens, { de: 'equipe', texto: final, hora: horaAgora(), respondendoAId }] } : c
     ));
     setTexto('');
     // O back-end persiste, detecta CNPJ e devolve a conversa completa.
@@ -3283,14 +3269,14 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       // acha que respondeu. O texto volta para a caixa, para não se perder.
       setConversas(prev => prev.map(c => {
         if (c.id !== id) return c;
-        const i = c.mensagens.findIndex(m => !m.id && m.de === 'equipe' && m.texto === final);
+        const i = c.mensagens.findIndex(m => !m.id && m.de === 'equipe' && m.texto === final && m.respondendoAId === respondendoAId);
         if (i < 0) return c;
         return { ...c, mensagens: c.mensagens.filter((_, k) => k !== i) };
       }));
       setTexto(txt);
       window.alert('A mensagem NÃO foi enviada: ' + (e?.message || 'erro desconhecido'));
     }
-  }, [conversa, setConversas, setTexto, aplicarConversa, assinar, assinaturaNome]);
+  }, [conversa, setConversas, setTexto, aplicarConversa, assinar, assinaturaNome, respondendoAId]);
 
   // Envio de mídia com progresso/cancelamento. Devolve { promise, cancel } para
   // o PainelChat controlar a barra e o botão de cancelar. A conversa atualizada
@@ -3327,27 +3313,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     }
   }, [inputCnpj, conversa, aplicarConversa]);
 
-  const executarFluxo = useCallback(async (fluxo) => {
-    if (!conversa || !fluxo) return;
-    const id = conversa.id;
-    const textos = fluxo.passos
-      .filter(p => p.tipo === 'mensagem' || p.tipo === 'acao')
-      .map(p => `[🤖 ${p.titulo}]: ${p.desc || p.texto || ''}`);
-    try {
-      let atualizada = null;
-      for (const t of textos) atualizada = await ConversasAPI.enviarMensagem(id, t);
-      if (atualizada) aplicarConversa(atualizada);
-    } catch (e) {
-      // Idem: sem servidor, nenhuma dessas mensagens chegou ao cliente.
-      window.alert('O fluxo não foi executado: ' + (e?.message || 'erro desconhecido'));
-    }
-  }, [conversa, aplicarConversa]);
 
-  const fluxoSugerido = conversa
-    ? fluxos.find(f => f.ativo && conversa.mensagens.some(m =>
-        m.de === 'cliente' && m.texto.toLowerCase().includes(f.gatilho)
-      ))
-    : null;
 
   const chatAberto = !!conversa;
 
@@ -3642,8 +3608,6 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               onMarcarLido={marcarComoLido}
               onSolicitarCnpj={solicitarCnpjBot}
               onValidarCnpjModal={() => setModalCnpj(true)}
-              onExecutarFluxo={executarFluxo}
-              fluxoSugerido={fluxoSugerido}
               onVoltar={() => setSelecionada(null)}
               atendente={atendenteDaConversa(conversa)}
               onTransferir={() => setTransferindo(conversa)}
