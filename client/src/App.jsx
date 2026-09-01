@@ -45,6 +45,18 @@ export default function App() {
           {/* Painel: tudo daqui para baixo exige sessao. */}
           <Route element={<RotaProtegida />}>
             <Route path="/" element={<Navigate to="/atendimento" replace />} />
+
+            {/* PAINEL DE PAREDE -- FORA do AppLayout, e de proposito.
+                
+                Ele roda numa TV dedicada, sem teclado e sem mouse: nao ha para
+                onde navegar, entao a barra lateral so rouba 17rem de largura de
+                uma tela que existe para ser lida de longe. Continua atras do
+                portao de sessao e do gate de modulo -- o que sai e a moldura,
+                nao a protecao. */}
+            <Route element={<RotaModulo />}>
+              <Route path="/painel" element={<PainelPage />} />
+            </Route>
+
             <Route element={<AppLayout />}>
               {/* Acesso por modulo, dirigido pela matriz de permissoes.
                   RotaModulo guarda no front; o servidor barra de verdade. */}
@@ -58,7 +70,6 @@ export default function App() {
                 <Route path="/mensagens"   element={<MensagensPage />} />
                 <Route path="/massa"       element={<MassaPage />} />
                 <Route path="/dashboard"   element={<DashboardPage />} />
-                <Route path="/painel"      element={<PainelPage />} />
                 <Route path="/fluxos"      element={<FluxosPage />} />
                 <Route path="/whatsapp"    element={<WhatsAppPage />} />
                 <Route path="/configuracoes" element={<ConfiguracoesPage />} />

@@ -23,7 +23,8 @@
  * ninguem liderar por causa de uma unica estrela solta.
  */
 import { useEffect, useState, useCallback } from 'react';
-import { Trophy, Star, Clock, Users, Inbox, Target, Maximize2, WifiOff } from 'lucide-react';
+import { Trophy, Star, Clock, Users, Inbox, Target, Maximize2, WifiOff, ArrowLeft } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { DashboardAPI } from '../../services/api';
 
 const ATUALIZAR_MS = 30_000;
@@ -172,11 +173,24 @@ export default function PainelParede() {
           <span className="font-display font-bold text-white text-3xl xl:text-4xl tabular-nums leading-none">
             {agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
           </span>
+          {/* OS DOIS UNICOS CONTROLES DA TELA, e ambos discretos de proposito.
+              
+              A TV nao tem mouse, entao eles nunca serao usados la -- existem
+              para quem abre o painel num computador. A volta e obrigatoria:
+              sem a barra lateral, esta rota seria um beco sem saida, e a unica
+              saida seria digitar outra URL. */}
+          <Link
+            to="/dashboard"
+            title="Voltar ao painel de gestão"
+            className="p-2 rounded-xl border border-linha text-slate-500 hover:text-white hover:border-linha-forte transition-colors"
+          >
+            <ArrowLeft size={16} />
+          </Link>
           <button
             type="button"
             onClick={() => document.documentElement.requestFullscreen?.()}
             title="Tela cheia"
-            className="p-2 rounded-xl border border-linha text-slate-400 hover:text-white hover:border-linha-forte transition-colors"
+            className="p-2 rounded-xl border border-linha text-slate-500 hover:text-white hover:border-linha-forte transition-colors"
           >
             <Maximize2 size={16} />
           </button>
