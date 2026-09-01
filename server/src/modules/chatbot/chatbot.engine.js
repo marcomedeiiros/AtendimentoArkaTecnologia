@@ -3660,11 +3660,6 @@ class ChatbotEngine {
       };
     }
 
-    // Midia nao dispara o fluxo do bot: registramos e notificamos o atendente.
-    if (ehMidia) {
-      return { processado: true, motivo: "midia_recebida", conversaId: conversa.id };
-    }
-
     // ── FORA DO HORARIO DE ATENDIMENTO ───────────────────────────────────────
     //
     // O bot nao inicia fluxo nenhum, avisa o cliente e PRESERVA o atendimento na
@@ -3676,6 +3671,15 @@ class ChatbotEngine {
     // Vale so para conversa nova/parada: quem ja esta no meio de um menu, de uma
     // resposta livre ou da pesquisa continua, para o expediente virar sem
     // abandonar o cliente na metade do caminho.
+    //
+    // ── ESTA CHECAGEM PASSOU A VIR ANTES DA MIDIA ───────────────────────────
+    //
+    // O `return` de "midia_recebida" ficava ACIMA daqui, e nao e uma ordem
+    // inocente: uma foto do erro as 22h -- que e como metade dos chamados de
+    // suporte comeca -- saia deste metodo antes de a regra de expediente ser
+    // sequer lida. O cliente mandava o print e recebia silencio absoluto, e o
+    // mesmo cliente mandando "meu sistema travou" em texto recebia o aviso. O
+    // expediente e da EMPRESA, nao do formato da mensagem.
     const horario = await this.deps.configuracaoService.horarioAtendimento();
     if (this.foraDoHorario(horario)) {
       const sessaoEmCurso = await this.deps.sessaoRepository.findByTelefone(instanciaId, telefone);
@@ -3691,7 +3695,17 @@ class ChatbotEngine {
           AGUARDANDO.AVALIACAO_NOTA,
           AGUARDANDO.AVALIACAO_COMENTARIO,
         ].includes(sessaoEmCurso.aguardando);
-      if (!emCurso) {
+      // ── E QUEM JA ESTA COM UMA PESSOA TAMBEM NAO E "CONVERSA PARADA" ──────
+      //
+      // `statusAtendimento: "aberta"` quer dizer que um atendente assumiu e esta
+      // ali. Sem esta linha, o plantao das 19h virava o pior dos mundos: o
+      // atendente respondia, o cliente respondia de volta, e o bot atropelava a
+      // conversa com "estamos fora do horario" -- e pior, `transferirParaHumano`
+      // logo abaixo devolvia a conversa para Pendentes, tirando da tela de quem
+      // estava atendendo. O guard de `aberta` que existe mais abaixo nunca era
+      // alcancado, porque este bloco retorna antes dele.
+      const comAtendente = conversa.statusAtendimento === "aberta";
+      if (!emCurso && !comAtendente) {
         // ── O AVISO NAO SE REPETE A CADA MENSAGEM ──────────────────────────
         //
         // Aqui a mensagem saia SEMPRE. Depois do primeiro aviso a sessao fica em
@@ -3738,6 +3752,12 @@ class ChatbotEngine {
           }
         );
       }
+    }
+
+    // Midia nao dispara o fluxo do bot: registramos e notificamos o atendente.
+    // (Dentro do expediente. Fora dele, o aviso ja saiu no bloco acima.)
+    if (ehMidia) {
+      return { processado: true, motivo: "midia_recebida", conversaId: conversa.id };
     }
 
     // Atendente humano assumiu: o bot nao interfere.

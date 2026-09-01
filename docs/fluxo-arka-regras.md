@@ -321,10 +321,25 @@ própria em Configurações. Interpretada por
   horários à mão;
 - o aviso **não se repete** a cada mensagem (`reavisarAposMin`, padrão 2 h).
 
+A regra nasce **desligada** (`chatbot.horario` vazio = atende a qualquer hora).
+Enquanto ela estiver assim, nenhum aviso de "fora do horário" sai — é a primeira
+coisa a conferir quando o relato for "o cliente escreveu de madrugada e não
+recebeu nada". `node diagnosticar-instalacao.js` responde isso em uma linha.
+
 Fora do horário o bot não inicia fluxo nenhum: avisa e **preserva** o atendimento
 em Pendentes — a estrutura que a Central já usa para "chegou e ninguém assumiu".
 Quem já está no meio de um menu, de uma resposta livre ou da pesquisa **continua**,
 para o expediente virar sem abandonar o cliente na metade.
+
+Duas fronteiras dessa regra, e as duas custaram um defeito:
+
+- vale para **mídia também**. O `return` de "mídia recebida" ficava antes da
+  checagem, e uma foto do erro às 22 h — como metade dos chamados começa — saía do
+  motor sem que o expediente fosse lido: o mesmo cliente recebia o aviso ao
+  escrever e silêncio ao mandar o print;
+- **não** vale para conversa com atendente (`statusAtendimento: "aberta"`). No
+  plantão das 19 h o bot atropelava a conversa com "estamos fora do horário" e o
+  handoff a devolvia para Pendentes, tirando-a da tela de quem estava atendendo.
 
 Configuração ilegível (hora fora de formato, fuso inexistente, JSON quebrado)
 devolve "estamos **dentro** do expediente": na dúvida, atender.

@@ -869,6 +869,70 @@ function conferirUmaPerguntaPorTurno(rotulo, r) {
     "a marca do aviso nao ficou na sessao: sem ela o aviso repete a cada mensagem"
   );
 
+  // ── UMA FOTO ÀS 22H TAMBÉM É UM CLIENTE ESPERANDO ──────────────────────────
+  //
+  // O `return` de "midia_recebida" ficava ANTES da regra de expediente. Não é
+  // uma ordem inocente: metade dos chamados de suporte começa com o print do
+  // erro, e essa foto saía do motor antes de o horário ser sequer lido. O mesmo
+  // cliente, na mesma hora, recebia o aviso se escrevesse "meu sistema travou" e
+  // recebia SILÊNCIO se mandasse a tela travada. O expediente é da empresa, não
+  // do formato da mensagem.
+  //
+  // A marca é zerada porque `deveAvisar` já viu um aviso há segundos: sem isto o
+  // teste mediria a não-repetição (que a checagem acima já cobre), e não o
+  // caminho da mídia.
+  sessaoF.contexto = { ...(sessaoF.contexto || {}), foraHorarioEm: null };
+  const antesDaFoto = enviadasFora.length;
+  const rFoto = await engineF.processarMensagemEntrada({
+    instanciaId: "i", instanceName: "arka", telefone: conversaF.telefone,
+    texto: "", nomeCliente: "David", waMessageId: "wa-foto",
+    midia: { tipo: "imagem", mimetype: "image/jpeg" },
+  });
+  const avisoDaFoto = enviadasFora.slice(antesDaFoto);
+  const okFoto =
+    check(
+      avisoDaFoto.length === 1,
+      `foto fora do horario deveria receber o mesmo aviso, saiu ${avisoDaFoto.length} mensagem(ns) do bot`
+    ) &
+    check(
+      /fora do horário/i.test(avisoDaFoto[0] || ""),
+      `o aviso da foto nao identifica o motivo: ${avisoDaFoto[0]}`
+    ) &
+    check(
+      rFoto?.motivo === "fora_do_horario",
+      `foto fora do horario deveria ser tratada como fora do horario, veio ${rFoto?.motivo}`
+    );
+  console.log(`  ${okFoto ? "OK   " : "FALHA"} foto fora do horario recebe o mesmo aviso que o texto`);
+
+  // ── QUEM JÁ ESTÁ COM UMA PESSOA NÃO LEVA O AVISO NA CARA ───────────────────
+  //
+  // O plantão das 19h era o pior dos mundos: o atendente respondia, o cliente
+  // respondia de volta, e o bot atropelava a conversa com "estamos fora do
+  // horário" -- e pior, o handoff logo abaixo devolvia a conversa para Pendentes,
+  // tirando-a da tela de quem estava atendendo. O guard de `aberta` que existe
+  // mais adiante no motor nunca era alcançado, porque este bloco retorna antes.
+  sessaoF.contexto = { ...(sessaoF.contexto || {}), foraHorarioEm: null };
+  conversaF.statusAtendimento = "aberta";
+  const antesDoAtendente = enviadasFora.length;
+  const rAberta = await receber("Obrigado, era isso mesmo", "wa-aberta");
+  const okAberta =
+    check(
+      enviadasFora.length === antesDoAtendente,
+      `conversa em atendimento humano recebeu ${enviadasFora.length - antesDoAtendente} aviso(s) de fora do horario`
+    ) &
+    check(
+      rAberta?.motivo === "atendimento_humano",
+      `com atendente na conversa o motivo deveria ser atendimento_humano, veio ${rAberta?.motivo}`
+    ) &
+    check(
+      conversaF.statusAtendimento === "aberta",
+      `o bot devolveu para Pendentes uma conversa que um atendente conduzia (status=${conversaF.statusAtendimento})`
+    );
+  console.log(
+    `  ${okAberta ? "OK   " : "FALHA"} conversa com atendente nao e interrompida nem volta para Pendentes`
+  );
+  conversaF.statusAtendimento = "pendente";
+
   // Trocado o expediente, o MESMO fluxo passa a atender: a regra e da
   // configuracao, e nao do desenho.
   foraCfg.ativo = false;

@@ -201,7 +201,14 @@ function titulo(t) {
     const h = await cfgSvc.horarioAtendimento();
     const mod = require("./src/modules/chatbot/chatbot.horario");
     if (!h.ativo) {
+      // ISTO PARECE INFORMACAO E E DIAGNOSTICO. "O cliente manda mensagem de
+      // madrugada e nao recebe aviso nenhum" chega como defeito do bot, e a
+      // resposta quase sempre e esta linha: a regra nunca foi ligada nesta
+      // instalacao (o padrao e vazio, ou seja, atende sempre). Dizer onde se
+      // liga economiza a investigacao inteira.
       console.log("  regra DESLIGADA -- o bot atende a qualquer hora (padrão do sistema)");
+      console.log("    nenhum aviso de \"fora do horário\" sai enquanto ela estiver assim.");
+      console.log("    para ligar: Configurações -> Horário de atendimento -> \"Regra ativa\".");
     } else if (!mod.temAlgumPeriodo(h)) {
       console.log("  regra ATIVA mas sem nenhum período legível");
       problemas.push("o horário está ativo e sem período válido: o bot considera a empresa sempre fechada");
