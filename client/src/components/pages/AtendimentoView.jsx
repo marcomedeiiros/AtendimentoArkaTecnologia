@@ -28,6 +28,10 @@ import { useAuth } from '../../context/AuthContext';
 import { ConversasAPI, ContatosAPI } from '../../services/api';
 import { usePreferencia } from '../../hooks/usePreferencia';
 import { contatoCombina, normalizarBusca, telefoneComparavel } from '../../utils/busca';
+// CPF ou CNPJ: a validacao e a mascara vivem em utils/documento -- estavam
+// duplicadas aqui e em ParceirosPage, com as mesmas regras copiadas, e a
+// mudanca para aceitar CPF teria de ser feita duas vezes.
+import { limparDocumento, mascararDocumento, documentoValido } from '../../utils/documento';
 import { FUSO_BR } from '../../utils/data';
 import { mesclarConversa, registrarApagada, desfazerApagada } from '../../utils/mesclarConversa';
 import { formatarComAssinatura, formatarLegendaComAssinatura, separarAssinatura, juntarAssinatura } from '../../utils/assinatura';
@@ -205,8 +209,8 @@ const SEM_SETOR = {
  */
 function empresaDaConversa(c, parceiros = []) {
   if (!c?.cnpjVerificado) return null;
-  const digitos = limparCnpj(c.cnpj);
-  const parceiro = digitos ? parceiros.find(p => limparCnpj(p.cnpj) === digitos) : null;
+  const digitos = limparDocumento(c.cnpj);
+  const parceiro = digitos ? parceiros.find(p => limparDocumento(p.cnpj) === digitos) : null;
   return parceiro?.razaoSocial || c.empresa || null;
 }
 
@@ -288,8 +292,8 @@ function tipoDoCliente(c, parceiros = []) {
   if (c?.atendimentoAvulso) return 'avulso';
 
   if (c?.cnpjVerificado) {
-    const digitos = limparCnpj(c?.cnpj);
-    const parceiro = digitos ? parceiros.find(p => limparCnpj(p.cnpj) === digitos) : null;
+    const digitos = limparDocumento(c?.cnpj);
+    const parceiro = digitos ? parceiros.find(p => limparDocumento(p.cnpj) === digitos) : null;
     return parceiro?.status === 'ativo' ? 'cadastrado' : 'avulso';
   }
   // Sem CNPJ verificado, vale o que foi CLASSIFICADO -- é o caminho do fluxo que
@@ -394,8 +398,6 @@ const SETORES_ATENDIMENTO = [
   { id: 'Comercial',  desc: 'Orçamento, proposta, novo contrato.' },
 ];
 
-function limparCnpj(v) { return String(v || '').replace(/\D/g, ''); }
-
 // "27999990000" -> "(27) 99999-0000". Só visual: o que vai para a API é o
 // numero cru, e quem normaliza DDI/DDD e o servidor.
 function mascararTelefone(v) {
@@ -410,28 +412,6 @@ function mascararTelefone(v) {
   return d
     .replace(/^(\d{2})(\d)/, '($1) $2')
     .replace(/(\d{4,5})(\d{4})$/, '$1-$2');
-}
-function mascararCnpj(v) {
-  const c = limparCnpj(v).slice(0, 14);
-  return c
-    .replace(/^(\d{2})(\d)/, '$1.$2')
-    .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
-    .replace(/\.(\d{3})(\d)/, '.$1/$2')
-    .replace(/(\d{4})(\d)/, '$1-$2');
-}
-function cnpjValido(v) {
-  const c = limparCnpj(v);
-  if (c.length !== 14) return false;
-  if (/^(\d)\1{13}$/.test(c)) return false;
-  const calc = (base, pesos) => {
-    const soma = pesos.reduce((acc, p, i) => acc + Number(base[i]) * p, 0);
-    const resto = soma % 11;
-    return resto < 2 ? 0 : 11 - resto;
-  };
-  const p1 = [5,4,3,2,9,8,7,6,5,4,3,2], p2 = [6,5,4,3,2,9,8,7,6,5,4,3,2];
-  const d1 = calc(c.slice(0,12), p1);
-  const d2 = calc(c.slice(0,12)+d1, p2);
-  return c === c.slice(0,12)+String(d1)+String(d2);
 }
 function horaAgora() {
   return new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: FUSO_BR });
@@ -3041,8 +3021,8 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     const contato = contatoPorTelefone.get(telefoneComparavel(c.telefone));
     return normalizarBusca(c.cliente).includes(q) ||
            (!!qTel && telefoneComparavel(c.telefone).includes(qTel)) ||
-           (qDigitos && limparCnpj(c.cnpj).includes(qDigitos)) ||
-           (c.cnpj && mascararCnpj(c.cnpj).toLowerCase().includes(q)) ||
+           (qDigitos && limparDocumento(c.cnpj).includes(qDigitos)) ||
+           (c.cnpj && mascararDocumento(c.cnpj).toLowerCase().includes(q)) ||
            (!!contato && contatoCombina(contato, busca)) ||
            c.mensagens.some(m => normalizarBusca(m.texto).includes(q));
   };
@@ -3601,8 +3581,8 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   }, [conversa, aplicarConversa]);
 
   const validarCnpjManual = useCallback(async () => {
-    const c = limparCnpj(inputCnpj);
-    if (!cnpjValido(c)) { alert('CNPJ inválido!'); return; }
+    const c = limparDocumento(inputCnpj);
+    if (!documentoValido(c)) { alert('CPF ou CNPJ inválido!'); return; }
     const id = conversa.id;
     setInputCnpj('');
     setModalCnpj(false);
@@ -3984,7 +3964,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
             <p className="text-xs text-slate-400">Insira o CNPJ para pesquisar o status do parceiro.</p>
             <input
               value={inputCnpj}
-              onChange={e => setInputCnpj(mascararCnpj(e.target.value))}
+              onChange={e => setInputCnpj(mascararDocumento(e.target.value))}
               placeholder="00.000.000/0000-00"
               className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder-slate-500 focus:outline-none focus:border-acao/50"
             />

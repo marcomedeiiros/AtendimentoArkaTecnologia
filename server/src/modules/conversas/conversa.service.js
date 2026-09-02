@@ -8,7 +8,7 @@ const fotos = require("./conversa.fotos");
 const { mapConversa, mapAtendimento } = require("../../shared/helpers/mapper.helper");
 // `mascararCnpj` saiu daqui: nenhuma mensagem deste service imprime mais os 14
 // digitos -- o que confirma a identificacao e a razao social.
-const { limparCnpj, cnpjValido, normalizarTelefoneBr } = require("../../shared/helpers/cnpj.helper");
+const { limparCnpj, documentoValido, normalizarTelefoneBr } = require("../../shared/helpers/cnpj.helper");
 const {
   normalizarSetor,
   podeAcessarSetor,
@@ -396,7 +396,7 @@ class ConversaService {
     // que le `conversa.empresa`.
     const cnpjNumeros = limparCnpj(texto);
 
-    if (cnpjNumeros.length === 14 && !conversa.cnpjVerificado && cnpjValido(cnpjNumeros)) {
+    if (!conversa.cnpjVerificado && documentoValido(cnpjNumeros)) {
       const parceiro = await parceiroRepository.findAtivoByCnpj(cnpjNumeros);
       // `empresa` e o que a Central passa a exibir no lugar do numero. Fica
       // gravado aqui (e nao resolvido a cada leitura) para a identificacao
@@ -920,8 +920,8 @@ class ConversaService {
     exigirAcessoSetor(userCargo, conversa.setor);
 
     const cnpjLimpo = limparCnpj(cnpj);
-    if (!cnpjValido(cnpjLimpo)) {
-      throw new AppError("CNPJ invalido", 400, "INVALID_CNPJ");
+    if (!documentoValido(cnpjLimpo)) {
+      throw new AppError("CPF ou CNPJ invalido", 400, "INVALID_CNPJ");
     }
 
     const parceiro = await parceiroRepository.findAtivoByCnpj(cnpjLimpo);

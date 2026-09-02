@@ -73,7 +73,9 @@ const atualizarStatusSchema = z.object({
 });
 
 const validarCnpjSchema = z.object({
-  cnpj: z.string().min(14),
+  // 11 = CPF sem pontuacao. Peneira grossa contra campo vazio; quem valida de
+  // verdade e `documentoValido` no servico -- ver parceiro.dto.js.
+  cnpj: z.string().min(11),
 });
 
 const atualizarFlagsSchema = z

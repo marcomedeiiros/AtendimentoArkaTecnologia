@@ -3,6 +3,10 @@ import { Plus, Trash2, Search, Building2, Mail, Phone, MapPin, Pencil, X, Loader
 import { useAppContext } from '../context/AppContext';
 import { ParceirosAPI } from '../services/api';
 import { confirmar } from '../utils/dialogo';
+// CPF ou CNPJ: a validacao e a mascara vivem em utils/documento -- estavam
+// duplicadas aqui e em AtendimentoView, com as mesmas regras copiadas, e a mudanca
+// para aceitar CPF teria de ser feita duas vezes.
+import { limparDocumento, mascararDocumento, documentoValido } from '../utils/documento';
 
 // Tipos de contrato oferecidos ao cliente. `chave` casa com o backend
 // (parceiro.dto.js); `label` e o que aparece na tela.
@@ -42,32 +46,6 @@ function ContratosSelect({ valor, onChange }) {
   );
 }
 
-function limparCnpj(v) { return String(v || '').replace(/\D/g, ''); }
-
-function mascararCnpj(v) {
-  const c = limparCnpj(v).slice(0, 14);
-  return c
-    .replace(/^(\d{2})(\d)/,             '$1.$2')
-    .replace(/^(\d{2})\.(\d{3})(\d)/,    '$1.$2.$3')
-    .replace(/\.(\d{3})(\d)/,            '.$1/$2')
-    .replace(/(\d{4})(\d)/,              '$1-$2');
-}
-
-function cnpjValido(v) {
-  const c = limparCnpj(v);
-  if (c.length !== 14) return false;
-  if (/^(\d)\1{13}$/.test(c)) return false;
-  const calc = (base, pesos) => {
-    const soma = pesos.reduce((acc, p, i) => acc + Number(base[i]) * p, 0);
-    const resto = soma % 11;
-    return resto < 2 ? 0 : 11 - resto;
-  };
-  const p1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
-  const p2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
-  const d1 = calc(c.slice(0, 12), p1);
-  const d2 = calc(c.slice(0, 12) + d1, p2);
-  return c === c.slice(0, 12) + String(d1) + String(d2);
-}
 
 export default function ParceirosPage() {
   const { parceiros, atualizarParceiros } = useAppContext();
@@ -129,8 +107,8 @@ export default function ParceirosPage() {
   }
 
   async function adicionar() {
-    const c = limparCnpj(cnpjInput);
-    if (!cnpjValido(c)) { setErro('CNPJ inválido confira os números.'); return; }
+    const c = limparDocumento(cnpjInput);
+    if (!documentoValido(c)) { setErro('CPF ou CNPJ inválido — confira os números.'); return; }
     if (!nome.trim()) { setErro('Informe a razão social.'); return; }
     setErro('');
 
@@ -185,7 +163,7 @@ export default function ParceirosPage() {
     }
     if (!busca.trim()) return true;
     const term = busca.toLowerCase().trim();
-    const cnpjDigits = limparCnpj(busca);
+    const cnpjDigits = limparDocumento(busca);
     const matchNome = (p.razaoSocial || '').toLowerCase().includes(term);
     const matchCnpj = cnpjDigits ? (p.cnpj || '').includes(cnpjDigits) : false;
     const matchEmail = (p.email || '').toLowerCase().includes(term);
@@ -203,7 +181,7 @@ export default function ParceirosPage() {
     <div className="fade-in space-y-6 baixa:lg:space-y-4">
       <div className="mb-8 baixa:lg:mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-linha">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight font-display">Cadastro de Clientes (CNPJ)</h1>
+          <h1 className="text-2xl font-bold text-white tracking-tight font-display">Cadastro de Clientes</h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-1">Cadastro oficial de parceiros com dados de e-mail, telefones e cidades atendidas.</p>
         </div>
       </div>
@@ -212,8 +190,8 @@ export default function ParceirosPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <input
             value={cnpjInput}
-            onChange={e => { setCnpjInput(mascararCnpj(e.target.value)); setErro(''); }}
-            placeholder="CNPJ (00.000.000/0000-00)"
+            onChange={e => { setCnpjInput(mascararDocumento(e.target.value)); setErro(''); }}
+            placeholder="CPF ou CNPJ"
             className="bg-grafite-700 border border-linha rounded-xl px-3.5 py-2 text-xs text-white font-mono placeholder-slate-500 focus:outline-none focus:border-acao/50"
           />
           <input
@@ -265,7 +243,7 @@ export default function ParceirosPage() {
         <input
           value={busca}
           onChange={e => setBusca(e.target.value)}
-          placeholder="Pesquisar por Nome, CNPJ, E-mail ou Cidade..."
+          placeholder="Pesquisar por Nome, CPF/CNPJ, E-mail ou Cidade..."
           className="w-full bg-grafite-700 border border-linha rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50"
         />
       </div>
@@ -309,7 +287,7 @@ export default function ParceirosPage() {
               </div>
               <div className="min-w-0 space-y-1">
                 <div className="font-bold text-xs sm:text-sm text-white truncate">{p.razaoSocial}</div>
-                <div className="text-[11px] text-slate-400 font-mono">{mascararCnpj(p.cnpj)}</div>
+                <div className="text-[11px] text-slate-400 font-mono">{mascararDocumento(p.cnpj)}</div>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-400 pt-1">
                   {p.email && (
                     <span className="flex items-center gap-1">
@@ -435,9 +413,9 @@ export default function ParceirosPage() {
             </div>
 
             <div>
-              <label className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.14em] text-slate-400">CNPJ</label>
+              <label className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.14em] text-slate-400">CPF ou CNPJ</label>
               <div className="rounded-xl border border-linha bg-grafite-800/60 px-3.5 py-2 text-xs font-mono text-slate-400">
-                {mascararCnpj(editando.cnpj)}
+                {mascararDocumento(editando.cnpj)}
               </div>
             </div>
 

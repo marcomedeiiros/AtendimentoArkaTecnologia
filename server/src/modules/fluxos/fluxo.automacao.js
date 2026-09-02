@@ -33,19 +33,19 @@ const PADROES = {
     // seguir o atendimento como cliente avulso.
     aoEsgotarTentativas: "transferir", // "transferir" | "avulso"
     mensagemInvalido:
-      "Hmm, o número informado parece estar incorreto. Poderia conferir o CNPJ e tentar novamente?",
+      "Hmm, o número informado parece estar incorreto. Poderia conferir o CPF ou CNPJ e tentar novamente?",
     mensagemUltimaTentativa:
-      "O número informado parece estar incorreto. Você tem mais uma tentativa: confira o CNPJ e envie novamente.",
+      "O número informado parece estar incorreto. Você tem mais uma tentativa: confira o CPF ou CNPJ do contrato e envie novamente.",
     mensagemNaoCadastrado:
-      "Não encontramos esse CNPJ em nossa lista de Clientes. Você será atendido como cliente avulso.",
+      "Não encontramos esse CPF/CNPJ em nossa lista de Clientes. Você será atendido como cliente avulso.",
     mensagemRespostaInvalida:
       "Hmm, não entendi o que você falou. Poderia repetir?",
     mensagemConfirmar:
-      "Vi que você já foi atendido por aqui. O atendimento continua sendo para esta empresa?\n\n🏢 {{empresa}}\n\nResponda *SIM* para confirmar ou *NÃO* para informar outro CNPJ.",
+      "Vi que você já foi atendido por aqui. O atendimento continua sendo para esta empresa?\n\n🏢 {{empresa}}\n\nResponda *SIM* para confirmar ou *NÃO* para informar outro.",
     mensagemConfirmarSemEmpresa:
-      "Vi que você já foi atendido por aqui. O CNPJ continua sendo este?\n\n📄 {{cnpj}}\n\nResponda *SIM* para confirmar ou *NÃO* para informar outro.",
+      "Vi que você já foi atendido por aqui. O documento continua sendo este?\n\n📄 {{cnpj}}\n\nResponda *SIM* para confirmar ou *NÃO* para informar outro.",
     mensagemPedirOutro:
-      "Sem problema. Por favor, informe o *CNPJ* (pode enviar com ou sem pontuação).",
+      "Sem problema. Por favor, informe o *CPF ou CNPJ* do contrato (pode enviar só os números).",
     // O QUE O CLIENTE OUVE QUANDO O CNPJ É RECONHECIDO -- por padrão, NADA.
     //
     // Aqui vivia "Cliente identificado: {razão social} - parceiro com contrato
@@ -348,7 +348,7 @@ function resumoAutomacoes(fluxo) {
   if (passoCnpj) {
     const cfg = paramsCnpj(passoCnpj);
     itens.push({
-      grupo: "Identificação por CNPJ",
+      grupo: "Identificação por CPF/CNPJ",
       passoId: passoCnpj.id,
       passoTitulo: passoCnpj.titulo,
       regras: [
@@ -357,11 +357,11 @@ function resumoAutomacoes(fluxo) {
           rotulo: "Ao esgotar as tentativas",
           valor: cfg.aoEsgotarTentativas === "avulso" ? "Seguir como cliente avulso" : "Transferir para atendente",
         },
-        { rotulo: "CNPJ inválido", valor: cfg.mensagemInvalido },
+        { rotulo: "CPF/CNPJ inválido", valor: cfg.mensagemInvalido },
         { rotulo: "Última tentativa", valor: cfg.mensagemUltimaTentativa },
-        { rotulo: "CNPJ válido, não cadastrado", valor: cfg.mensagemNaoCadastrado },
+        { rotulo: "Documento válido, não cadastrado", valor: cfg.mensagemNaoCadastrado },
         { rotulo: "Resposta fora do esperado", valor: cfg.mensagemRespostaInvalida },
-        { rotulo: "Confirmar CNPJ anterior", valor: cfg.memoria ? "Ligado" : "Desligado" },
+        { rotulo: "Confirmar documento anterior", valor: cfg.memoria ? "Ligado" : "Desligado" },
       ],
     });
   }

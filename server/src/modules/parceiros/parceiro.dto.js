@@ -12,7 +12,13 @@ const contratosSchema = z
   .nullable();
 
 const criarParceiroSchema = z.object({
-  cnpj: z.string().min(14),
+  // 11 = CPF sem pontuacao, que e o documento mais curto que o cadastro
+  // aceita. Este `min` e so uma peneira grossa contra campo vazio; QUEM VALIDA
+  // e o servico, com a conta dos digitos verificadores (`documentoValido`).
+  // Estava em 14 e por isso um CPF em digitos crus era recusado aqui, ANTES de
+  // chegar na validacao de verdade -- com uma mensagem de schema, e nao a
+  // mensagem que explica o que esta errado.
+  cnpj: z.string().min(11),
   razaoSocial: z.string().min(2),
   email: z.string().optional().nullable(),
   telefones: z.string().optional().nullable(),

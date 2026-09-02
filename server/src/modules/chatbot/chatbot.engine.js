@@ -6,7 +6,7 @@ const evolutionApi = require("../../infrastructure/external/evolution-api.client
 const mockErp = require("../../infrastructure/external/mock-erp.service");
 const {
   limparCnpj,
-  cnpjValido,
+  documentoValido,
   mascararCnpj,
   sleep,
   tipoClienteDaOpcaoEscolhida,
@@ -1763,7 +1763,11 @@ class ChatbotEngine {
       };
     }
 
-    if (cnpjLimpo.length !== 14 || !cnpjValido(cnpjLimpo)) {
+    // CPF OU CNPJ. O tamanho decide qual dos dois e (11 ou 14 digitos) e a
+    // conta dos digitos verificadores decide se vale -- ver `tipoDocumento`
+    // em cnpj.helper. Antes so 14 digitos passavam, e cliente pessoa fisica
+    // ficava preso neste passo ate esgotar as tentativas e cair como avulso.
+    if (!documentoValido(cnpjLimpo)) {
       return { valido: false, estado: "invalido", cnpj: cnpjLimpo, mensagem: cfg.mensagemInvalido };
     }
 
@@ -4123,7 +4127,7 @@ class ChatbotEngine {
       // Cliente ja mandou o CNPJ junto com a primeira mensagem.
       const cnpjNumeros = limparCnpj(textoLimpo);
       let cnpjValidacao = null;
-      if (cnpjNumeros.length === 14 && cnpjValido(cnpjNumeros) && !conversa.cnpjVerificado) {
+      if (documentoValido(cnpjNumeros) && !conversa.cnpjVerificado) {
         // Fora de fluxo nao ha passo: valem os padroes de fluxo.automacao.
         cnpjValidacao = await this.validarCnpjRecebido(conversa, textoLimpo);
         if (cnpjValidacao.mensagem) {

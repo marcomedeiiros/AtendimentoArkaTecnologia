@@ -3,7 +3,7 @@ const conversaRepository = require("../../infrastructure/repositories/conversa.r
 const logger = require("../../config/logger");
 const { mapParceiro } = require("../../shared/helpers/mapper.helper");
 const bus = require("../../shared/events/event-bus");
-const { limparCnpj, cnpjValido } = require("../../shared/helpers/cnpj.helper");
+const { limparCnpj, documentoValido } = require("../../shared/helpers/cnpj.helper");
 const { TIPOS_CONTRATO } = require("./parceiro.dto");
 const AppError = require("../../shared/errors/AppError");
 
@@ -49,8 +49,8 @@ class ParceiroService {
 
   async criar({ cnpj, razaoSocial, email, telefones, cidades, contratos, status = "ativo" }) {
     const cnpjLimpo = limparCnpj(cnpj);
-    if (!cnpjValido(cnpjLimpo)) {
-      throw new AppError("CNPJ invalido", 400, "INVALID_CNPJ");
+    if (!documentoValido(cnpjLimpo)) {
+      throw new AppError("CPF ou CNPJ invalido", 400, "INVALID_CNPJ");
     }
 
     const parceiro = await parceiroRepository.upsert(cnpjLimpo, {
@@ -68,8 +68,8 @@ class ParceiroService {
 
   async validar(cnpj) {
     const cnpjLimpo = limparCnpj(cnpj);
-    if (!cnpjValido(cnpjLimpo)) {
-      throw new AppError("CNPJ invalido", 400, "INVALID_CNPJ");
+    if (!documentoValido(cnpjLimpo)) {
+      throw new AppError("CPF ou CNPJ invalido", 400, "INVALID_CNPJ");
     }
 
     const parceiro = await parceiroRepository.findAtivoByCnpj(cnpjLimpo);

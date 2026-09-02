@@ -29,6 +29,65 @@ function cnpjValido(valor) {
   return c === c.slice(0, 12) + String(d1) + String(d2);
 }
 
+// ── CPF ENTROU AO LADO DO CNPJ ─────────────────────────────────────────────
+//
+// O contrato nem sempre esta no nome de uma empresa: cliente pessoa fisica tem
+// contrato igual, e ate aqui o bot so sabia pedir CNPJ -- quem tinha CPF ficava
+// preso no passo de identificacao ate esgotar as tentativas e cair como avulso.
+//
+// A distincao e pelo TAMANHO, que e a unica coisa que separa os dois formatos
+// no Brasil: 11 digitos e CPF, 14 e CNPJ. Nao ha ambiguidade -- nenhum CPF tem
+// 14 digitos e nenhum CNPJ tem 11 -- entao nao existe campo de "tipo" para o
+// cliente errar, nem para o cadastro guardar errado.
+//
+// O NOME DA COLUNA CONTINUA `cnpj`, e isso e divida assumida: `Parceiro.cnpj` e
+// CHAVE PRIMARIA, e renomear PK cascateia por schema, repositorio, DTO e pelo
+// `Conversa.cnpj` que a referencia por consulta. Guardar CPF numa coluna
+// chamada `cnpj` e feio; guardar seria pior se o codigo escondesse isso, entao
+// esta escrito aqui e as funcoes novas se chamam `documento`.
+function cpfValido(valor) {
+  const c = limparCnpj(valor);
+  if (c.length !== 11) return false;
+  // 111.111.111-11 e companhia passam na conta dos digitos verificadores e nao
+  // sao CPF de ninguem. Mesma armadilha que o `cnpjValido` acima ja cobre.
+  if (/^(\d)\1{10}$/.test(c)) return false;
+
+  const digito = (base, pesoInicial) => {
+    const soma = [...base].reduce((acc, n, i) => acc + Number(n) * (pesoInicial - i), 0);
+    const resto = (soma * 10) % 11;
+    return resto === 10 ? 0 : resto;
+  };
+
+  const d1 = digito(c.slice(0, 9), 10);
+  const d2 = digito(c.slice(0, 10), 11);
+  return c === c.slice(0, 9) + String(d1) + String(d2);
+}
+
+// "cpf" | "cnpj" | null -- null quando nao e nem um nem outro.
+function tipoDocumento(valor) {
+  const c = limparCnpj(valor);
+  if (c.length === 11) return cpfValido(c) ? "cpf" : null;
+  if (c.length === 14) return cnpjValido(c) ? "cnpj" : null;
+  return null;
+}
+
+function documentoValido(valor) {
+  return tipoDocumento(valor) !== null;
+}
+
+// Mascara de acordo com o que o numero E: 000.000.000-00 ou 00.000.000/0000-00.
+// Sem tamanho reconhecido, devolve so os digitos -- melhor um numero cru na
+// tela do que um numero pontuado no formato errado, que passa a impressao de
+// que o sistema entendeu uma coisa que ele nao entendeu.
+function mascararDocumento(valor) {
+  const c = limparCnpj(valor);
+  if (c.length === 11) {
+    return c.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4");
+  }
+  if (c.length === 14) return mascararCnpj(c);
+  return c;
+}
+
 function limparTelefone(valor) {
   return String(valor || "").replace(/\D/g, "");
 }
@@ -270,6 +329,11 @@ module.exports = {
   limparCnpj,
   mascararCnpj,
   cnpjValido,
+  // CPF ao lado do CNPJ -- ver o bloco "CPF ENTROU AO LADO DO CNPJ".
+  cpfValido,
+  tipoDocumento,
+  documentoValido,
+  mascararDocumento,
   limparTelefone,
   normalizarTelefoneBr,
   variantesTelefoneBr,
