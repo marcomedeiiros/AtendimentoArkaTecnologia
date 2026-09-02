@@ -13,6 +13,7 @@ import { exportarRelatorioPdf } from '../../utils/exportarPdf';
 import { hojeISO, FUSO_BR } from '../../utils/data';
 import HelpDeskPainel from './HelpDeskPainel';
 import RegistroConversas from './RegistroConversas';
+import { avisar } from '../../utils/dialogo';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -206,7 +207,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
           `${metricas.totalEquipe} operador(es) online e ${metricas.parceirosPeriodo} parceiro(s) ativo(s).`
       });
     } catch (e) {
-      window.alert('Não foi possível gerar o PDF: ' + e.message);
+      avisar('Não foi possível gerar o PDF: ' + e.message);
     } finally {
       setGerandoPdf(false);
     }

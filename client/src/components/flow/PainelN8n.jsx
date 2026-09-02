@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { N8nAPI } from '../../services/api';
 import { FUSO_BR } from '../../utils/data';
+import { confirmar, pedirTexto } from '../../utils/dialogo';
 
 function formatarData(iso) {
   if (!iso) return '-';
@@ -66,19 +67,30 @@ export default function PainelN8n() {
   }, []);
 
   const criar = async () => {
-    const nome = window.prompt('Nome do novo workflow no n8n:');
+    const nome = await pedirTexto('Como este workflow vai se chamar no n8n?', {
+      titulo: 'Novo workflow',
+      placeholder: 'Ex.: Triagem de chamados',
+      rotuloConfirmar: 'Criar',
+    });
     if (!nome?.trim()) return;
     await acao('novo', () => N8nAPI.criar(nome.trim()));
   };
 
   const renomear = async (w) => {
-    const nome = window.prompt('Novo nome:', w.nome);
+    const nome = await pedirTexto('Novo nome do workflow:', {
+      titulo: 'Renomear workflow',
+      valorInicial: w.nome,
+      rotuloConfirmar: 'Renomear',
+    });
     if (!nome?.trim() || nome === w.nome) return;
     await acao(w.id, () => N8nAPI.renomear(w.id, nome.trim()));
   };
 
   const excluir = async (w) => {
-    if (!window.confirm(`Excluir o workflow "${w.nome}" do n8n?\n\nEssa ação é feita no próprio n8n e não pode ser desfeita.`)) return;
+    if (!(await confirmar(
+      `Excluir o workflow "${w.nome}" do n8n?\n\nEssa ação é feita no próprio n8n e não pode ser desfeita.`,
+      { titulo: 'Excluir workflow', rotuloConfirmar: 'Excluir', perigo: true }
+    ))) return;
     await acao(w.id, () => N8nAPI.remover(w.id));
   };
 

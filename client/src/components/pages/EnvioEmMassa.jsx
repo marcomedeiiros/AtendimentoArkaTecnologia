@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { CampanhasAPI } from '../../services/api';
 import { FUSO_BR } from '../../utils/data';
+import { confirmar } from '../../utils/dialogo';
 
 
 // A campanha vive no SERVIDOR (tabela `campanhas`), nao mais no localStorage.
@@ -262,7 +263,10 @@ export default function EnvioEmMassa({ conversas = [] }) {
   // backend: fechar a aba NAO interrompe mais o envio.
   async function iniciarEnvio() {
     if (!mensagem.trim() || destinatarios.length === 0) return;
-    if (!window.confirm(`Enviar esta mensagem para ${destinatarios.length} destinatário(s) pelo WhatsApp?`)) return;
+    if (!(await confirmar(
+      `Enviar esta mensagem para ${destinatarios.length} destinatário(s) pelo WhatsApp?`,
+      { titulo: 'Confirmar envio em massa', rotuloConfirmar: 'Enviar agora' }
+    ))) return;
     setErroApi('');
     try {
       let id = campanhaId;
@@ -304,7 +308,12 @@ export default function EnvioEmMassa({ conversas = [] }) {
 
   async function pararEnvio() {
     if (!campanhaId) { resetar(); return; }
-    if (!window.confirm('Cancelar esta campanha? Os envios restantes não serão feitos.')) return;
+    if (!(await confirmar('Cancelar esta campanha? Os envios restantes não serão feitos.', {
+      titulo: 'Cancelar campanha',
+      rotuloConfirmar: 'Cancelar envios',
+      rotuloCancelar: 'Continuar enviando',
+      perigo: true,
+    }))) return;
     try {
       await CampanhasAPI.cancelar(campanhaId);
       setStatus('idle');

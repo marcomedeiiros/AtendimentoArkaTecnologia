@@ -172,32 +172,37 @@ titulo("4. Grade: colunas que sabem virar uma só");
 // Grades LIBERADAS, com o motivo. Não são descuido:
 //   calendário -> as 7 colunas SÃO os sete dias; com menos vira outra coisa
 //   emoji e miniaturas -> células minúsculas, cabem de sobra em 320px
-const GRADES_LIBERADAS = new Map([
-  ["components/pages/Agenda.jsx:173", "cabeçalho dom..sáb"],
-  ["components/pages/Agenda.jsx:178", "dias do mês"],
-  // A chave e arquivo:LINHA, entao ela ANDA quando alguem edita algo acima. Foi
-  // o que aconteceu aqui: o seletor de emoji nao mudou uma virgula, so desceu
-  // de 1556 para 1621 quando o cabecalho da conversa e o modal de
-  // transferencia cresceram -- e depois SUBIU para 1544, quando o painel de TV
-  // saiu deste arquivo e virou components/ModoTv.jsx (218 linhas a menos acima
-  // dele). Se este teste acusar uma grade que voce nao escreveu, confira
-  // primeiro se e so a linha que mudou.
-  ["components/pages/AtendimentoView.jsx:1544", "seletor de emoji"],
-  ["components/ReportarBug.jsx:237", "miniaturas dos anexos"],
-  // MEDIDO, não presumido: reproduzido com o CSS compilado numa tela de 320px,
-  // a linha precisa de 286px e tem 286px -- inclusive com os números de uma
+// ── A LIBERAÇÃO NÃO É MAIS POR NÚMERO DE LINHA ─────────────────────────────
+//
+// Isto era `arquivo:LINHA`, e a linha ANDA a cada edição acima dela. O seletor de
+// emoji do AtendimentoView não mudou uma vírgula e passeou por 1556 → 1621 →
+// 1544 → 1545 conforme o arquivo crescia e encurtava; a cada passeio, este teste
+// acusava uma grade que ninguém escreveu e alguém tinha de vir somar 1 aqui.
+// Teste que reprova por motivo errado ensina a equipe a ignorar o teste.
+//
+// A chave agora é `arquivo` + um TRECHO da própria linha. Ela sobrevive a
+// qualquer edição em volta e, se a grade em si for reescrita, o trecho deixa de
+// casar -- que é o comportamento desejado: grade alterada volta para revisão.
+const GRADES_LIBERADAS = [
+  // Calendário: as 7 colunas SÃO os sete dias da semana; com menos, vira outra coisa.
+  { arquivo: "components/pages/Agenda.jsx", marca: "grid grid-cols-7 gap-0.5 mb-1", motivo: "cabeçalho dom..sáb" },
+  { arquivo: "components/pages/Agenda.jsx", marca: "grid grid-cols-7 gap-0.5", motivo: "dias do mês" },
+  // MEDIDO, não presumido: reproduzido com o CSS compilado numa tela de 320px, a
+  // linha precisa de 286px e tem 286px -- inclusive com os números de uma
   // operação grande (12.847 avaliações, 87,4%). Não transborda e não corta.
-  ["components/pages/Dashboard.jsx:384", "3 números curtos, medidos em 320px"],
-  // O seletor de emoji não é uma grade de conteúdo: é uma paleta dentro de um
-  // popup de LARGURA FIXA (`w-72`, 288px, declarado no container em
-  // AtendimentoView.jsx:1642). Ela não precisa virar uma coluna porque nunca
-  // depende da largura da tela -- 288px cabem no menor celular (320px), e cada
-  // célula fica com 36px, acima dos 24px do alvo de toque confortável.
-  //
-  // Quebrar em pontos de ruptura aqui pioraria: a paleta viraria uma tira alta
-  // e estreita dentro de um popup que continua com 288px.
-  ["components/pages/AtendimentoView.jsx:1668", "paleta de emoji em popup de largura fixa w-72"],
-]);
+  { arquivo: "components/pages/Dashboard.jsx", marca: "grid grid-cols-3 gap-2 text-center", motivo: "3 números curtos, medidos em 320px" },
+  { arquivo: "components/ReportarBug.jsx", marca: "grid grid-cols-4 gap-1.5", motivo: "miniaturas dos anexos" },
+  // O seletor de emoji não é grade de conteúdo: é uma paleta dentro de um popup de
+  // LARGURA FIXA (`w-72`, 288px). Não precisa virar uma coluna porque nunca
+  // depende da largura da tela -- 288px cabem no menor celular e cada célula
+  // fica com 36px, acima dos 24px do alvo de toque confortável. Quebrar aqui
+  // pioraria: a paleta viraria uma tira alta e estreita dentro do mesmo popup.
+  { arquivo: "components/pages/AtendimentoView.jsx", marca: "grid grid-cols-8 gap-0.5", motivo: "paleta de emoji em popup de largura fixa w-72" },
+  { arquivo: "components/pages/AtendimentoView.jsx", marca: "grid-cols-8 gap-1", motivo: "categorias do seletor de emoji" },
+];
+
+const liberada = (arquivo, linha) =>
+  GRADES_LIBERADAS.some((g) => arquivo === g.arquivo && linha.includes(g.marca));
 
 const gradeRigida = [];
 for (const f of arquivos) {
@@ -208,9 +213,8 @@ for (const f of arquivos) {
     for (const a of achados) {
       const n = Number(a.match(/([0-9]+)$/)[1]);
       if (n < 3) continue;                 // 2 colunas ainda cabem em 320px
-      const chave = `${rel(f)}:${i + 1}`;
-      if (GRADES_LIBERADAS.has(chave)) continue;
-      gradeRigida.push(`${chave}  grid-cols-${n} sem ponto de quebra`);
+      if (liberada(rel(f), l)) continue;
+      gradeRigida.push(`${rel(f)}:${i + 1}  grid-cols-${n} sem ponto de quebra`);
     }
   });
 }

@@ -17,6 +17,7 @@ import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { EquipeAPI, PermissoesAPI } from '../services/api';
 import Avatar from '../components/Avatar';
+import { confirmar } from '../utils/dialogo';
 
 function vistoEm(iso) {
   if (!iso) return 'nunca entrou';
@@ -175,10 +176,11 @@ export default function EquipePage() {
   }
 
   async function excluirConta(membro) {
-    if (!window.confirm(
-      `Excluir definitivamente a conta de ${membro.nome}? Esta ação não pode ser desfeita. ` +
-      `Os atendimentos que essa pessoa fez continuam registrados, mas ela perde o acesso.`
-    )) return;
+    if (!(await confirmar(
+      `Excluir definitivamente a conta de ${membro.nome}? Esta ação não pode ser desfeita.\n\n` +
+      `Os atendimentos que essa pessoa fez continuam registrados, mas ela perde o acesso.`,
+      { titulo: 'Excluir conta', rotuloConfirmar: 'Excluir conta', perigo: true }
+    ))) return;
     setLoadingId(membro.id);
     setErro('');
     setOkMsg('');
@@ -197,9 +199,10 @@ export default function EquipePage() {
   // aprovacao, e uma rejeicao do pedido de acesso, nao a exclusao de alguem que
   // ja fazia parte da equipe.
   async function recusarConta(membro) {
-    if (!window.confirm(
-      `Recusar e excluir o cadastro de ${membro.nome}? A pessoa precisará se cadastrar novamente para solicitar acesso.`
-    )) return;
+    if (!(await confirmar(
+      `Recusar e excluir o cadastro de ${membro.nome}? A pessoa precisará se cadastrar novamente para solicitar acesso.`,
+      { titulo: 'Recusar cadastro', rotuloConfirmar: 'Recusar e excluir', perigo: true }
+    ))) return;
     setLoadingId(membro.id);
     setErro('');
     setOkMsg('');

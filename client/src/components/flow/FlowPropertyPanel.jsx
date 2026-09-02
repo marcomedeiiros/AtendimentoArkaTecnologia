@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { X, Play, HelpCircle, Trash2, Variable, GitBranch, Save, RefreshCw, AlertCircle, CheckCircle2, Edit2, ChevronDown, ChevronUp } from 'lucide-react';
+import { confirmar } from '../../utils/dialogo';
 
 const BLOCK_META = {
   gatilho:    { emoji: '⚡', label: 'Gatilho'     },
@@ -443,8 +444,16 @@ export function FlowPropertyPanel({
 
   // Fechar com alteração pendente avisa. Sem isto, o X do canto vira um
   // "descartar" silencioso e o painel acabou de deixar de salvar sozinho.
-  const fechar = useCallback(() => {
-    if (sujo && !window.confirm('Este bloco tem alterações não salvas. Descartar?')) return;
+  // `async` porque o diálogo da Arka resolve por Promise (o `confirm` nativo
+  // devolvia na hora, congelando a aba). Quem chama não usa o retorno -- é um
+  // handler de clique --, então nada mais muda.
+  const fechar = useCallback(async () => {
+    if (sujo && !(await confirmar('Este bloco tem alterações não salvas. Descartar?', {
+      titulo: 'Descartar alterações',
+      rotuloConfirmar: 'Descartar',
+      rotuloCancelar: 'Continuar editando',
+      perigo: true,
+    }))) return;
     onClose();
   }, [sujo, onClose]);
 
@@ -1281,8 +1290,12 @@ export function FlowPropertyPanel({
                         config: { ...(node.config || {}), opcoes: novasOpcoes },
                       });
                     }}
-                    onRemove={() => {
-                      if (window.confirm('Deseja remover esta ramificação?')) {
+                    onRemove={async () => {
+                      if (await confirmar('Deseja remover esta ramificação?', {
+                        titulo: 'Remover ramificação',
+                        rotuloConfirmar: 'Remover',
+                        perigo: true,
+                      })) {
                         const novasOpcoes = opcoes.filter((_, idx) => idx !== i);
                         onChangeNode({
                           ...node,

@@ -11,6 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { BugsAPI } from '../services/api';
 import Portal from '../components/Portal';
 import { FUSO_BR } from '../utils/data';
+import { confirmar } from '../utils/dialogo';
 
 // ── Constantes de imagem (espelham o servidor: bug.imagens.js) ─────────────
 // A barreira real fica no backend (whitelist de mime + magic bytes +
@@ -386,7 +387,11 @@ export default function BugsPage() {
   }
 
   async function excluir(relato) {
-    if (!window.confirm('Excluir este relato definitivamente?')) return;
+    if (!(await confirmar('Excluir este relato definitivamente?', {
+      titulo: 'Excluir relato',
+      rotuloConfirmar: 'Excluir',
+      perigo: true,
+    }))) return;
     setLoadingId(relato.id);
     setErro('');
     // Otimista: some da lista na hora; o servidor confirma em segundo plano.

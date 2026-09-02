@@ -27,6 +27,7 @@ import { FUSO_BR } from '../../utils/data';
 import { mesclarConversa, registrarApagada, desfazerApagada } from '../../utils/mesclarConversa';
 import { formatarComAssinatura, formatarLegendaComAssinatura } from '../../utils/assinatura';
 import { CATEGORIAS_EMOJI, TODOS_EMOJIS } from './emojis';
+import { avisar } from '../../utils/dialogo';
 
 // O responsavel pelo atendimento agora vem do banco (conversa.atendenteNome /
 // atendenteId), compartilhado por toda a equipe. Antes vivia no localStorage e
@@ -1697,9 +1698,9 @@ function PainelChat({
   const selecionarArquivo = useCallback((file) => {
     if (!file) return;
     const MAX = 20 * 1024 * 1024; // 20MB (alinhado ao teto do servidor)
-    if (file.size > MAX) { window.alert('Arquivo muito grande (máx. 20MB).'); return; }
+    if (file.size > MAX) { avisar('Arquivo muito grande (máx. 20MB).'); return; }
     if (!arquivoPermitido(file)) {
-      window.alert('Tipo de arquivo não permitido. Envie imagem (JPG, PNG, WEBP, GIF), vídeo, áudio ou documento.');
+      avisar('Tipo de arquivo não permitido. Envie imagem (JPG, PNG, WEBP, GIF), vídeo, áudio ou documento.');
       return;
     }
     const tipo = tipoDoArquivo(file);
@@ -1789,7 +1790,7 @@ function PainelChat({
       media = anexo.dataUrl
         || (anexo.file ? await lerArquivoComoDataUrl(anexo.file) : await urlParaDataUrl(anexo.urlRemota));
     } catch (e) {
-      window.alert('Falha ao ler o arquivo: ' + e.message);
+      avisar('Falha ao ler o arquivo: ' + e.message);
       setEnviandoMidia(false);
       return;
     }
@@ -1825,7 +1826,7 @@ function PainelChat({
       setTexto('');
       setTimeout(() => irParaFim(true), 0);
     } catch (e) {
-      if (String(e.message) !== 'cancelado') window.alert('Falha ao enviar mídia: ' + e.message);
+      if (String(e.message) !== 'cancelado') avisar('Falha ao enviar mídia: ' + e.message);
     } finally {
       setEnviandoMidia(false);
       cancelarRef.current = null;
@@ -2579,7 +2580,7 @@ function PainelChat({
               // Sem isso o erro era engolido: se a Evolution recusa (WhatsApp
               // desconectado, numero invalido), nada aparecia E nada avisava.
               r?.promise?.catch(e => {
-                if (String(e.message) !== 'cancelado') window.alert('Não foi possível enviar o áudio: ' + e.message);
+                if (String(e.message) !== 'cancelado') avisar('Não foi possível enviar o áudio: ' + e.message);
               });
               setGravandoAudio(false);
             }}
@@ -3193,7 +3194,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       // O modal FICA aberto no erro: fechá-lo esconderia a lista onde a pessoa
       // acabou de agir, e um 409 ("outra pessoa transferiu") precisa ser lido
       // com a conversa ainda à vista.
-      window.alert(`${rotuloErro}: ${e.message}`);
+      avisar(`${rotuloErro}: ${e.message}`);
       if (e.status === 409 || e.codigo === 'TRANSFERENCIA_CONFLITO') {
         // Perdeu a corrida: busca o estado real em vez de deixar na tela a
         // atribuição que não aconteceu.
@@ -3284,7 +3285,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
         setSelecionada(null);
         setAbaAtual(ABAS.find(a => a.statusMatch(real))?.id || 'pendentes');
       }
-      window.alert(
+      avisar(
         err?.codigo === 'CONVERSA_JA_ATENDIDA'
           ? err.message
           : 'Não foi possível assumir a conversa: ' + (err?.message || 'erro desconhecido')
@@ -3357,7 +3358,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     try {
       aplicarConversa(await ConversasAPI.editarMensagem(mensagemId, texto));
     } catch (e) {
-      window.alert('Não foi possível editar: ' + e.message);
+      avisar('Não foi possível editar: ' + e.message);
     }
   }, [aplicarConversa]);
 
@@ -3365,7 +3366,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     try {
       aplicarConversa(await ConversasAPI.encaminharMensagem(mensagemId, conversaDestinoId));
     } catch (e) {
-      window.alert('Não foi possível encaminhar: ' + e.message);
+      avisar('Não foi possível encaminhar: ' + e.message);
     }
   }, [aplicarConversa]);
 
@@ -3377,7 +3378,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     // Sem id do banco = mensagem otimista ainda nao sincronizada (o envio nao
     // terminou). Apagar agora daria "Mensagem nao encontrada" no servidor.
     if (!mensagem?.id) {
-      window.alert('Aguarde a mensagem terminar de enviar para apagá-la.');
+      avisar('Aguarde a mensagem terminar de enviar para apagá-la.');
       return;
     }
     const convId = conversa?.id;
@@ -3398,7 +3399,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     } catch (e) {
       desfazerApagada(mensagem.id); // servidor recusou: some com a marca
       marcar(false);
-      window.alert('Não foi possível apagar: ' + e.message);
+      avisar('Não foi possível apagar: ' + e.message);
     }
   }, [aplicarConversa, conversa, setConversas]);
 
@@ -3421,7 +3422,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       setTexto('');
     } catch (e) {
       // O texto FICA na caixa: quem escreveu não perde o que digitou.
-      window.alert('A nota NÃO foi salva: ' + (e?.message || 'erro desconhecido'));
+      avisar('A nota NÃO foi salva: ' + (e?.message || 'erro desconhecido'));
     }
   }, [aplicarConversa, conversa, setTexto]);
 
@@ -3450,7 +3451,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
         return { ...c, mensagens: c.mensagens.filter((_, k) => k !== i) };
       }));
       setTexto(txt);
-      window.alert('A mensagem NÃO foi enviada: ' + (e?.message || 'erro desconhecido'));
+      avisar('A mensagem NÃO foi enviada: ' + (e?.message || 'erro desconhecido'));
     }
   }, [conversa, setConversas, setTexto, aplicarConversa, assinar, assinaturaNome]);
 
@@ -3470,7 +3471,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     catch (e) {
       // Falhou = o cliente não recebeu o pedido. Fingir a bolha aqui só
       // enganaria o operador até o próximo F5.
-      window.alert('Não foi possível pedir o CNPJ ao cliente: ' + (e?.message || 'erro desconhecido'));
+      avisar('Não foi possível pedir o CNPJ ao cliente: ' + (e?.message || 'erro desconhecido'));
     }
   }, [conversa, aplicarConversa]);
 
@@ -3485,7 +3486,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       // Antes o catch marcava o cliente como identificado SÓ na tela: nada era
       // gravado, e a identificação evaporava no F5. (A causa mais comum desse
       // erro era a chave estrangeira de `conversas.cnpj`, já removida.)
-      window.alert('Não foi possível identificar o cliente: ' + (e?.message || 'erro desconhecido'));
+      avisar('Não foi possível identificar o cliente: ' + (e?.message || 'erro desconhecido'));
     }
   }, [inputCnpj, conversa, aplicarConversa]);
 

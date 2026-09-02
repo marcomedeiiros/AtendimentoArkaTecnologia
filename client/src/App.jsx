@@ -11,6 +11,7 @@ import { AuthProvider } from './context/AuthContext';
 import AppLayout from './components/layout/AppLayout';
 import RotaProtegida from './components/layout/RotaProtegida';
 import RotaModulo from './components/layout/RotaModulo';
+import DialogoArka from './components/DialogoArka';
 
 import NotFound from './pages/NotFound';
 import LoginPage from './pages/LoginPage';
@@ -77,6 +78,14 @@ export default function App() {
 
           <Route path="*" element={<NotFound />} />
         </Routes>
+
+        {/* OS DIÁLOGOS DA ARKA, no lugar de alert/confirm/prompt do navegador.
+            
+            Montado FORA das rotas, e uma vez só: qualquer tela (inclusive login
+            e cadastro, que ficam fora do portão de sessão) chama
+            `confirmar()`/`avisar()` de utils/dialogo e este componente desenha.
+            Sem isso, cada tela precisaria hospedar o próprio modal. */}
+        <DialogoArka />
       </AuthProvider>
     </Router>
   );

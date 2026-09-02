@@ -7,6 +7,7 @@ import { EmojiIcon } from '../components/pages/EmojiIcon';
 import { useAppContext } from '../context/AppContext';
 import { WhatsAppAPI } from '../services/api';
 import { FUSO_BR } from '../utils/data';
+import { avisar, pedirTexto } from '../utils/dialogo';
 
 // Enquanto a instancia nao pareia, o QR da Evolution expira em ~30s.
 const QR_REFRESH_MS = 25000;
@@ -171,14 +172,20 @@ export default function WhatsAppPage() {
   async function excluirInstancia() {
     // Acao destrutiva e irreversivel: exige digitar o nome da instancia.
     // Um confirm simples era aceito sem leitura e derrubava a conexao inteira.
-    const resposta = window.prompt(
-      `⚠️ ATENÇÃO: isso APAGA a instância "${instancia}" na Evolution.\n\n` +
-      `Você perderá o pareamento e precisará escanear o QR Code de novo.\n` +
+    const resposta = await pedirTexto(
+      `Isso APAGA a instância "${instancia}" na Evolution.\n\n` +
+      `Você perderá o pareamento e precisará escanear o QR Code de novo. ` +
       `Para apenas reiniciar a conexão, cancele e use "Reconectar".\n\n` +
-      `Para confirmar, digite o nome da instância:`
+      `Para confirmar, digite o nome da instância:`,
+      {
+        titulo: 'Apagar instância do WhatsApp',
+        placeholder: instancia,
+        rotuloConfirmar: 'Apagar instância',
+        perigo: true,
+      }
     );
     if (resposta !== instancia) {
-      if (resposta !== null) window.alert('Nome não confere. Exclusão cancelada.');
+      if (resposta !== null) avisar('Nome não confere. Exclusão cancelada.');
       return;
     }
     setOcupado(true); setAviso('');

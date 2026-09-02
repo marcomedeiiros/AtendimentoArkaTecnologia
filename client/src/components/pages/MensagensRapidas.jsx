@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import Portal from '../Portal';
 import { MensagensRapidasAPI } from '../../services/api';
+import { avisar, confirmar } from '../../utils/dialogo';
 
 // Segurança (defesa em profundidade): o anexo de uma mensagem rápida e uma
 // imagem que sera enviada ao cliente e exibida no painel. Aqui validamos tipo e
@@ -340,20 +341,24 @@ export default function MensagensRapidas({ onUsarMensagem }) {
       setEditando(null);
       await carregarLista();
     } catch (e) {
-      window.alert('Não foi possível salvar: ' + (e.message || 'erro desconhecido'));
+      avisar('Não foi possível salvar: ' + (e.message || 'erro desconhecido'));
     } finally {
       setSalvando(false);
     }
   }
 
   async function removerMensagem(id) {
-    if (!window.confirm('Remover esta mensagem rápida? Isso vale para toda a equipe.')) return;
+    if (!(await confirmar('Remover esta mensagem rápida? Isso vale para toda a equipe.', {
+      titulo: 'Remover mensagem rápida',
+      rotuloConfirmar: 'Remover',
+      perigo: true,
+    }))) return;
     setErro('');
     try {
       await MensagensRapidasAPI.remover(id);
       await carregarLista();
     } catch (e) {
-      window.alert('Não foi possível remover: ' + (e.message || 'erro desconhecido'));
+      avisar('Não foi possível remover: ' + (e.message || 'erro desconhecido'));
     }
   }
 

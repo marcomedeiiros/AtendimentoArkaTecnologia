@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Plus, Trash2, Search, Building2, Mail, Phone, MapPin, Pencil, X, Loader2, FileText, MessageCircle } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { ParceirosAPI } from '../services/api';
+import { confirmar } from '../utils/dialogo';
 
 // Tipos de contrato oferecidos ao cliente. `chave` casa com o backend
 // (parceiro.dto.js); `label` e o que aparece na tela.
@@ -153,7 +154,11 @@ export default function ParceirosPage() {
   }
 
   async function remover(c) {
-    if (!window.confirm('Deseja remover este parceiro?')) return;
+    if (!(await confirmar('Deseja remover este parceiro?', {
+      titulo: 'Remover cliente',
+      rotuloConfirmar: 'Remover',
+      perigo: true,
+    }))) return;
     try {
       await ParceirosAPI.remover(c);
       atualizarParceiros(parceiros.filter(p => p.cnpj !== c));

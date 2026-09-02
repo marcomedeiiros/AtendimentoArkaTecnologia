@@ -6,6 +6,7 @@ import {
 import Portal from '../Portal';
 import { AgendaAPI } from '../../services/api';
 import { hojeISO, anoMesHoje } from '../../utils/data';
+import { avisar, confirmar } from '../../utils/dialogo';
 
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
                'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -301,21 +302,25 @@ export default function Agenda() {
       }
       setModalAberto(false); setEditando(null);
     } catch (e) {
-      window.alert('Não foi possível salvar: ' + (e.message || 'erro desconhecido'));
+      avisar('Não foi possível salvar: ' + (e.message || 'erro desconhecido'));
     } finally {
       setSalvando(false);
     }
   }
 
   async function removerCompromisso(id) {
-    if (!window.confirm('Remover este compromisso? Isso vale para toda a equipe.')) return;
+    if (!(await confirmar('Remover este compromisso? Isso vale para toda a equipe.', {
+      titulo: 'Remover compromisso',
+      rotuloConfirmar: 'Remover',
+      perigo: true,
+    }))) return;
     const anterior = compromissos;
     setCompromissos(prev => prev.filter(c => c.id !== id)); // otimista
     try {
       await AgendaAPI.remover(id);
     } catch (e) {
       setCompromissos(anterior); // desfaz
-      window.alert('Não foi possível remover: ' + (e.message || 'erro desconhecido'));
+      avisar('Não foi possível remover: ' + (e.message || 'erro desconhecido'));
     }
   }
 
@@ -339,7 +344,7 @@ export default function Agenda() {
       await AgendaAPI.limparConcluidosAntigos();
     } catch (e) {
       setCompromissos(anterior);
-      window.alert('Não foi possível limpar: ' + (e.message || 'erro desconhecido'));
+      avisar('Não foi possível limpar: ' + (e.message || 'erro desconhecido'));
     }
   }
 

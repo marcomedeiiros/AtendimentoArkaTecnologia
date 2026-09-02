@@ -8,6 +8,7 @@ import { ContatosAPI } from '../../services/api';
 import Portal from '../Portal';
 import { contatoCombina } from '../../utils/busca';
 import { useAppContext } from '../../context/AppContext';
+import { avisar, confirmar } from '../../utils/dialogo';
 
 function limparTel(v) { return String(v || '').replace(/\D/g, ''); }
 function mascararTel(v) {
@@ -204,13 +205,13 @@ export default function Contatos({ setAba }) {
       const lista = await ContatosAPI.listar();
       setContatos(Array.isArray(lista) ? lista : []);
       setErroApi(null);
-      window.alert(
+      avisar(
         r.total === 0
           ? 'A Evolution não retornou nenhum contato.\n\nIsso acontece quando o WhatsApp ainda não enviou a agenda - conecte o número e aguarde alguns instantes.'
           : `Agenda importada!\n\n${r.criados} contato(s) novo(s)\n${r.atualizados} atualizado(s)\n${r.ignorados} ignorado(s) (grupos/inválidos)`
       );
     } catch (e) {
-      window.alert('Não foi possível importar a agenda: ' + e.message);
+      avisar('Não foi possível importar a agenda: ' + e.message);
     } finally {
       setSincronizando(false);
     }
@@ -266,7 +267,11 @@ export default function Contatos({ setAba }) {
   // Idem: se o DELETE falhar, o contato CONTINUA na tela. Antes ele sumia e
   // reaparecia no F5, porque nunca tinha sido apagado no banco.
   const removerContato = useCallback(async (id) => {
-    if (!window.confirm('Remover este contato?')) return;
+    if (!(await confirmar('Remover este contato?', {
+      titulo: 'Remover contato',
+      rotuloConfirmar: 'Remover',
+      perigo: true,
+    }))) return;
     try {
       await ContatosAPI.remover(id);
       setContatos(prev => prev.filter(c => c.id !== id));
