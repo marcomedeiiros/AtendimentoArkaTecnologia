@@ -171,15 +171,26 @@ export default function ModoTv({ onFechar }) {
       <div className="fixed inset-0 z-[70] bg-grafite-900 flex flex-col gap-4 p-5 xl:p-7 overflow-hidden">
         {/* Cabecalho enxuto: identidade, relogio, aviso de conexao e a saida. */}
         <header className="flex items-center justify-between gap-4 shrink-0">
-          <div className="min-w-0">
-            <h1 className="font-display font-bold text-white text-2xl xl:text-3xl leading-none truncate">
-              Painel da Equipe
-            </h1>
-            <p className="text-xs text-slate-400 mt-1 truncate">
-              {dados
-                ? `Ranking do ${dados.periodo.rotulo} · atualiza sozinho a cada 30 segundos`
-                : 'atualiza sozinho a cada 30 segundos'}
-            </p>
+          <div className="flex items-center gap-3 xl:gap-4 min-w-0">
+            {/* A marca ao lado do titulo: esta tela fica pendurada numa parede
+                que qualquer visitante ve, e ali ela representa a empresa, nao
+                so a equipe. A classe `arka-logo` cuida do tema claro (inverte
+                o logo, que e desenhado para fundo escuro). */}
+            <img
+              src="/arka_tecnologia_logo-removebg-preview.png"
+              alt="Logo Arka Tecnologia"
+              className="arka-logo h-10 xl:h-12 w-auto shrink-0 object-contain"
+            />
+            <div className="min-w-0">
+              <h1 className="font-display font-bold text-white text-2xl xl:text-3xl leading-none truncate">
+                Painel da Equipe
+              </h1>
+              <p className="text-xs text-slate-400 mt-1 truncate">
+                {dados
+                  ? `Ranking do ${dados.periodo.rotulo} · atualiza sozinho a cada 30 segundos`
+                  : 'atualiza sozinho a cada 30 segundos'}
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-4 shrink-0">
             {erro && dados && (
@@ -187,9 +198,18 @@ export default function ModoTv({ onFechar }) {
                 <WifiOff size={14} /> sem conexão
               </span>
             )}
-            <span className="font-display font-bold text-white text-3xl xl:text-4xl tabular-nums leading-none">
-              {agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-            </span>
+            {/* Hora grande, data pequena embaixo: a hora e o que se confere de
+                longe (e o que prova que a tela nao travou); a data responde a
+                outra pergunta, mais rara, e nao precisa competir por atencao.
+                `tabular-nums` nos dois evita o numero "dancar" a cada tique. */}
+            <div className="text-right leading-none">
+              <div className="font-display font-bold text-white text-3xl xl:text-4xl tabular-nums">
+                {agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              </div>
+              <div className="text-xs xl:text-sm text-slate-400 tabular-nums mt-1.5">
+                {agora.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+              </div>
+            </div>
             {/* O UNICO CONTROLE DA TELA. A TV nao tem mouse, entao ele nunca
                 sera usado la -- existe para quem abriu o painel num computador
                 e precisa voltar para a Central. */}
