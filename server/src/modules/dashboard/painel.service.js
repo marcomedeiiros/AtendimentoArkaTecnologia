@@ -36,6 +36,44 @@ const TOP = 3;
 // que motiva, que e o oposto do que esta tela existe para fazer.
 const MINIMO_AVALIACOES = 3;
 
+// ── A PONTUACAO DO DESTAQUE DO MES ─────────────────────────────────────────
+//
+// Este arquivo passou a vida RECUSANDO uma pontuacao unica, e o motivo estava
+// escrito aqui: juntar volume e nota obriga a inventar um peso ("cada estrela
+// vale quantos atendimentos?"), e o peso escolhido decide o vencedor. Ninguem
+// explica o proprio lugar num ranking assim, e ranking que nao se explica gera
+// desconfianca em vez de disputa.
+//
+// A objecao continua valida -- o que mudou foi a resposta a ela. O peso nao e
+// mais escondido dentro de um numero: as TRES PARCELAS saem daqui separadas, e
+// a parede mostra "38 + 39 + 15 = 92". Quem discorda do peso discorda de uma
+// conta visivel, e nao de um oraculo. Foi essa visibilidade que tornou o card
+// unico defensavel; sem ela, a recusa antiga continuaria certa.
+//
+// Cada atendimento fechado vale 1 ponto, entao a nota precisa de um peso para
+// nao virar ruido ao lado de dezenas de atendimentos: com 8, um mes impecavel
+// (5,0) vale 40 pontos -- o equivalente a 40 atendimentos. E deliberado que
+// atender bem pese tanto quanto atender muito.
+const PESO_NOTA = 8;
+
+// Agilidade em FAIXAS, e nao proporcional ao tempo.
+//
+// Proporcional premiaria cada segundo economizado, e numa parede isso vira
+// pressa: vale a pena assumir a conversa so para parar o relogio, mesmo sem
+// poder atender. Faixa larga premia o habito ("assumo rapido") e para de
+// premiar depois -- entre 30 s e 90 s nao ha vantagem a perseguir.
+const FAIXAS_AGILIDADE = [
+  { ateSeg: 120, pontos: 20 },
+  { ateSeg: 300, pontos: 15 },
+  { ateSeg: 600, pontos: 10 },
+  { ateSeg: 1200, pontos: 5 },
+];
+
+function pontosDeAgilidade(medioSeg) {
+  if (medioSeg == null) return 0;
+  return FAIXAS_AGILIDADE.find((f) => medioSeg <= f.ateSeg)?.pontos || 0;
+}
+
 const inicioDoDia = () => {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
@@ -116,16 +154,24 @@ class PainelService {
   }
 
   /**
-   * TOP 3 -- e por que ha DOIS podios, e nao um.
+   * O DESTAQUE DO MES -- uma classificacao, com a conta a vista.
    *
-   * Juntar volume e nota numa pontuacao unica obriga a inventar um peso ("cada
-   * estrela vale quantos atendimentos?"), e o peso escolhido decide o vencedor.
-   * Ninguem consegue explicar o proprio lugar num ranking assim, e ranking que
-   * nao se explica nao motiva: gera desconfianca.
+   * Aqui havia DOIS podios (mais atendimentos / melhores notas) justamente para
+   * nao arbitrar um peso entre eles. Viraram um so a pedido de quem usa a
+   * parede, e a troca so e honesta por causa de uma condicao: as parcelas saem
+   * daqui SEPARADAS, e a tela mostra a soma. Ver o bloco de constantes acima.
    *
-   * Dois podios lado a lado dizem a verdade sem arbitrar: quem atendeu mais e
-   * quem foi melhor avaliado. Da para liderar os dois, e da para ser
-   * reconhecido em um sem ganhar o outro.
+   * O que cada pessoa junta no mes:
+   *
+   *   atendimentos fechados      1 ponto cada
+   *   nota media x PESO_NOTA     so a partir de MINIMO_AVALIACOES notas
+   *   agilidade (ate assumir)    faixa fixa, ver FAIXAS_AGILIDADE
+   *
+   * O MINIMO DE AVALIACOES SOBREVIVEU A UNIFICACAO, e isso importa: sem ele,
+   * uma unica nota 5 valeria 40 pontos -- mais do que um mes inteiro de
+   * atendimento de muita gente -- e o ranking voltaria a ser sorteio. Quem
+   * ainda nao tem tres notas pontua ZERO nessa parcela, e a tela diz que esta
+   * faltando (ver `aCaminho`), em vez de fingir que a pessoa e ruim de nota.
    */
   _ranking(atendimentos) {
     const porPessoa = new Map();
@@ -134,36 +180,58 @@ class PainelService {
       // ranking de gente.
       const nome = a.atendenteNome || null;
       if (!nome) continue;
-      if (!porPessoa.has(nome)) porPessoa.set(nome, { nome, fechados: 0, notas: [] });
+      if (!porPessoa.has(nome)) porPessoa.set(nome, { nome, fechados: 0, notas: [], assumir: [] });
       const p = porPessoa.get(nome);
       if (a.status === "fechada") p.fechados += 1;
       if (typeof a.avaliacao === "number") p.notas.push(a.avaliacao);
+      // O MESMO "tempo ate assumir" do indicador da faixa de baixo, so que por
+      // pessoa. E ate o CLIQUE em atender (`atendidoEm`), e nao ate a primeira
+      // mensagem: medir a primeira mensagem exige abrir todas as mensagens de
+      // todas as conversas -- 2,6 s e 87 MB por chamada, numa tela que recarrega
+      // a cada 30 segundos. Ver o cabecalho deste arquivo.
+      if (a.atendidoEm) p.assumir.push((new Date(a.atendidoEm) - new Date(a.abertoEm)) / 1000);
     }
 
     const pessoas = [...porPessoa.values()];
 
-    const porVolume = pessoas
-      .filter((p) => p.fechados > 0)
-      .sort((a, b) => b.fechados - a.fechados || a.nome.localeCompare(b.nome))
-      .slice(0, TOP)
-      .map((p) => ({ nome: p.nome, valor: p.fechados }));
+    const pontuadas = pessoas.map((p) => {
+      const notaMedia = p.notas.length ? media(p.notas) : null;
+      const notaConta = p.notas.length >= MINIMO_AVALIACOES;
+      const assumirMedio = p.assumir.length ? Math.round(media(p.assumir)) : null;
 
-    const porNota = pessoas
-      .filter((p) => p.notas.length >= MINIMO_AVALIACOES)
-      .map((p) => ({ nome: p.nome, valor: media(p.notas), amostra: p.notas.length }))
-      .sort((a, b) => b.valor - a.valor || b.amostra - a.amostra || a.nome.localeCompare(b.nome))
-      .slice(0, TOP);
+      const ptsAtendimentos = p.fechados;
+      const ptsNota = notaConta ? Math.round(notaMedia * PESO_NOTA) : 0;
+      const ptsAgilidade = pontosDeAgilidade(assumirMedio);
+
+      return {
+        nome: p.nome,
+        pontos: ptsAtendimentos + ptsNota + ptsAgilidade,
+        atendimentos: { valor: p.fechados, pontos: ptsAtendimentos },
+        // `conta` e o que a tela usa para escrever "1 de 3" em vez de "0,0".
+        nota: { valor: notaMedia, amostra: p.notas.length, conta: notaConta, pontos: ptsNota },
+        agilidade: { medioSeg: assumirMedio, amostra: p.assumir.length, pontos: ptsAgilidade },
+      };
+    });
+
+    // Zero ponto nao entra: e quem so tem conversa em aberto, e uma linha
+    // "0 pts" na parede parece cobranca publica. Ha podio, e nao lanterna.
+    const classificacao = pontuadas
+      .filter((p) => p.pontos > 0)
+      .sort(
+        (a, b) =>
+          b.pontos - a.pontos ||
+          b.atendimentos.valor - a.atendimentos.valor ||
+          a.nome.localeCompare(b.nome)
+      )
+      .slice(0, TOP)
+      .map((p, i) => ({ posicao: i + 1, ...p }));
 
     // QUEM ESTA A CAMINHO -- so os nomes, nunca a nota.
     //
     // O minimo de avaliacoes protege o ranking, mas cobra um preco no comeco:
-    // ate alguem juntar tres notas o podio inteiro fica vazio, e numa parede
-    // um painel vazio parece painel quebrado. Uma operacao recem-comecada fica
-    // dias assim -- justo os dias em que a equipe esta olhando mais.
-    //
-    // Entao o painel passa a mostrar quem esta perto de entrar: "David C. -- 1
-    // de 3". Isso responde "por que nao aparece ninguem?" sem afrouxar a regra,
-    // e transforma a espera em algo que anda.
+    // ate alguem juntar tres notas essa parcela fica zerada para todo mundo, e
+    // a tela nao explicaria por que. Uma operacao recem-comecada fica dias
+    // assim -- justo os dias em que a equipe esta olhando mais.
     //
     // A NOTA DE QUEM AINDA NAO ENTROU NAO SAI DAQUI. Mandar a media de quem tem
     // uma avaliacao so seria o mesmo que abolir o minimo: a parede mostraria o
@@ -174,7 +242,12 @@ class PainelService {
       .sort((a, b) => b.amostra - a.amostra || a.nome.localeCompare(b.nome))
       .slice(0, TOP);
 
-    return { porVolume, porNota, aCaminho, minimoAvaliacoes: MINIMO_AVALIACOES };
+    return {
+      classificacao,
+      aCaminho,
+      minimoAvaliacoes: MINIMO_AVALIACOES,
+      pesos: { nota: PESO_NOTA, agilidade: FAIXAS_AGILIDADE },
+    };
   }
 
   _csat(atendimentos) {
