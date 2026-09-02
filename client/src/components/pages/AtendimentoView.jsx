@@ -8,7 +8,7 @@ import {
   // midia girava um icone de IMAGEM. Agora e o Loader2 de verdade.
   FileText, MapPin, Contact, Paperclip, Smile, Loader2,
   SlidersHorizontal, Star, Archive, EyeOff, MoreVertical,
-  Maximize2, CornerUpLeft, CornerUpRight, Share2, Pencil, MoreHorizontal, Mic, Tag, PenLine,
+  Maximize2, Download, CornerUpLeft, CornerUpRight, Share2, Pencil, MoreHorizontal, Mic, Tag, PenLine,
   Sun, Moon, Bot, StickyNote, SpellCheck, Undo2
 } from 'lucide-react';
 import { EmojiIcon, FormattedMessage, TextoFormatado } from './EmojiIcon';
@@ -16,10 +16,11 @@ import { useMensagensRapidas } from './MensagensRapidas';
 import Avatar from '../Avatar';
 import Portal from '../Portal';
 import ModoTv from '../ModoTv';
-// O visualizador saiu deste arquivo para components/VisualizadorImagem.jsx: os
+// O visualizador saiu deste arquivo para components/VisualizadorMidia.jsx: os
 // Relatos de Bugs precisavam do mesmo zoom, e duas telas de imagem com duas
 // implementações era garantia de uma delas ficar para trás (foi o que aconteceu).
-import VisualizadorImagem from '../VisualizadorImagem';
+// Depois ele passou a atender VÍDEO pela mesma razão -- ver o arquivo.
+import VisualizadorMidia from '../VisualizadorMidia';
 import AudioPlayer from '../AudioPlayer';
 import AudioRecorder from '../AudioRecorder';
 import { useAppContext } from '../../context/AppContext';
@@ -1091,39 +1092,61 @@ function BolhaAudio({ m, escuro }) {
 }
 
 // Player de video da bolha. Largura fixa para a barra de controles nativa caber
-// (volume + tela cheia), e um botao proprio de TELA CHEIA que funciona em
-// qualquer proporcao -- inclusive video retrato, onde o Chrome escondia os
-// controles no menu "3 pontinhos". Em tela cheia os controles aparecem por
-// completo.
-function BolhaVideo({ src, caption, escuro }) {
-  const ref = useRef(null);
-  const telaCheia = () => {
-    const v = ref.current;
-    if (!v) return;
-    if (v.requestFullscreen) v.requestFullscreen();
-    else if (v.webkitEnterFullscreen) v.webkitEnterFullscreen(); // iOS Safari
-    else if (v.webkitRequestFullscreen) v.webkitRequestFullscreen();
-  };
+// (volume + tela cheia).
+//
+// ── O BOTAO DO CANTO AGORA AMPLIA, E NAO SO JOGA EM TELA CHEIA ─────────────
+//
+// Ele chamava `requestFullscreen` direto. Tela cheia resolve "quero ver grande",
+// e nao resolve o caso real deste sistema: o cliente grava a TELA do computador
+// dele e a mensagem de erro fica num quadradinho do video. Para ler aquilo
+// precisa de ZOOM -- o mesmo que a foto ja tinha e o video nao.
+//
+// Agora o botao abre o visualizador de midia, que tem zoom por roda do mouse,
+// arraste, download E um botao de tela cheia dentro dele. Nada se perdeu: o que
+// era um clique continua a um clique, e o que nao existia passou a existir.
+function BolhaVideo({ src, caption, escuro, nomeArquivo, onAmpliar }) {
   return (
     <div className="space-y-1.5">
       <div className="relative w-[260px] max-w-full">
         <video
-          ref={ref}
           src={src}
           controls
           preload="metadata"
           playsInline
+          // `nodownload` esconde o download do menu "3 pontinhos" do player. Ele
+          // sai do menu escondido e vira BOTAO ao lado -- ver abaixo.
           controlsList="nodownload"
           className="rounded-lg w-full max-h-[340px] bg-black object-contain"
         />
-        <button
-          onClick={telaCheia}
-          title="Tela cheia"
-          aria-label="Tela cheia"
-          className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-black/60 text-white hover:bg-black/80 transition-colors"
-        >
-          <Maximize2 size={15} />
-        </button>
+        <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
+          {/* BAIXAR O VIDEO, direto da bolha.
+              
+              Existia no visualizador, escondido atras de um clique -- e video do
+              cliente costuma ser prova de chamado: o tecnico salva para anexar na
+              OS, mandar para o fornecedor ou guardar depois que a conversa fecha.
+              Um clique para isso e o certo.
+              
+              `download` sem valor herdaria o nome da URL (que aqui e o id da
+              mensagem, sem extensao); com o nome explicito o arquivo chega
+              utilizavel -- ver `nomeArquivoMidia`. */}
+          <a
+            href={src}
+            download={nomeArquivo || 'video.mp4'}
+            title={`Baixar vídeo${nomeArquivo ? ` (${nomeArquivo})` : ''}`}
+            aria-label="Baixar vídeo"
+            className="p-1.5 rounded-lg bg-black/60 text-white hover:bg-black/80 transition-colors"
+          >
+            <Download size={15} />
+          </a>
+          <button
+            onClick={onAmpliar}
+            title="Ampliar (zoom, arraste e tela cheia)"
+            aria-label="Ampliar vídeo"
+            className="p-1.5 rounded-lg bg-black/60 text-white hover:bg-black/80 transition-colors"
+          >
+            <Maximize2 size={15} />
+          </button>
+        </div>
       </div>
       {caption && (
         <div className={`text-[11px] leading-relaxed whitespace-pre-wrap break-words ${escuro ? 'text-slate-200' : 'text-slate-900'}`}>
@@ -1137,11 +1160,48 @@ function BolhaVideo({ src, caption, escuro }) {
   );
 }
 
+/**
+ * NOME DO ARQUIVO PARA SALVAR -- e por que não dá para confiar no `fileName`.
+ *
+ * O WhatsApp manda `fileName` em documento, e quase nunca em vídeo, áudio ou
+ * foto. Sem nome, o navegador salva usando o último trecho da URL -- que aqui é o
+ * ID da mensagem, sem extensão nenhuma. O arquivo chega no computador como
+ * `a3f9c1e2-...` e o Windows não sabe abrir com o quê.
+ *
+ * Com a hora no nome (`video-0914.mp4`), baixar três vídeos da mesma conversa
+ * não gera `video (1).mp4`, `video (2).mp4` -- dá para saber qual é qual.
+ */
+const EXT_POR_MIME = {
+  'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov', 'video/3gpp': '3gp',
+  'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
+  'audio/ogg': 'ogg', 'audio/opus': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a',
+  'audio/aac': 'aac', 'audio/wav': 'wav', 'audio/webm': 'webm',
+};
+
+function nomeArquivoMidia(md = {}, m = {}) {
+  if (md.fileName) return md.fileName;
+  const mime = String(md.mimetype || '').split(';')[0].trim().toLowerCase();
+  const ext = EXT_POR_MIME[mime] || (mime.split('/')[1] || 'bin').replace(/[^a-z0-9]/g, '') || 'bin';
+  const base = m.tipo === 'video' ? 'video'
+    : m.tipo === 'audio' ? 'audio'
+    : m.tipo === 'imagem' ? 'imagem'
+    : m.tipo === 'figurinha' ? 'figurinha'
+    : 'arquivo';
+  const hora = String(m.hora || '').replace(/\D/g, ''); // "09:14" -> "0914"
+  return hora ? `${base}-${hora}.${ext}` : `${base}.${ext}`;
+}
+
 // Renderiza a bolha de acordo com o tipo de mídia. `escuro` = bolha do cliente
 // (fundo escuro); senão é a bolha da equipe (fundo laranja).
-function MensagemMidia({ m, escuro, onAbrirImagem }) {
+// `onAbrirMidia` (era `onAbrirImagem`): o visualizador passou a atender vídeo
+// também, e um nome que diz "imagem" faria o próximo leitor procurar um segundo
+// mecanismo para vídeo -- que não existe.
+function MensagemMidia({ m, escuro, onAbrirMidia }) {
   const md = m.midia || {};
   const semArquivo = !md.url && m.tipo !== 'localizacao' && m.tipo !== 'contato';
+  // Nome com que o arquivo é SALVO no computador. Calculado uma vez porque tanto
+  // o botão de baixar da bolha quanto o do visualizador usam o mesmo.
+  const nomeArquivo = nomeArquivoMidia(md, m);
 
   if (semArquivo) {
     return (
@@ -1174,7 +1234,7 @@ function MensagemMidia({ m, escuro, onAbrirImagem }) {
           alt={md.caption || 'imagem'}
           title="Clique para ampliar"
           className="rounded-lg max-w-full max-h-72 object-contain cursor-zoom-in hover:opacity-90 transition-opacity"
-          onClick={() => onAbrirImagem?.({ url: md.url, legenda: md.caption, nomeArquivo: md.fileName })}
+          onClick={() => onAbrirMidia?.({ url: md.url, tipo: 'imagem', legenda: md.caption, nomeArquivo })}
         />
         {md.caption && (
           <div className={`text-[11px] leading-relaxed whitespace-pre-wrap break-words ${escuro ? 'text-slate-200' : 'text-slate-900'}`}>
@@ -1185,7 +1245,17 @@ function MensagemMidia({ m, escuro, onAbrirImagem }) {
     );
   }
   if (m.tipo === 'video') {
-    return <BolhaVideo src={md.url} caption={md.caption} escuro={escuro} />;
+    return (
+      <BolhaVideo
+        src={md.url}
+        caption={md.caption}
+        escuro={escuro}
+        nomeArquivo={nomeArquivo}
+        onAmpliar={() => onAbrirMidia?.({
+          url: md.url, tipo: 'video', legenda: md.caption, nomeArquivo,
+        })}
+      />
+    );
   }
   if (m.tipo === 'audio') {
     return <BolhaAudio m={m} escuro={escuro} />;
@@ -2169,7 +2239,7 @@ function PainelChat({
                   // duas vezes na bolha: uma dentro do bloco da imagem, outra
                   // logo abaixo. Não era duplicação de dados -- a mensagem
                   // sempre esteve gravada uma vez só.
-                  <MensagemMidia m={m} escuro onAbrirImagem={setImagemAmpliada} />
+                  <MensagemMidia m={m} escuro onAbrirMidia={setImagemAmpliada} />
                 ) : (
                   <FormattedMessage text={m.texto} />
                 )}
@@ -2561,8 +2631,9 @@ function PainelChat({
       )}
 
       {imagemAmpliada && (
-        <VisualizadorImagem
+        <VisualizadorMidia
           url={imagemAmpliada.url}
+          tipo={imagemAmpliada.tipo || 'imagem'}
           legenda={imagemAmpliada.legenda}
           nomeArquivo={imagemAmpliada.nomeArquivo}
           onFechar={() => setImagemAmpliada(null)}

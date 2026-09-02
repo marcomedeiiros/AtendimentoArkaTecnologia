@@ -12,7 +12,7 @@ import { BugsAPI } from '../services/api';
 import Portal from '../components/Portal';
 import { FUSO_BR } from '../utils/data';
 import { confirmar } from '../utils/dialogo';
-import VisualizadorImagem from '../components/VisualizadorImagem';
+import VisualizadorMidia from '../components/VisualizadorMidia';
 
 // ── Constantes de imagem (espelham o servidor: bug.imagens.js) ─────────────
 // A barreira real fica no backend (whitelist de mime + magic bytes +
@@ -638,9 +638,9 @@ export default function BugsPage() {
           o texto ilegível, e não havia zoom, arraste nem download.
           
           Agora vem com roda do mouse, +/-, duplo clique, arraste acima de 100% e
-          botão de baixar. Ver components/VisualizadorImagem. */}
+          botão de baixar. Ver components/VisualizadorMidia. */}
       {ampliada && (
-        <VisualizadorImagem
+        <VisualizadorMidia
           url={ampliada.url}
           nomeArquivo={ampliada.nome}
           onFechar={() => setAmpliada(null)}
