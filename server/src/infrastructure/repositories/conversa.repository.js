@@ -793,6 +793,28 @@ class ConversaRepository {
     });
   }
 
+  /**
+   * A mensagem local que corresponde a um id do WhatsApp -- DENTRO de uma conversa.
+   *
+   * E o que resolve a citacao RECEBIDA: quando o cliente responde citando, o
+   * WhatsApp manda apenas `contextInfo.stanzaId`, que e o id da mensagem no
+   * aparelho. Como todo envio nosso guarda o `waMessageId` que a Evolution
+   * devolveu (ver vincularWaMessageId) e toda mensagem recebida guarda o
+   * `key.id` do webhook, esse id sempre volta para uma mensagem nossa.
+   *
+   * `findFirst` com a conversa no filtro, e nao `findUnique` pelo indice: o
+   * unique de `waMessageId` e GLOBAL, e casar sem escopo permitiria, em teoria,
+   * uma citacao apontar para mensagem de outro fio -- que apareceria na bolha
+   * como se fosse desta conversa.
+   */
+  findMensagemPorWaId(waMessageId, conversaId = null) {
+    if (!waMessageId) return Promise.resolve(null);
+    return prisma.mensagem.findFirst({
+      where: { waMessageId: String(waMessageId), ...(conversaId ? { conversaId } : {}) },
+      select: { id: true, origem: true, texto: true },
+    });
+  }
+
   countByStatus() {
     return prisma.conversa.groupBy({
       by: ["statusAtendimento"],

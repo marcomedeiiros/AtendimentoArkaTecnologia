@@ -3469,6 +3469,8 @@ class ChatbotEngine {
     waMessageId = null,
     midia = null,
     encaminhada = null,
+    // { stanzaId, texto } do "responder" do WhatsApp. Ver extrairCitacao.
+    citacao = null,
   }) {
     const textoLimpo = this.extrairTextoMensagem(texto);
     const ehMidia = !!midia && midia.tipo && midia.tipo !== "texto";
@@ -3532,10 +3534,26 @@ class ChatbotEngine {
       }
     }
 
-    // A marca de encaminhamento e botaoId entram no metadata.
+    // RETRATO DO TRECHO CITADO -- e por que ele vai para o metadata.
+    //
+    // A ligacao boa e por id (`respondendoAId`, resolvido logo abaixo pelo
+    // stanzaId), e e ela que faz a bolha citar a mensagem de verdade. Mas a
+    // original pode nao existir aqui: o cliente pode citar mensagem anterior a
+    // integracao, ou uma que saiu do celular fora da Central. Sem retrato, esses
+    // casos voltariam a mostrar a resposta solta -- sem nenhuma pista do que o
+    // cliente estava respondendo. Com ele, a Central exibe o trecho citado
+    // mesmo sem conseguir apontar para a mensagem.
+    const citacaoResumo = citacao?.texto ? { texto: String(citacao.texto).slice(0, 500) } : null;
+
+    // A marca de encaminhamento, o botaoId e o trecho citado entram no metadata.
     const metadata =
-      ehMidia || encaminhada || botaoId
-        ? { ...(ehMidia ? midia : {}), ...(encaminhada || {}), ...(botaoId ? { botaoId } : {}) }
+      ehMidia || encaminhada || botaoId || citacaoResumo
+        ? {
+            ...(ehMidia ? midia : {}),
+            ...(encaminhada || {}),
+            ...(botaoId ? { botaoId } : {}),
+            ...(citacaoResumo ? { citacao: citacaoResumo } : {}),
+          }
         : null;
     const respondendoPesquisa =
       sessaoAberta?.ativo &&
@@ -3648,12 +3666,28 @@ class ChatbotEngine {
       // Se o cliente escrever DEPOIS da avaliacao, essa proxima mensagem nao
       // tem a marca, abre atendimento novo e avisa normalmente -- que e
       // exatamente quando o atendente precisa saber.
+      // CITACAO RECEBIDA: stanzaId (id no aparelho) -> id da mensagem local.
+      //
+      // Escopada nesta conversa de proposito -- ver findMensagemPorWaId. Se nao
+      // resolver, `respondendoAId` fica null e a bolha usa o retrato em
+      // `metadata.citacao`; a mensagem nunca deixa de ser gravada por causa
+      // disto. O `?.` cobre stubs de teste que nao implementam o metodo.
+      let respondendoAId = null;
+      if (citacao?.stanzaId) {
+        const original = await this.deps.conversaRepository.findMensagemPorWaId?.(
+          citacao.stanzaId,
+          conversa.id
+        );
+        respondendoAId = original?.id || null;
+      }
+
       await this.deps.conversaRepository.addMensagem(
         conversa.id,
         "cliente",
         textoMsg,
         respondendoPesquisa ? { ...(metadata || {}), respostaPesquisa: true } : metadata,
-        waMessageId
+        waMessageId,
+        respondendoAId ? { respondendoAId } : {}
       );
       // Se a conversa ficou so com o numero (ex.: iniciada pelo atendente) ou com
       // o placeholder "Cliente", adota o nome do perfil do WhatsApp quando o

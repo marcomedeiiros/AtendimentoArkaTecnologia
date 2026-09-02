@@ -9,7 +9,7 @@ import {
   FileText, MapPin, Contact, Paperclip, Smile, Loader2,
   SlidersHorizontal, Star, Archive, EyeOff, MoreVertical,
   ZoomIn, ZoomOut, Maximize2, Download, CornerUpLeft, CornerUpRight, Share2, Pencil, MoreHorizontal, Mic, Tag, PenLine,
-  Sun, Moon, Bot, StickyNote
+  Sun, Moon, Bot, StickyNote, SpellCheck, Undo2
 } from 'lucide-react';
 import { EmojiIcon, FormattedMessage, TextoFormatado } from './EmojiIcon';
 import { useMensagensRapidas } from './MensagensRapidas';
@@ -1641,6 +1641,12 @@ function PainelChat({
   const [encaminhando, setEncaminhando] = useState(null);   // mensagem a encaminhar
   const [editando, setEditando] = useState(null);           // { id, textoOriginal }
   const [gravandoAudio, setGravandoAudio] = useState(false);
+  // CORRETOR DE TEXTO. `textoAntes` guarda o que a pessoa escreveu para o
+  // "desfazer" existir: um corretor sem volta é um corretor em que não se
+  // confia, porque o operador perde a própria frase se a correção ficar ruim.
+  const [corrigindo, setCorrigindo] = useState(false);
+  const [textoAntes, setTextoAntes] = useState(null);
+  const [avisoCorrecao, setAvisoCorrecao] = useState('');
   // MODO NOTA: a mesma caixa de texto, escrevendo para dentro em vez de para o
   // cliente. Um estado, e não uma segunda caixa, porque duas caixas na mesma
   // barra é o desenho que faz a pessoa digitar na errada.
@@ -1713,6 +1719,44 @@ function PainelChat({
   }, []);
 
   // Cola imagem/arquivo direto da area de transferencia (Ctrl+V), ex: print de tela.
+  /**
+   * Corrige o texto da caixa (ortografia, acentuação, pontuação, concordância).
+   *
+   * NÃO envia nada: troca o conteúdo do campo e devolve o cursor para o
+   * atendente, que lê e decide. O corretor é do servidor (mesma chave da
+   * transcrição) porque um dicionário no navegador não resolve acentuação e
+   * concordância -- e porque a regra tem de ser a mesma para toda a equipe.
+   */
+  const corrigirTexto = useCallback(async () => {
+    const original = texto.trim();
+    if (!original || corrigindo) return;
+    setCorrigindo(true);
+    setAvisoCorrecao('');
+    try {
+      const r = await ConversasAPI.corrigirTexto(original);
+      if (r.alterado) {
+        setTextoAntes(texto);
+        setTexto(r.texto);
+      } else {
+        // "Não mudou nada" é resposta boa e precisa ser dita: sem isso, clicar e
+        // não ver diferença parece botão quebrado.
+        setAvisoCorrecao('Nenhum erro encontrado.');
+        setTimeout(() => setAvisoCorrecao(''), 2500);
+      }
+    } catch (e) {
+      setAvisoCorrecao(e.message);
+      setTimeout(() => setAvisoCorrecao(''), 6000);
+    } finally {
+      setCorrigindo(false);
+    }
+  }, [texto, corrigindo, setTexto]);
+
+  const desfazerCorrecao = useCallback(() => {
+    if (textoAntes == null) return;
+    setTexto(textoAntes);
+    setTextoAntes(null);
+  }, [textoAntes, setTexto]);
+
   const colarDaAreaTransferencia = useCallback((e) => {
     const items = e.clipboardData?.items;
     if (!items || !items.length) return;
@@ -2188,17 +2232,30 @@ function PainelChat({
                   </div>
                 )}
 
-                {/* Trecho citado (recurso "responder") */}
-                {m.respondendoAId && (() => {
-                  const orig = conversa.mensagens.find(x => x.id === m.respondendoAId);
-                  if (!orig) return null;
+                {/* Trecho citado (recurso "responder").
+                    
+                    DUAS FONTES, nesta ordem: a mensagem original carregada na
+                    tela (`respondendoAId`) e, quando ela não está disponível, o
+                    RETRATO que veio do WhatsApp junto da resposta do cliente
+                    (`m.citacao`). O plano B não é luxo: a original pode ser
+                    anterior à integração, ter saído pelo celular fora da
+                    Central, ou simplesmente estar fora da janela de mensagens
+                    carregada -- e nos três casos um `return null` silencioso
+                    fazia a resposta do cliente aparecer solta, sem pista de a
+                    que ele estava respondendo. */}
+                {(() => {
+                  const orig = m.respondendoAId
+                    ? conversa.mensagens.find(x => x.id === m.respondendoAId)
+                    : null;
+                  const textoCitado = orig?.texto || m.citacao?.texto || null;
+                  if (!textoCitado) return null;
                   return (
                     <div className={`text-[10px] px-2 py-1 rounded-lg border-l-2 mb-1 truncate ${
                       m.de === 'cliente'
                         ? 'bg-grafite-800/70 border-acao/60 text-texto-suave'
                         : 'bg-grafite-900/30 border-acao-200/70 text-texto-suave'
                     }`}>
-                      {orig.texto}
+                      {textoCitado}
                     </div>
                   );
                 })()}
@@ -2268,6 +2325,29 @@ function PainelChat({
           <button onClick={() => setRespondendoA(null)} className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 shrink-0">
             <X size={13} />
           </button>
+        </div>
+      )}
+
+      {/* Resultado da correção: o "desfazer" e os recados do corretor.
+          
+          O desfazer fica FORA da barra de botões, e visível, porque é ele que
+          torna o corretor seguro de usar: a frase original está a um clique até
+          a pessoa digitar de novo ou enviar. */}
+      {(textoAntes != null || avisoCorrecao) && (
+        <div className="mx-3 mb-2 flex items-center justify-between gap-3 px-2.5 py-2 rounded-xl bg-grafite-700 border border-linha text-[11px]">
+          <span className="min-w-0 truncate flex items-center gap-1.5 text-slate-400">
+            <SpellCheck size={12} className="text-acao-200 shrink-0" />
+            {avisoCorrecao || 'Texto corrigido — confira antes de enviar.'}
+          </span>
+          {textoAntes != null && (
+            <button
+              onClick={desfazerCorrecao}
+              title="Voltar ao texto que você escreveu"
+              className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg bg-grafite-600 hover:bg-grafite-500 text-slate-300 font-semibold transition-colors"
+            >
+              <Undo2 size={12} /> Desfazer
+            </button>
+          )}
         </div>
       )}
 
@@ -2457,6 +2537,25 @@ function PainelChat({
           </button>
         )}
 
+        {/* CORRETOR. Fica desabilitado com o campo vazio: corrigir nada é o tipo
+            de clique que ensina a desconfiar da barra. Sem atalho de teclado de
+            propósito -- Enter e Ctrl+Enter já enviam, e um atalho a mais nesta
+            caixa é risco de mandar mensagem sem querer. */}
+        <button
+          onClick={corrigirTexto}
+          disabled={!texto.trim() || corrigindo}
+          title={texto.trim()
+            ? 'Corrigir ortografia, acentuação e pontuação do texto (não envia)'
+            : 'Escreva algo para corrigir'}
+          className={`p-2.5 rounded-xl border transition-all disabled:opacity-40 ${
+            corrigindo
+              ? 'bg-acao/20 border-acao/40 text-acao-200'
+              : 'bg-grafite-700 border-linha text-slate-400 hover:text-acao-200 hover:border-acao/30'
+          }`}
+        >
+          {corrigindo ? <Loader2 size={15} className="animate-spin" /> : <SpellCheck size={15} />}
+        </button>
+
         <button
           onClick={() => setGravandoAudio(v => !v)}
           title={gravandoAudio ? 'Cancelar gravação' : 'Gravar áudio'}
@@ -2490,7 +2589,20 @@ function PainelChat({
           <textarea
             value={texto}
             rows={1}
-            onChange={e => setTexto(e.target.value)}
+            /* Corretor NATIVO do navegador, de graça e sempre ligado: sublinha o
+               erro de digitação enquanto se escreve. `lang` é o que troca o
+               dicionário -- sem ele o navegador usa o idioma da página/sistema e
+               marca palavra portuguesa como erro. O botão de corrigir é o passo
+               seguinte, para o que dicionário nenhum resolve (acentuação que muda
+               sentido, concordância, vírgula). */
+            lang="pt-BR"
+            spellCheck
+            onChange={e => {
+              setTexto(e.target.value);
+              // Digitou depois de corrigir: o "desfazer" perderia o sentido
+              // (voltaria a um texto anterior ao que está na tela agora).
+              if (textoAntes != null) setTextoAntes(null);
+            }}
             onPaste={colarDaAreaTransferencia}
             onKeyDown={e => {
               // Enter envia; Ctrl/Cmd+Enter envia; Shift+Enter quebra linha.

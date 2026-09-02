@@ -707,6 +707,10 @@ function conferirUmaPerguntaPorTurno(rotulo, r) {
       atualizarAtendimentoAtual: async () => null,
       atualizarAtendimento: async () => null,
       garantirAtendimentoAberto: async () => ({ atendimento: null, nova: false }),
+      // Este roteiro nao tem OS nenhuma (atendimento: null), entao o real
+      // devolveria 0 aqui -- "nenhuma linha casou". O que importa e o metodo
+      // EXISTIR: sem ele o fechamento por timeout estourava TypeError.
+      definirMotivoAtualSeVazio: async () => 0,
       respondeuDepoisDe: async () => false,
     },
     sessaoRepository: {
@@ -797,6 +801,8 @@ function conferirUmaPerguntaPorTurno(rotulo, r) {
       update: async (_i, d) => Object.assign(conversaF, d),
       atualizarAtendimentoAtual: async () => null,
       garantirAtendimentoAberto: async () => ({ atendimento: null, nova: false }),
+      // Sem OS neste roteiro: o real devolveria 0. Ver a nota no stub do timeout.
+      definirMotivoAtualSeVazio: async () => 0,
       ultimoCnpjDoTelefone: async () => null,
     },
     sessaoRepository: {

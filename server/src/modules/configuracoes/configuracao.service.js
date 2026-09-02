@@ -197,6 +197,23 @@ class ConfiguracaoService {
     return String(c["transcricao.apiKey"] || "").trim();
   }
 
+  /**
+   * A MESMA chave, para os recursos de IA em geral (hoje: transcricao de audio e
+   * corretor de texto).
+   *
+   * UMA chave, e nao uma por recurso, porque e uma conta so na Groq e a API e a
+   * mesma (formato OpenAI: /audio/transcriptions e /chat/completions). Uma chave
+   * por recurso obrigaria a colar o mesmo valor duas vezes em Configuracoes e
+   * criaria o estado "transcricao funciona, corretor nao" sem nenhuma razao
+   * tecnica -- confusao pura para quem administra.
+   *
+   * Existe como nome proprio (e nao um `transcricaoApiKey()` chamado de dentro
+   * do corretor) para o codigo do corretor nao mentir sobre o que le.
+   */
+  async iaApiKey() {
+    return this.transcricaoApiKey();
+  }
+
   // "n8n" | "local" | "humano" -- ver DEFINICOES.
   async modoAtendimento() {
     const c = await this._carregar();

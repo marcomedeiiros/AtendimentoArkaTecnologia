@@ -18,7 +18,10 @@ class ChatbotService {
     return instancia;
   }
 
-  async processar({ telefone, texto, botaoId = null, nomeCliente, instanceName, waMessageId, midia = null, encaminhada = null }) {
+  // A desestruturacao aqui e EXPLICITA, e nao um `...params`: campo novo que
+  // ninguem adicionar nesta lista morre silenciosamente no caminho. Foi assim
+  // que a citacao recebida ficou de fora -- por isso `citacao` esta aqui.
+  async processar({ telefone, texto, botaoId = null, nomeCliente, instanceName, waMessageId, midia = null, encaminhada = null, citacao = null }) {
     const instancia = await this.resolverInstancia(instanceName);
     return chatbotEngine.processarMensagemEntrada({
       instanciaId: instancia.id,
@@ -30,6 +33,7 @@ class ChatbotService {
       waMessageId,
       midia,
       encaminhada,
+      citacao,
     });
   }
 

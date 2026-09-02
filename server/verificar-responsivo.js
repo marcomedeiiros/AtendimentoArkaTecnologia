@@ -178,9 +178,11 @@ const GRADES_LIBERADAS = new Map([
   // A chave e arquivo:LINHA, entao ela ANDA quando alguem edita algo acima. Foi
   // o que aconteceu aqui: o seletor de emoji nao mudou uma virgula, so desceu
   // de 1556 para 1621 quando o cabecalho da conversa e o modal de
-  // transferencia cresceram. Se este teste acusar uma grade que voce nao
-  // escreveu, confira primeiro se e so a linha que mudou.
-  ["components/pages/AtendimentoView.jsx:1621", "seletor de emoji"],
+  // transferencia cresceram -- e depois SUBIU para 1544, quando o painel de TV
+  // saiu deste arquivo e virou components/ModoTv.jsx (218 linhas a menos acima
+  // dele). Se este teste acusar uma grade que voce nao escreveu, confira
+  // primeiro se e so a linha que mudou.
+  ["components/pages/AtendimentoView.jsx:1544", "seletor de emoji"],
   ["components/ReportarBug.jsx:237", "miniaturas dos anexos"],
   // MEDIDO, não presumido: reproduzido com o CSS compilado numa tela de 320px,
   // a linha precisa de 286px e tem 286px -- inclusive com os números de uma

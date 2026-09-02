@@ -150,22 +150,81 @@ class WhatsAppService {
    * um selo falso.
    */
   extrairEncaminhada(payload) {
-    const msg = payload?.data?.message || payload?.message;
-    if (!msg || typeof msg !== "object") return null;
-
-    const nos = [
-      msg.extendedTextMessage, msg.imageMessage, msg.videoMessage, msg.audioMessage,
-      msg.documentMessage, msg.documentWithCaptionMessage?.message?.documentMessage,
-      msg.stickerMessage, msg.locationMessage, msg.contactMessage, msg.contextInfo && msg,
-    ].filter(Boolean);
-
-    for (const no of nos) {
-      const ctx = no.contextInfo;
-      if (!ctx) continue;
+    for (const ctx of this._contextos(payload)) {
       const vezes = Number(ctx.forwardingScore) || 0;
       if (ctx.isForwarded === true || vezes > 0) {
         return { encaminhada: true, encaminhadaVezes: vezes || 1 };
       }
+    }
+    return null;
+  }
+
+  /**
+   * Os `contextInfo` do payload, um por no de tipo.
+   *
+   * O Baileys pendura o `contextInfo` DENTRO do no do tipo
+   * (extendedTextMessage, imageMessage, ...), e nao na raiz -- por isso varremos
+   * os nos conhecidos em vez de olhar um lugar so. Fica numa funcao propria
+   * porque DUAS informacoes diferentes moram nesse mesmo objeto (encaminhamento
+   * e citacao), e com a lista duplicada bastava alguem adicionar um tipo novo em
+   * uma das duas para os recursos discordarem sobre a mesma mensagem.
+   */
+  _contextos(payload) {
+    const msg = payload?.data?.message || payload?.message;
+    if (!msg || typeof msg !== "object") return [];
+
+    return [
+      msg.extendedTextMessage, msg.imageMessage, msg.videoMessage, msg.audioMessage,
+      msg.documentMessage, msg.documentWithCaptionMessage?.message?.documentMessage,
+      msg.stickerMessage, msg.locationMessage, msg.contactMessage, msg.contextInfo && msg,
+    ]
+      .filter(Boolean)
+      .map((no) => no.contextInfo)
+      .filter(Boolean);
+  }
+
+  /**
+   * A mensagem e RESPOSTA a outra? (o "responder" do WhatsApp)
+   *
+   * ── O DEFEITO QUE ISTO CONSERTA ────────────────────────────────────────────
+   *
+   * A citacao funcionava numa direcao so. Quando NOS respondiamos citando, a
+   * bolha mostrava o trecho citado -- porque a Central grava `respondendoAId`
+   * no envio. Quando o CLIENTE respondia citando, a mensagem dele aparecia
+   * solta: ninguem lia o `contextInfo` do webhook, entao o dado nao existia. Nao
+   * era problema de renderizacao (o bloco de citacao sempre foi desenhado para
+   * qualquer origem) -- era falta de ingestao.
+   *
+   * ── O QUE O WHATSAPP MANDA, E O QUE FAZEMOS COM ISSO ───────────────────────
+   *
+   *   `stanzaId`      -> o id da mensagem CITADA no aparelho. E a unica ligacao
+   *                      com a original, e casa com o nosso `waMessageId`.
+   *   `quotedMessage` -> um retrato do conteudo citado.
+   *
+   * Guardamos os dois, e nao apenas o id, de proposito: a original pode nao
+   * existir aqui (o cliente citou uma mensagem anterior a integracao, ou uma
+   * enviada pelo celular fora da Central). Com o retrato, a bolha mostra o
+   * trecho citado de qualquer forma -- que e o que o atendente precisa ler para
+   * entender a resposta. Sem ele, a mensagem voltaria a aparecer solta nesses
+   * casos.
+   */
+  extrairCitacao(payload) {
+    for (const ctx of this._contextos(payload)) {
+      const stanzaId = ctx.stanzaId || ctx.quotedMessageId || null;
+      const citada = ctx.quotedMessage || null;
+      if (!stanzaId && !citada) continue;
+
+      // Reaproveita a extracao de texto da mensagem normal: o retrato citado tem
+      // a mesma forma de uma mensagem (conversation, extendedTextMessage, ...).
+      const texto = citada ? this.extrairTexto({ message: citada }) : null;
+
+      return {
+        stanzaId: stanzaId ? String(stanzaId) : null,
+        // Texto do trecho citado quando houver; para midia citada o
+        // `extrairTexto` devolve a legenda, e sem legenda fica null (a bolha
+        // cai no lookup pelo id, que resolve a original de verdade).
+        texto: texto || null,
+      };
     }
     return null;
   }
@@ -421,6 +480,9 @@ class WhatsAppService {
     // Encaminhamento vale para QUALQUER tipo -- inclusive texto puro, que não
     // passa por `extrairMidia`. Por isso é lido em separado e juntado depois.
     const encaminhada = this.extrairEncaminhada(body);
+    // Citação ("responder"): mesma história do encaminhamento -- vale para
+    // qualquer tipo e mora no mesmo `contextInfo`.
+    const citacao = this.extrairCitacao(body);
     let midia = this.extrairMidia(body);
     // Para tipos com arquivo, tenta obter os bytes (base64 no payload quando o
     // "Webhook Base64" está ligado, senão baixa via getBase64FromMediaMessage).
@@ -500,6 +562,7 @@ class WhatsAppService {
       waMessageId: key?.id || null,
       midia,
       encaminhada,
+      citacao,
     });
 
     return { recebido: true, ...result };

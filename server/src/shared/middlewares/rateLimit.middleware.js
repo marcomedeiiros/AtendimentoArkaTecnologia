@@ -114,4 +114,26 @@ const midiaLimiter = rateLimit({
   },
 });
 
-module.exports = { webhookLimiter, apiLimiter, authLimiter, midiaLimiter };
+// CORRETOR DE TEXTO: cada chamada e uma requisicao paga a um provedor externo
+// (Groq), disparada por um clique. O limite aqui nao e sobre carga do nosso
+// servidor -- e sobre CUSTO e sobre a cota da conta de IA, que o apiLimiter
+// global (~133/min) nunca protegeria.
+//
+// 30/min por IP: um atendente corrige uma frase de cada vez, e mesmo varios
+// operadores atras do mesmo IP da empresa nao chegam perto disso digitando. Quem
+// chegar esta com o dedo no botao ou com um script.
+const correcaoLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: {
+      code: "RATE_LIMIT",
+      message: "Muitas correções em sequência. Aguarde um minuto.",
+    },
+  },
+});
+
+module.exports = { webhookLimiter, apiLimiter, authLimiter, midiaLimiter, correcaoLimiter };

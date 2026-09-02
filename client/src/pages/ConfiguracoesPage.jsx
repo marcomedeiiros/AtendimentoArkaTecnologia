@@ -239,13 +239,16 @@ export default function ConfiguracoesPage() {
       {!carregando && (
         <div className="glass-panel p-6 rounded-2xl border border-linha space-y-4">
           <h3 className="font-bold text-sm text-white font-display flex items-center gap-2">
-            <FileText size={16} className="text-acao-200" /> Transcrição de áudio (Whisper)
+            <FileText size={16} className="text-acao-200" /> Recursos de IA (transcrição e corretor)
           </h3>
           <p className="text-[11px] text-slate-400 leading-relaxed">
-            Liga o botão <strong className="text-slate-300">Transcrever</strong> nos áudios da conversa
-            use uma chave <strong className="text-slate-300">gratuita</strong> da{' '}
+            Uma chave da{' '}
             <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-acao-200 underline underline-offset-2">Groq</a>{' '}
-            (cadastro rápido) o Whisper roda na camada gratuita sem chave, o botão avisa que a transcrição não está configurada.
+            liga <strong className="text-slate-300">dois</strong> recursos da Central: o botão{' '}
+            <strong className="text-slate-300">Transcrever</strong> nos áudios que o cliente manda e o{' '}
+            <strong className="text-slate-300">corretor de texto</strong> da caixa de mensagem. É a mesma
+            conta e a mesma API, então não há duas chaves para preencher. Sem ela os dois botões avisam
+            que o recurso não está configurado o resto da Central funciona normalmente.
           </p>
           <Campo
             def={{ chave: 'transcricao.apiKey', label: 'Chave de API (Groq)', placeholder: 'gsk_...', segredo: true }}

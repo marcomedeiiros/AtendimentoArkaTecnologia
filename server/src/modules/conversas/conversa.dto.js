@@ -32,6 +32,20 @@ const adicionarNotaSchema = z.object({
   texto: z.string().min(1, "Escreva a nota").max(2000, "Nota muito longa (maximo 2000 caracteres)"),
 });
 
+// Corretor de texto da caixa de mensagem. So o texto: o corretor nao conhece
+// conversa, cliente nem destino -- ele recebe uma frase e devolve a frase
+// corrigida, e quem decide enviar e o atendente.
+//
+// O teto casa com o `MAX_CARACTERES` do correcao.client: recusar aqui, na
+// porta, e mais barato (e mais claro para quem le o erro) do que gastar a
+// chamada da API para receber um limite estourado do outro lado.
+const corrigirTextoSchema = z.object({
+  texto: z
+    .string()
+    .min(1, "Escreva algo para corrigir")
+    .max(4000, "Texto muito longo para corrigir (maximo 4000 caracteres)"),
+});
+
 // Conversa iniciada pelo painel (botao de enviar da Central).
 //
 // O telefone e validado de leve aqui (tamanho plausivel) e normalizado de
@@ -362,6 +376,7 @@ const avaliarAtendimentoSchema = z.object({
 module.exports = {
   enviarMensagemSchema,
   adicionarNotaSchema,
+  corrigirTextoSchema,
   iniciarConversaSchema,
   atualizarStatusSchema,
   validarCnpjSchema,

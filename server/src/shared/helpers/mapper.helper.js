@@ -60,6 +60,11 @@ function mapMensagem(m) {
     // Risquinhos: so faz sentido no que sai daqui.
     status: m.origem === "cliente" ? null : m.status || null,
     respondendoAId: m.respondendoAId || null,
+    // RETRATO do trecho citado, quando o WhatsApp mandou junto (citacao vinda do
+    // cliente). E o plano B do `respondendoAId`: com ele a bolha mostra o que
+    // foi citado mesmo quando a mensagem original nao esta no banco (citou algo
+    // anterior a integracao) ou nao esta na janela carregada na tela.
+    citacao: meta.citacao?.texto ? { texto: meta.citacao.texto } : null,
     editada: !!m.editadaEm,
     // Marcada por "Apagar para todos": some do WhatsApp do cliente e vira aviso
     // no chat ao vivo, mas segue no Registro (o texto original continua aqui).

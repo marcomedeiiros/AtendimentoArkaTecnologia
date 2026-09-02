@@ -673,6 +673,10 @@ export const ConversasAPI = {
   adicionarNota: (id, texto) => request(`/conversas/${id}/notas`, { method: 'POST', body: JSON.stringify({ texto }) }),
   editarMensagem: (mensagemId, texto) => request(`/conversas/mensagens/${mensagemId}`, { method: 'PATCH', body: JSON.stringify({ texto }) }),
   transcreverAudio: (mensagemId) => request(`/conversas/mensagens/${mensagemId}/transcrever`, { method: 'POST' }),
+  // Corretor de ortografia/gramática da caixa de mensagem. Devolve
+  // { texto, alterado } -- `alterado: false` = o texto já estava correto, e a
+  // tela precisa saber a diferença para não dizer "corrigido" sem ter mudado nada.
+  corrigirTexto: (texto) => request('/conversas/corrigir-texto', { method: 'POST', body: JSON.stringify({ texto }) }),
   apagarMensagem: (mensagemId) => request(`/conversas/mensagens/${mensagemId}`, { method: 'DELETE' }),
   encaminharMensagem: (mensagemId, conversaDestinoId) => request('/conversas/mensagens/encaminhar', { method: 'POST', body: JSON.stringify({ mensagemId, conversaDestinoId }) }),
   solicitarCnpj: (id) => request(`/conversas/${id}/solicitar-cnpj`, { method: 'POST' }),

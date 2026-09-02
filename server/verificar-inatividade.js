@@ -110,6 +110,17 @@ function ambiente(fluxo) {
         if (os) Object.assign(os, dados);
         return os || null;
       },
+      // MESMO CONTRATO DO REAL: rotula a OS em curso, e SO SE ela ainda nao tem
+      // motivo -- a escolha de quem fechou pela Central vale mais que o rotulo
+      // do robo. Faltava aqui, e o encerramento por inatividade (que passa por
+      // `fecharConversa`) estourava TypeError antes de chegar a qualquer
+      // assertiva: o motor ganhou a chamada e este stub nao acompanhou.
+      definirMotivoAtualSeVazio: async (_id, motivo) => {
+        const os = est.conversa.atendimentos[0];
+        if (!os || !motivo || os.motivo) return 0;
+        os.motivo = motivo;
+        return 1;
+      },
       ultimoCnpjDoTelefone: async () => null,
     },
     sessaoRepository: {

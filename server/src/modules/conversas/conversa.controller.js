@@ -89,6 +89,10 @@ class ConversaController {
       .then((data) => success(res, data));
   }
 
+  corrigirTexto(req, res) {
+    return conversaService.corrigirTexto(req.body.texto).then((data) => success(res, data));
+  }
+
   // GET /conversas/mensagens/:mensagemId/midia?t=<token>
   //
   // Autenticada pelo token assinado na URL (o <img>/<video> do navegador nao

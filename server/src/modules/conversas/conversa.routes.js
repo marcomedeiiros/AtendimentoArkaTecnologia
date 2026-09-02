@@ -4,7 +4,7 @@ const conversaStream = require("./conversa.stream");
 const validate = require("../../shared/middlewares/validate.middleware");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
 const { exigirModulo } = require("../permissoes/modulo.middleware");
-const { midiaLimiter } = require("../../shared/middlewares/rateLimit.middleware");
+const { midiaLimiter, correcaoLimiter } = require("../../shared/middlewares/rateLimit.middleware");
 const {
   enviarMensagemSchema,
   adicionarNotaSchema,
@@ -18,6 +18,7 @@ const {
   atualizarSetorSchema,
   definirAtendenteSchema,
   avaliarAtendimentoSchema,
+  corrigirTextoSchema,
 } = require("./conversa.dto");
 
 // SSE: autenticado pelo ticket na query (o EventSource nao manda header).
@@ -78,6 +79,19 @@ router.get("/motivos-encerramento", (req, res, next) =>
 // casaria com "/:id" se viesse depois.
 router.post("/iniciar", validate(iniciarConversaSchema), (req, res, next) =>
   conversaController.iniciarConversa(req, res).catch(next)
+);
+
+// CORRETOR DE TEXTO da caixa de mensagem. Nao recebe id de conversa: corrige a
+// frase que esta sendo digitada, antes de ela virar mensagem.
+//
+// Declarada aqui, junto de "/iniciar", pelo habito da casa de por as rotas
+// literais antes das de parametro -- ainda que "/corrigir-texto" (POST) nao
+// colidisse com "/:id" (GET).
+//
+// Com limitador: cada clique e uma chamada paga a um provedor externo, e o teto
+// generoso do apiLimiter global (~133/min) nao serve de freio para isso.
+router.post("/corrigir-texto", correcaoLimiter, validate(corrigirTextoSchema), (req, res, next) =>
+  conversaController.corrigirTexto(req, res).catch(next)
 );
 router.get("/:id", (req, res, next) => conversaController.obter(req, res).catch(next));
 router.post("/:id/atender", (req, res, next) => conversaController.atender(req, res).catch(next));

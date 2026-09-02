@@ -2,6 +2,7 @@ const conversaRepository = require("../../infrastructure/repositories/conversa.r
 const instanciaRepository = require("../../infrastructure/repositories/instancia.repository");
 const evolutionApi = require("../../infrastructure/external/evolution-api.client");
 const transcricaoClient = require("../../infrastructure/external/transcricao.client");
+const correcaoClient = require("../../infrastructure/external/correcao.client");
 const midiaStorage = require("../../infrastructure/storage/midia.storage");
 const { mapConversa, mapAtendimento } = require("../../shared/helpers/mapper.helper");
 // `mascararCnpj` saiu daqui: nenhuma mensagem deste service imprime mais os 14
@@ -717,6 +718,23 @@ class ConversaService {
     if (conversa) this._emitir(conversa);
 
     return { transcricao, cache: false };
+  }
+
+  /**
+   * CORRIGE O TEXTO QUE O ATENDENTE ESTA ESCREVENDO -- e nada mais.
+   *
+   * Nao toca em conversa, mensagem nem banco: entra uma frase, sai a frase
+   * corrigida. Vive neste service pelo mesmo motivo que `transcreverAudio`: e um
+   * recurso DA CENTRAL, e as rotas daqui ja estao atras do modulo
+   * "atendimento" -- quem pode escrever para o cliente pode corrigir o que
+   * escreveu. Um modulo de IA proprio criaria uma segunda permissao para
+   * responder a mesma pergunta.
+   *
+   * Sem cache, de proposito: cada texto e diferente, e guardar rascunho de
+   * mensagem nao enviada seria criar um deposito de coisas que ninguem pediu.
+   */
+  async corrigirTexto(texto) {
+    return correcaoClient.corrigir(texto);
   }
 
   // Encaminha uma mensagem existente para outra conversa (o WhatsApp reenvia o
