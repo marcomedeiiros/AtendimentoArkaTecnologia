@@ -17,6 +17,7 @@ const prisma = require("./infrastructure/database/prisma.client");
 const inatividade = require("./modules/chatbot/chatbot.inatividade");
 const sessaoRefreshRepository = require("./infrastructure/repositories/sessaoRefresh.repository");
 const reconexaoWhatsApp = require("./modules/whatsapp/whatsapp.reconexao");
+const fotosConversas = require("./modules/conversas/conversa.fotos");
 
 const app = createApp();
 
@@ -50,6 +51,12 @@ async function start() {
     // verdade e, se o pareamento tiver se perdido, para de tentar e avisa o
     // painel. A regra toda vive no modulo -- ele e a UNICA via de reconexao.
     reconexaoWhatsApp.iniciar();
+
+    // O link de foto do WhatsApp vence em poucos dias e passa a devolver 403 --
+    // o avatar do cliente cai nas iniciais sem nada aparecer no log, porque
+    // quem leva o 403 e o navegador do operador. Esta varredura troca os links
+    // vencidos antes que isso aconteca.
+    fotosConversas.iniciar();
   });
 }
 

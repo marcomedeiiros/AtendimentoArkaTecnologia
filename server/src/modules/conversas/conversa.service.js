@@ -4,6 +4,7 @@ const evolutionApi = require("../../infrastructure/external/evolution-api.client
 const transcricaoClient = require("../../infrastructure/external/transcricao.client");
 const correcaoClient = require("../../infrastructure/external/correcao.client");
 const midiaStorage = require("../../infrastructure/storage/midia.storage");
+const fotos = require("./conversa.fotos");
 const { mapConversa, mapAtendimento } = require("../../shared/helpers/mapper.helper");
 // `mascararCnpj` saiu daqui: nenhuma mensagem deste service imprime mais os 14
 // digitos -- o que confirma a identificacao e a razao social.
@@ -163,7 +164,11 @@ class ConversaService {
     // a conversa nasceu, tentamos de novo ao assumir o atendimento. Depois do
     // guard de concorrencia de proposito -- e chamada de rede, e nao pode
     // atrasar a decisao de quem fica com a conversa.
-    if (!conversa.fotoUrl) {
+    //
+    // `precisaRenovar` no lugar de `!fotoUrl`: o link do CDN do WhatsApp vence
+    // em poucos dias e passa a responder 403. So olhar para "e nulo?" deixava
+    // o link podre gravado para sempre (ver conversa.fotos).
+    if (fotos.precisaRenovar(conversa.fotoUrl)) {
       const foto = await evolutionApi
         .fetchProfilePictureUrl(conversa.telefone, env.evolutionApi.instance)
         .catch(() => null);
