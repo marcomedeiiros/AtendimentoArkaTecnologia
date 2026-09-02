@@ -5,10 +5,16 @@ class UsuarioRepository {
     return prisma.usuario.findUnique({ where: { email } });
   }
 
+  // `setoresExtras` E OBRIGATORIO NESTE SELECT, e nao um extra de conveniencia:
+  // e daqui que sai o `req.user` do authMiddleware, e `podeAcessarSetor` decide
+  // com cargo E extras. Sem a coluna aqui o campo chega `undefined`, a pessoa
+  // fica so com o que o cargo da, e a tela de Gestao da Equipe passa a marcar
+  // setores que nao concedem nada -- em silencio, porque o lado que NEGA
+  // continua funcionando e nenhuma varredura de vazamento acusa.
   findById(id) {
     return prisma.usuario.findUnique({
       where: { id },
-      select: { id: true, nome: true, email: true, cargo: true, ativo: true },
+      select: { id: true, nome: true, email: true, cargo: true, ativo: true, setoresExtras: true },
     });
   }
 
@@ -18,7 +24,7 @@ class UsuarioRepository {
     return prisma.usuario.findMany({
       orderBy: { criadoEm: "asc" },
       select: {
-        id: true, nome: true, email: true, cargo: true,
+        id: true, nome: true, email: true, cargo: true, setoresExtras: true,
         ativo: true, ultimoAcessoEm: true, criadoEm: true,
       },
     });
@@ -64,6 +70,17 @@ class UsuarioRepository {
       where: { id },
       data: { cargo },
       select: { id: true, nome: true, email: true, cargo: true, ativo: true },
+    });
+  }
+
+  // Setores EXTRAS -- os que a pessoa ve alem do que o cargo ja da. Guardados
+  // separados por virgula ("Comercial,Financeiro"), como `Parceiro.contratos`;
+  // `null` significa "nenhum extra", e nao "nenhum setor".
+  atualizarSetoresExtras(id, setoresExtras) {
+    return prisma.usuario.update({
+      where: { id },
+      data: { setoresExtras },
+      select: { id: true, nome: true, email: true, cargo: true, ativo: true, setoresExtras: true },
     });
   }
 

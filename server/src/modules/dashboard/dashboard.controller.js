@@ -12,7 +12,7 @@ class DashboardController {
   // sozinha e nao tem interacao -- varias chamadas por atualizacao dariam
   // metades do painel de instantes diferentes.
   async painel(req, res) {
-    const data = await painelService.obter(req.user?.cargo);
+    const data = await painelService.obter(req.user);
     return success(res, data);
   }
 }

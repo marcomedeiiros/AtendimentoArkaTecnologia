@@ -87,6 +87,11 @@ async function authMiddleware(req, res, next) {
       email: usuario.email,
       nome: usuario.nome,
       cargo: usuario.cargo, // autoritativo (do banco), sobrepoe o do token
+      // Setores extras, tambem do banco e pelo mesmo motivo: tirar um setor de
+      // alguem passa a valer na requisicao seguinte, e nao quando o token
+      // vencer. Vai junto do cargo porque `podeAcessarSetor` decide com os
+      // dois -- separa-los criaria o caminho em que um chega e o outro nao.
+      setoresExtras: usuario.setoresExtras || null,
       // Sessao desta requisicao. Serve para poupar a propria sessao quando a
       // acao derruba as outras (troca de senha).
       sid: payload.sid || null,

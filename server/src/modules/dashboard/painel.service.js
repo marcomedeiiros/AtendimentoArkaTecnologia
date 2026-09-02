@@ -91,11 +91,11 @@ const media = (lista) => (lista.length ? lista.reduce((a, b) => a + b, 0) / list
 
 class PainelService {
   /**
-   * @param {string|null} userCargo cargo de quem pediu. A FILA e recortada por
+   * @param {string|null} acesso cargo de quem pediu. A FILA e recortada por
    *   ele; os agregados (ranking, CSAT, tempos, meta) sao da equipe inteira,
    *   que e o proposito da tela.
    */
-  async obter(userCargo = null) {
+  async obter(acesso = null) {
     const desdeMes = inicioDoMes();
     const desdeHoje = inicioDoDia();
 
@@ -149,7 +149,7 @@ class PainelService {
       tempos: this._tempos(doMes),
       hoje: { fechados: fechadosHoje, meta },
       equipe: this._equipe(equipe, carga),
-      fila: this._fila(fila, userCargo),
+      fila: this._fila(fila, acesso),
     };
   }
 
@@ -306,12 +306,12 @@ class PainelService {
    * ranking por setor destruiria a tela -- ela existe justamente para a equipe
    * se ver como equipe.
    */
-  _fila(conversas, userCargo) {
+  _fila(conversas, acesso) {
     const agora = Date.now();
     const visiveis =
-      !userCargo || userCargo === "Administrador"
+      !acesso || acesso.cargo === "Administrador"
         ? conversas
-        : conversas.filter((c) => podeAcessarSetor(userCargo, c.setor || "Geral"));
+        : conversas.filter((c) => podeAcessarSetor(acesso, c.setor || "Geral"));
     return visiveis.map((c) => ({
       id: c.id,
       cliente: c.empresa || c.cliente,

@@ -1,4 +1,5 @@
 const { z } = require("zod");
+const { SETORES } = require("../../shared/helpers/setor.helper");
 
 // Fonte unica dos cargos validos. O service e o front espelham esta lista, mas a
 // autoridade de "cargo existe?" mora aqui, na borda da API.
@@ -17,6 +18,16 @@ const alterarCargoSchema = z.object({
   cargo: z.enum(CARGOS_VALIDOS),
 });
 
+// PATCH /:id/setores -- os setores EXTRAS, alem do que o cargo ja da.
+//
+// A allowlist vem de `SETORES` (setor.helper), e nao de uma lista escrita aqui:
+// duas listas dos mesmos quatro nomes acabam divergindo, e a que diverge vira
+// um setor que se consegue conceder e que `podeAcessarSetor` nunca reconhece --
+// permissao que a tela mostra e o servidor ignora.
+const alterarSetoresSchema = z.object({
+  setores: z.array(z.enum(SETORES)).max(SETORES.length),
+});
+
 // PATCH /:id/senha -- string com no minimo 6 caracteres (o service reconfere).
 const redefinirSenhaSchema = z.object({
   senha: z.string().min(6, "A senha precisa de pelo menos 6 caracteres."),
@@ -26,5 +37,6 @@ module.exports = {
   CARGOS_VALIDOS,
   alterarStatusSchema,
   alterarCargoSchema,
+  alterarSetoresSchema,
   redefinirSenhaSchema,
 };

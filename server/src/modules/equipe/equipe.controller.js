@@ -19,6 +19,12 @@ class EquipeController {
     return equipeService.alterarCargo(id, cargo, req.user.sub).then((data) => success(res, data));
   }
 
+  alterarSetores(req, res) {
+    const { id } = req.params;
+    const { setores } = req.body;
+    return equipeService.alterarSetores(id, setores, req.user.sub).then((data) => success(res, data));
+  }
+
   redefinirSenha(req, res) {
     const { id } = req.params;
     const { senha } = req.body;

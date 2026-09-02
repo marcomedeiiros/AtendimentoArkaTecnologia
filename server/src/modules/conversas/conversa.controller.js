@@ -7,27 +7,27 @@ const { prepararRespostaMidia, interpretarRange } = require("../../shared/helper
 
 class ConversaController {
   listar(req, res) {
-    return conversaService.listar(req.query, req.user?.cargo).then((data) => success(res, data));
+    return conversaService.listar(req.query, req.user).then((data) => success(res, data));
   }
 
   // Retrato barato para a Central reconciliar as abas com frequencia, sem
   // arrastar o historico inteiro. Ver conversaService.listarEstados.
   listarEstados(req, res) {
-    return conversaService.listarEstados(req.user?.cargo).then((data) => success(res, data));
+    return conversaService.listarEstados(req.user).then((data) => success(res, data));
   }
 
   obter(req, res) {
-    return conversaService.obter(req.params.id, req.user?.cargo).then((data) => success(res, data));
+    return conversaService.obter(req.params.id, req.user).then((data) => success(res, data));
   }
 
   atender(req, res) {
-    return conversaService.atender(req.params.id, req.user?.sub, req.user?.cargo).then((data) => success(res, data));
+    return conversaService.atender(req.params.id, req.user?.sub, req.user).then((data) => success(res, data));
   }
 
   // Historico de OS (atendimentos) do cliente.
   atendimentos(req, res) {
     return conversaService
-      .listarAtendimentos(req.params.id, req.user?.cargo)
+      .listarAtendimentos(req.params.id, req.user)
       .then((data) => success(res, data));
   }
 
@@ -35,7 +35,7 @@ class ConversaController {
     return conversaService
       // `req.user` vai junto para o service poder registrar QUEM respondeu como
       // atendente quando a conversa ainda nao tem responsavel.
-      .enviarMensagem(req.params.id, req.body.texto, "equipe", req.body.respondendoAId, req.user?.cargo, req.user)
+      .enviarMensagem(req.params.id, req.body.texto, "equipe", req.body.respondendoAId, req.user, req.user)
       .then((data) => success(res, data));
   }
 
@@ -49,7 +49,7 @@ class ConversaController {
   // ficar gravada no metadata da mensagem.
   adicionarNota(req, res) {
     return conversaService
-      .adicionarNota(req.params.id, req.body.texto, req.user?.cargo, req.user)
+      .adicionarNota(req.params.id, req.body.texto, req.user, req.user)
       .then((data) => success(res, data, 201));
   }
 
@@ -63,30 +63,30 @@ class ConversaController {
         setor: req.body.setor,
         texto: req.body.texto,
         atendenteId: req.user?.sub || null,
-        userCargo: req.user?.cargo,
+        acesso: req.user,
       })
       .then((data) => success(res, data, 201));
   }
 
   encaminharMensagem(req, res) {
     return conversaService
-      .encaminharMensagem(req.body.mensagemId, req.body.conversaDestinoId, req.user?.cargo)
+      .encaminharMensagem(req.body.mensagemId, req.body.conversaDestinoId, req.user)
       .then((data) => success(res, data));
   }
 
   editarMensagem(req, res) {
     return conversaService
-      .editarMensagem(req.params.mensagemId, req.body.texto, req.user?.cargo)
+      .editarMensagem(req.params.mensagemId, req.body.texto, req.user)
       .then((data) => success(res, data));
   }
 
   enviarMidia(req, res) {
-    return conversaService.enviarMidia(req.params.id, req.body, "equipe", req.user?.cargo, req.user).then((data) => success(res, data));
+    return conversaService.enviarMidia(req.params.id, req.body, "equipe", req.user, req.user).then((data) => success(res, data));
   }
 
   transcreverAudio(req, res) {
     return conversaService
-      .transcreverAudio(req.params.mensagemId, req.user?.cargo)
+      .transcreverAudio(req.params.mensagemId, req.user)
       .then((data) => success(res, data));
   }
 
@@ -119,7 +119,7 @@ class ConversaController {
       .then(async (resultado) => {
         const conversa =
           resultado.importadas > 0
-            ? await conversaService.obter(req.params.id, req.user?.cargo)
+            ? await conversaService.obter(req.params.id, req.user)
             : null;
         return success(res, { ...resultado, conversa });
       });
@@ -192,26 +192,26 @@ class ConversaController {
 
   apagarMensagem(req, res) {
     return conversaService
-      .apagarMensagem(req.params.mensagemId, req.user?.cargo)
+      .apagarMensagem(req.params.mensagemId, req.user)
       .then((data) => success(res, data));
   }
 
   solicitarCnpj(req, res) {
-    return conversaService.solicitarCnpj(req.params.id, req.user?.cargo).then((data) => success(res, data));
+    return conversaService.solicitarCnpj(req.params.id, req.user).then((data) => success(res, data));
   }
 
   validarCnpj(req, res) {
-    return conversaService.validarCnpjManual(req.params.id, req.body.cnpj, req.user?.cargo).then((data) => success(res, data));
+    return conversaService.validarCnpjManual(req.params.id, req.body.cnpj, req.user).then((data) => success(res, data));
   }
 
   atualizarStatus(req, res) {
     return conversaService
-      .atualizarStatus(req.params.id, req.body.status, req.user?.cargo, req.user, req.body.motivo)
+      .atualizarStatus(req.params.id, req.body.status, req.user, req.user, req.body.motivo)
       .then((data) => success(res, data));
   }
 
   atualizarSetor(req, res) {
-    return conversaService.atualizarSetor(req.params.id, req.body.setor, req.user?.cargo).then((data) => success(res, data));
+    return conversaService.atualizarSetor(req.params.id, req.body.setor, req.user).then((data) => success(res, data));
   }
 
   // Para quem da para transferir. `conversaId` e opcional: com ele, cada
@@ -219,7 +219,7 @@ class ConversaController {
   // mandar a conversa para alguem de outro setor.
   listarAtendentes(req, res) {
     return conversaService
-      .listarAtendentes(req.query.conversaId || null, req.user?.cargo)
+      .listarAtendentes(req.query.conversaId || null, req.user)
       .then((data) => success(res, data));
   }
 
@@ -229,24 +229,24 @@ class ConversaController {
   // campo JSON que qualquer um digita no curl.
   definirAtendente(req, res) {
     return conversaService
-      .definirAtendente(req.params.id, req.body.atendenteId ?? null, req.user?.cargo, req.user?.sub)
+      .definirAtendente(req.params.id, req.body.atendenteId ?? null, req.user, req.user?.sub)
       .then((data) => success(res, data));
   }
 
   avaliarAtendimento(req, res) {
-    return conversaService.avaliarAtendimento(req.params.id, req.body, req.user?.cargo).then((data) => success(res, data));
+    return conversaService.avaliarAtendimento(req.params.id, req.body, req.user).then((data) => success(res, data));
   }
 
   atualizarFlags(req, res) {
-    return conversaService.atualizarFlags(req.params.id, req.body, req.user?.cargo).then((data) => success(res, data));
+    return conversaService.atualizarFlags(req.params.id, req.body, req.user).then((data) => success(res, data));
   }
 
   marcarLido(req, res) {
-    return conversaService.marcarLido(req.params.id, req.user?.cargo).then((data) => success(res, data));
+    return conversaService.marcarLido(req.params.id, req.user).then((data) => success(res, data));
   }
 
   remover(req, res) {
-    return conversaService.remover(req.params.id, req.user?.cargo).then((data) => success(res, data));
+    return conversaService.remover(req.params.id, req.user).then((data) => success(res, data));
   }
 }
 

@@ -9,7 +9,7 @@ const { podeAcessarSetor } = require("../../shared/helpers/setor.helper");
 // o stream com ?ticket=. Ticket vive ~30s e some ao ser consumido.
 const TICKET_TTL_MS = 30_000;
 const HEARTBEAT_MS = 20_000;
-const tickets = new Map(); // ticketId -> { exp, cargo }
+const tickets = new Map(); // ticketId -> { exp, acesso }
 
 function limparExpirados() {
   const agora = Date.now();
@@ -23,10 +23,11 @@ class ConversaStreamController {
   criarTicket(req, res) {
     limparExpirados();
     const ticket = crypto.randomUUID();
-    // Guarda o cargo de quem pediu (do token ja validado). O stream so entrega
-    // eventos dos setores que esse cargo pode ver -- senao o SSE vazaria ao
+    // Guarda o ACESSO de quem pediu (cargo + setores extras, do token ja
+    // validado). O stream so entrega eventos dos setores que esse acesso pode
+    // ver -- senao o SSE vazaria ao
     // vivo justamente o que listar/obter filtram na leitura.
-    tickets.set(ticket, { exp: Date.now() + TICKET_TTL_MS, cargo: req.user?.cargo || null });
+    tickets.set(ticket, { exp: Date.now() + TICKET_TTL_MS, acesso: req.user || null });
     res.json({ success: true, data: { ticket } });
   }
 
@@ -42,7 +43,7 @@ class ConversaStreamController {
       });
     }
     tickets.delete(ticket); // uso unico
-    const cargo = dados.cargo;
+    const acesso = dados.acesso;
 
     res.writeHead(200, {
       "Content-Type": "text/event-stream",
@@ -62,8 +63,8 @@ class ConversaStreamController {
       // O setor mora em `evento.conversa.setor`. Ler `evento.setor` (como era
       // antes) sempre dava `undefined`, `normalizarSetor` traduzia isso para
       // "Geral" -- que todo mundo ve -- e o stream entregava AO VIVO conversas
-      // de setores que a listagem esconde daquele cargo.
-      if (evento?.type === "conversa:update" && !podeAcessarSetor(cargo, evento.conversa?.setor)) {
+      // de setores que a listagem esconde daquele acesso.
+      if (evento?.type === "conversa:update" && !podeAcessarSetor(acesso, evento.conversa?.setor)) {
         // ── PERDEU O ACESSO AGORA? ENTAO A CONVERSA TEM DE SAIR DA TELA ──────
         //
         // Descartar o evento em silencio protege o sigilo, mas nao termina o
@@ -71,13 +72,13 @@ class ConversaStreamController {
         // congelada no estado antigo, ate um F5. Transferir do Comercial para o
         // Tecnico "funcionava" no banco e nao aparecia na tela de ninguem.
         //
-        // `setorAnterior` so vem quando a emissao MUDOU o setor. Se este cargo
+        // `setorAnterior` so vem quando a emissao MUDOU o setor. Se este acesso
         // via o setor de origem e nao ve o de destino, ele acabou de perder a
         // conversa -- e recebe uma remocao, com o id e nada mais. Sem
         // `setorAnterior` (a esmagadora maioria dos eventos), segue o descarte
         // silencioso de antes: nao da para mandar remocao de conversa que a
         // pessoa nunca teve, senao todo update de outro setor viraria trafego.
-        if (evento.setorAnterior && podeAcessarSetor(cargo, evento.setorAnterior)) {
+        if (evento.setorAnterior && podeAcessarSetor(acesso, evento.setorAnterior)) {
           try {
             res.write(
               `data: ${JSON.stringify({
@@ -95,7 +96,7 @@ class ConversaStreamController {
       // O patch de status carrega o setor no proprio evento (nao ha conversa
       // dentro dele). Sem este guard, o risquinho de uma conversa de outro setor
       // chegaria ao vivo para quem nem enxerga a conversa.
-      if (evento?.type === "mensagem:status" && !podeAcessarSetor(cargo, evento.setor)) {
+      if (evento?.type === "mensagem:status" && !podeAcessarSetor(acesso, evento.setor)) {
         return;
       }
       try {

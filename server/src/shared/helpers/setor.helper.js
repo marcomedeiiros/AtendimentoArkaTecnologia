@@ -72,14 +72,66 @@ function setorValido(valor) {
 // regras dizendo a mesma coisa so criam a duvida de qual vale.
 const CUIDAM_DA_TRIAGEM = new Set(["Técnico"]);
 
-function podeAcessarSetor(userCargo, setorConversa) {
-  if (!userCargo || userCargo === "Administrador") return true;
+/**
+ * ── SETORES EXTRAS POR PESSOA ─────────────────────────────────────────────
+ *
+ * Ate aqui "quem ve o que" saia INTEIRAMENTE do cargo: um Tecnico ERA o setor
+ * Tecnico, e nao havia onde dizer "este tecnico aqui tambem atende o
+ * Comercial". Na pratica quem precisava disso ganhava cargo de Administrador --
+ * que da acesso a TUDO, inclusive ao que a pessoa nao devia ver. A excecao
+ * virava um buraco, e o buraco era permanente.
+ *
+ * Agora cada pessoa pode ter setores EXTRAS (`Usuario.setoresExtras`), que se
+ * SOMAM ao que o cargo ja da. Somam e nunca subtraem: extras nao tiram acesso,
+ * so acrescentam -- assim ninguem consegue, mexendo nesta tela, esconder de um
+ * Financeiro o proprio Financeiro.
+ *
+ * ── O QUE CHEGA AQUI E O ACESSO, E NAO SO O CARGO ─────────────────────────
+ *
+ * O primeiro parametro era uma string com o cargo; passou a ser o `req.user`
+ * inteiro (cargo + extras). Uma STRING continua sendo aceita e significa
+ * exatamente "este cargo, sem extras" -- e isso e deliberado, nao preguica: os
+ * chamadores que ainda nao passam o acesso completo (e qualquer um que apareca
+ * depois) dao MENOS acesso, nunca mais. O esquecimento cai para o lado seguro,
+ * que e o unico lado aceitavel num arquivo que decide quem le a conversa de
+ * quem.
+ */
+function listaDeSetores(valor) {
+  const bruto = Array.isArray(valor) ? valor : String(valor || "").split(",");
+  // `acharSetor` devolve null para o que nao e setor, entao lixo gravado na
+  // coluna nao vira acesso a nada -- ele simplesmente some da lista.
+  return bruto.map((s) => acharSetor(s)).filter(Boolean);
+}
+
+/** Cargo e extras a partir de um `req.user`, de uma string de cargo, ou nada. */
+function acessoDe(valor) {
+  if (!valor) return { cargo: null, extras: [] };
+  if (typeof valor === "string") return { cargo: valor, extras: [] };
+  return { cargo: valor.cargo || null, extras: listaDeSetores(valor.setoresExtras) };
+}
+
+function podeAcessarSetor(acesso, setorConversa) {
+  const { cargo, extras } = acessoDe(acesso);
+  if (!cargo || cargo === "Administrador") return true;
+
   const setorNorm = normalizarSetor(setorConversa);
-  if (["Financeiro", "Técnico", "Comercial"].includes(userCargo)) {
-    if (setorNorm === SETOR_PADRAO) return CUIDAM_DA_TRIAGEM.has(userCargo);
-    return setorNorm === userCargo;
+
+  // O EXTRA VALE PARA QUALQUER SETOR, "Geral" INCLUSIVE. Dar "Geral" de extra a
+  // alguem e dizer "esta pessoa tambem cuida da triagem" -- que e uma decisao
+  // legitima e ate agora so existia embutida em CUIDAM_DA_TRIAGEM, sem forma de
+  // conceder caso a caso.
+  if (extras.includes(setorNorm)) return true;
+
+  if (["Financeiro", "Técnico", "Comercial"].includes(cargo)) {
+    if (setorNorm === SETOR_PADRAO) return CUIDAM_DA_TRIAGEM.has(cargo);
+    return setorNorm === cargo;
   }
   return true;
+}
+
+/** Todos os setores que este acesso enxerga -- para a tela mostrar a conta pronta. */
+function setoresVisiveis(acesso) {
+  return SETORES.filter((s) => podeAcessarSetor(acesso, s));
 }
 
 /**
@@ -214,6 +266,8 @@ module.exports = {
   acharSetor,
   normalizarSetor,
   podeAcessarSetor,
+  setoresVisiveis,
+  listaDeSetores,
   resolverSetorDeclarado,
   setorDaOpcaoEscolhida,
 };

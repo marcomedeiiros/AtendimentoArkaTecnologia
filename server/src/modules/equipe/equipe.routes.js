@@ -7,6 +7,7 @@ const validate = require("../../shared/middlewares/validate.middleware");
 const {
   alterarStatusSchema,
   alterarCargoSchema,
+  alterarSetoresSchema,
   redefinirSenhaSchema,
 } = require("./equipe.dto");
 
@@ -30,6 +31,7 @@ router.get("/", exigirModulo("equipe"), (req, res, next) => equipeController.lis
 // service reconfere o cargo no BANCO.
 router.patch("/:id/status", adminMiddleware, validate(alterarStatusSchema), (req, res, next) => equipeController.alterarStatus(req, res).catch(next));
 router.patch("/:id/cargo", adminMiddleware, validate(alterarCargoSchema), (req, res, next) => equipeController.alterarCargo(req, res).catch(next));
+router.patch("/:id/setores", adminMiddleware, validate(alterarSetoresSchema), (req, res, next) => equipeController.alterarSetores(req, res).catch(next));
 router.patch("/:id/senha", adminMiddleware, validate(redefinirSenhaSchema), (req, res, next) => equipeController.redefinirSenha(req, res).catch(next));
 router.delete("/:id", adminMiddleware, (req, res, next) => equipeController.remover(req, res).catch(next));
 

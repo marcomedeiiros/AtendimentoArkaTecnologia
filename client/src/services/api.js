@@ -531,6 +531,9 @@ export const EquipeAPI = {
   listar: () => request('/equipe'),
   alterarStatus: (id, ativo) => request(`/equipe/${id}/status`, { method: 'PATCH', body: JSON.stringify({ ativo }) }),
   alterarCargo: (id, cargo) => request(`/equipe/${id}/cargo`, { method: 'PATCH', body: JSON.stringify({ cargo }) }),
+  // Setores EXTRAS -- os que a pessoa ve alem do que o cargo ja da. A lista
+  // enviada e a lista final: o servidor descarta o que o cargo ja dava.
+  alterarSetores: (id, setores) => request(`/equipe/${id}/setores`, { method: 'PATCH', body: JSON.stringify({ setores }) }),
   // Sem recuperacao por e-mail: um Administrador define a nova senha do membro.
   redefinirSenha: (id, senha) => request(`/equipe/${id}/senha`, { method: 'PATCH', body: JSON.stringify({ senha }) }),
   excluir: (id) => request(`/equipe/${id}`, { method: 'DELETE' }),

@@ -12,7 +12,7 @@
  * pelo servidor a cada requisicao autenticada.
  */
 import { useState, useEffect } from 'react';
-import { Users, Circle, ShieldCheck, CheckCircle2, XCircle, KeyRound, Loader2, X, Clock, Trash2, SlidersHorizontal, Save, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Users, Circle, ShieldCheck, CheckCircle2, XCircle, KeyRound, Loader2, X, Clock, Trash2, SlidersHorizontal, Save, Lock, Eye, EyeOff, AlertCircle, Inbox } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { EquipeAPI, PermissoesAPI } from '../services/api';
@@ -32,6 +32,11 @@ function vistoEm(iso) {
 }
 
 const CARGOS = ['Administrador', 'Financeiro', 'Técnico', 'Comercial'];
+
+// Os setores que uma conversa pode ter. Casa com `SETORES` no servidor
+// (setor.helper.js), que é quem realmente decide -- aqui é só o que a tela
+// oferece para marcar.
+const SETORES = ['Geral', 'Financeiro', 'Técnico', 'Comercial'];
 
 export default function EquipePage() {
   const { equipe, recarregarEquipe } = useAppContext();
@@ -175,6 +180,36 @@ export default function EquipePage() {
     }
   }
 
+  /**
+   * Liga ou desliga UM setor extra.
+   *
+   * O que vai para a API e a lista FINAL de setores marcados, e nao "adicione
+   * este". Duas abas abertas na mesma pessoa poderiam, com "adicione/remova",
+   * gravar uma soma que ninguem pediu; com a lista inteira, a ultima gravacao
+   * vence e e exatamente o que estava na tela de quem clicou.
+   *
+   * O servidor descarta o que o cargo ja dava -- por isso da para mandar
+   * `setoresVisiveis` sem separar o que era extra do que nao era.
+   */
+  async function alternarSetor(membro, setor) {
+    const atuais = membro.setoresVisiveis || [];
+    const novos = atuais.includes(setor)
+      ? atuais.filter((s) => s !== setor)
+      : [...atuais, setor];
+
+    setLoadingId(membro.id);
+    setErro('');
+    setOkMsg('');
+    try {
+      await EquipeAPI.alterarSetores(membro.id, novos);
+      if (recarregarEquipe) await recarregarEquipe();
+    } catch (e) {
+      setErro(e.message);
+    } finally {
+      setLoadingId(null);
+    }
+  }
+
   async function excluirConta(membro) {
     if (!(await confirmar(
       `Excluir definitivamente a conta de ${membro.nome}? Esta ação não pode ser desfeita.\n\n` +
@@ -294,6 +329,51 @@ export default function EquipePage() {
               {estaInativo ? 'Pendente' : m.status === 'online' ? 'Online' : vistoEm(m.ultimoAcessoEm)}
             </span>
           </div>
+
+          {/* QUAIS FILAS ESTA PESSOA ENXERGA.
+              Os setores que o CARGO já dá vêm marcados e travados: eles não são
+              uma escolha, e deixá-los desmarcáveis sugeriria que dá para tirar
+              o Financeiro de quem é do Financeiro -- o servidor ignoraria, e a
+              tela teria mentido. O que se marca aqui é o EXTRA. */}
+          {!estaInativo && (
+            <div className="border-t border-linha pt-3">
+              <div className="mb-2 flex items-center gap-1.5 text-[11px] text-texto-suave">
+                <Inbox size={13} className="text-acao-200" />
+                <span className="font-semibold">Filas que enxerga</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {SETORES.map(setor => {
+                  const peloCargo = (m.setoresVisiveis || []).includes(setor)
+                    && !(m.setoresExtras || []).includes(setor);
+                  const marcado = (m.setoresVisiveis || []).includes(setor);
+                  const travado = peloCargo || !ehAdmin || loadingId === m.id;
+                  return (
+                    <button
+                      key={setor}
+                      type="button"
+                      disabled={travado}
+                      onClick={() => alternarSetor(m, setor)}
+                      title={
+                        peloCargo
+                          ? `O cargo ${m.cargo} já dá acesso ao setor ${setor}`
+                          : marcado
+                          ? `Remover o acesso extra ao setor ${setor}`
+                          : `Dar acesso extra ao setor ${setor}`
+                      }
+                      className={`rounded-lg border px-2 py-1 text-[11px] font-semibold transition-colors ${
+                        marcado
+                          ? 'border-acao/40 bg-acao/15 text-acao-200'
+                          : 'border-linha bg-grafite-700 text-texto-fraco hover:border-linha-forte'
+                      } ${travado ? 'cursor-default opacity-80' : 'cursor-pointer'}`}
+                    >
+                      {setor}
+                      {peloCargo && <span className="ml-1 font-normal opacity-60">(cargo)</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {ehAdmin && !ehVoce && (

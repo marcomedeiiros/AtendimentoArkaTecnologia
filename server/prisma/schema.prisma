@@ -66,6 +66,13 @@ model Usuario {
   email          String    @unique
   senhaHash      String    @map("senha_hash")
   cargo          String    @default("Administrador")
+  /// Setores que esta pessoa enxerga ALEM do que o cargo ja da, separados por
+  /// virgula ("Comercial,Financeiro"). Somam, nunca subtraem -- ver
+  /// `podeAcessarSetor` em setor.helper.js.
+  ///
+  /// Existe porque a alternativa que a equipe usava era pior: quem precisava
+  /// ver outro setor ganhava cargo de Administrador, que da acesso a tudo.
+  setoresExtras  String?   @map("setores_extras")
   ativo          Boolean   @default(false)
   // Reservado (opcional). O nome de assinatura em uso e guardado como
   // preferencia do operador; esta coluna existe para o Prisma Client bater com
