@@ -339,7 +339,7 @@ function conferirUmaPerguntaPorTurno(rotulo, r) {
   mostrar("CNPJ valido fora da base de clientes -> caminho avulso", r);
   conferirUmaPerguntaPorTurno("tecnico/nao-cadastrado", r);
   check(
-    /Não encontramos esse CNPJ/.test(tudoQueOBotFalou(r)),
+    /Não encontramos esse CPF\/CNPJ/.test(tudoQueOBotFalou(r)),
     "CNPJ fora da base nao avisou o cliente"
   );
   check(
@@ -388,7 +388,7 @@ function conferirUmaPerguntaPorTurno(rotulo, r) {
     `deveria aguardar a escolha dos 2 botões, veio ${r.turnos[2].aguardando}`
   );
   check(
-    !/informe o CNPJ da empresa/i.test(tudoQueOBotFalou(r)),
+    !/informe o CPF ou CNPJ do titular/i.test(tudoQueOBotFalou(r)),
     "o bot pediu o CNPJ apesar de o telefone estar no cadastro"
   );
   // E a confirmação mostra o cadastro que ele encontrou.
@@ -399,7 +399,7 @@ function conferirUmaPerguntaPorTurno(rotulo, r) {
   );
   // UMA confirmação em toda a conversa.
   const confirmacoesMemoria = r.turnos.filter((t) =>
-    t.respostas.some((x) => /O CNPJ continua sendo este\?/.test(x))
+    t.respostas.some((x) => /O documento continua sendo este\?/.test(x))
   ).length;
   check(
     confirmacoesMemoria === 1,
@@ -432,7 +432,7 @@ function conferirUmaPerguntaPorTurno(rotulo, r) {
     `telefone desconhecido deveria PEDIR o CNPJ, veio ${r.turnos[2].aguardando}`
   );
   check(
-    /informe o CNPJ da empresa/i.test(r.turnos[2].respostas.join("\n")),
+    /informe o CPF ou CNPJ do titular/i.test(r.turnos[2].respostas.join("\n")),
     `o pedido do CNPJ não saiu: ${r.turnos[2].respostas.map(linha1).join(" | ")}`
   );
   console.log("  OK    telefone desconhecido -> pede o CNPJ por texto livre");
@@ -535,7 +535,7 @@ function conferirUmaPerguntaPorTurno(rotulo, r) {
     "a memória reofereceu o cadastro que o cliente acabou de recusar (laço)"
   );
   const ofertas = r.turnos.filter((t) =>
-    t.respostas.some((x) => /O CNPJ continua sendo este\?/.test(x))
+    t.respostas.some((x) => /O documento continua sendo este\?/.test(x))
   ).length;
   check(ofertas === 1, `o cadastro foi oferecido ${ofertas} vezes, esperado 1`);
   console.log("  OK    recusa -> pede digitado, e o cadastro não é oferecido de novo");
