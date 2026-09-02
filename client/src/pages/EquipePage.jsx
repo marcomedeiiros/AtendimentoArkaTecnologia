@@ -551,7 +551,7 @@ export default function EquipePage() {
         <div>
           <h1 className="font-display text-2xl font-bold tracking-tight text-white">Gestão da Equipe & Permissões</h1>
           <p className="mt-1 text-xs text-texto-suave sm:text-sm">
-            Gerencie os usuários do sistema, altere cargos (Financeiro, Técnico, Comercial, Admin) e aprove contas pendentes.
+            Gerencie os usuários do sistema, altere cargos (Financeiro, Técnico, Comercial, Admin) e aprove contas pendentes
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-4 text-xs">

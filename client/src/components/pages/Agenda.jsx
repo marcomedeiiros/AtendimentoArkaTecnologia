@@ -372,7 +372,7 @@ export default function Agenda() {
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight font-display">Agenda</h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-1">
-            Gerencie compromissos, follow-ups e tarefas da equipe.
+            Gerencie compromissos, follow-ups e tarefas da equipe
             {pendentes > 0 && <span className="ml-2 text-acao-200 font-semibold">{pendentes} pendente{pendentes > 1 ? 's' : ''}</span>}
           </p>
         </div>

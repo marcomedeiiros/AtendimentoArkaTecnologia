@@ -152,7 +152,7 @@ export default function ConfiguracoesPage() {
             <Settings size={22} className="text-acao-200" /> Configurações
           </h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-1">
-            Conexões com a Evolution API e o n8n os valores salvos aqui têm prioridade sobre o .env.
+            Conexões com a Evolution API e o n8n os valores salvos aqui têm prioridade sobre o .env
           </p>
         </div>
         <button onClick={salvar} disabled={salvando || carregando}

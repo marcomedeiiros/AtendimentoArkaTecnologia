@@ -148,7 +148,7 @@ async function main() {
   // O caso concreto que foi reportado, citado pelo nome.
   //
   // Casado pelo PREFIXO, e nao pelo titulo exato: o passo virou
-  // "COMERCIAL — DADOS" em 31/08/2026 e a igualdade literal passou a nao achar
+  // "COMERCIAL DADOS" em 31/08/2026 e a igualdade literal passou a nao achar
   // nada, quebrando as tres assertivas abaixo de uma vez. O que este teste
   // protege e a assimetria `desc` vazio + `texto` cheio, nao a redacao do
   // titulo -- e renomear um bloco no editor nao pode reprovar o build.

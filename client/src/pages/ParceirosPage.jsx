@@ -108,7 +108,7 @@ export default function ParceirosPage() {
 
   async function adicionar() {
     const c = limparDocumento(cnpjInput);
-    if (!documentoValido(c)) { setErro('CPF ou CNPJ inválido — confira os números.'); return; }
+    if (!documentoValido(c)) { setErro('CPF ou CNPJ inválido confira os números.'); return; }
     if (!nome.trim()) { setErro('Informe a razão social.'); return; }
     setErro('');
 
@@ -182,7 +182,7 @@ export default function ParceirosPage() {
       <div className="mb-8 baixa:lg:mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-linha">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight font-display">Cadastro de Clientes</h1>
-          <p className="text-slate-400 text-xs sm:text-sm mt-1">Cadastro oficial de parceiros com dados de e-mail, telefones e cidades atendidas.</p>
+          <p className="text-slate-400 text-xs sm:text-sm mt-1">Cadastro oficial de parceiros com dados de e-mail, telefones e cidades atendidas</p>
         </div>
       </div>
 

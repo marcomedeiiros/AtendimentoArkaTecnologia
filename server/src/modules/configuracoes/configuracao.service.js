@@ -251,7 +251,7 @@ class ConfiguracaoService {
    * O expediente para a TELA: o mesmo objeto, mais o retrato legivel.
    *
    * A tela precisa de duas coisas que o motor nao usa: os dias FECHADOS (para
-   * desenhar a linha "Sábado — fechado") e a previa da mensagem que o cliente
+   * desenhar a linha "Sábado fechado") e a previa da mensagem que o cliente
    * receberia. Calcular isso no front duplicaria a regra em JavaScript de
    * navegador -- e uma copia que envelhece sozinha.
    */

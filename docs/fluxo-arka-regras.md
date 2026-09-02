@@ -1,4 +1,4 @@
-# Fluxo ARKA — regras de interface e de espera
+# Fluxo ARKA regras de interface e de espera
 
 Documento de referência do fluxo publicado em [`fluxo-arka.json`](fluxo-arka.json).
 Ele responde a três perguntas que antes só se respondiam lendo o motor:
@@ -58,8 +58,8 @@ Fora do caminho, porque **não são passos da conversa**:
 |---|---|
 | `Configurações do bot` | textos de fallback e os dois relógios do fluxo |
 | `Pesquisa de Satisfação` | configuração da pesquisa; disparada pelo **encerramento** |
-| `Sem resposta` | timeout A — o bot perguntou e o cliente sumiu |
-| `Espera na fila` | timeout B — ninguém assumiu a conversa |
+| `Sem resposta` | timeout A o bot perguntou e o cliente sumiu |
+| `Espera na fila` | timeout B ninguém assumiu a conversa |
 
 ---
 
@@ -67,7 +67,7 @@ Fora do caminho, porque **não são passos da conversa**:
 
 O layout do WhatsApp aceita **no máximo 3 botões por mensagem**. É limite do
 protocolo (a Evolution responde `400 Maximum of 3 reply buttons allowed`), não
-da configuração — e por isso é validado em três lugares: no envio
+da configuração e por isso é validado em três lugares: no envio
 (`MAX_BOTOES_POR_MENSAGEM`), no publicador (`publicar-fluxo-arka.js`) e no
 painel de automações do editor.
 
@@ -76,7 +76,7 @@ painel de automações do editor.
 | MENU PRINCIPAL | **3** | `🔧 Técnico` · `💼 Comercial` · `💰 Financeiro` |
 | TÉCNICO | **3** | `Tenho contrato` · `Atendimento avulso` · `Voltar ao menu` |
 | CONFIRMA CNPJ | **2** | `✅ Sim, é esse` · `🔄 Não, outro CNPJ` |
-| AVULSO — VALORES | **3** | `✅ Sim, seguir` · `❌ Não, obrigado` · `🏠 Voltar ao menu` |
+| AVULSO VALORES | **3** | `✅ Sim, seguir` · `❌ Não, obrigado` · `🏠 Voltar ao menu` |
 
 **O menu principal não tem "Encerrar atendimento".** As três vagas são dos
 setores. O encerramento é o mecanismo global do motor: as palavras de
@@ -99,8 +99,8 @@ Como podemos ajudar?
 ```
 
 Não é redundância com os botões. `enviarBotComOpcoes` cai para texto puro em
-dois casos reais — a Evolution recusar o payload interativo, e a instalação rodar
-sem `WHATSAPP_BOTOES_INTERATIVOS` — e nesses casos o que sai é o texto do bloco.
+dois casos reais a Evolution recusar o payload interativo, e a instalação rodar
+sem `WHATSAPP_BOTOES_INTERATIVOS`   e nesses casos o que sai é o texto do bloco.
 Sem a lista, o cliente receberia "Como podemos ajudar?" e **nenhuma opção**.
 
 No caminho com botões essas linhas **não aparecem**: `_corpoInterativo` remove do
@@ -109,7 +109,7 @@ exatamente a mensagem sem a lista.
 
 **O rótulo não repete o número.** O WhatsApp corta o botão em 20 unidades
 UTF-16, e o emoji de teclado (`1️⃣`) custa **três** delas. Medido:
-`2️⃣ Atendimento avulso` tem 22 e sairia como `2️⃣ Atendimento` — perdendo a
+`2️⃣ Atendimento avulso` tem 22 e sairia como `2️⃣ Atendimento`   perdendo a
 palavra que distingue a opção de `Tenho contrato`. Sem o número, `Atendimento
 avulso` tem 18 e cabe inteiro. Emoji de significado (🔧 💼 💰 ✅ 🔄 ❌ 🏠) custa 2
 e cabe, então fica.
@@ -123,12 +123,12 @@ Nenhum tem botão, nenhum tem opção no `config`, e nenhum mostra o rodapé
 
 | Bloco | Declaração | Coleta | Segue para |
 |---|---|---|---|
-| CNPJ | `aguardar: "cnpj"` | o CNPJ — **só de quem não é reconhecido pelo telefone** (ver §4b) | CONFIRMA CNPJ (ou AVULSO, se fora da base) |
+| CNPJ | `aguardar: "cnpj"` | o CNPJ   **só de quem não é reconhecido pelo telefone** (ver §4b) | CONFIRMA CNPJ (ou AVULSO, se fora da base) |
 | IDENTIFICAÇÃO | `aguardar: "texto"` | nome + setor | DESCRIÇÃO |
 | DESCRIÇÃO DA SOLICITAÇÃO | `aguardar: "texto"` | o que o cliente precisa | FILA TÉCNICA |
-| AVULSO — DADOS | `aguardar: "texto"` | nome + demanda | FILA TÉCNICA |
-| COMERCIAL — DADOS | `aguardar: "texto"` | nome + demanda | FILA COMERCIAL |
-| FINANCEIRO — DADOS | `aguardar: "texto"` | nome + demanda | FILA FINANCEIRO |
+| AVULSO   DADOS | `aguardar: "texto"` | nome + demanda | FILA TÉCNICA |
+| COMERCIAL   DADOS | `aguardar: "texto"` | nome + demanda | FILA COMERCIAL |
+| FINANCEIRO   DADOS | `aguardar: "texto"` | nome + demanda | FILA FINANCEIRO |
 
 ---
 
@@ -148,7 +148,7 @@ valores, e a declaração vence qualquer leitura da forma das opções:
 
 Antes havia **um** jeito de o motor parar e esperar: o bloco precisava ter
 `config.opcoes`. Como boa parte do fluxo pede **informação** e não escolha, esses
-blocos eram montados com uma opção curinga — e a opção virava **um botão**, com
+blocos eram montados com uma opção curinga   e a opção virava **um botão**, com
 o texto interno do fluxo:
 
 ```
@@ -159,7 +159,7 @@ o texto interno do fluxo:
 Selecione uma opção
 ```
 
-A tentativa oposta — tirar as opções e deixar só o `targetId` — produzia o outro
+A tentativa oposta   tirar as opções e deixar só o `targetId`   produzia o outro
 defeito relatado: sem opções o bloco **não estaciona**, `percorrer` segue na mesma
 volta, e o cliente recebia a identificação, a descrição e a confirmação em
 sequência, sem chance de responder.
@@ -168,7 +168,7 @@ sequência, sem chance de responder.
 
 Pela topologia, o bloco de **entrega** ("✅ Solicitação recebida! …encaminhamos
 para a equipe técnica") é indistinguível de um bloco que **pergunta** e transfere
-com a resposta. Na dúvida, `decidirEsperaDoPasso` estacionava — e o cliente
+com a resposta. Na dúvida, `decidirEsperaDoPasso` estacionava   e o cliente
 recebia "encaminhamos seu atendimento" com o bot parado esperando uma mensagem
 que ninguém tinha motivo para mandar.
 
@@ -176,14 +176,14 @@ Com a declaração a ambiguidade acaba: quem pergunta diz `"texto"`, quem entreg
 diz `"nada"`. Fluxos antigos, que não declaram nada, continuam caindo na regra
 conservadora de antes.
 
-## 4b. Memória do perfil — quem já é cliente não digita o CNPJ
+## 4b. Memória do perfil   quem já é cliente não digita o CNPJ
 
 `memoriaCnpj: "fluxo"` no bloco de CNPJ. Duas fontes, nesta ordem:
 
-1. **o cadastro de parceiros** (`Parceiro.telefones`) — a forte, e a que funciona
+1. **o cadastro de parceiros** (`Parceiro.telefones`)   a forte, e a que funciona
    no **primeiro** contato. Medido na base real: **179 dos 183** parceiros têm
    telefone cadastrado, contra **4** conversas com CNPJ confirmado;
-2. **a conversa anterior** (`ultimoCnpjDoTelefone`) — cobre quem informou o CNPJ
+2. **a conversa anterior** (`ultimoCnpjDoTelefone`)   cobre quem informou o CNPJ
    digitando, sem estar no cadastro.
 
 Reconhecido, o fluxo pula o pedido do CNPJ e vai direto para CONFIRMA CNPJ:
@@ -201,12 +201,12 @@ CLIENTE > Tenho contrato
 
 | Valor | Quem confirma | Uso |
 |---|---|---|
-| `false` | ninguém — o cliente digita | quando não se quer memória |
+| `false` | ninguém   o cliente digita | quando não se quer memória |
 | `true` | o **motor**, com os botões fixos dele, antes de o fluxo seguir | comportamento histórico, preservado |
 | `"fluxo"` | o **bloco seguinte do desenho** | este fluxo |
 
 `"fluxo"` existe por um defeito que a matriz de testes pegou: com `true` e um
-bloco de confirmação no desenho, o cliente confirmava **duas vezes seguidas** —
+bloco de confirmação no desenho, o cliente confirmava **duas vezes seguidas**  
 tocava "Sim, é esse" nos botões do motor e o bloco seguinte perguntava a mesma
 coisa. Com `"fluxo"` a pergunta acontece uma vez, no bloco cujo texto o operador
 controla no editor.
@@ -214,7 +214,7 @@ controla no editor.
 ### O que a memória NÃO faz
 
 - **Não adivinha entre duas empresas.** Número cadastrado em mais de um parceiro
-  (contador, matriz e filial) devolve nada, e o fluxo pede o CNPJ — que é a
+  (contador, matriz e filial) devolve nada, e o fluxo pede o CNPJ   que é a
   pergunta certa nesse caso. Escolher uma abriria o chamado no CNPJ errado.
 - **Não presume nada por ser lembrado.** O CNPJ adotado passa pela **mesma**
   validação de quem digita: se a empresa saiu da lista de clientes, o cliente é
@@ -222,12 +222,12 @@ controla no editor.
 - **Não reoferece o que foi recusado.** "Não, outro CNPJ" marca a recusa no ciclo
   (`cnpjRecusado` na sessão). Sem isso a opção virava laço: desassocia a conversa,
   volta ao bloco de CNPJ, consulta o cadastro pelo telefone e acha o mesmo
-  parceiro — para sempre. `_desassociarCnpj` solta a conversa, mas não pode apagar
+  parceiro   para sempre. `_desassociarCnpj` solta a conversa, mas não pode apagar
   o telefone do cadastro.
 - **Não casa telefone por aproximação.** `(27)9999-8888` e `(27)99999-8888` são a
   mesma linha (nono dígito da Anatel, 2012) e casam; `(27)3222-8888` (fixo) e
-  `(27)93222-8888` (móvel) **não**. Comparar "os últimos 8 dígitos" — a saída
-  fácil — casaria os dois, e num fluxo que adota o CNPJ isso é atender uma empresa
+  `(27)93222-8888` (móvel) **não**. Comparar "os últimos 8 dígitos"   a saída
+  fácil   casaria os dois, e num fluxo que adota o CNPJ isso é atender uma empresa
   como se fosse outra. Ver `variantesTelefoneBr`.
 
 ---
@@ -264,7 +264,7 @@ Não existe tabela de filas neste projeto. A "fila" é a dupla
 `chatbot.filas` de Configurações, e **só quando o `setor` não está declarado**.
 Como todas as três declaram o setor, o roteamento não depende do mapa.
 
-**O Financeiro não declara fila de propósito.** O fluxo anterior usava `35` — a
+**O Financeiro não declara fila de propósito.** O fluxo anterior usava `35`   a
 fila do **Comercial**. Não roteava errado só porque o setor declarado vencia, mas
 era uma mentira à espera de efeito. Não há id conhecido para a fila financeira
 nesta instalação; declarar o errado é pior do que não declarar nenhum.
@@ -274,7 +274,7 @@ nesta instalação; declarar o errado é pior do que não declarar nenhum.
 
 ## 6. Os relógios
 
-São **três**, deliberadamente separados — confundi-los daria a mensagem errada
+São **três**, deliberadamente separados   confundi-los daria a mensagem errada
 nos três casos. Todos contados pelo servidor (`chatbot.inatividade.js`), nunca
 pelo navegador: o prazo tem de correr com a aba fechada e atravessar restart.
 
@@ -296,7 +296,7 @@ sistema. O bloco vence porque é o que a pessoa vê na tela. O terceiro sai do
 
 Os dois lugares declaram o **mesmo** valor de propósito: se divergirem, o painel
 mostraria um número que o campo escondido contradiz. O campo legado
-`notResponseMessage` **não** está no fluxo — ele criaria uma terceira fonte para
+`notResponseMessage` **não** está no fluxo   ele criaria uma terceira fonte para
 o mesmo prazo (e no fluxo anterior os dois discordavam: o legado dizia 10 min, o
 bloco dizia 5, e o bot esperava 5).
 
@@ -316,25 +316,25 @@ própria em Configurações. Interpretada por
 - dia ligado/desligado individualmente;
 - **vários períodos no mesmo dia** (o intervalo de almoço);
 - fuso próprio (o container roda em UTC);
-- **feriados/exceções** por data — fechado, ou com expediente especial;
+- **feriados/exceções** por data   fechado, ou com expediente especial;
 - mensagem com `{{horarios}}` e `{{excecao}}`, para o texto **nunca** repetir os
   horários à mão;
 - o aviso **não se repete** a cada mensagem (`reavisarAposMin`, padrão 2 h).
 
 A regra nasce **desligada** (`chatbot.horario` vazio = atende a qualquer hora).
-Enquanto ela estiver assim, nenhum aviso de "fora do horário" sai — é a primeira
+Enquanto ela estiver assim, nenhum aviso de "fora do horário" sai   é a primeira
 coisa a conferir quando o relato for "o cliente escreveu de madrugada e não
 recebeu nada". `node diagnosticar-instalacao.js` responde isso em uma linha.
 
 Fora do horário o bot não inicia fluxo nenhum: avisa e **preserva** o atendimento
-em Pendentes — a estrutura que a Central já usa para "chegou e ninguém assumiu".
+em Pendentes   a estrutura que a Central já usa para "chegou e ninguém assumiu".
 Quem já está no meio de um menu, de uma resposta livre ou da pesquisa **continua**,
 para o expediente virar sem abandonar o cliente na metade.
 
 Duas fronteiras dessa regra, e as duas custaram um defeito:
 
 - vale para **mídia também**. O `return` de "mídia recebida" ficava antes da
-  checagem, e uma foto do erro às 22 h — como metade dos chamados começa — saía do
+  checagem, e uma foto do erro às 22 h   como metade dos chamados começa   saía do
   motor sem que o expediente fosse lido: o mesmo cliente recebia o aviso ao
   escrever e silêncio ao mandar o print;
 - **não** vale para conversa com atendente (`statusAtendimento: "aberta"`). No

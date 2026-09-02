@@ -1079,7 +1079,7 @@ export function FlowPropertyPanel({
                     },
                     {
                       id: 'nada',
-                      label: '➡️ Nada — entrega na hora',
+                      label: '➡️ Nada entrega na hora',
                       sub: 'Fala com o cliente e executa a saída (transferir/encerrar) na mesma volta. Para o bloco de "Solicitação recebida".',
                     },
                   ].map((modo) => {

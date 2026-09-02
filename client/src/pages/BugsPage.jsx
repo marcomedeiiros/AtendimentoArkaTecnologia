@@ -447,7 +447,7 @@ export default function BugsPage() {
         <div>
           <h1 className="font-display text-2xl font-bold tracking-tight text-white">Relatos de Bugs</h1>
           <p className="mt-1 text-xs text-texto-suave sm:text-sm">
-            Problemas enviados pela equipe através do botão de reportar bug.
+            Problemas enviados pela equipe através do botão de reportar bug
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-3 text-xs">

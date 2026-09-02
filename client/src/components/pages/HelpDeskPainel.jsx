@@ -208,15 +208,15 @@ function ConfigMotivos({ motivos, onSalvo }) {
         )}
       </div>
       <p className="text-[11px] text-slate-400 leading-relaxed">
-        A lista que o atendente escolhe ao fechar. Mantenha curta — de 8 a 12 itens.
-        Lista grande é preenchida no automático, e o relatório continua bonito enquanto mente.
-        Revisar por trimestre: divida o motivo que ficou grande demais, junte o que ninguém usa.
+        A lista que o atendente escolhe ao fechar mantenha curta de 8 a 12 itens
+        lista grande é preenchida no automático, e o relatório continua bonito enquanto mente
+        revisar por trimestre: divida o motivo que ficou grande demais, junte o que ninguém usa.
       </p>
 
       <div className="flex flex-wrap gap-1.5">
         {lista.length === 0 ? (
           <p className="text-[11px] text-slate-500 italic py-1">
-            Lista vazia — ao salvar assim, o sistema volta aos 12 motivos padrão.
+            Lista vazia ao salvar assim, o sistema volta aos 12 motivos padrão.
           </p>
         ) : lista.map(m => (
           <span key={m} className="inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-xl bg-grafite-700 border border-linha text-xs text-slate-200">
@@ -252,8 +252,8 @@ function ConfigMotivos({ motivos, onSalvo }) {
           um item, e não saber a resposta é o que trava a revisão. */}
       <p className="text-[10px] text-slate-500 leading-relaxed">
         Remover um motivo <strong className="text-slate-400">não altera atendimentos já fechados</strong>:
-        eles mantêm o motivo escolhido na época e continuam aparecendo na quebra acima.
-        A mudança vale só para os próximos fechamentos.
+        eles mantêm o motivo escolhido na época e continuam aparecendo na quebra acima
+        a mudança vale só para os próximos fechamentos.
       </p>
 
       {erro && <p className="text-[11px] text-falha-400">{erro}</p>}
@@ -294,7 +294,7 @@ function fmtDuracao(seg, amostra = 1) {
  *
  * Os três juntos é que contam a história: quando a média está colada no p50, a
  * operação é regular e o número grande pode ser lido sem ressalva. Quando ela
- * está bem acima do p50, existe uma cauda de casos ruins escondida atrás dela —
+ * está bem acima do p50, existe uma cauda de casos ruins escondida atrás dela
  * e o p90 mostra o tamanho dessa cauda. É esse cliente, e não o do meio, que
  * liga reclamando.
  */
@@ -454,7 +454,7 @@ export default function HelpDeskPainel() {
             </p>
             {dados.porMotivo.length === 0 ? (
               <p className="text-xs text-slate-400 py-4 text-center">
-                Nenhum atendimento fechado ainda — o motivo é escolhido no fechamento.
+                Nenhum atendimento fechado ainda o motivo é escolhido no fechamento.
               </p>
             ) : (
               <div className="space-y-2">

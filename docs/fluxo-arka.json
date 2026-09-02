@@ -332,7 +332,7 @@
     {
       "id": "8619e80e-47a4-4a05-80fd-be50e7649756",
       "tipo": "mensagem",
-      "titulo": "AVULSO — VALORES",
+      "titulo": "AVULSO VALORES",
       "desc": "Valores do atendimento avulso e a confirmação. Três botões.",
       "texto": "🙋 *Atendimento avulso*\n\nSerá um prazer atendê-lo! Antes, precisamos informar os valores:\n\n💻 Atendimento remoto: R$ 120,00\n🛠 Atendimento in loco: R$ 180,00/h\n\nOutros serviços ou projetos têm valor informado mediante consulta.\n\nPodemos seguir com o seu atendimento?\n\n1️⃣ Sim, seguir\n2️⃣ Não, obrigado\n3️⃣ Voltar ao menu",
       "config": {
@@ -397,7 +397,7 @@
     {
       "id": "a1f0c7e2-4b58-4c31-9a6d-1e7b2c9d4f02",
       "tipo": "mensagem",
-      "titulo": "AVULSO — DADOS",
+      "titulo": "AVULSO DADOS",
       "desc": "Nome e o que o cliente precisa. TEXTO LIVRE.",
       "texto": "👤 *Seus dados*\n\nPara encaminharmos seu atendimento corretamente, envie:\n\n• Seu nome\n• O que você precisa\n\nVocê pode enviar as duas informações na mesma mensagem.",
       "config": {
@@ -412,7 +412,7 @@
     {
       "id": "64b85687-198c-49ef-b7a7-827fdb8a456a",
       "tipo": "mensagem",
-      "titulo": "COMERCIAL — DADOS",
+      "titulo": "COMERCIAL DADOS",
       "desc": "Nome e demanda. TEXTO LIVRE: nenhum botão, nenhuma opção.",
       "texto": "💼 *Atendimento Comercial*\n\nPara encaminharmos seu atendimento corretamente, envie:\n\n• Seu nome\n• O que você precisa\n\nVocê pode enviar as duas informações na mesma mensagem.",
       "config": {
@@ -455,7 +455,7 @@
     {
       "id": "4f5f1646-5441-4afd-974d-dd4fa639f958",
       "tipo": "mensagem",
-      "titulo": "FINANCEIRO — DADOS",
+      "titulo": "FINANCEIRO DADOS",
       "desc": "Nome e demanda. TEXTO LIVRE: nenhum botão, nenhuma opção.",
       "texto": "💰 *Administrativo / Financeiro*\n\nPara encaminharmos seu atendimento corretamente, envie:\n\n• Seu nome\n• O que você precisa\n\nVocê pode enviar as duas informações na mesma mensagem.",
       "config": {

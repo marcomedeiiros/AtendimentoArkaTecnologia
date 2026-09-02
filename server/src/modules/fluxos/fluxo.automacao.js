@@ -423,14 +423,14 @@ function resumoAutomacoes(fluxo) {
     if (escolhas.length > LIMITE_BOTOES) {
       excessos.push({
         rotulo: `"${passo.titulo}"`,
-        valor: `${escolhas.length} opções — acima do limite de ${LIMITE_BOTOES}; será enviado como lista`,
+        valor: `${escolhas.length} opções acima do limite de ${LIMITE_BOTOES}; será enviado como lista`,
       });
     }
     if (passo.config?.aguardar === "texto") {
       livres.push({
         rotulo: `"${passo.titulo}"`,
         valor: opcoes.length
-          ? `espera o cliente escrever — ATENÇÃO: o bloco ainda tem ${opcoes.length} opção(ões) no config`
+          ? `espera o cliente escrever ATENÇÃO: o bloco ainda tem ${opcoes.length} opção(ões) no config`
           : "espera o cliente escrever (sem botões)",
       });
     }
@@ -457,7 +457,7 @@ function resumoAutomacoes(fluxo) {
       regras: [
         {
           rotulo: "Limite do WhatsApp",
-          valor: `${LIMITE_BOTOES} botões por mensagem — é do protocolo, não da configuração`,
+          valor: `${LIMITE_BOTOES} botões por mensagem é do protocolo, não da configuração`,
         },
         ...excessos,
       ],

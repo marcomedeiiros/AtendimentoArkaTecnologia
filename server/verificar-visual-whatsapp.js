@@ -206,8 +206,8 @@ const CENARIOS = [
     turnos: [
       { entrada: "oi", bloco: "MENU PRINCIPAL", botoes: 3 },
       { entrada: "1", bloco: "TÉCNICO", botoes: 3 },
-      { entrada: "2", bloco: "AVULSO — VALORES", botoes: 3 },
-      { entrada: "1", bloco: "AVULSO — DADOS", botoes: 0 },
+      { entrada: "2", bloco: "AVULSO VALORES", botoes: 3 },
+      { entrada: "1", bloco: "AVULSO DADOS", botoes: 0 },
       { entrada: "David, preciso de suporte na rede.", bloco: "FILA TÉCNICA", botoes: 0 },
     ],
   },
@@ -215,7 +215,7 @@ const CENARIOS = [
     titulo: "Comercial",
     turnos: [
       { entrada: "oi", bloco: "MENU PRINCIPAL", botoes: 3 },
-      { entrada: "2", bloco: "COMERCIAL — DADOS", botoes: 0 },
+      { entrada: "2", bloco: "COMERCIAL DADOS", botoes: 0 },
       { entrada: "David, preciso de um orçamento para 10 notebooks.", bloco: "FILA COMERCIAL", botoes: 0 },
     ],
   },
@@ -223,7 +223,7 @@ const CENARIOS = [
     titulo: "Financeiro",
     turnos: [
       { entrada: "oi", bloco: "MENU PRINCIPAL", botoes: 3 },
-      { entrada: "3", bloco: "FINANCEIRO — DADOS", botoes: 0 },
+      { entrada: "3", bloco: "FINANCEIRO DADOS", botoes: 0 },
       { entrada: "Ana, segunda via do boleto.", bloco: "FILA FINANCEIRO", botoes: 0 },
     ],
   },
@@ -504,7 +504,7 @@ const CENARIOS = [
   const html = `<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Verificação visual — fluxo ARKA no WhatsApp</title>
+<title>Verificação visual fluxo ARKA no WhatsApp</title>
 <style>
   :root { color-scheme: light dark; }
   body { margin:0; font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
@@ -532,7 +532,7 @@ const CENARIOS = [
   .ok { color:#7ee0a0; } .nao { color:#f2a2a2; }
   footer { color:#8696a0; font-size:12px; margin-top:24px; max-width:70ch; }
 </style></head><body>
-<h1>Fluxo ARKA — o que o cliente vê no WhatsApp</h1>
+<h1>Fluxo ARKA o que o cliente vê no WhatsApp</h1>
 <p class="sub">Bolhas montadas a partir do <strong>payload real</strong> enviado à Evolution API,
 capturado do motor (<code>verificar-visual-whatsapp.js</code>). Botão desenhado = botão
 que sai de verdade.</p>
@@ -555,7 +555,7 @@ ${c.turnos
       })
       .join("\n");
     const qtd = t.mensagens[t.mensagens.length - 1]?.botoes.length || 0;
-    const marca = `      <div class="marca">${esc(t.bloco)} — <span class="${qtd ? "ok" : "ok"}">${
+    const marca = `      <div class="marca">${esc(t.bloco)}  <span class="${qtd ? "ok" : "ok"}">${
       qtd ? `${qtd} botão(ões)` : "texto livre, sem botões"
     }</span></div>`;
     return [cli, bots, marca].join("\n");
@@ -568,7 +568,7 @@ ${c.turnos
 </div>
 <footer>
 As bolhas do cliente aparecem à direita; as do bot, à esquerda. Onde não há botão
-desenhado, o motor enviou <code>sendText</code> — texto puro, sem card interativo
+desenhado, o motor enviou <code>sendText</code>  texto puro, sem card interativo
 e sem o rodapé “Selecione uma opção”. É o que o item 27 do pedido exige para
 Identificação, Descrição, Dados Comercial, Dados Financeiro e Dados Avulso.
 </footer>

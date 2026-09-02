@@ -44,8 +44,8 @@ export default function PainelAutomacoes() {
             <Bot size={15} className="text-acao-200" /> Automações do BOT
           </h2>
           <p className="text-[11px] text-slate-400 mt-1 max-w-2xl leading-relaxed">
-            Tudo que o bot faz sozinho está aqui, com o valor que está valendo agora.
-            Para alterar, abra o fluxo e clique no bloco correspondente.
+            Tudo que o bot faz sozinho está aqui, com o valor que está valendo agora
+            para alterar, abra o fluxo e clique no bloco correspondente
             <strong className="text-slate-300"> Fluxo pausado não executa nenhuma destas regras.</strong>
           </p>
         </div>

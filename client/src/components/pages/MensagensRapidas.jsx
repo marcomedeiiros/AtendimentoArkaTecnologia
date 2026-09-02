@@ -395,7 +395,7 @@ export default function MensagensRapidas({ onUsarMensagem }) {
             Mensagens Rápidas
           </h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-1">
-            Respostas pré-definidas e editáveis para agilizar o atendimento.
+            Respostas pré-definidas e editáveis para agilizar o atendimento
           </p>
         </div>
         <button

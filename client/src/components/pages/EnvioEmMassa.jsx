@@ -332,7 +332,7 @@ export default function EnvioEmMassa({ conversas = [] }) {
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight font-display">Envio em Massa</h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-1">
-            Dispare mensagens para múltiplos contatos com controle de progresso.
+            Dispare mensagens para múltiplos contatos com controle de progresso
           </p>
         </div>
         {status === 'concluido' && (

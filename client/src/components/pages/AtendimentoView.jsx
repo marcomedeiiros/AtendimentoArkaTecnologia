@@ -626,7 +626,7 @@ function ModalMotivoEncerramento({ motivos, carregando, erro, salvando, onConfir
         <div className="p-4 flex-1 overflow-y-auto min-h-0">
           <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
             Por que este cliente procurou? É o que permite descobrir o que mais
-            gera chamado — e reduzir, em vez de só atender.
+            gera chamado e reduzir, em vez de só atender.
           </p>
 
           {carregando ? (
@@ -2324,7 +2324,7 @@ function PainelChat({
         <div className="mx-3 mb-2 flex items-center justify-between gap-3 px-2.5 py-2 rounded-xl bg-grafite-700 border border-linha text-[11px]">
           <span className="min-w-0 truncate flex items-center gap-1.5 text-slate-400">
             <SpellCheck size={12} className="text-acao-200 shrink-0" />
-            {avisoCorrecao || 'Texto corrigido — confira antes de enviar.'}
+            {avisoCorrecao || 'Texto corrigido confira antes de enviar.'}
           </span>
           {textoAntes != null && (
             <button
@@ -2618,7 +2618,7 @@ function PainelChat({
             }}
             placeholder={
               modoNota
-                ? 'Nota interna — o cliente NÃO recebe isto.  (Enter salva)'
+                ? 'Nota interna o cliente NÃO recebe isto.  (Enter salva)'
                 : anexo ? 'Legenda (opcional)...' : 'Digite sua mensagem...  (Enter envia · Shift+Enter quebra linha)'
             }
             className={`order-first w-full sm:order-none sm:w-auto sm:flex-1 min-w-0 resize-none max-h-32 border rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none transition-colors ${
@@ -3608,7 +3608,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
             Central de Atendimentos
           </h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-1">
-            Assuma conversas, consulte CNPJ e automatize respostas.
+            Assuma conversas, consulte CNPJ e automatize respostas
           </p>
         </div>
 

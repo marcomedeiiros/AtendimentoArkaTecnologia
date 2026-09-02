@@ -141,7 +141,7 @@ function conferirUmaPerguntaPorTurno(rotulo, r) {
     ["MENU PRINCIPAL", 3],
     ["TÉCNICO", 3],
     ["CONFIRMA CNPJ", 2],
-    ["AVULSO — VALORES", 3],
+    ["AVULSO VALORES", 3],
   ]) {
     const ops = opcoesDe(titulo);
     const escolhas = ops.filter((o) => engine._opcaoEhEscolha(o));
@@ -183,9 +183,9 @@ function conferirUmaPerguntaPorTurno(rotulo, r) {
   for (const titulo of [
     "IDENTIFICAÇÃO",
     "DESCRIÇÃO DA SOLICITAÇÃO",
-    "AVULSO — DADOS",
-    "COMERCIAL — DADOS",
-    "FINANCEIRO — DADOS",
+    "AVULSO DADOS",
+    "COMERCIAL DADOS",
+    "FINANCEIRO DADOS",
   ]) {
     const p = passoPor(titulo);
     const ok =
@@ -211,7 +211,7 @@ function conferirUmaPerguntaPorTurno(rotulo, r) {
     "o bloco de CNPJ tem opcoes -- viraria botao debaixo do pedido do CNPJ"
   );
   check(
-    passoCnpj.config?.targetIdNaoCadastrado === passoPor("AVULSO — VALORES")?.id,
+    passoCnpj.config?.targetIdNaoCadastrado === passoPor("AVULSO VALORES")?.id,
     "CNPJ nao cadastrado nao aponta para o caminho avulso"
   );
   console.log("  OK    \"CNPJ\" -> TEXTO LIVRE, e o nao-cadastrado sai para o caminho avulso");
@@ -343,11 +343,11 @@ function conferirUmaPerguntaPorTurno(rotulo, r) {
     "CNPJ fora da base nao avisou o cliente"
   );
   check(
-    r.turnos[3].passoAtualTitulo === "AVULSO — VALORES",
-    `CNPJ fora da base deveria cair em AVULSO — VALORES, caiu em ${r.turnos[3].passoAtualTitulo}`
+    r.turnos[3].passoAtualTitulo === "AVULSO VALORES",
+    `CNPJ fora da base deveria cair em AVULSO VALORES, caiu em ${r.turnos[3].passoAtualTitulo}`
   );
   check(
-    r.turnos[4].passoAtualTitulo === "AVULSO — DADOS" && r.turnos[4].aguardando === AGUARDANDO.TEXTO,
+    r.turnos[4].passoAtualTitulo === "AVULSO DADOS" && r.turnos[4].aguardando === AGUARDANDO.TEXTO,
     `apos aceitar os valores deveria parar nos dados do avulso, veio ${r.turnos[4].passoAtualTitulo}`
   );
   check(
@@ -606,7 +606,7 @@ function conferirUmaPerguntaPorTurno(rotulo, r) {
     "os valores do atendimento avulso nao foram apresentados"
   );
   check(
-    r.turnos[3].aguardando === AGUARDANDO.TEXTO && r.turnos[3].passoAtualTitulo === "AVULSO — DADOS",
+    r.turnos[3].aguardando === AGUARDANDO.TEXTO && r.turnos[3].passoAtualTitulo === "AVULSO DADOS",
     `apos aceitar os valores deveria parar nos dados, veio ${r.turnos[3].passoAtualTitulo}/${r.turnos[3].aguardando}`
   );
   const fimAvulso = r.turnos[4];
@@ -637,8 +637,8 @@ function conferirUmaPerguntaPorTurno(rotulo, r) {
     `o Comercial deveria PARAR esperando o texto do cliente, veio ${r.turnos[1].aguardando}`
   );
   check(
-    r.turnos[1].passoAtualTitulo === "COMERCIAL — DADOS",
-    `parou em ${r.turnos[1].passoAtualTitulo}, esperado COMERCIAL — DADOS`
+    r.turnos[1].passoAtualTitulo === "COMERCIAL DADOS",
+    `parou em ${r.turnos[1].passoAtualTitulo}, esperado COMERCIAL DADOS`
   );
   check(
     !/PRODUTOS|SERVIÇOS/i.test(tudoQueOBotFalou(r)),
@@ -1005,7 +1005,7 @@ function conferirUmaPerguntaPorTurno(rotulo, r) {
   console.log("\n╔══ 9. ENCERRAMENTO E PALAVRAS DE CONTROLE ═══════════════════");
   // ══════════════════════════════════════════════════════════════════════════
   //
-  // O menu não tem mais o botão "4 — Encerrar atendimento" (as três vagas são
+  // O menu não tem mais o botão "4 Encerrar atendimento" (as três vagas são
   // dos setores). Quem encerra é o mecanismo GLOBAL do motor: as palavras de
   // `chatbot.config.palavrasChave.sair` (sair / cancelar / encerrar / parar /
   // tchau), liberadas pelo fluxo em `permitirComandosGlobais`.
@@ -1249,9 +1249,9 @@ function conferirUmaPerguntaPorTurno(rotulo, r) {
   for (const titulo of [
     "IDENTIFICAÇÃO",
     "DESCRIÇÃO DA SOLICITAÇÃO",
-    "AVULSO — DADOS",
-    "COMERCIAL — DADOS",
-    "FINANCEIRO — DADOS",
+    "AVULSO DADOS",
+    "COMERCIAL DADOS",
+    "FINANCEIRO DADOS",
   ]) {
     check(textoDoPainel.includes(titulo), `o painel nao lista "${titulo}" entre as respostas livres`);
   }

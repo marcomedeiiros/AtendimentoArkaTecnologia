@@ -157,7 +157,7 @@ export default function HorarioAtendimento({ horario, resumo, mensagemPrevia, se
           <p className="text-[11px] text-slate-400 leading-relaxed mt-1 max-w-xl">
             Fora do horário, o bot não inicia o fluxo: ele avisa o cliente e mantém a conversa
             em <strong className="text-slate-300">Pendentes</strong> para a equipe atender no próximo
-            período. Quem já está no meio de um menu ou escrevendo uma resposta continua normalmente.
+            período quem já está no meio de um menu ou escrevendo uma resposta continua normalmente.
           </p>
         </div>
         <button
@@ -308,7 +308,7 @@ export default function HorarioAtendimento({ horario, resumo, mensagemPrevia, se
           </button>
         </div>
         <p className="text-[10px] text-slate-500 leading-relaxed">
-          Uma data específica vence o dia da semana. Sem período, a data é fechada; com período,
+          Uma data específica vence o dia da semana sem período, a data é fechada; com período,
           ela tem um expediente diferente (véspera até meio-dia, por exemplo).
         </p>
         {excecoes.length === 0 && (
@@ -425,7 +425,7 @@ export default function HorarioAtendimento({ horario, resumo, mensagemPrevia, se
         <p className="text-[10px] text-slate-500 leading-relaxed">
           Use <code className="text-acao-200 font-mono">{'{{horarios}}'}</code> para inserir a tabela
           acima e <code className="text-acao-200 font-mono">{'{{excecao}}'}</code> para a descrição do
-          feriado do dia. <strong className="text-slate-400">Não escreva os horários à mão</strong>:
+          feriado do dia <strong className="text-slate-400">não escreva os horários à mão</strong>:
           trocar o expediente aqui em cima tem de trocar o que o cliente lê.
         </p>
         <textarea

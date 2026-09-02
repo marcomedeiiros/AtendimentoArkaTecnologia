@@ -232,7 +232,7 @@ check(
 );
 check(
   h.mensagemFora(
-    { ...comFeriado, mensagem: "{{excecao}} — atendemos {{horarios}}" },
+    { ...comFeriado, mensagem: "{{excecao}} atendemos {{horarios}}" },
     em("2026-09-07T10:00:00-03:00")
   ).includes("Independência"),
   "template com {{excecao}} recebe a descricao do feriado do dia"

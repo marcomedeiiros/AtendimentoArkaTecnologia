@@ -108,7 +108,7 @@ const MENSAGEM_PADRAO =
   "Nosso horário de atendimento é:\n\n" +
   "{{horarios}}\n\n" +
   "*Para ser atendido, entre em contato novamente dentro do horário acima.*\n\n" +
-  "Este atendimento será encerrado em {{minutos}} minutos. Seu histórico fica salvo — " +
+  "Este atendimento será encerrado em {{minutos}} minutos. Seu histórico fica salvo  " +
   "é só nos escrever no horário de atendimento que abrimos um novo chamado para você.";
 
 // Minutos entre o aviso de fora do horario e o encerramento automatico da
