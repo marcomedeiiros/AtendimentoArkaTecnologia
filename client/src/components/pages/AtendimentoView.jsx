@@ -2592,7 +2592,15 @@ function PainelChat({
             onSendAudio={(dataUrl) => {
               // O backend espera o campo `media` (mesmo do envio de imagem),
               // nao `dataUrl` -- por isso o audio nao saia mesmo com a prop certa.
-              const r = onEnviarMidia({ tipo: 'audio', media: dataUrl, mimetype: 'audio/ogg; codecs=opus', fileName: 'audio.ogg' });
+              //
+              // O mimetype sai do PROPRIO data URL. Estava fixo em
+              // "audio/ogg; codecs=opus" enquanto o Chrome gravava WebM: o
+              // servidor acreditava no rotulo, o WhatsApp tentava ler OGG e o
+              // cliente recebia uma onda cinza sem botao de play. Quem sabe o
+              // formato e o gravador -- aqui so repassamos.
+              const mimetype = /^data:([^;,]+)/.exec(dataUrl)?.[1] || 'audio/webm';
+              const extensao = mimetype.includes('ogg') ? 'ogg' : 'webm';
+              const r = onEnviarMidia({ tipo: 'audio', media: dataUrl, mimetype, fileName: `audio.${extensao}` });
               // Sem isso o erro era engolido: se a Evolution recusa (WhatsApp
               // desconectado, numero invalido), nada aparecia E nada avisava.
               r?.promise?.catch(e => {

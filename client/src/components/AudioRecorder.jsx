@@ -34,6 +34,38 @@ const CONSTRAINTS_LIMPAS = {
 };
 
 /**
+ * O CONTÊINER DO ÁUDIO -- e por que rotular não converte nada.
+ *
+ * Até 02/09/2026 o áudio saía daqui como `new MediaRecorder(stream)` (sem pedir
+ * formato: no Chrome isso é WebM) e ia embrulhado num `Blob` com o rótulo
+ * `audio/ogg`. Rótulo de Blob é só metadado -- os bytes continuavam WebM. O
+ * WhatsApp acreditava no rótulo, tentava ler OGG, falhava, e a bolha chegava
+ * ao cliente como aquela onda cinza sem botão de play.
+ *
+ * Conferido nos arquivos que a VM guardou: nome `.ogg`, primeiros bytes
+ * `1A 45 DF A3` -- cabeçalho EBML, ou seja, WebM. OGG de verdade começa
+ * com `OggS`.
+ *
+ * A correção é dizer a VERDADE sobre o que foi gravado. A Evolution tem ffmpeg
+ * e converte para o OGG/Opus que o WhatsApp exige -- mas só acerta a conversão
+ * se o formato de entrada estiver declarado corretamente.
+ *
+ * A ordem abaixo é preferência, não exigência: OGG/Opus primeiro (Firefox grava
+ * nativamente, e aí não há conversão nenhuma), WebM/Opus depois (Chrome, Edge).
+ * `isTypeSupported` não existe em navegador muito antigo, daí o `?.` e o
+ * fallback para o padrão do navegador -- que agora é lido de volta em
+ * `mediaRecorder.mimeType` em vez de ser adivinhado.
+ */
+const FORMATOS_PREFERIDOS = ['audio/ogg;codecs=opus', 'audio/webm;codecs=opus', 'audio/webm'];
+
+function melhorFormatoSuportado() {
+  for (const tipo of FORMATOS_PREFERIDOS) {
+    if (window.MediaRecorder?.isTypeSupported?.(tipo)) return tipo;
+  }
+  return null;
+}
+
+/**
  * ISOLAMENTO DE VOZ -- o que o `noiseSuppression` NAO faz.
  *
  * A pergunta que motivou isto: "o supressor ajuda a nao pegar as vozes de
@@ -117,7 +149,8 @@ export default function AudioRecorder({ onSendAudio, onCancel }) {
       setSupressao(ajustes.noiseSuppression === true);
       setIsolamento(ajustes.voiceIsolation === true);
 
-      const mediaRecorder = new MediaRecorder(stream);
+      const formato = melhorFormatoSuportado();
+      const mediaRecorder = new MediaRecorder(stream, formato ? { mimeType: formato } : undefined);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
@@ -159,7 +192,11 @@ export default function AudioRecorder({ onSendAudio, onCancel }) {
     if (timerRef.current) clearInterval(timerRef.current);
 
     mediaRecorderRef.current.onstop = () => {
-      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/ogg; codecs=opus' });
+      // O tipo sai do PRÓPRIO gravador: é o único que sabe o que gravou. Fixar
+      // uma string aqui foi exatamente o que quebrou o áudio (ver
+      // FORMATOS_PREFERIDOS).
+      const tipoGravado = mediaRecorderRef.current.mimeType || melhorFormatoSuportado() || 'audio/webm';
+      const audioBlob = new Blob(audioChunksRef.current, { type: tipoGravado });
       const reader = new FileReader();
       reader.onloadend = () => {
         const base64DataUrl = reader.result;
