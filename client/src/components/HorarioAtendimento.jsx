@@ -434,7 +434,7 @@ export default function HorarioAtendimento({ horario, resumo, mensagemPrevia, se
           )}
           <p className="text-[10px] text-slate-500 leading-relaxed">
             Este bloco é calculado pelo servidor pela mesma regra que o bot usa e por isso só
-            muda depois de <strong className="text-slate-400">Salvar configurações</strong>.
+            muda depois de <strong className="text-slate-400">Salvar horário</strong>.
           </p>
         </div>
       )}

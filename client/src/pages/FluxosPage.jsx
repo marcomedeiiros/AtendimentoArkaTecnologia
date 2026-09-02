@@ -1,16 +1,22 @@
 import { useState } from 'react';
-import { GitBranch, Workflow, Bot } from 'lucide-react';
+import { GitBranch, Workflow, Bot, Clock } from 'lucide-react';
 import { VisualFlowEditor } from '../components/flow/VisualFlowEditor';
 import PainelN8n from '../components/flow/PainelN8n';
 import PainelAutomacoes from '../components/flow/PainelAutomacoes';
+import PainelHorarioAtendimento from '../components/flow/PainelHorarioAtendimento';
 import { useAppContext } from '../context/AppContext';
 
 // Duas fontes de automacao convivem: os fluxos locais (executados pelo motor de
 // chatbot no WhatsApp) e os workflows do n8n. As abas separam os dois sem
 // alterar o editor visual existente.
+//
+// O horario de atendimento entra aqui, e nao em Configuracoes, porque e uma
+// regra DO BOT: fora do expediente nenhum fluxo inicia. Ao lado dos fluxos ele
+// e lido junto do que governa; entre chaves de API ele era so mais um campo.
 const ABAS = [
   { id: 'locais', label: 'Fluxos do Chatbot', Icon: GitBranch },
   { id: 'automacoes', label: 'Automações do BOT', Icon: Bot },
+  { id: 'horario', label: 'Horário de atendimento', Icon: Clock },
   { id: 'n8n',    label: 'Workflows n8n',     Icon: Workflow },
 ];
 
@@ -45,6 +51,12 @@ export default function FluxosPage() {
           <VisualFlowEditor fluxos={fluxos} setFluxos={atualizarFluxos} equipe={equipe} />
         ) : aba === 'automacoes' ? (
           <PainelAutomacoes />
+        ) : aba === 'horario' ? (
+          /* Scroll proprio: o `main` da rota vem com overflow-hidden (por causa
+             do canvas do editor) e este formulario e alto. */
+          <div className="h-full overflow-y-auto p-4 sm:p-6">
+            <PainelHorarioAtendimento />
+          </div>
         ) : (
           <div className="h-full overflow-y-auto p-4 sm:p-6">
             <PainelN8n />
