@@ -736,6 +736,10 @@ class WhatsAppService {
 
   async conectar(instanceName) {
     const nome = instanceName || env.evolutionApi.instance;
+    // Este e o unico caminho que ainda emite QR, e ele so roda por acao humana
+    // no painel. Avisar o vigia antes evita que o QUE FOI PEDIDO volte pelo
+    // webhook como se fosse sintoma de pareamento perdido.
+    reconexao.registrarPedidoDeQr();
     const data = await evolutionApi.connect(nome);
     return {
       instancia: nome,

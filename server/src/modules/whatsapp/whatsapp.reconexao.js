@@ -62,10 +62,26 @@ function _esperaMs(n) {
   return BASE_ESPERA_MS * Math.pow(2, Math.max(0, n - 1));
 }
 
-// Chamado quando descobrimos que a instancia perdeu o pareamento (a Evolution
-// emitiu QR sem ninguem ter pedido). Nao adianta reiniciar: so um humano com o
+// QR PEDIDO PELO PAINEL -- janela curta em que um QR novo NAO e sintoma.
+//
+// Medido em producao (02/09/2026): `/instance/connect` devolve QR sempre que o
+// socket em memoria nao esta autenticado, mesmo com a credencial no volume
+// intacta -- aquela instancia voltou a `open` sozinha depois de um restart,
+// sem ninguem escanear nada. Ou seja, "veio QR" nao prova pareamento perdido.
+// Sem esta janela, o operador que clica em "Gerar QR" veria a tela anunciar um
+// problema que ele mesmo acabou de provocar.
+let qrPedidoEm = 0;
+const JANELA_QR_PEDIDO_MS = 60 * 1000;
+
+function registrarPedidoDeQr() {
+  qrPedidoEm = Date.now();
+}
+
+// Chamado quando a Evolution emite QR sem ninguem ter pedido -- unico caso em
+// que isso sugere pareamento perdido. Nao adianta reiniciar: so um humano com o
 // celular na mao resolve. Paramos de tentar e deixamos o recado no /status.
 function marcarPrecisaParear(motivo) {
+  if (Date.now() - qrPedidoEm < JANELA_QR_PEDIDO_MS) return;
   if (precisaParear) return;
   precisaParear = true;
   tentativa = MAX_TENTATIVAS;
@@ -210,4 +226,5 @@ module.exports = {
   estado,
   notificarQueda,
   marcarPrecisaParear,
+  registrarPedidoDeQr,
 };
