@@ -34,6 +34,32 @@ const CONSTRAINTS_LIMPAS = {
 };
 
 /**
+ * ISOLAMENTO DE VOZ -- o que o `noiseSuppression` NAO faz.
+ *
+ * A pergunta que motivou isto: "o supressor ajuda a nao pegar as vozes de
+ * fundo?". Nao. O `noiseSuppression` mira ruido CONSTANTE (ar, ventilador,
+ * chiado) e e treinado para PRESERVAR fala -- a voz do colega ao lado e fala,
+ * entao ele a protege em vez de remover.
+ *
+ * `voiceIsolation` e a constraint que mira exatamente isso: manter quem esta
+ * falando no microfone e abaixar o resto, inclusive outras vozes. E um pedido
+ * OPCIONAL de proposito, e por duas razoes:
+ *
+ *   1. depende de suporte de baixo nivel do sistema/hardware -- onde nao houver,
+ *      o navegador ignora a chave e a gravacao segue normal;
+ *   2. quando funciona, e um processamento agressivo. Por isso a escada de
+ *      tentativas em `capturarMicrofone`: se pedir isolamento fizer o navegador
+ *      recusar a captura, tentamos de novo sem ele em vez de perder o audio.
+ *
+ * O selo na tela le o que o navegador CONFIRMOU (getSettings), nunca o que
+ * pedimos: prometer "voz isolada" onde a plataforma nao suporta seria pior que
+ * nao dizer nada.
+ */
+const CONSTRAINTS_COM_ISOLAMENTO = {
+  audio: { ...CONSTRAINTS_LIMPAS.audio, voiceIsolation: true },
+};
+
+/**
  * Pede o microfone com supressão e, se o navegador recusar as constraints, pede
  * de novo sem elas.
  *
@@ -44,13 +70,21 @@ const CONSTRAINTS_LIMPAS = {
  * "nenhum áudio", que é muito pior.
  */
 async function capturarMicrofone() {
-  try {
-    return await navigator.mediaDevices.getUserMedia(CONSTRAINTS_LIMPAS);
-  } catch (e) {
-    // Permissão negada é decisão do usuário: não há o que tentar de novo.
-    if (e?.name === 'NotAllowedError' || e?.name === 'SecurityError') throw e;
-    return navigator.mediaDevices.getUserMedia({ audio: true });
+  // Escada de tentativas, do melhor para o garantido. Cada degrau abre mão de
+  // uma melhoria, nunca da gravação: ficar sem áudio é pior que áudio com ruído.
+  const tentativas = [CONSTRAINTS_COM_ISOLAMENTO, CONSTRAINTS_LIMPAS, { audio: true }];
+  let ultimoErro = null;
+  for (const constraints of tentativas) {
+    try {
+      return await navigator.mediaDevices.getUserMedia(constraints);
+    } catch (e) {
+      // Permissão negada é decisão do usuário: insistir com outras constraints
+      // só produziria três recusas em sequência.
+      if (e?.name === 'NotAllowedError' || e?.name === 'SecurityError') throw e;
+      ultimoErro = e;
+    }
   }
+  throw ultimoErro || new Error('Microfone indisponível');
 }
 
 export default function AudioRecorder({ onSendAudio, onCancel }) {
@@ -58,6 +92,7 @@ export default function AudioRecorder({ onSendAudio, onCancel }) {
   const [seconds, setSeconds] = useState(0);
   const [erro, setErro] = useState('');
   const [supressao, setSupressao] = useState(false);
+  const [isolamento, setIsolamento] = useState(false);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const timerRef = useRef(null);
@@ -73,11 +108,14 @@ export default function AudioRecorder({ onSendAudio, onCancel }) {
     try {
       setErro('');
       const stream = await capturarMicrofone();
-      // Registra o que o navegador de fato aplicou: `noiseSuppression: true` é
-      // um PEDIDO, e nem todo navegador/dispositivo atende. Mostrar só quando
-      // está ativo de verdade evita prometer na tela o que não aconteceu.
+      // Registra o que o navegador de fato aplicou: cada uma dessas chaves é um
+      // PEDIDO, e nem todo navegador/dispositivo atende. Mostrar só o que está
+      // ativo de verdade evita prometer na tela o que não aconteceu -- e a
+      // diferença importa: "ruído reduzido" e "voz isolada" resolvem problemas
+      // diferentes (ver CONSTRAINTS_COM_ISOLAMENTO).
       const ajustes = stream.getAudioTracks()[0]?.getSettings?.() || {};
       setSupressao(ajustes.noiseSuppression === true);
+      setIsolamento(ajustes.voiceIsolation === true);
 
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
@@ -159,12 +197,14 @@ export default function AudioRecorder({ onSendAudio, onCancel }) {
         {/* Só aparece quando o navegador CONFIRMOU a supressão (getSettings), e
             não porque nós a pedimos. Um selo que mente sobre a qualidade do
             áudio é pior do que nenhum selo. */}
-        {supressao && (
+        {(supressao || isolamento) && (
           <span
             className="hidden sm:inline-flex items-center gap-1 font-sans font-semibold text-[10px] px-1.5 py-0.5 rounded-md border bg-ativo/15 border-ativo/30 text-ativo-400 shrink-0"
-            title="O navegador está filtrando o ruído de fundo, o eco e nivelando o volume desta gravação."
+            title={isolamento
+              ? 'Isolamento de voz ativo: o navegador mantém quem fala no microfone e abaixa o resto, inclusive outras vozes.'
+              : 'Filtrando o ruído de fundo (ar, ventilador, teclado), o eco e nivelando o volume. Voz de outra pessoa perto do microfone NÃO é removida -- para isso, use um fone com microfone.'}
           >
-            <Waves size={11} /> ruído reduzido
+            <Waves size={11} /> {isolamento ? 'voz isolada' : 'ruído reduzido'}
           </span>
         )}
       </div>
