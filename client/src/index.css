@@ -296,15 +296,71 @@
    animacao -- sem timer em JS, entao nao ha o que limpar ao desmontar e a
    preferencia por menos movimento desliga tudo de uma vez, no fim do arquivo. */
 
-/* Grade tecnica de fundo. A mascara radial faz ela existir onde o conteudo
-   esta e sumir nas bordas, em vez de virar papel de parede uniforme. */
+/* Grade tecnica de fundo, EM MOVIMENTO. A mascara radial faz ela existir onde o
+   conteudo esta e sumir nas bordas, em vez de virar papel de parede uniforme.
+   
+   ── POR QUE EM DUAS CAMADAS, E POR QUE `transform` ───────────────────────
+   
+   O caminho obvio seria animar `background-position` no proprio elemento. Isso
+   funciona e custa REPINTURA da area inteira a cada quadro -- num painel que
+   ocupa metade da tela, e trabalho de CPU constante numa tela onde a pessoa so
+   quer digitar a senha. `transform` de uma pseudo-elemento e composto na GPU:
+   o navegador move uma textura ja pintada.
+   
+   A grade fica no `::after` e o brilho no `::before` porque a ordem de pintura e
+   essa: assim a luz passa POR BAIXO das linhas e elas continuam nitidas, em vez
+   de serem lavadas por um veu por cima. */
 .grade-tecnica {
+  overflow: hidden;
+  -webkit-mask-image: radial-gradient(ellipse 78% 62% at 42% 45%, #000 25%, transparent 78%);
+  mask-image: radial-gradient(ellipse 78% 62% at 42% 45%, #000 25%, transparent 78%);
+}
+
+.grade-tecnica::before,
+.grade-tecnica::after {
+  content: '';
+  position: absolute;
+}
+
+/* A LUZ QUE ATRAVESSA. Vai e volta (`alternate`) num ciclo longo e sem pausa nas
+   pontas -- o `ease-in-out` desacelera antes de inverter, entao o retorno nao
+   parece um solavanco. */
+.grade-tecnica::before {
+  inset: -25%;
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgb(var(--acao) / 0.1),
+    rgb(var(--acao) / 0.04) 35%,
+    transparent 65%
+  );
+  animation: gradeLuz 22s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+/* AS LINHAS. Uma celula de folga em cada borda (`inset: -46px`): e exatamente o
+   que o deslocamento consome, entao a borda da textura nunca entra em cena. */
+.grade-tecnica::after {
+  inset: -46px;
   background-image:
     linear-gradient(to right, rgba(42, 57, 66, 0.55) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(42, 57, 66, 0.55) 1px, transparent 1px);
   background-size: 46px 46px;
-  -webkit-mask-image: radial-gradient(ellipse 78% 62% at 42% 45%, #000 25%, transparent 78%);
-  mask-image: radial-gradient(ellipse 78% 62% at 42% 45%, #000 25%, transparent 78%);
+  animation: gradeDeriva 26s linear infinite;
+  will-change: transform;
+}
+
+/* O CICLO FECHA EXATAMENTE NUMA CELULA (46px, o mesmo do `background-size`).
+   Terminar deslocado por um tile inteiro deixa o quadro final identico ao
+   primeiro -- e por isso o loop nao tem costura visivel. Qualquer outro valor
+   faria a grade "pular" a cada volta. */
+@keyframes gradeDeriva {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(46px, 46px, 0); }
+}
+
+@keyframes gradeLuz {
+  from { transform: translate3d(-10%, -6%, 0) scale(1); }
+  to   { transform: translate3d(10%, 8%, 0)   scale(1.15); }
 }
 
 @keyframes bolhaEntra {
@@ -344,6 +400,15 @@
     opacity: 1;
   }
   .cena-lida { color: #53BDEB; }
+
+  /* A grade PARA, mas continua desenhada: ela e estrutura visual da tela, nao
+     enfeite -- apagar as linhas mudaria o layout para quem pede menos
+     movimento. O que sai e o deslocamento e a luz que varre. */
+  .grade-tecnica::before { animation: none; }
+  .grade-tecnica::after {
+    animation: none;
+    transform: none;
+  }
 
   /* `fade-in` sai: e translate + scale, o tipo de movimento que incomoda quem
      pede menos animacao.
