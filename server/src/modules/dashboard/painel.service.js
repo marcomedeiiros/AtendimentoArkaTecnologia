@@ -154,7 +154,27 @@ class PainelService {
       .sort((a, b) => b.valor - a.valor || b.amostra - a.amostra || a.nome.localeCompare(b.nome))
       .slice(0, TOP);
 
-    return { porVolume, porNota, minimoAvaliacoes: MINIMO_AVALIACOES };
+    // QUEM ESTA A CAMINHO -- so os nomes, nunca a nota.
+    //
+    // O minimo de avaliacoes protege o ranking, mas cobra um preco no comeco:
+    // ate alguem juntar tres notas o podio inteiro fica vazio, e numa parede
+    // um painel vazio parece painel quebrado. Uma operacao recem-comecada fica
+    // dias assim -- justo os dias em que a equipe esta olhando mais.
+    //
+    // Entao o painel passa a mostrar quem esta perto de entrar: "David C. -- 1
+    // de 3". Isso responde "por que nao aparece ninguem?" sem afrouxar a regra,
+    // e transforma a espera em algo que anda.
+    //
+    // A NOTA DE QUEM AINDA NAO ENTROU NAO SAI DAQUI. Mandar a media de quem tem
+    // uma avaliacao so seria o mesmo que abolir o minimo: a parede mostraria o
+    // numero, e o numero e o que a equipe compara. Vai a CONTAGEM, e mais nada.
+    const aCaminho = pessoas
+      .filter((p) => p.notas.length > 0 && p.notas.length < MINIMO_AVALIACOES)
+      .map((p) => ({ nome: p.nome, amostra: p.notas.length }))
+      .sort((a, b) => b.amostra - a.amostra || a.nome.localeCompare(b.nome))
+      .slice(0, TOP);
+
+    return { porVolume, porNota, aCaminho, minimoAvaliacoes: MINIMO_AVALIACOES };
   }
 
   _csat(atendimentos) {

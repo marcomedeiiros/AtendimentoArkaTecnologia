@@ -259,7 +259,7 @@ function DegrauVazio({ posicao }) {
   );
 }
 
-function Podio({ icon: Icon, corIcone, estiloIcone, titulo, nota, itens, formatar, apoio, rotuloLider, vazio }) {
+function Podio({ icon: Icon, corIcone, estiloIcone, titulo, nota, itens, formatar, apoio, rotuloLider, vazio, aCaminho, minimo }) {
   // Buracos viram celula vazia, e nao coluna faltando: com duas pessoas no
   // ranking, `filter(Boolean)` jogaria o lider para a esquerda e o segundo
   // lugar ficaria no meio, mais alto. Uma celula vazia mantem o ouro no centro.
@@ -280,12 +280,33 @@ function Podio({ icon: Icon, corIcone, estiloIcone, titulo, nota, itens, formata
           {ORDEM_PODIO.map((posicao) => (
             <DegrauVazio key={posicao} posicao={posicao} />
           ))}
-          <p className="absolute inset-x-0 top-[22%] text-center text-sm xl:text-lg text-slate-500 px-6 leading-snug">
-            {vazio}
-          </p>
+          <div className="absolute inset-x-0 top-[18%] px-6 flex flex-col items-center gap-3">
+            <p className="text-center text-sm xl:text-lg text-slate-500 leading-snug">{vazio}</p>
+            {/* QUEM ESTA A CAMINHO. So a contagem, nunca a nota -- mostrar a
+                media de quem ainda nao entrou seria abolir o minimo pela porta
+                dos fundos, porque o numero e o que a equipe compara. */}
+            {aCaminho?.length > 0 && (
+              <div className="flex flex-wrap justify-center gap-2">
+                {aCaminho.map((p) => (
+                  <span
+                    key={p.nome}
+                    className="inline-flex items-baseline gap-1.5 rounded-full border border-linha-forte bg-grafite-600/50 px-3 py-1 text-xs xl:text-base text-slate-300"
+                  >
+                    <span className="font-display font-semibold text-texto">{nomeCurto(p.nome)}</span>
+                    <span className="tabular-nums text-slate-400">{p.amostra} de {minimo}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         <div className="flex-1 min-h-0 grid grid-cols-3 gap-2 xl:gap-3.5 items-end mt-3 xl:mt-4">
+          {/* Posicao ainda sem dono vira DEGRAU APAGADO, e nao celula em branco.
+              Com uma pessoa so no ranking -- o comeco de qualquer mes -- a
+              celula vazia deixava um degrau dourado solto no meio da tela, que
+              nao se le como podio. O degrau apagado completa a forma e diz que
+              o segundo e o terceiro lugar estao em aberto. */}
           {colunas.map((item, coluna) =>
             item ? (
               <Degrau
@@ -297,7 +318,7 @@ function Podio({ icon: Icon, corIcone, estiloIcone, titulo, nota, itens, formata
                 rotuloLider={rotuloLider}
               />
             ) : (
-              <div key={`vazio-${coluna}`} />
+              <DegrauVazio key={`vago-${coluna}`} posicao={ORDEM_PODIO[coluna]} />
             )
           )}
         </div>
@@ -586,6 +607,8 @@ export default function ModoTv({ onFechar, fila = [] }) {
                   formatar={(it) => it.valor.toFixed(1).replace('.', ',')}
                   apoio={(it) => `${it.amostra} ${it.amostra === 1 ? 'avaliação' : 'avaliações'}`}
                   rotuloLider="Melhor nota"
+                  aCaminho={ranking.aCaminho}
+                  minimo={ranking.minimoAvaliacoes}
                   vazio={`Ninguém tem ${ranking.minimoAvaliacoes} avaliações ainda.`}
                 />
               </div>
