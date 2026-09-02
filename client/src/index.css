@@ -33,6 +33,14 @@
     --falha: 241 92 109;   --falha-400: 245 138 150;  --falha-600: 194 61 76;
     --lida: 83 189 235;    --lida-400: 127 209 240;   --lida-600: 58 147 186;
 
+    /* Medalhas do pódio do Modo TV. Ouro, prata e bronze são a única cor do
+       sistema que NÃO significa estado -- significa posição -- mas moram aqui
+       pelo mesmo motivo que as outras: no tema claro a prata #B8C4CC sobre
+       branco fica ilegível, e a TV do setor roda no tema claro. */
+    --medalha-1: 245 179 1;
+    --medalha-2: 184 196 204;
+    --medalha-3: 201 123 60;
+
     --texto: 233 237 239;
     --texto-suave: 134 150 160;
     --texto-fraco: 102 119 129;
@@ -75,6 +83,11 @@
     --quieto: 102 119 129; --quieto-400: 102 119 129; --quieto-600: 82 97 106;
     --falha: 208 52 68;    --falha-400: 194 61 76;    --falha-600: 176 42 56;
     --lida: 58 147 186;    --lida-400: 47 123 158;    --lida-600: 47 123 158;
+
+    /* Medalhas escurecidas: sobre branco, o ouro e a prata originais somem. */
+    --medalha-1: 176 122 0;
+    --medalha-2: 108 122 131;
+    --medalha-3: 160 92 38;
 
     --texto: 17 27 33;
     --texto-suave: 84 101 110;
