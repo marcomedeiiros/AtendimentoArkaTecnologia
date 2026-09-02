@@ -12,7 +12,7 @@
  * pelo servidor a cada requisicao autenticada.
  */
 import { useState, useEffect } from 'react';
-import { Users, Circle, ShieldCheck, CheckCircle2, XCircle, KeyRound, Loader2, X, Clock, Trash2, SlidersHorizontal, Save, Lock, Eye, EyeOff } from 'lucide-react';
+import { Users, Circle, ShieldCheck, CheckCircle2, XCircle, KeyRound, Loader2, X, Clock, Trash2, SlidersHorizontal, Save, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { EquipeAPI, PermissoesAPI } from '../services/api';
@@ -134,7 +134,11 @@ export default function EquipePage() {
       const atualizado = await PermissoesAPI.salvar(payload);
       setPerm(atualizado);
       setPermMatriz(atualizado.matriz);
-      setPermOk('Permissões salvas elas valem na próxima vez que cada pessoa carregar o painel no servidor já valem agora.');
+      // O aviso antigo dizia que as permissões só valeriam "na próxima vez que
+      // cada pessoa carregar o painel". Isso deixou de ser verdade: o servidor
+      // publica a mudança e o painel de quem está online relê a própria sessão
+      // na hora (ver AppContext, recurso `permissoes`).
+      setPermOk('Permissões salvas. Já valem agora, inclusive para quem está com o painel aberto.');
     } catch (e) {
       setPermErro(e.message);
     } finally {
@@ -344,6 +348,15 @@ export default function EquipePage() {
   }
 
   function renderPermissoes() {
+    // Há diferença entre o que está na tela e o que o servidor devolveu?
+    // Comparação por `!!` nos dois lados: módulo ausente e `false` são a mesma
+    // coisa para a matriz, e sem isso um deles apareceria como alteração eterna.
+    const permAlterado =
+      !!perm && !!permMatriz &&
+      perm.cargosEditaveis.some(c =>
+        perm.modulos.some(m => !!permMatriz[c]?.[m.chave] !== !!perm.matriz?.[c]?.[m.chave])
+      );
+
     return (
       <section className="glass-panel space-y-4 rounded-2xl border border-linha p-4 sm:p-5">
         <div className="flex flex-col gap-1 border-b border-linha pb-3 sm:flex-row sm:items-center sm:justify-between">
@@ -418,11 +431,25 @@ export default function EquipePage() {
               </table>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-1">
+            {/* MARCAR A CAIXA NÃO SALVA NADA -- e a tela precisa dizer isso.
+                
+                Sem este aviso, desmarcar um módulo e sair da página parecia ter
+                salvado (a caixa fica desmarcada na tela), e a impressão era de
+                que o sistema tinha perdido a alteração. Agora o pendente é
+                visível e o botão só fica ativo quando há o que gravar. */}
+            <div className="flex flex-col-reverse items-stretch justify-end gap-2 pt-1 sm:flex-row sm:items-center">
+              {permAlterado && (
+                <span className="flex items-center justify-center gap-1.5 text-[11px] font-semibold text-espera-400">
+                  <AlertCircle size={12} /> Alterações não salvas
+                </span>
+              )}
               <button
                 onClick={salvarPermissoes}
-                disabled={permSalvando}
-                className="flex items-center gap-1.5 rounded-xl bg-acao px-3.5 py-2 text-xs font-bold text-slate-950 hover:bg-acao-200 disabled:opacity-60"
+                disabled={permSalvando || !permAlterado}
+                title={permAlterado
+                  ? 'Gravar a matriz de permissões'
+                  : 'Nada mudou desde o último salvamento'}
+                className="flex items-center justify-center gap-1.5 rounded-xl bg-acao px-3.5 py-2 text-xs font-bold text-slate-950 hover:bg-acao-200 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {permSalvando
                   ? <><Loader2 size={13} className="animate-spin" /> Salvando...</>

@@ -276,14 +276,48 @@ class ChatbotEngine {
       valores[`resposta.${chave}`] = valor;
     }
 
-    return str.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_tudo, chave) => {
+    // Marca se alguma variavel resolveu para VAZIO. Ver a limpeza no fim.
+    let houveVazio = false;
+
+    const substituido = str.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_tudo, chave) => {
       const valor = valores[chave];
       if (valor === undefined) {
         logger.warn("Variavel desconhecida no texto do passo", { chave });
+        houveVazio = true;
         return "";
       }
-      return String(valor ?? "");
+      // NOME INVISIVEL CONTA COMO VAZIO.
+      //
+      // O `pushName` do WhatsApp e escolhido pelo cliente, e ha quem use apenas
+      // caracteres invisiveis (o caso real que chegou foi U+3164, o preenchedor
+      // Hangul). Para `String()` aquilo tem tamanho e passa como nome; na tela do
+      // cliente virou "Ei ㅤ!", que ele le como "Ei  !" -- parece defeito nosso.
+      const texto = String(valor ?? "");
+      if (!texto.replace(/[\s\u00a0\u115f\u1160\u3164\u2800\u200b-\u200f\u2060\ufeff]/g, "")) {
+        houveVazio = true;
+        return "";
+      }
+      return texto;
     });
+
+    // LIMPEZA DO RASTRO DA LACUNA -- e so quando houve lacuna.
+    //
+    // Sem isto, "Ei {{cliente}}!" com nome vazio sai "Ei !", que e pior que a
+    // ausencia do nome: parece erro de digitacao nosso. Colapsando o espaco
+    // sobrando e a pontuacao orfa, sai "Ei!" -- que le bem.
+    //
+    // Condicionado a `houveVazio` de proposito: aplicar sempre mexeria em texto
+    // que ninguem pediu para mexer (recuo intencional, alinhamento de tabela de
+    // horarios), e este metodo passa em TODA mensagem que o bot envia.
+    if (!houveVazio) return substituido;
+    return substituido
+      // Espaco duplicado que sobrou no lugar da variavel (nao mexe em quebra de
+      // linha: [ \t] em vez de \s).
+      .replace(/[ \t]{2,}/g, " ")
+      // "Ei !" -> "Ei!" / "Olá , tudo bem" -> "Olá, tudo bem"
+      .replace(/[ \t]+([!?.,;:])/g, "$1")
+      // Espaco que ficou pendurado no fim da linha.
+      .replace(/[ \t]+$/gm, "");
   }
 
   // Texto que efetivamente vai para o cliente. `descricao` e anotacao interna
@@ -2333,6 +2367,26 @@ class ChatbotEngine {
 
     // So faz sentido para quem esta MESMO esperando um humano.
     if (conversa.statusAtendimento !== "pendente" || conversa.atendenteId) return false;
+
+    // ── FORA DO EXPEDIENTE NAO EXISTE FILA A ESPERAR ────────────────────────
+    //
+    // Faltava esta checagem, e o efeito foi relatado: as 22h28 o cliente mandou
+    // "oi", recebeu o aviso de fora do horario ("nosso horario e ... entre em
+    // contato novamente dentro do horario acima") e, na mesma conversa, recebeu
+    // logo em seguida "estamos com uma demanda alta, em breve um atendente
+    // estara disponivel". As duas mensagens se contradizem: a primeira diz que
+    // ninguem vai atender agora, a segunda promete atendimento.
+    //
+    // A causa e que este aviso e do varredor, que so olhava "esta pendente e sem
+    // atendente ha mais de X minutos" -- e a conversa que chega de madrugada fica
+    // exatamente nesse estado de proposito (ver o bloco de fora do horario em
+    // _processarMensagemEntrada: ela vai para Pendentes para a equipe achar de
+    // manha).
+    //
+    // "Demanda alta" e uma afirmacao sobre a EQUIPE estar ocupada. Com a empresa
+    // fechada, ela nao e so inoportuna: e falsa.
+    const horario = await this.deps.configuracaoService.horarioAtendimento();
+    if (this.foraDoHorario(horario)) return false;
 
     const os = (conversa.atendimentos || []).find((a) => a.id === conversa.atendimentoAtualId);
     if (!os) return false;

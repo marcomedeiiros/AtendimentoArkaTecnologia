@@ -1,5 +1,6 @@
 const prisma = require("../../infrastructure/database/prisma.client");
 const logger = require("../../config/logger");
+const bus = require("../../shared/events/event-bus");
 
 // Permissoes de acesso por PERFIL (cargo) a cada MODULO (tela) do painel.
 //
@@ -137,6 +138,25 @@ class PermissaoService {
       create: { chave: CHAVE_CONFIG, valor: JSON.stringify(limpa) },
     });
     this.invalidarCache();
+
+    // ── AVISA QUEM ESTA COM O PAINEL ABERTO ─────────────────────────────────
+    //
+    // Faltava isto, e era a causa do relato "desmarquei e nao salvou". O
+    // salvamento sempre funcionou: o banco gravava, o cache era invalidado e o
+    // servidor passava a barrar a rota na hora (ver modulo.middleware). O que
+    // NAO acontecia era a tela do operador afetado mudar.
+    //
+    // `usuario.permissoes` -- a lista que monta o menu -- e calculada no LOGIN e
+    // em `/auth/me`, e nada mais a recalculava. Entao o Tecnico de quem se
+    // acabara de tirar a Agenda continuava vendo o item no menu, e clicar nele
+    // abria uma tela que a API recusava com 403. Para quem administra, "o menu
+    // dele nao mudou" e indistinguivel de "nao salvou".
+    //
+    // O evento leva apenas o NOME do recurso: cada painel rele a propria sessao
+    // pela API, com o cargo de quem esta olhando. Mesmo mecanismo de "equipe" e
+    // "parceiros" -- nada de empurrar matriz de permissao pelo stream.
+    bus.emitRecurso("permissoes");
+
     logger.info("Permissoes de perfis atualizadas");
     return this.paraEditor();
   }

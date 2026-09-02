@@ -6,9 +6,10 @@
  qualquer pagina acesse o mesmo estado sem re-montar dados
  */
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { EquipeAPI, FluxosAPI, ParceirosAPI, ConversasAPI, WhatsAppAPI } from '../services/api';
+import { EquipeAPI, FluxosAPI, ParceirosAPI, ConversasAPI, WhatsAppAPI, AuthAPI } from '../services/api';
 import { playPing } from '../utils/sound';
 import { mesclarConversa, aplicarStatusMensagem } from '../utils/mesclarConversa';
+import { useAuth } from './AuthContext';
 
 // NAO existe mais SEED aqui de proposito.
 //
@@ -32,6 +33,10 @@ function ordenarConversas(lista) {
 const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
+  // Só para reaplicar a sessão quando a matriz de permissões muda (ver
+  // `recarregarSessao`). O AppProvider vive DENTRO do AuthProvider (ver
+  // RotaProtegida), então o hook está sempre disponível aqui.
+  const { atualizarUsuario } = useAuth();
   const [carregando,        setCarregando]        = useState(true);
   const [equipe,            setEquipe]            = useState([]);
   const [fluxos,            setFluxos]            = useState([]);
@@ -49,7 +54,12 @@ export function AppProvider({ children }) {
   // Idem para a agenda de contatos, que vive dentro das telas que a usam
   // (Contatos e a busca da Central) e não no estado global.
   const [sinalContatos,     setSinalContatos]     = useState(0);
-  const msgCountsRef = useRef(null);
+  // Última mensagem do cliente já notificada, por conversa (id da mensagem).
+  // `null` = ainda não semeado (carregamento inicial). Ver o efeito que notifica.
+  const ultimaMsgRef = useRef(null);
+  // Pulso "chegou mensagem nova de cliente", para os painéis animarem sem
+  // recontar nada por conta própria.
+  const [sinalMensagemNova, setSinalMensagemNova] = useState(0);
   // Espelho de `conversas` para quem precisa LER o estado sem entrar nas
   // dependências de um efeito (a conferência de estado abaixo roda num intervalo
   // e não pode ser recriada a cada mensagem que chega).
@@ -121,6 +131,26 @@ export function AppProvider({ children }) {
     } catch { /* back-end offline: mantem estado atual */ }
   }, []);
 
+  /**
+   * RELÊ A PRÓPRIA SESSÃO -- usada quando a matriz de permissões muda.
+   *
+   * `usuario.permissoes` é o que decide quais itens aparecem no menu e quais
+   * rotas o `RotaModulo` deixa abrir. Ela nascia no login e não era recalculada,
+   * então um módulo tirado de um perfil só desaparecia da tela do operador no
+   * próximo F5 -- enquanto o servidor já recusava a API com 403. Era essa
+   * defasagem que fazia a edição parecer não ter sido salva.
+   *
+   * Pergunta pela SESSÃO (`/auth/me`), e não pela matriz: o servidor devolve as
+   * permissões do cargo de quem está perguntando, então nenhum operador recebe a
+   * configuração dos outros perfis.
+   */
+  const recarregarSessao = useCallback(async () => {
+    try {
+      const eu = await AuthAPI.eu();
+      if (eu?.id) atualizarUsuario({ cargo: eu.cargo, permissoes: eu.permissoes });
+    } catch { /* sessão caindo: o AuthContext já trata o 401 */ }
+  }, [atualizarUsuario]);
+
   // Mesma ideia para os clientes (CNPJ): a Central usa esta lista para mostrar
   // a razao social de quem ja se identificou, entao cadastrar/editar um parceiro
   // precisa refletir na hora, sem F5.
@@ -133,7 +163,7 @@ export function AppProvider({ children }) {
 
   // Patch incremental vindo do SSE: substitui/insere/remove uma conversa sem
   // recarregar a lista inteira. O disparo de som/notificacao continua no efeito
-  // de msgCountsRef, que reage a qualquer mudanca em `conversas`.
+  // de ultimaMsgRef, que reage a qualquer mudanca em `conversas`.
   const aplicarEvento = useCallback((evt) => {
     if (!evt?.type) return;
     // Uma LISTA mudou no servidor (clientes, equipe). O evento traz só o nome do
@@ -144,6 +174,17 @@ export function AppProvider({ children }) {
       if (evt.recurso === 'parceiros') recarregarParceiros();
       if (evt.recurso === 'equipe') recarregarEquipe();
       if (evt.recurso === 'contatos') setSinalContatos(n => n + 1);
+      // A MATRIZ DE PERMISSÕES MUDOU -- relê a própria sessão.
+      //
+      // `usuario.permissoes` (a lista que monta o menu) nasce no login e não era
+      // recalculada nunca. Tirar um módulo de um perfil passava a valer no
+      // servidor imediatamente, mas o menu de quem estava logado continuava
+      // mostrando o item -- e clicar nele dava uma tela vazia com 403 por baixo.
+      //
+      // Cada painel pergunta pela SUA sessão: o servidor responde com as
+      // permissões do cargo de quem está perguntando, e nenhuma matriz de outro
+      // perfil trafega para cá.
+      if (evt.recurso === 'permissoes') recarregarSessao();
       return;
     }
     // Só o risquinho de UMA mensagem mudou (enviada/entregue/lida/erro).
@@ -202,7 +243,7 @@ export function AppProvider({ children }) {
         return ordenarConversas(lista);
       });
     }
-  }, [recarregarParceiros, recarregarEquipe]);
+  }, [recarregarParceiros, recarregarEquipe, recarregarSessao]);
 
   // Tempo real por SSE do nosso back-end. O EventSource nao envia header
   // Authorization, entao pegamos um ticket de uso unico antes de abrir o stream.
@@ -389,7 +430,7 @@ export function AppProvider({ children }) {
     // tela de carregamento. So depois que o painel de atendimento carrega
     // (`carregando` falso) e que uma mensagem de fato nova passa a tocar.
     if (carregando) {
-      msgCountsRef.current = null;
+      ultimaMsgRef.current = null;
       return;
     }
 
@@ -411,38 +452,78 @@ export function AppProvider({ children }) {
     // abre atendimento novo, entra em Pendentes e avisa normalmente.
     const ehDoCliente = (m) =>
       !m.respostaPesquisa && (m.origem ? m.origem === 'cliente' : m.de === 'cliente');
-    const counts = {};
-    conversas.forEach(c => {
-      counts[c.id] = (c.mensagens || []).filter(ehDoCliente).length;
-    });
-    const anterior = msgCountsRef.current;
+
+    /**
+     * A ÚLTIMA mensagem do cliente -- e não QUANTAS existem.
+     *
+     * ── O DEFEITO QUE ISTO CONSERTA ───────────────────────────────────────
+     *
+     * Aqui se contava as mensagens do cliente por conversa e avisava quando o
+     * número subia. Parecia certo, e notificava DUAS VEZES a mesma mensagem.
+     *
+     * A razão não está nesta função: a lista `mensagens` tem LARGURAS
+     * diferentes conforme quem a entregou -- o evento SSE traz a cauda (30
+     * últimas), a listagem traz 40, e `GET /conversas/:id` traz o histórico
+     * inteiro. Como o merge nunca descarta mensagem (é preciso: ver
+     * utils/mesclarConversa), quando o retrato mais LARGO chega -- segundos
+     * depois, pela conferência de estado de 10s -- a contagem sobe de novo, e
+     * sobe por causa de mensagens ANTIGAS. Este efeito lia aquilo como "chegou
+     * outra" e tocava o som pela segunda vez, exibindo o texto da MESMA
+     * mensagem. Quanto mais longo o histórico do cliente, mais garantido o aviso
+     * duplicado.
+     *
+     * A identidade da última mensagem não tem esse problema: carregar histórico
+     * antigo não muda quem é a última.
+     */
+    const marcaDaUltima = (c) => {
+      const msgs = c.mensagens || [];
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        if (ehDoCliente(msgs[i])) return msgs[i].id || `${msgs[i].texto}|${msgs[i].hora}`;
+      }
+      return null;
+    };
+
+    const marcas = {};
+    conversas.forEach(c => { marcas[c.id] = marcaDaUltima(c); });
+    const anterior = ultimaMsgRef.current;
     if (anterior !== null) {
       const novas = [];
       conversas.forEach(c => {
-        const antes = anterior[c.id] ?? 0;
-        const agora = counts[c.id] ?? 0;
-        if (agora > antes) {
-          const ultima = [...(c.mensagens || [])].reverse().find(ehDoCliente);
-          novas.push({
-            id: `${c.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-            convId: c.id,
-            tipo: 'mensagem',
-            cliente: c.cliente,
-            fotoUrl: c.fotoUrl || null,
-            texto: ultima?.texto || 'Nova mensagem',
-            em: Date.now(),
-            lida: false
-          });
-        }
+        const marca = marcas[c.id];
+        if (!marca) return;
+        // `undefined` = conversa que a tela não tinha (cliente novo, ou conversa
+        // transferida para este setor). Continua avisando, como antes.
+        // Marca IGUAL = nada novo, mesmo que a lista de mensagens tenha crescido.
+        if (anterior[c.id] === marca) return;
+        const msgs = c.mensagens || [];
+        const ultima = [...msgs].reverse().find(ehDoCliente);
+        novas.push({
+          id: `${c.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          convId: c.id,
+          tipo: 'mensagem',
+          cliente: c.cliente,
+          fotoUrl: c.fotoUrl || null,
+          texto: ultima?.texto || 'Nova mensagem',
+          em: Date.now(),
+          lida: false
+        });
       });
       if (novas.length > 0) {
         playPing();
         setNotificacoes(prev => [...novas, ...prev].slice(0, 5));
         registrarNoHistorico(novas);
+        // Pulso para quem só precisa saber QUE chegou algo (a animação do sino na
+        // Central). Antes ela tinha o próprio contador, com a própria regra --
+        // duas contas para a mesma pergunta, e as duas erravam junto.
+        setSinalMensagemNova(n => n + 1);
         novas.forEach(n => setTimeout(() => removerNotificacao(n.id), 7000));
       }
     }
-    msgCountsRef.current = counts;
+    // MERGE, e não substituição: a conversa que sai da lista (transferida de
+    // setor, ou ausente de um retrato) mantém a marca conhecida. Substituindo o
+    // mapa, ela voltaria como `undefined` e o próximo retrato notificaria de novo
+    // a mesma mensagem -- o mesmo defeito por outro caminho.
+    ultimaMsgRef.current = { ...(anterior || {}), ...marcas };
   }, [conversas, carregando, removerNotificacao, registrarNoHistorico]);
 
   const fluxosAtivos = fluxos.filter(f => f.ativo).length;
@@ -531,7 +612,7 @@ export function AppProvider({ children }) {
       parceiros,         atualizarParceiros, recarregarParceiros,
       conversas,         atualizarConversas, recarregarConversas,
       // Pulsos de "algo mudou" para os painéis derivados, vindos do mesmo SSE.
-      sinalConversas,   sinalContatos,
+      sinalConversas,   sinalContatos,   sinalMensagemNova,
       whatsAppConectado, setWhatsAppConectado,
       notificacoes,      removerNotificacao,
       historico,         marcarNotificacoesLidas, limparHistorico,

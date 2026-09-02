@@ -2708,7 +2708,7 @@ const ItemContatoAgenda = React.memo(function ItemContatoAgenda({ contato, onAbr
 // de onde vinha o defeito do Técnico. O nome do responsável nunca veio dali:
 // vem da própria conversa (`atendenteDaConversa`).
 export default function AtendimentoView({ conversas, setConversas, fluxos, parceiros }) {
-  const { whatsAppConectado, carregando, historico = [], marcarNotificacoesLidas, limparHistorico, sinalContatos } = useAppContext();
+  const { whatsAppConectado, carregando, historico = [], marcarNotificacoesLidas, limparHistorico, sinalContatos, sinalMensagemNova } = useAppContext();
   const { usuario, assinaturaNome, tema, alternarTema } = useAuth();
   // Nome usado ao assinar mensagens: vem do perfil (personalizavel no menu de
   // perfil) e cai no primeiro nome como padrao. Fica no AuthContext, entao muda
@@ -2779,7 +2779,6 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   const [showNotif,     setShowNotif]    = useState(false);
   const [transferindo,  setTransferindo] = useState(null); // conversa alvo do modal de transferencia
   const scrollRef = useRef(null);
-  const totalMsgClienteRef = useRef(null);
   const sinoRef = useRef(null);
 
   // RELÓGIO ÚNICO da lista. Um só `setInterval` mantém o "há quanto tempo" de
@@ -2903,29 +2902,26 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     atualizarFlag(id, { fixada: !atual?.fixada });
   }, [conversas, atualizarFlag]);
 
-  // Sino + som: dispara quando o total de mensagens de clientes aumenta
-  // (nova mensagem recebida via polling do AppContext).
-  // Mesma regra do sino no AppContext: automação do bot não é atividade do
-  // cliente e não sacode o sininho.
-  const totalMsgCliente = conversas.reduce(
-    (acc, c) => acc + (c.mensagens || []).filter(
-      m => (m.origem ? m.origem === 'cliente' : m.de === 'cliente')
-    ).length, 0
-  );
+  /**
+   * ANIMAÇÃO DO SINO -- agora pelo mesmo sinal que toca o som.
+   *
+   * Aqui havia um SEGUNDO contador: a soma das mensagens de cliente de TODAS as
+   * conversas. Duas contas para responder a mesma pergunta ("chegou mensagem
+   * nova?"), e elas discordavam -- esta não excluía a resposta da pesquisa de
+   * satisfação, e, sendo uma soma global, sacudia o sino quando qualquer
+   * conversa entrava na lista ou tinha o histórico completo carregado, sem
+   * mensagem nova nenhuma.
+   *
+   * `sinalMensagemNova` vem do AppContext e incrementa exatamente uma vez por
+   * rodada de notificação -- o mesmo instante em que o som toca. Uma regra, num
+   * lugar só.
+   */
   useEffect(() => {
-    if (totalMsgClienteRef.current === null) {
-      totalMsgClienteRef.current = totalMsgCliente;
-      return;
-    }
-    if (totalMsgCliente > totalMsgClienteRef.current) {
-      // O som toca globalmente (AppContext); aqui só animamos o sino.
-      setSinoTocando(true);
-      const t = setTimeout(() => setSinoTocando(false), 1600);
-      totalMsgClienteRef.current = totalMsgCliente;
-      return () => clearTimeout(t);
-    }
-    totalMsgClienteRef.current = totalMsgCliente;
-  }, [totalMsgCliente]);
+    if (!sinalMensagemNova) return; // 0 = nada notificado ainda nesta sessão
+    setSinoTocando(true);
+    const t = setTimeout(() => setSinoTocando(false), 1600);
+    return () => clearTimeout(t);
+  }, [sinalMensagemNova]);
 
   // Ao abrir uma conversa com nao-lidas, marca como lida (zera o badge).
   useEffect(() => {

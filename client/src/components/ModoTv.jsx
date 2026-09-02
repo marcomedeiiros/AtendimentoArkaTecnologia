@@ -20,8 +20,9 @@
  *     (`text-6xl`, `text-7xl`) e os rotulos ficam pequenos e em caixa alta.
  *
  *  3. A TELA SE ATUALIZA SOZINHA. Uma TV que mostra dado de ontem e pior do que
- *     uma TV apagada, porque parece atual. Os numeros recarregam a cada 30 s; a
- *     fila nao espera nada, porque vem da lista da Central, que o SSE mantem
+ *     uma TV apagada, porque parece atual. O relogio bate a cada segundo (e o
+ *     que prova, de longe, que a tela nao travou), os numeros recarregam a cada
+ *     30 s, e a fila nao espera nada: vem da lista da Central, que o SSE mantem
  *     viva.
  *
  * ── DUAS FONTES, DE PROPOSITO ──────────────────────────────────────────────
@@ -193,12 +194,19 @@ export default function ModoTv({ onFechar, fila = [] }) {
     return () => clearInterval(id);
   }, [carregar]);
 
-  // Relogio proprio, mais rapido que a recarga: e ele que faz a espera da fila
-  // ANDAR entre uma atualizacao e outra (a conta usa `esperaDesde`, o instante
-  // que veio do servidor). Sem isso os minutos ficariam parados por 30 s numa
-  // tela cuja unica promessa e mostrar o agora.
+  // RELOGIO DE 1 SEGUNDO -- porque o mostrador tem segundos.
+  //
+  // Era 20 s, o suficiente para o relogio de horas e minutos e para os minutos
+  // de espera da fila ANDAREM entre duas recargas (a conta usa `esperaDesde`, o
+  // instante que veio do servidor). Com segundos no mostrador, 20 s viraria um
+  // relogio que pula de 12 em 12 -- e um relogio que salta parece tela travada,
+  // que e exatamente o oposto do que ele existe para provar numa parede.
+  //
+  // O custo e um render por segundo desta tela. Barato: a fila chega pronta por
+  // prop (memoizada na Central) e os numeros vem do estado, entao o segundo nao
+  // recalcula nada -- so redesenha.
   useEffect(() => {
-    const id = setInterval(() => setAgora(new Date()), 20_000);
+    const id = setInterval(() => setAgora(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
 
@@ -253,8 +261,8 @@ export default function ModoTv({ onFechar, fila = [] }) {
                 outra pergunta, mais rara, e nao precisa competir por atencao.
                 `tabular-nums` nos dois evita o numero "dancar" a cada tique. */}
             <div className="text-right leading-none">
-              <div className="font-display font-bold text-white text-3xl xl:text-4xl tabular-nums">
-                {agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              <div className="font-display font-bold text-white text-3xl xl:text-4xl tabular-nums whitespace-nowrap">
+                {agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
               </div>
               <div className="text-xs xl:text-sm text-slate-400 mt-1.5 whitespace-nowrap">
                 {dataPorExtenso(agora)}
