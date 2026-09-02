@@ -2897,6 +2897,54 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     .filter(c => ABAS.find(a => a.id === abaAtual)?.statusMatch(c))
     .sort((a, b) => (b.fixada ? 1 : 0) - (a.fixada ? 1 : 0));
 
+  /**
+   * FILA DO MODO TV -- montada aqui, e nao pelo painel da TV.
+   *
+   * O painel podia pedir a fila a `/dashboard/painel`, e pedia: era so nome,
+   * setor e minutos de espera. Faltava justamente o que se le de longe -- a
+   * foto, o telefone e as badges (empresa, setor, responsavel) -- porque essa
+   * informacao nao esta no payload do painel: ela nasce de `chipDoCliente` e
+   * companhia, que precisam do cadastro vivo de `parceiros` e vivem NESTE
+   * arquivo, do lado do cartao da lista.
+   *
+   * Calcular aqui e o que mantem a TV e a Central concordando sobre o mesmo
+   * cliente: e a mesma funcao desenhando as duas. De quebra a fila passa a ser
+   * a lista local, alimentada por SSE -- muda no instante em que a conversa
+   * muda, sem esperar a recarga de 30 s do painel.
+   *
+   * Nao vaza nada: `conversas` e o resultado de `GET /api/conversas`, ja
+   * filtrado por setor pelo servidor (o mesmo `podeAcessarSetor` que o painel
+   * usa). A TV mostra o que quem abriu ja ve na lista atras dela.
+   *
+   * So calcula com o painel aberto -- fechado, isto seria trabalho por render
+   * para ninguem ver.
+   */
+  const filaModoTv = useMemo(() => {
+    if (!modoTv) return [];
+    return conversas
+      .filter(c => c.statusAtendimento === 'pendente' && !c.arquivada && !c.oculta)
+      // Mais antiga primeiro: na fila, quem espera ha mais tempo vem antes.
+      .sort((a, b) => new Date(a.ultimaMensagemEm || 0) - new Date(b.ultimaMensagemEm || 0))
+      .map(c => {
+        const ultima = c.mensagens?.[c.mensagens.length - 1];
+        return {
+          id: c.id,
+          cliente: c.cliente,
+          telefone: c.telefone,
+          fotoUrl: c.fotoUrl,
+          naoLidas: c.naoLidas || 0,
+          ticket: c.ticket,
+          // Espera contada da ultima mensagem: e o que a lista mostra e o que
+          // responde "faz quanto tempo que ninguem atende isso?".
+          esperaDesde: c.ultimaMensagemEm,
+          previa: ultima ? (ultima.deletada ? 'Mensagem apagada' : ultima.texto) : 'Sem mensagens',
+          chip: chipDoCliente(c, parceiros),
+          setor: setorDaConversa(c),
+          atendente: atendenteDaConversa(c),
+        };
+      });
+  }, [modoTv, conversas, parceiros]);
+
   // Contatos da agenda que batem com a busca e nao estao ja na lista acima.
   // Aparecem numa secao separada, abaixo das conversas: e por eles que se abre
   // o atendimento de quem ainda nao escreveu (ou de quem escreveu em outra aba).
@@ -3723,10 +3771,10 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
         />
       )}
 
-      {/* O painel de parede: numeros da equipe + fila, por cima de tudo. Nao
-          recebe as conversas por prop -- ele busca o proprio quadro na API
-          (`/dashboard/painel`), que ja entrega a fila filtrada por setor. */}
-      {modoTv && <ModoTv onFechar={fecharModoTv} />}
+      {/* O painel de parede: numeros da equipe + fila, por cima de tudo. Os
+          numeros vem da API (`/dashboard/painel`); a FILA vem daqui, ja com as
+          badges e a foto -- ver `filaModoTv`. */}
+      {modoTv && <ModoTv onFechar={fecharModoTv} fila={filaModoTv} />}
 
       {transferindo && (
         <Portal>

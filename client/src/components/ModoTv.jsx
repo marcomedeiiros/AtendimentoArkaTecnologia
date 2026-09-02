@@ -19,8 +19,18 @@
  *     valores usam tamanhos que pareceriam exagerados num relatorio
  *     (`text-6xl`, `text-7xl`) e os rotulos ficam pequenos e em caixa alta.
  *
- *  3. A TELA SE ATUALIZA SOZINHA a cada 30 s. Uma TV que mostra dado de ontem
- *     e pior do que uma TV apagada, porque parece atual.
+ *  3. A TELA SE ATUALIZA SOZINHA. Uma TV que mostra dado de ontem e pior do que
+ *     uma TV apagada, porque parece atual. Os numeros recarregam a cada 30 s; a
+ *     fila nao espera nada, porque vem da lista da Central, que o SSE mantem
+ *     viva.
+ *
+ * ── DUAS FONTES, DE PROPOSITO ──────────────────────────────────────────────
+ *
+ * Os indicadores vem de `/dashboard/painel` (agregados que so o servidor sabe
+ * calcular). A FILA vem por prop, montada pela Central em `filaModoTv`: e la
+ * que vivem `chipDoCliente` e companhia, que produzem as badges a partir do
+ * cadastro vivo de parceiros. Buscar a fila na API custava exatamente o que
+ * faltava nesta tela -- foto, telefone e badges, que aquele payload nao tem.
  *
  * ── E A REGRA QUE DECIDE O QUE *NAO* ENTRA ─────────────────────────────────
  *
@@ -31,8 +41,9 @@
  * ninguem liderar por causa de uma unica estrela solta.
  */
 import { useEffect, useState, useCallback } from 'react';
-import { Trophy, Star, Clock, Users, Inbox, Target, WifiOff, X, AlertCircle } from 'lucide-react';
+import { Trophy, Star, Clock, Users, Inbox, Target, WifiOff, X, AlertCircle, UserCheck } from 'lucide-react';
 import Portal from './Portal';
+import Avatar from './Avatar';
 import { DashboardAPI } from '../services/api';
 
 const ATUALIZAR_MS = 30_000;
@@ -50,7 +61,46 @@ function duracao(segundos) {
   return resto ? `${h} h ${String(resto).padStart(2, '0')}` : `${h} h`;
 }
 
-const espera = (min) => (min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')}`);
+// Espera SEMPRE relativa, recontada a cada tique do relogio. A funcao da lista
+// (`tempoDesde`) passa a data absoluta depois de uma semana, e na parede isso
+// viraria "esperando 09/08/2026 21:49" -- que nao responde a pergunta que a
+// parede existe para responder: faz quanto tempo?
+function tempoEspera(iso, agora) {
+  if (!iso) return 'sem registro';
+  const ms = new Date(iso).getTime();
+  if (Number.isNaN(ms)) return 'sem registro';
+  const s = Math.max(0, Math.floor((agora - ms) / 1000));
+  if (s < 60) return 'agora';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} h`;
+  return `${Math.floor(h / 24)} d`;
+}
+
+// Data por extenso: "1, setembro de 2026".
+//
+// Nao e `toLocaleDateString` com `month: 'long'` porque o pt-BR devolve "1 de
+// setembro de 2026", e o formato pedido troca o primeiro "de" por virgula. O mes
+// ainda vem do locale (nao ha lista de meses escrita a mao aqui) -- so a
+// montagem e nossa.
+//
+// Numa parede, mes escrito ganha do numerico: "1, setembro" nao tem como ser
+// lido como 9 de janeiro por quem esta acostumado ao formato americano.
+function dataPorExtenso(d) {
+  const mes = d.toLocaleDateString('pt-BR', { month: 'long' });
+  return `${d.getDate()}, ${mes} de ${d.getFullYear()}`;
+}
+
+// Espera longa = vermelho. E o dado que importa numa parede: quem esta
+// esperando demais precisa saltar aos olhos.
+function urgencia(iso, agora) {
+  if (!iso) return { linha: 'border-linha bg-grafite-700/50', tempo: 'text-slate-300' };
+  const min = (agora - new Date(iso).getTime()) / 60000;
+  if (min >= 15) return { linha: 'border-falha/40 bg-falha/10', tempo: 'text-falha-400' };
+  if (min >= 5) return { linha: 'border-espera/40 bg-espera/10', tempo: 'text-espera-400' };
+  return { linha: 'border-linha bg-grafite-700/50', tempo: 'text-ativo-400' };
+}
 
 // Primeiro nome + inicial: nome completo nao cabe no podio, e "Ana S." e o que
 // a equipe usa para se chamar.
@@ -115,7 +165,7 @@ function Podio({ icon: Icon, titulo, itens, formatar, vazio }) {
 
 // ── tela ───────────────────────────────────────────────────────────────────
 
-export default function ModoTv({ onFechar }) {
+export default function ModoTv({ onFechar, fila = [] }) {
   const [dados, setDados] = useState(null);
   const [erro, setErro] = useState(false);
   const [agora, setAgora] = useState(new Date());
@@ -206,8 +256,8 @@ export default function ModoTv({ onFechar }) {
               <div className="font-display font-bold text-white text-3xl xl:text-4xl tabular-nums">
                 {agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
               </div>
-              <div className="text-xs xl:text-sm text-slate-400 tabular-nums mt-1.5">
-                {agora.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+              <div className="text-xs xl:text-sm text-slate-400 mt-1.5 whitespace-nowrap">
+                {dataPorExtenso(agora)}
               </div>
             </div>
             {/* O UNICO CONTROLE DA TELA. A TV nao tem mouse, entao ele nunca
@@ -224,29 +274,32 @@ export default function ModoTv({ onFechar }) {
           </div>
         </header>
 
-        {/* Primeira carga (ou primeira carga que falhou): a moldura ja esta na
-            tela, entao o Sair funciona mesmo quando nao ha dado nenhum. */}
-        {!dados ? (
-          <div className="flex-1 grid place-items-center text-center">
-            {erro ? (
-              <div className="max-w-md space-y-2">
-                <AlertCircle size={32} className="text-espera-400 mx-auto" />
-                <p className="font-display text-lg text-white">Não foi possível carregar o painel</p>
-                <p className="text-sm text-slate-400">
-                  Tentando de novo a cada 30 segundos. Se não voltar, seu perfil pode não ter
-                  acesso ao módulo de indicadores.
-                </p>
-              </div>
-            ) : (
-              <p className="font-display text-lg text-slate-500">Carregando o painel…</p>
-            )}
-          </div>
-        ) : (
-          /* AS DUAS METADES. Em telas estreitas empilham; numa TV ficam lado a
-             lado, cada uma rolando por dentro se precisar -- a tela em si nunca
-             rola, porque ninguem vai rolar uma TV. */
-          <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-2 gap-4">
-            {/* ── METADE 1: A EQUIPE ───────────────────────────────────────── */}
+        {/* AS DUAS METADES. Em telas estreitas empilham; numa TV ficam lado a
+            lado, cada uma rolando por dentro se precisar -- a tela em si nunca
+            rola, porque ninguem vai rolar uma TV.
+            
+            AS DUAS FALHAM SEPARADO, de proposito: os numeros vem da API de
+            indicadores e a fila vem da lista da Central. Antes um erro na API
+            apagava a tela inteira -- inclusive a fila, que nao depende dela e e
+            a metade que exige acao. */}
+        <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-2 gap-4">
+          {/* ── METADE 1: A EQUIPE ─────────────────────────────────────────── */}
+          {!dados ? (
+            <section className="min-h-0 glass-panel border border-linha rounded-2xl grid place-items-center text-center p-6">
+              {erro ? (
+                <div className="max-w-md space-y-2">
+                  <AlertCircle size={32} className="text-espera-400 mx-auto" />
+                  <p className="font-display text-lg text-white">Não foi possível carregar os indicadores</p>
+                  <p className="text-sm text-slate-400">
+                    Tentando de novo a cada 30 segundos. Se não voltar, seu perfil pode não ter
+                    acesso ao módulo de indicadores. A fila ao lado continua valendo.
+                  </p>
+                </div>
+              ) : (
+                <p className="font-display text-lg text-slate-500">Carregando os indicadores…</p>
+              )}
+            </section>
+          ) : (
             <section className="min-h-0 flex flex-col gap-4 overflow-y-auto pr-1">
               <div className="grid grid-cols-2 gap-4">
                 <Podio
@@ -346,64 +399,97 @@ export default function ModoTv({ onFechar }) {
                 )}
               </div>
             </section>
+          )}
 
-            {/* ── METADE 2: A FILA ─────────────────────────────────────────── */}
-            <section className="min-h-0 glass-panel border border-linha rounded-2xl p-5 flex flex-col gap-4">
-              <div className="flex items-center justify-between shrink-0">
-                <span className="flex items-center gap-2 text-slate-400">
-                  <Inbox size={16} />
-                  <span className="text-[11px] font-bold uppercase tracking-[0.12em]">Aguardando atendimento</span>
-                </span>
-                <span className="font-display font-bold text-white text-4xl xl:text-5xl leading-none tabular-nums">
-                  {dados.fila.length}
-                </span>
-              </div>
+          {/* ── METADE 2: A FILA ───────────────────────────────────────────── */}
+          <section className="min-h-0 glass-panel border border-linha rounded-2xl p-5 flex flex-col gap-4">
+            <div className="flex items-center justify-between shrink-0">
+              <span className="flex items-center gap-2 text-slate-400">
+                <Inbox size={16} />
+                <span className="text-[11px] font-bold uppercase tracking-[0.12em]">Aguardando atendimento</span>
+              </span>
+              <span className="font-display font-bold text-white text-4xl xl:text-5xl leading-none tabular-nums">
+                {fila.length}
+              </span>
+            </div>
 
-              {dados.fila.length === 0 ? (
-                <div className="flex-1 grid place-items-center text-center">
-                  <div>
-                    <p className="font-display font-bold text-ativo-400 text-3xl">Fila vazia</p>
-                    <p className="text-sm text-slate-400 mt-1">Nenhum cliente esperando.</p>
-                  </div>
+            {fila.length === 0 ? (
+              <div className="flex-1 grid place-items-center text-center">
+                <div>
+                  <p className="font-display font-bold text-ativo-400 text-3xl">Fila vazia</p>
+                  <p className="text-sm text-slate-400 mt-1">Nenhum cliente esperando.</p>
                 </div>
-              ) : (
-                <ul className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2 pr-1">
-                  {dados.fila.map((c) => {
-                    const esperaMin = c.esperaDesde
-                      ? Math.max(0, Math.round((agora - new Date(c.esperaDesde)) / 60000))
-                      : c.esperaMin;
-                    // Espera longa muda a cor da linha inteira: e o unico alarme
-                    // desta tela, e precisa ser visto sem ninguem procurar.
-                    const cor =
-                      esperaMin >= 30
-                        ? 'border-falha/40 bg-falha/10'
-                        : esperaMin >= 15
-                          ? 'border-espera/40 bg-espera/10'
-                          : 'border-linha bg-grafite-700/50';
-                    const corTempo =
-                      esperaMin >= 30 ? 'text-falha-400' : esperaMin >= 15 ? 'text-espera-400' : 'text-slate-300';
-                    return (
-                      <li key={c.id} className={`border rounded-xl px-4 py-3 flex items-center gap-4 ${cor}`}>
-                        <div className="flex-1 min-w-0">
+              </div>
+            ) : (
+              <ul className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2.5 pr-1">
+                {fila.map((c) => {
+                  const u = urgencia(c.esperaDesde, agora);
+                  return (
+                    <li key={c.id} className={`border rounded-xl p-3 xl:p-3.5 flex flex-col gap-2 ${u.linha}`}>
+                      {/* Foto, nome e telefone: e por eles que quem olha a TV
+                          reconhece o cliente antes de abrir a conversa. */}
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Avatar nome={c.cliente} size="md" fotoUrl={c.fotoUrl} />
+                        <div className="min-w-0 flex-1">
                           <p className="font-display font-semibold text-white text-lg xl:text-xl truncate">
                             {c.cliente}
                           </p>
-                          <p className="text-xs text-slate-400 truncate">
-                            {c.ticket ? `AK${String(c.ticket).padStart(5, '0')} · ` : ''}
-                            {c.setor}
-                          </p>
+                          <p className="text-xs xl:text-sm text-slate-400 font-mono truncate">{c.telefone}</p>
                         </div>
-                        <span className={`shrink-0 font-display font-bold text-2xl xl:text-3xl tabular-nums ${corTempo}`}>
-                          {espera(esperaMin)}
+                        {c.naoLidas > 0 && (
+                          <span className="shrink-0 min-w-[26px] h-[26px] px-2 rounded-full bg-espera text-grafite-900 text-sm font-extrabold flex items-center justify-center tabular-nums">
+                            {c.naoLidas > 99 ? '99+' : c.naoLidas}
+                          </span>
+                        )}
+                        <span className={`shrink-0 font-display font-bold text-xl xl:text-2xl tabular-nums ${u.tempo}`}>
+                          {tempoEspera(c.esperaDesde, agora)}
                         </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </section>
-          </div>
-        )}
+                      </div>
+
+                      {/* As mesmas badges do cartao da lista: quem olha a TV
+                          decide para quem vai a conversa, e saber a empresa (ou
+                          que ela ainda nao foi identificada) e o setor pedido e
+                          o que muda essa decisao. O numero do CNPJ nunca vai
+                          para a parede. */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {c.ticket && (
+                          <span className="inline-flex items-center text-[10px] xl:text-xs font-mono font-bold px-1.5 py-0.5 rounded-md border border-linha-forte text-acao-200/90">
+                            {c.ticket}
+                          </span>
+                        )}
+                        <span className={`inline-flex items-center max-w-full truncate text-[10px] xl:text-xs font-bold px-2 py-0.5 rounded-md border ${c.chip.classe}`}
+                          title={c.chip.titulo}>
+                          {c.chip.label}
+                        </span>
+                        {c.setor && (
+                          <span className={`inline-flex items-center text-[10px] xl:text-xs font-bold px-2 py-0.5 rounded-md border ${c.setor.classe}`}
+                            title={c.setor.id === 'geral'
+                              ? 'Ainda sem triagem: o cliente nao escolheu setor no menu'
+                              : `Setor escolhido pelo cliente: ${c.setor.setor}`}>
+                            {c.setor.label}
+                          </span>
+                        )}
+                        {/* Numa fila de pendentes isto quase sempre esta vazio
+                            (conversa sem responsavel), mas quando aparece evita
+                            duas pessoas pegarem a mesma conversa. */}
+                        {c.atendente?.nome && (
+                          <span className="inline-flex items-center gap-1 text-[10px] xl:text-xs font-bold px-2 py-0.5 rounded-md border bg-purple-500/15 text-purple-300 border-purple-500/30"
+                            title={`Atendendo: ${c.atendente.nome}${c.atendente.cargo ? ' (' + c.atendente.cargo + ')' : ''}`}>
+                            <UserCheck size={12} className="shrink-0" /> {c.atendente.nome}
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-xs xl:text-sm text-slate-400 line-clamp-2 leading-snug">
+                        {c.previa}
+                      </p>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+        </div>
       </div>
     </Portal>
   );
