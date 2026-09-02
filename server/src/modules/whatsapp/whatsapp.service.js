@@ -11,6 +11,7 @@ const logger = require("../../config/logger");
 const env = require("../../config/env");
 const AppError = require("../../shared/errors/AppError");
 const { limparTelefone } = require("../../shared/helpers/cnpj.helper");
+const { motivoParaIgnorarJid } = require("../../shared/helpers/jid.helper");
 
 // Teto da midia RECEBIDA do WhatsApp. O remetente e externo, entao este limite e
 // o que impede alguem de encher o disco mandando arquivos enormes. O proprio
@@ -443,7 +444,25 @@ class WhatsAppService {
       return { recebido: true, processado: false, motivo: "mensagem_propria" };
     }
 
-    const telefone = this.extrairTelefone(key?.remoteJid || data?.remoteJid);
+    // GRUPO, TRANSMISSAO E CANAL NAO ABREM ATENDIMENTO.
+    //
+    // Isto faltava, e o efeito foi visto em producao: o numero da empresa
+    // participa de um grupo, alguem falou la, e a conversa do GRUPO apareceu na
+    // fila com o pushName de quem falou no lugar do cliente. `extrairTelefone`
+    // nao tinha como perceber -- ele so tira o que vem antes do "@" -- e um jid
+    // de grupo antigo ("5527998189226-1620131695@g.us") vira um "telefone" de
+    // 23 digitos que passa por qualquer validacao de tamanho.
+    //
+    // Sai ANTES de qualquer escrita: nao cria conversa, nao grava mensagem, nao
+    // acorda o bot. Ver jid.helper para por que a regra e lista de recusa.
+    const jid = key?.remoteJid || data?.remoteJid || "";
+    const motivoIgnorar = motivoParaIgnorarJid(jid);
+    if (motivoIgnorar) {
+      logger.debug("Mensagem ignorada: nao e conversa de atendimento", { jid, motivo: motivoIgnorar });
+      return { recebido: true, processado: false, motivo: motivoIgnorar };
+    }
+
+    const telefone = this.extrairTelefone(jid);
     const texto = this.extrairTexto(body);
     const botaoId = this.extrairBotaoId(body);
     const nomeCliente = data?.pushName || data?.senderName || "Cliente";

@@ -4,6 +4,7 @@ const instanciaRepository = require("../../infrastructure/repositories/instancia
 const midiaStorage = require("../../infrastructure/storage/midia.storage");
 const whatsappService = require("./whatsapp.service");
 const AppError = require("../../shared/errors/AppError");
+const { motivoParaIgnorarJid } = require("../../shared/helpers/jid.helper");
 const logger = require("../../config/logger");
 
 // Teto por importacao. Nao e limite tecnico: e o que impede um clique de virar
@@ -348,8 +349,11 @@ class HistoricoService {
       for (const registro of r.registros) {
         const waId = registro?.key?.id ? String(registro.key.id) : null;
         if (!waId || novos.has(waId) || daPagina.has(waId)) continue;
-        // Grupo nao e conversa de atendimento: o fio aqui e de um telefone.
-        if (String(registro?.key?.remoteJid || "").endsWith("@g.us")) continue;
+        // Grupo, transmissao e canal nao sao conversa de atendimento: o fio aqui
+        // e de um telefone. Mesma regra do recebimento ao vivo (jid.helper) --
+        // duas listas do que ignorar acabariam divergindo, e a importacao
+        // traria de volta exatamente o que o webhook aprendeu a barrar.
+        if (motivoParaIgnorarJid(registro?.key?.remoteJid)) continue;
         daPagina.set(waId, registro);
       }
 
