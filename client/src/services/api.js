@@ -688,6 +688,18 @@ export const ConversasAPI = {
   // Historico de OS (atendimentos) do cliente. A conversa ja traz a lista; esta
   // rota serve para reler so o historico sem baixar o fio inteiro.
   atendimentos: (id) => request(`/conversas/${id}/atendimentos`),
+  // ── HISTÓRICO ANTIGO DO WHATSAPP (o que aconteceu no celular) ──
+  //
+  // A Central só registra o que passou por ela. O que a equipe conversou pelo
+  // aparelho antes disso vive no banco da Evolution (quando o pareamento
+  // sincronizou o histórico) e estas duas rotas o trazem para dentro do fio.
+  //
+  // A prévia é separada da importação de propósito: "não há nada para importar"
+  // é uma resposta legítima e comum, e a tela precisa poder dizer isso sem
+  // escrever nada no banco. Ambas exigem Administrador no servidor.
+  historicoWhatsApp: (id) => request(`/conversas/${id}/historico-whatsapp`),
+  importarHistorico: (id, opcoes = {}) =>
+    request(`/conversas/${id}/importar-historico`, { method: 'POST', body: JSON.stringify(opcoes) }),
   atualizarStatus: (id, status) => request(`/conversas/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   atualizarSetor: (id, setor) => request(`/conversas/${id}/setor`, { method: 'PATCH', body: JSON.stringify({ setor }) }),
   // Define/limpa o responsavel (compartilhado). atendenteId null = remover.

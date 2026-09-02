@@ -3,6 +3,7 @@ const conversaController = require("./conversa.controller");
 const conversaStream = require("./conversa.stream");
 const validate = require("../../shared/middlewares/validate.middleware");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
+const { adminMiddleware } = require("../../shared/middlewares/admin.middleware");
 const { exigirModulo } = require("../permissoes/modulo.middleware");
 const { midiaLimiter, correcaoLimiter } = require("../../shared/middlewares/rateLimit.middleware");
 const {
@@ -19,6 +20,7 @@ const {
   definirAtendenteSchema,
   avaliarAtendimentoSchema,
   corrigirTextoSchema,
+  importarHistoricoSchema,
 } = require("./conversa.dto");
 
 // SSE: autenticado pelo ticket na query (o EventSource nao manda header).
@@ -98,6 +100,25 @@ router.post("/:id/atender", (req, res, next) => conversaController.atender(req, 
 // Historico de atendimentos (OS) do cliente daquele fio de conversa.
 router.get("/:id/atendimentos", (req, res, next) =>
   conversaController.atendimentos(req, res).catch(next)
+);
+
+// ── HISTORICO ANTIGO DO WHATSAPP (o que aconteceu no celular) ───────────────
+//
+// Restrito a Administrador, e nao ao modulo "atendimento" que o resto do arquivo
+// exige. Nao e uma acao de atendimento: escreve mensagem em nome do cliente e da
+// equipe, com data no passado, e cria uma OS. Errar o numero enche a conversa
+// errada com o historico de outra pessoa -- e a limpeza e manual.
+//
+// GET primeiro (previa, nao muda nada) e POST depois: a tela mostra o que existe
+// antes de pedir confirmacao.
+router.get("/:id/historico-whatsapp", adminMiddleware, (req, res, next) =>
+  conversaController.historicoWhatsApp(req, res).catch(next)
+);
+router.post(
+  "/:id/importar-historico",
+  adminMiddleware,
+  validate(importarHistoricoSchema),
+  (req, res, next) => conversaController.importarHistorico(req, res).catch(next)
 );
 router.post("/:id/mensagens", validate(enviarMensagemSchema), (req, res, next) =>
   conversaController.enviarMensagem(req, res).catch(next)

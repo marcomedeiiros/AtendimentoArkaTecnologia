@@ -815,6 +815,168 @@ class ConversaRepository {
     });
   }
 
+  // O minimo para importar historico: de qual instancia falar com a Evolution e
+  // qual numero procurar. Consulta propria em vez de esticar `findByIdBasico`:
+  // aquele select e do caminho de ENVIO, afinado campo por campo, e nao deve
+  // engordar por causa de uma operacao administrativa que roda uma vez.
+  dadosParaImportacao(id) {
+    return prisma.conversa.findUnique({
+      where: { id },
+      select: { id: true, telefone: true, instanciaId: true, cliente: true },
+    });
+  }
+
+  // Quantas mensagens deste fio tem id do WhatsApp -- ou seja, quantas podem se
+  // sobrepor ao que a Evolution guardou. E o numero comparavel ao "disponivel"
+  // da previa; o total de mensagens nao serve, porque nota interna e mensagem de
+  // sistema nunca existiram no WhatsApp.
+  contarMensagensComWaId(conversaId) {
+    return prisma.mensagem.count({
+      where: { conversaId, waMessageId: { not: null } },
+    });
+  }
+
+  /**
+   * Quais destes ids do WhatsApp JA existem no banco.
+   *
+   * E a idempotencia da importacao de historico, feita em UMA consulta em vez de
+   * um `existeMensagemWa` por mensagem (importar 2.000 mensagens faria 2.000
+   * consultas so para descobrir que quase todas ja estao la). O `@unique` de
+   * `waMessageId` e global, entao a pergunta tambem e: uma mensagem que ja
+   * pertence a outro fio nao pode ser inserida aqui.
+   */
+  async waIdsExistentes(waIds = []) {
+    const ids = [...new Set(waIds.filter(Boolean).map(String))];
+    if (ids.length === 0) return new Set();
+    const achadas = new Set();
+    // Fatiado porque `IN (...)` tem teto de parametros no SQLite (999 por
+    // padrao): uma lista maior que isso estoura a consulta em vez de responder.
+    for (let i = 0; i < ids.length; i += 500) {
+      const linhas = await prisma.mensagem.findMany({
+        where: { waMessageId: { in: ids.slice(i, i + 500) } },
+        select: { waMessageId: true },
+      });
+      for (const l of linhas) achadas.add(l.waMessageId);
+    }
+    return achadas;
+  }
+
+  /**
+   * A OS SINTETICA que recebe o historico importado do celular.
+   *
+   * Por que uma OS propria, e nao `atendimentoId: null`: a Central recorta o
+   * historico por atendimento, e mensagem sem carimbo de OS so aparece no
+   * ULTIMO clique de "Ver mensagens antigas" (ver AtendimentoView). Com uma OS
+   * de verdade, o trecho importado entra no mecanismo que ja existe -- um clique
+   * o traz, com separador e data.
+   *
+   * `abertoEm` e a data da mensagem mais ANTIGA importada: e isso que coloca
+   * este ciclo no comeco da ordem cronologica, onde ele pertence.
+   *
+   * NAO toca `atendimentoAtualId`: a OS em curso continua sendo a que estava em
+   * curso. Importar historico nao abre chamado nenhum.
+   *
+   * O numero da OS, porem, vem do contador atomico e portanto e ALTO -- um
+   * ciclo antigo com numero novo. Nao ha como retroagir a sequencia sem colidir
+   * com numeros ja informados a clientes; quem identifica o trecho na tela e a
+   * data e o rotulo, nao o numero.
+   */
+  async criarAtendimentoImportado(conversaId, { abertoEm, fechadoEm, motivo = null } = {}) {
+    return prisma.$transaction(async (tx) => {
+      const numeroOS = await proximoNumero("ticket", tx);
+      return tx.atendimento.create({
+        data: {
+          conversaId,
+          numeroOS,
+          setor: null,
+          // Fechado: e historico, nao trabalho em aberto. Se nascesse "pendente"
+          // este ciclo apareceria na fila da equipe como chamado a atender.
+          status: "fechada",
+          atendenteNome: "Histórico do WhatsApp",
+          motivo: motivo || "Histórico importado do WhatsApp",
+          abertoEm: abertoEm || new Date(),
+          fechadoEm: fechadoEm || abertoEm || new Date(),
+        },
+      });
+    });
+  }
+
+  /**
+   * INSERE MENSAGENS DE HISTORICO -- de proposito NAO passa por `addMensagem`.
+   *
+   * `addMensagem` faz muito mais do que inserir: ela "toca" a conversa
+   * (`atualizadoEm`), incrementa `versao` e, para `origem: "cliente"`,
+   * incrementa `naoLidas`. Importar 2.000 mensagens antigas por lá jogaria a
+   * conversa para o topo da lista com um badge de 2.000 nao lidas, e carimbaria
+   * tudo na OS EM CURSO. Nada disso e verdade: essas mensagens sao velhas, ja
+   * foram lidas no celular, e pertencem ao passado do cliente.
+   *
+   * Aqui as linhas entram cruas, com `criadoEm` e `atendimentoId` explicitos, e
+   * a conversa recebe UM unico incremento de `versao` no fim -- o suficiente
+   * para o front aceitar o retrato novo (ele descarta versao <= a que tem em
+   * tela) sem mentir sobre atividade recente.
+   *
+   * Idempotente: quem chama ja filtrou por `waIdsExistentes`, e o `catch` por
+   * linha cobre a corrida com uma mensagem que chegou pelo webhook no meio da
+   * importacao.
+   */
+  async importarMensagens(conversaId, linhas = []) {
+    if (linhas.length === 0) return { inseridas: 0, ignoradas: 0 };
+
+    let inseridas = 0;
+    let ignoradas = 0;
+
+    for (let i = 0; i < linhas.length; i += 200) {
+      const lote = linhas.slice(i, i + 200);
+      try {
+        // Caminho rapido. `skipDuplicates` nao existe no SQLite, por isso o
+        // lote inteiro cai no caminho lento quando UMA linha colide.
+        const r = await prisma.mensagem.createMany({ data: lote });
+        inseridas += r.count;
+      } catch {
+        for (const linha of lote) {
+          try {
+            await prisma.mensagem.create({ data: linha });
+            inseridas += 1;
+          } catch {
+            // Quase sempre P2002: o waMessageId ja existe (webhook chegou antes,
+            // ou a mensagem pertence a outro fio). Historico nao e urgente --
+            // pular e o comportamento certo.
+            ignoradas += 1;
+          }
+        }
+      }
+    }
+
+    if (inseridas > 0) {
+      // ── `atualizadoEm` VAI ESCRITO DE PROPOSITO, COM O VALOR ANTIGO ────────
+      //
+      // `atualizadoEm` e `@updatedAt`: o Prisma o reescreve sozinho em QUALQUER
+      // update da linha -- inclusive num update que so incrementa `versao`. E a
+      // lista da Central e ordenada por ele.
+      //
+      // Sem esta releitura, importar historico de 2024 fazia a conversa saltar
+      // para o topo da Central como se o cliente tivesse acabado de escrever. O
+      // proprio nome do campo esconde a armadilha: nada no `data` falava de
+      // data, e o efeito aparecia na tela, longe daqui.
+      //
+      // Passar o campo explicitamente vence o `@updatedAt`. A `versao` sobe (o
+      // front precisa dela para aceitar o retrato novo); a posicao na lista, nao.
+      const antes = await prisma.conversa.findUnique({
+        where: { id: conversaId },
+        select: { atualizadoEm: true },
+      });
+      await prisma.conversa.update({
+        where: { id: conversaId },
+        data: {
+          versao: { increment: 1 },
+          ...(antes?.atualizadoEm ? { atualizadoEm: antes.atualizadoEm } : {}),
+        },
+      });
+    }
+    return { inseridas, ignoradas };
+  }
+
   countByStatus() {
     return prisma.conversa.groupBy({
       by: ["statusAtendimento"],

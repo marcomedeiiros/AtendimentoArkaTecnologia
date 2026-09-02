@@ -79,6 +79,69 @@ export function formatarLegendaComAssinatura(texto, assinar, nome) {
   return assinar && nomeLimpo ? assinaturaDe(nomeLimpo) : '';
 }
 
+/**
+ * SEPARA A ASSINATURA DO CORPO de uma mensagem JÁ ENVIADA.
+ *
+ * ── O PROBLEMA QUE ISTO RESOLVE ────────────────────────────────────────────
+ *
+ * Editar uma mensagem carregava o texto GRAVADO para a caixa -- e o texto
+ * gravado começa com a assinatura (`> *Marco Medeiros*`). Resultado: quem ia
+ * corrigir uma palavra da frase encontrava o próprio nome editável na primeira
+ * linha, e um backspace a mais o apagava, ou o transformava em outro nome. Pior:
+ * a mensagem editada ia para o WhatsApp assim, sem assinatura ou assinada com
+ * um nome quebrado -- e do lado do cliente aquilo é a identidade de quem
+ * atende.
+ *
+ * A assinatura não é conteúdo da mensagem: é a identificação de quem escreveu.
+ * Editar o texto e trocar a autoria são duas ações diferentes, e a segunda se
+ * faz no perfil, não numa caixa de mensagem.
+ *
+ * ── COMO A DETECÇÃO FUNCIONA ───────────────────────────────────────────────
+ *
+ * Estruturalmente, pela PRIMEIRA linha: `> *qualquer coisa*`. Não compara com o
+ * nome do operador logado de propósito -- a mensagem pode ter sido assinada com
+ * um nome antigo (a pessoa mudou a assinatura no perfil depois), ou com uma das
+ * variantes que já circularam (`> **Nome**`, `> *Nome*:`). Todas continuam
+ * sendo preservadas.
+ *
+ * O falso positivo possível é uma mensagem cuja primeira linha seja uma citação
+ * inteira em negrito. Nesse caso ela é preservada em vez de editável -- o dado
+ * não se perde, e é o lado errado mais barato.
+ *
+ * @returns {{assinatura: string, nome: string, corpo: string}}
+ */
+const LINHA_ASSINATURA = /^>[ \t]*\*{1,2}[ \t]*([^*\n]+?)[ \t]*\*{1,2}:?[ \t]*$/;
+
+export function separarAssinatura(texto) {
+  const str = String(texto ?? '');
+  const quebra = str.indexOf('\n');
+  const primeira = (quebra >= 0 ? str.slice(0, quebra) : str).trim();
+  const achado = LINHA_ASSINATURA.exec(primeira);
+  if (!achado) return { assinatura: '', nome: '', corpo: str };
+  return {
+    assinatura: primeira,
+    nome: achado[1].trim(),
+    // `replace` inicial: a assinatura é separada do corpo por UMA quebra, mas
+    // texto colado pode ter linha em branco sobrando -- e ela viraria um recuo
+    // fantasma no começo da caixa de edição.
+    corpo: quebra >= 0 ? str.slice(quebra + 1).replace(/^\n+/, '') : '',
+  };
+}
+
+/**
+ * Recompõe a mensagem: a assinatura ORIGINAL de volta na frente do corpo editado.
+ *
+ * Sem passar por `formatarComAssinatura` de propósito -- aquela função decide se
+ * deve assinar, com qual nome, e limpa assinaturas repetidas. Aqui não há
+ * decisão a tomar: a mensagem já foi enviada assinada, e o que se está editando
+ * é só o corpo.
+ */
+export function juntarAssinatura(assinatura, corpo) {
+  const limpo = String(corpo ?? '').trim();
+  if (!assinatura) return limpo;
+  return limpo ? `${assinatura}\n${limpo}` : assinatura;
+}
+
 export function formatarComAssinatura(texto, assinar, nome) {
   if (typeof texto !== 'string') return '';
   const limpo = texto.trim();

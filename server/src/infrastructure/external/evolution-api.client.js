@@ -352,6 +352,64 @@ class EvolutionApiClient {
     return lista;
   }
 
+  /**
+   * MENSAGENS QUE A EVOLUTION GUARDOU de uma conversa -- inclusive as que
+   * aconteceram no CELULAR, antes de a Central existir.
+   *
+   * Isto NAO le o aparelho. Le o banco da propria Evolution, que se enche por
+   * dois caminhos:
+   *   1. o `syncFullHistory` do pareamento (ver createInstance), quando o
+   *      WhatsApp despeja o historico no dispositivo novo;
+   *   2. o dia a dia, com `DATABASE_SAVE_DATA_NEW_MESSAGE=true` (ver
+   *      docker-compose.evolution.yml).
+   * Sem nenhum dos dois, `total` volta 0 e nao existe historico para importar --
+   * o problema esta na Evolution, nao aqui.
+   *
+   * `offset` na API da Evolution NAO e o deslocamento: e o TAMANHO da pagina
+   * (`pages: Math.ceil(count / query.offset)` no fetchMessages dela). Mandar so
+   * `page` sem `offset` deixa a conta de paginas indefinida, entao os dois vao
+   * sempre juntos.
+   *
+   * @param {string} remoteJid jid completo, ex. "5511999999999@s.whatsapp.net"
+   * @returns {{total:number, paginas:number, pagina:number, registros:object[]}}
+   */
+  async findMessages(remoteJid, { pagina = 1, porPagina = 100 } = {}, instance = this.defaultInstance) {
+    const alvo = instance || (await this.instanciaPadrao());
+    const data = await this.request("POST", `/chat/findMessages/${alvo}`, {
+      where: { key: { remoteJid } },
+      page: pagina,
+      offset: porPagina,
+    });
+    const bloco = data?.messages || data || {};
+    const registros = Array.isArray(bloco.records)
+      ? bloco.records
+      : Array.isArray(bloco)
+        ? bloco
+        : [];
+    return {
+      total: Number(bloco.total ?? registros.length) || 0,
+      paginas: Number(bloco.pages) || (registros.length ? 1 : 0),
+      pagina: Number(bloco.currentPage ?? pagina) || pagina,
+      registros,
+    };
+  }
+
+  // Conversas conhecidas pela instancia. Usado para descobrir o jid REAL de um
+  // telefone: contato de Android recente chega como "<numero>@lid" em vez de
+  // "<numero>@s.whatsapp.net", e filtrar mensagem pelo jid errado devolve zero
+  // sem nenhum erro (ver issue 1916 da Evolution).
+  async findChats(instance = this.defaultInstance) {
+    const alvo = instance || (await this.instanciaPadrao());
+    try {
+      const data = await this.request("POST", `/chat/findChats/${alvo}`, {});
+      const bloco = data?.chats || data;
+      if (Array.isArray(bloco)) return bloco;
+      return Array.isArray(bloco?.records) ? bloco.records : [];
+    } catch {
+      return [];
+    }
+  }
+
   // Foto de perfil do contato. Best-effort: a Evolution retorna 404/erro quando
   // o numero nao tem foto publica -- nesses casos devolvemos null e o front cai
   // para o avatar de iniciais.

@@ -373,10 +373,26 @@ const avaliarAtendimentoSchema = z.object({
   feedback: z.string().max(4096).nullable().optional(),
 });
 
+// Importacao do historico do WhatsApp. Corpo inteiro opcional: o clique padrao
+// da tela nao manda nada e o service usa os proprios tetos.
+//
+// `limite` NAO e uma preferencia de gosto -- e quantas mensagens uma requisicao
+// pode arrastar antes de virar espera. O teto de verdade vive no service
+// (MAX_POR_IMPORTACAO), porque quem sabe o custo de cada pagina e ele; aqui so
+// barramos numero absurdo/negativo na porta.
+const importarHistoricoSchema = z.object({
+  limite: z.coerce.number().int().min(1).max(3000).optional(),
+  // Desligar o download da midia torna a importacao muito mais rapida quando o
+  // historico e antigo (os bytes provavelmente nao existem mais nos servidores
+  // do WhatsApp e cada tentativa e uma ida perdida).
+  baixarMidia: z.boolean().optional(),
+});
+
 module.exports = {
   enviarMensagemSchema,
   adicionarNotaSchema,
   corrigirTextoSchema,
+  importarHistoricoSchema,
   iniciarConversaSchema,
   atualizarStatusSchema,
   validarCnpjSchema,

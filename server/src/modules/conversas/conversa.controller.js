@@ -1,5 +1,6 @@
 const conversaService = require("./conversa.service");
 const configuracaoService = require("../configuracoes/configuracao.service");
+const historicoService = require("../whatsapp/historico.service");
 const { success } = require("../../shared/helpers/response.helper");
 const { validarTokenMidia } = require("../../shared/helpers/midiaToken.helper");
 const { prepararRespostaMidia, interpretarRange } = require("../../shared/helpers/midiaResposta.helper");
@@ -87,6 +88,41 @@ class ConversaController {
     return conversaService
       .transcreverAudio(req.params.mensagemId, req.user?.cargo)
       .then((data) => success(res, data));
+  }
+
+  // O que a Evolution guardou do historico deste numero. Leitura pura: serve
+  // para a tela dizer "ha 340 mensagens antigas" (ou que nao ha nenhuma) ANTES
+  // de o administrador confirmar a importacao.
+  historicoWhatsApp(req, res) {
+    return historicoService.previa(req.params.id).then((data) => success(res, data));
+  }
+
+  /**
+   * Importa o historico e devolve o resultado JUNTO com a conversa atualizada.
+   *
+   * A conversa vai na mesma resposta porque o front aplica retrato de conversa
+   * por um caminho unico (`aplicarConversa` -> mesclarConversa, que descarta
+   * versao antiga). Devolver so os numeros obrigaria a tela a fazer um segundo
+   * GET para ver o que acabou de importar -- e, entre os dois, um evento SSE
+   * poderia chegar com versao maior e o merge descartaria o retrato certo.
+   *
+   * Sem importacao nenhuma nao ha conversa nova para mandar: `null` evita
+   * carregar o fio inteiro (que pode ter milhares de mensagens) so para dizer
+   * "nada mudou".
+   */
+  importarHistorico(req, res) {
+    return historicoService
+      .importar(req.params.id, {
+        limite: req.body?.limite,
+        baixarMidia: req.body?.baixarMidia,
+      })
+      .then(async (resultado) => {
+        const conversa =
+          resultado.importadas > 0
+            ? await conversaService.obter(req.params.id, req.user?.cargo)
+            : null;
+        return success(res, { ...resultado, conversa });
+      });
   }
 
   corrigirTexto(req, res) {

@@ -9,7 +9,7 @@ import {
   FileText, MapPin, Contact, Paperclip, Smile, Loader2,
   SlidersHorizontal, Star, Archive, EyeOff, MoreVertical,
   Maximize2, Download, CornerUpLeft, CornerUpRight, Share2, Pencil, MoreHorizontal, Mic, Tag, PenLine,
-  Sun, Moon, Bot, StickyNote, SpellCheck, Undo2
+  Sun, Moon, Bot, StickyNote, SpellCheck, Undo2, History
 } from 'lucide-react';
 import { EmojiIcon, FormattedMessage, TextoFormatado } from './EmojiIcon';
 import { useMensagensRapidas } from './MensagensRapidas';
@@ -30,9 +30,9 @@ import { usePreferencia } from '../../hooks/usePreferencia';
 import { contatoCombina, normalizarBusca, telefoneComparavel } from '../../utils/busca';
 import { FUSO_BR } from '../../utils/data';
 import { mesclarConversa, registrarApagada, desfazerApagada } from '../../utils/mesclarConversa';
-import { formatarComAssinatura, formatarLegendaComAssinatura } from '../../utils/assinatura';
+import { formatarComAssinatura, formatarLegendaComAssinatura, separarAssinatura, juntarAssinatura } from '../../utils/assinatura';
 import { CATEGORIAS_EMOJI, TODOS_EMOJIS } from './emojis';
-import { avisar } from '../../utils/dialogo';
+import { avisar, confirmar } from '../../utils/dialogo';
 
 // O responsavel pelo atendimento agora vem do banco (conversa.atendenteNome /
 // atendenteId), compartilhado por toda a equipe. Antes vivia no localStorage e
@@ -1603,7 +1603,8 @@ function PainelChat({
   onMarcarLido, onSolicitarCnpj, onValidarCnpjModal,
   onVoltar, atendente, onTransferir,
   onEditar, onEncaminharPara, conversas, onAtender,
-  assinar, onToggleAssinar, assinaturaNome, onApagarMensagem
+  assinar, onToggleAssinar, assinaturaNome, onApagarMensagem,
+  podeBuscarHistorico, buscandoHistorico, onBuscarHistorico
 }) {
   const [showMsgRapidas, setShowMsgRapidas] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
@@ -1635,14 +1636,22 @@ function PainelChat({
   // não "pular" quando as mensagens entram acima do que está sendo lido.
   const ancoraRef = useRef(null);
 
+  // A EDIÇÃO ABRE SÓ O CORPO -- a assinatura fica fora da caixa.
+  //
+  // Antes carregava `m.texto` inteiro, que começa com `> *Nome*`: quem ia
+  // corrigir uma palavra encontrava o próprio nome editável na primeira linha, e
+  // um backspace a mais o apagava. A assinatura não é conteúdo da mensagem, é a
+  // identificação de quem escreveu -- ela é guardada aqui e recolocada no envio
+  // (ver `enviar`). Trocar de nome se faz no perfil.
   const iniciarEdicao = useCallback((m) => {
-    setEditando({ id: m.id, textoOriginal: m.texto });
+    const { assinatura, nome, corpo } = separarAssinatura(m.texto);
+    setEditando({ id: m.id, textoOriginal: m.texto, assinatura, nome, corpo });
     setRespondendoA(null);
     // Sai do modo nota: `enviar` testa o modo ANTES da edição, então editar uma
     // mensagem com o modo ligado gravaria uma nota nova e deixaria a mensagem
     // original intacta -- sem nenhum aviso de que a edição não aconteceu.
     setModoNota(false);
-    setTexto(m.texto);
+    setTexto(corpo);
   }, [setTexto]);
 
   const cancelarEdicao = useCallback(() => {
@@ -1848,7 +1857,8 @@ function PainelChat({
     }
 
     if (editando) {
-      onEditar(editando.id, texto.trim());
+      // A assinatura original volta na frente: a caixa editou só o corpo.
+      onEditar(editando.id, juntarAssinatura(editando.assinatura, texto));
       setEditando(null);
       setTexto('');
       return;
@@ -2064,20 +2074,46 @@ function PainelChat({
             Antes cada chamado virava uma conversa separada e o histórico sumia
             da tela; agora ele está aqui, no mesmo fio, um atendimento por vez --
             a conversa abre leve, mostrando o que está acontecendo agora. */}
-        {temMaisAntigas && (
+        {/* UM BOTÃO SÓ PARA "VOLTAR NO TEMPO" -- e ele não muda de nome conforme
+            a origem do que vai aparecer.
+            
+            Para quem atende, "ver mensagens antigas" é uma pergunta única: o que
+            veio antes disto? De onde a resposta sai (do que já está carregado ou
+            do histórico do WhatsApp) é detalhe de implementação, e virar dois
+            botões lado a lado transferia esse detalhe para a pessoa -- que teria
+            de saber a diferença entre "revelar" e "importar" para escolher.
+            
+            Então o mesmo botão faz as duas coisas, na ordem certa: primeiro
+            revela os atendimentos que já vieram com a conversa (instantâneo, não
+            busca nada), e só quando eles acabam é que o clique vai procurar no
+            WhatsApp. Buscar antes seria trabalho à toa; buscar nunca deixaria o
+            histórico do celular inalcançável.
+            
+            A busca no WhatsApp é restrita a Administrador (`podeBuscarHistorico`)
+            porque ela ESCREVE mensagens com data no passado. Para os demais o
+            botão simplesmente desaparece quando o histórico local termina, como
+            sempre foi. */}
+        {(temMaisAntigas || podeBuscarHistorico) && (
           <div className="flex justify-center pb-2">
             <button
-              onClick={verMensagensAntigas}
+              onClick={temMaisAntigas ? verMensagensAntigas : () => onBuscarHistorico?.(conversa.id)}
+              disabled={buscandoHistorico}
               title={
-                proximaOsAntiga
-                  ? `Carregar o atendimento #${proximaOsAntiga.os} (${dataHoraCurta(proximaOsAntiga.abertoEm)})`
-                  : 'Carregar o atendimento anterior'
+                temMaisAntigas
+                  ? proximaOsAntiga
+                    ? `Carregar o atendimento #${proximaOsAntiga.os} (${dataHoraCurta(proximaOsAntiga.abertoEm)})`
+                    : 'Carregar o atendimento anterior'
+                  : 'Procurar no WhatsApp as conversas anteriores a este número entrar na Central'
               }
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-grafite-700/80 hover:bg-grafite-600 border border-linha text-slate-300 hover:text-white text-[11px] font-semibold transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-grafite-700/80 hover:bg-grafite-600 border border-linha text-slate-300 hover:text-white text-[11px] font-semibold transition-colors disabled:opacity-60 disabled:cursor-wait"
             >
-              <ArrowUp size={12} />
-              Ver mensagens antigas
-              {proximaOsAntiga && (
+              {buscandoHistorico
+                ? <History size={12} className="animate-spin" />
+                : <ArrowUp size={12} />}
+              {buscandoHistorico ? 'Procurando no WhatsApp...' : 'Ver mensagens antigas'}
+              {/* O número da OS aparece só quando há uma OS conhecida para
+                  carregar. Na busca do WhatsApp ainda não se sabe o que vem. */}
+              {!buscandoHistorico && temMaisAntigas && proximaOsAntiga && (
                 <span className="font-mono text-acao-200/90">#{proximaOsAntiga.os}</span>
               )}
             </button>
@@ -2329,7 +2365,17 @@ function PainelChat({
             <div className="text-[10px] font-bold text-lida-400 mb-0.5 flex items-center gap-1">
               <Pencil size={11} /> Editando mensagem
             </div>
-            <div className="text-[11px] text-slate-400 truncate">{editando.textoOriginal}</div>
+            <div className="text-[11px] text-slate-400 truncate">{editando.corpo || editando.textoOriginal}</div>
+            {/* A assinatura aparece, mas como INFORMAÇÃO -- não como campo. É o
+                que responde "para onde foi meu nome?" sem devolvê-lo para a
+                caixa de texto. */}
+            {editando.assinatura && (
+              <div className="mt-1 flex items-center gap-1 text-[10px] text-slate-500">
+                <PenLine size={10} className="text-acao-200 shrink-0" />
+                Assinatura mantida:
+                <strong className="truncate font-semibold text-slate-400">{editando.nome || editando.assinatura}</strong>
+              </div>
+            )}
           </div>
           <button onClick={cancelarEdicao} className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 shrink-0">
             <X size={13} />
@@ -2765,6 +2811,28 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     return () => clearInterval(id);
   }, []);
 
+  // Importação do histórico antigo do WhatsApp: só Administrador, e o servidor
+  // barra de novo (ver adminMiddleware na rota). Esconder o botão é conforto de
+  // interface, não a autorização.
+  const ehAdmin = usuario?.cargo === 'Administrador';
+  const [importandoHistorico, setImportandoHistorico] = useState(false);
+  /**
+   * Conversas em que a busca no WhatsApp já respondeu "não tem mais nada".
+   *
+   * Sem isto o botão "Ver mensagens antigas" ficaria para sempre no topo de toda
+   * conversa, e todo clique repetiria a mesma ida à Evolution para receber zero
+   * -- o operador aprenderia a ignorar o botão, que é o pior desfecho possível
+   * para o recurso.
+   *
+   * Vive só nesta sessão de tela (não é persistido) de propósito: o histórico do
+   * WhatsApp pode mudar depois de um novo pareamento, e um F5 volta a oferecer a
+   * busca. É uma trava contra clique inútil, não um registro de verdade.
+   */
+  const [historicoVazio, setHistoricoVazio] = useState(() => new Set());
+  const marcarHistoricoVazio = useCallback((id) => {
+    setHistoricoVazio(prev => (prev.has(id) ? prev : new Set(prev).add(id)));
+  }, []);
+
   const conversa = conversas.find(c => c.id === selecionada);
 
   /**
@@ -3092,6 +3160,84 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       c.id === atualizada.id ? mesclarConversa(c, atualizada) : c
     ));
   }, [setConversas]);
+
+  /**
+   * TRAZ O HISTÓRICO DO CELULAR PARA DENTRO DA CONVERSA.
+   *
+   * Duas etapas, e a primeira não escreve nada: consulta o que a Evolution tem
+   * guardado e mostra o número antes de pedir confirmação. Isso existe porque
+   * "não há histórico" é um resultado comum e tem causa externa -- a Evolution
+   * só guarda mensagem se o pareamento sincronizou o histórico e se ela está
+   * configurada para persistir. Sem a prévia, esse caso viraria um clique que
+   * "não fez nada" e pareceria defeito da Central.
+   *
+   * A confirmação também é obrigatória por outro motivo: a importação escreve
+   * mensagens com data no passado, em nome do cliente e da equipe. É reversível
+   * só à mão, então quem clica precisa ver o tamanho do que vai entrar.
+   */
+  const importarHistorico = useCallback(async (id) => {
+    if (!id) return;
+    setImportandoHistorico(true);
+    try {
+      const previa = await ConversasAPI.historicoWhatsApp(id);
+      const disponivel = Number(previa?.disponivel) || 0;
+
+      if (disponivel === 0) {
+        marcarHistoricoVazio(id);
+        await avisar(
+          'Não há histórico antigo guardado para este número.\n\n' +
+          'O WhatsApp só entrega as conversas antigas no momento em que o ' +
+          'aparelho é pareado, e apenas um recorte delas. Se a conexão atual foi ' +
+          'feita antes disso, esse histórico não existe em nenhum lugar que a ' +
+          'Central possa alcançar.',
+          { titulo: 'Nada para importar', tipo: 'info' }
+        );
+        return;
+      }
+
+      const ok = await confirmar(
+        `Foram encontradas ${disponivel} mensagens antigas deste número.\n\n` +
+        `A Central já tem ${Number(previa?.jaNaCentral) || 0} mensagens com registro do WhatsApp; ` +
+        'as repetidas são ignoradas automaticamente.\n\n' +
+        'As mensagens entram como um atendimento antigo, acessível pelo botão ' +
+        '"Ver mensagens antigas". Nada é enviado ao cliente.',
+        { titulo: 'Importar histórico do WhatsApp', rotuloConfirmar: 'Importar' }
+      );
+      if (!ok) return;
+
+      const r = await ConversasAPI.importarHistorico(id);
+      // A conversa vem na mesma resposta quando algo entrou: aplicá-la aqui
+      // evita um segundo GET e mantém o caminho único de merge.
+      if (r?.conversa?.id) aplicarConversa(r.conversa);
+
+      const importadas = Number(r?.importadas) || 0;
+      if (importadas === 0) {
+        marcarHistoricoVazio(id);
+        await avisar(
+          'Nenhuma mensagem nova entrou: o histórico disponível já estava todo na Central.',
+          { titulo: 'Histórico já importado', tipo: 'info' }
+        );
+        return;
+      }
+
+      // Trouxe tudo o que havia: o próximo clique não teria o que buscar.
+      const restante = Number(r?.restante) || 0;
+      if (restante === 0) marcarHistoricoVazio(id);
+      await avisar(
+        `${importadas} ${importadas === 1 ? 'mensagem' : 'mensagens'} importadas.\n\n` +
+        'Elas estão no início da conversa, em um atendimento marcado como ' +
+        '"Histórico do WhatsApp". Use "Ver mensagens antigas" para chegar até lá.' +
+        (restante > 0
+          ? `\n\nAinda restam cerca de ${restante} mensagens. Clique de novo para continuar.`
+          : ''),
+        { titulo: 'Histórico importado', tipo: 'info' }
+      );
+    } catch (e) {
+      await avisar('Não foi possível importar o histórico: ' + (e?.message || 'erro desconhecido'));
+    } finally {
+      setImportandoHistorico(false);
+    }
+  }, [aplicarConversa, marcarHistoricoVazio]);
 
   // ── TRANSFERÊNCIA ────────────────────────────────────────────────────────
   //
@@ -3769,6 +3915,12 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               onToggleAssinar={() => setAssinar(v => !v)}
               assinaturaNome={assinaturaNome}
               onApagarMensagem={apagarMensagem}
+              // O botão de "ver mensagens antigas" só continua depois do fim do
+              // histórico local se houver a chance de existir algo no WhatsApp:
+              // Administrador, e esta conversa ainda não respondeu "não tem nada".
+              podeBuscarHistorico={ehAdmin && !historicoVazio.has(conversa.id)}
+              buscandoHistorico={importandoHistorico}
+              onBuscarHistorico={importarHistorico}
             />
           )}
         </div>
