@@ -437,6 +437,58 @@ function conferirUmaPerguntaPorTurno(rotulo, r) {
   );
   console.log("  OK    telefone desconhecido -> pede o CNPJ por texto livre");
 
+  // ── DOCUMENTO LEMBRADO QUE NÃO É CLIENTE: PERGUNTA DE NOVO ────────────────
+  //
+  // Caso real, e caro. O cliente clicou em "Tenho contrato" e o bot respondeu na
+  // hora "não encontramos esse documento -- você será atendido como avulso", sem
+  // nunca ter perguntado nada. A conversa tinha um documento verificado de um
+  // atendimento anterior, ele não estava na base, e com `memoriaCnpj: "fluxo"` o
+  // motor o adotava em silêncio e despachava pelo `targetIdNaoCadastrado`.
+  //
+  // O efeito era uma porta trancada: quem informou o documento errado uma vez --
+  // o próprio CPF, quando o contrato está no CNPJ da empresa -- ia para o
+  // caminho avulso em TODO contato seguinte, sem nenhum momento em que pudesse
+  // corrigir. E do lado de cá parecia que o cliente tinha escolhido ser avulso.
+  //
+  // O teste chama `_adotarCnpjLembrado` DIRETO, e não o bloco que o antecede:
+  // a primeira versão desta verificação passava pelo motivo errado -- ela
+  // montava um cenário em que a memória nem chegava a ser oferecida, então
+  // "pediu digitado" não provava nada sobre a adoção.
+  {
+    const passoCnpj = { id: "p-cnpj", tipo: "condicao", config: { memoriaCnpj: "fluxo" } };
+    const fluxoFake = { id: "f", passos: [passoCnpj] };
+
+    const montar = (parceiro) => {
+      const eng = new ChatbotEngine({
+        parceiroRepository: { findAtivoByCnpj: async () => parceiro, findAtivoByTelefone: async () => null },
+        conversaRepository: {
+          update: async () => ({}),
+          findById: async () => ({ id: "c", telefone: "5527900000000" }),
+        },
+      });
+      const conversa = { id: "c", telefone: "5527900000000", cnpj: null, cnpjVerificado: false };
+      return { eng, contexto: { conversa, fluxo: fluxoFake } };
+    };
+
+    // Um CPF válido que a base não conhece -- exatamente o valor do caso real.
+    const a = montar(null);
+    const foraDaBase = await a.eng._adotarCnpjLembrado("10421248769", passoCnpj, a.contexto);
+    check(
+      foraDaBase.pedirDigitado === true,
+      `documento lembrado fora da base deveria PEDIR digitado, veio ${JSON.stringify(foraDaBase)}`
+    );
+
+    // E o outro lado: lembrado E cadastrado continua sendo adotado, senão a
+    // correção teria trocado um atalho quebrado por nenhum atalho.
+    const b = montar(PARCEIRO);
+    const cadastrado = await b.eng._adotarCnpjLembrado(PARCEIRO.cnpj, passoCnpj, b.contexto);
+    check(
+      !cadastrado.pedirDigitado,
+      `documento lembrado E cadastrado deveria ser adotado, veio ${JSON.stringify(cadastrado)}`
+    );
+    console.log("  OK    lembrado fora da base -> pergunta de novo; lembrado e cadastrado -> adota");
+  }
+
   // ── MESMO NÚMERO EM DUAS EMPRESAS: não adivinha ───────────────────────────
   //
   // Caso real (contador, matriz e filial). Escolher uma seria abrir o chamado no
@@ -1178,7 +1230,8 @@ function conferirUmaPerguntaPorTurno(rotulo, r) {
   const grupos = resumo.itens.map((i) => i.grupo);
   console.log("  grupos: " + grupos.join(" | "));
   for (const esperado of [
-    "Identificação por CNPJ",
+    // "Identificação por CNPJ" ate o passo passar a aceitar CPF tambem.
+    "Identificação por CPF/CNPJ",
     "Triagem por setor",
     "Entrega para a fila",
     "Respostas livres do cliente",

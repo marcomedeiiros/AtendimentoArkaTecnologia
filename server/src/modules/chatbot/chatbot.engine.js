@@ -1535,6 +1535,45 @@ class ChatbotEngine {
    */
   async _adotarCnpjLembrado(cnpj, passo, contexto) {
     const { conversa, fluxo } = contexto;
+
+    // A MEMORIA SO VALE PARA QUEM A BASE RECONHECE.
+    //
+    // Vindo de um caso real: o cliente clicou em "Tenho contrato" e o bot
+    // respondeu, na hora, "nao encontramos esse documento -- voce sera atendido
+    // como avulso", sem nunca ter perguntado nada. O documento lembrado deste
+    // telefone nao estava na base, e com `memoriaCnpj: "fluxo"` o motor o
+    // adotava em silencio e despachava pelo `targetIdNaoCadastrado`.
+    //
+    // O efeito era uma porta trancada: quem informou o documento errado uma vez
+    // (o proprio CPF, quando o contrato esta no CNPJ da empresa) era mandado
+    // para o caminho avulso em TODO contato seguinte, sem nenhum momento em que
+    // pudesse corrigir. E ninguem percebe, porque do lado de ca parece que o
+    // cliente escolheu ser avulso.
+    //
+    // A memoria existe para poupar digitacao de quem JA E CONHECIDO. Quando o
+    // documento lembrado nao resolve em cliente cadastrado, ela nao esta
+    // poupando nada -- so esta decidindo por ele. Entao aqui a consulta vem
+    // ANTES da validacao: sem parceiro, volta a perguntar, e nada e gravado na
+    // conversa (`validarCnpjRecebido` grava; se rodasse antes desta decisao,
+    // marcaria a conversa como avulso por causa de um documento que o cliente
+    // nem chegou a reapresentar).
+    //
+    // O preco, para ficar dito: o avulso recorrente responde a pergunta de novo
+    // a cada atendimento. E o lado barato da troca -- uma pergunta a mais para
+    // quem nao e cliente, contra nenhuma saida para quem e.
+    const lembrado = limparCnpj(cnpj);
+    const parceiroLembrado = documentoValido(lembrado)
+      ? await this.deps.parceiroRepository.findAtivoByCnpj(lembrado)
+      : null;
+
+    if (!parceiroLembrado) {
+      logger.info("Documento lembrado nao e de cliente cadastrado: pedindo digitado", {
+        conversaId: conversa.id,
+        valido: documentoValido(lembrado),
+      });
+      return { pedirDigitado: true };
+    }
+
     const validacao = await this.validarCnpjRecebido(conversa, cnpj, paramsCnpj(passo));
 
     if (!validacao.valido) {

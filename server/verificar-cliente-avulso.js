@@ -89,7 +89,16 @@ function carregarBadge() {
 
   const mod = {};
   new Function(
-    "exports", "limparCnpj",
+    // O nome da dependencia acompanhou o refactor: as tres funcoes recortadas
+    // acima usavam `limparCnpj`, que morava no proprio AtendimentoView. Quando
+    // a validacao passou a aceitar CPF, as copias duplicadas do painel viraram
+    // client/src/utils/documento.js e a funcao virou `limparDocumento`.
+    //
+    // Este harness AVALIA o codigo real do painel em vez de reimplementar a
+    // regra do badge, e o preco disso e sentir renomeacao. E o preco certo: um
+    // teste que reescrevesse a regra continuaria passando enquanto a tela
+    // mostrasse a coisa errada.
+    "exports", "limparDocumento",
     trecho + "\n;exports.chip = chipDoCliente; exports.tipo = tipoDoCliente;"
   )(mod, (v) => String(v || "").replace(/\D/g, ""));
   return mod;
