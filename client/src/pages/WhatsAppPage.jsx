@@ -18,6 +18,10 @@ const STATUS_POLL_MS = 20000;
 const STATUS_UI = {
   Online:        { badge: 'bg-ativo/20 text-ativo-400', box: 'bg-ativo/15 text-ativo-400 border border-ativo/30' },
   Conectando:    { badge: 'bg-espera/20 text-espera-400',     box: 'bg-espera/15 text-espera-400 border border-espera/30' },
+  // O servidor desistiu de religar sozinho: o pareamento caiu e so o celular
+  // resolve. Cor de falha, nao de espera -- "Conectando" em amarelo passava a
+  // ideia de que estava quase la, e ninguem ia buscar o telefone.
+  'Reescaneie o QR': { badge: 'bg-falha/20 text-falha-400',   box: 'bg-falha/15 text-falha-400 border border-falha/30' },
   Desconectado:  { badge: 'bg-falha/20 text-falha-400',       box: 'bg-falha/15 text-falha-400 border border-falha/30' },
   Offline:       { badge: 'bg-slate-500/20 text-slate-400',     box: 'bg-slate-500/15 text-slate-400 border border-linha-forte' }
 };
@@ -262,6 +266,19 @@ export default function WhatsAppPage() {
           </button>
         </div>
       </div>
+
+      {/* O servidor religa a instancia sozinho quando a conexao cai, mas nao
+          quando o PAREAMENTO se perde -- ai a Evolution volta a pedir o QR e
+          nenhum reinicio adianta. Sem este recado a tela ficava em
+          "Conectando" indefinidamente e a equipe ficava sem WhatsApp sem saber
+          que bastava alguem escanear. */}
+      {detalhes?.perdeuPareamento && (
+        <div className="p-3 rounded-xl bg-falha/10 border border-falha/30 text-xs text-falha-400">
+          O pareamento com o WhatsApp foi perdido e o servidor não consegue
+          restabelecê-lo sozinho. Clique em <strong>Gerar QR</strong> abaixo e
+          escaneie com o celular do número em <strong>Aparelhos conectados</strong>.
+        </div>
+      )}
 
       {aviso && (
         <div className="p-3 rounded-xl bg-espera/10 border border-espera/30 text-xs text-espera-400">

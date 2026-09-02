@@ -139,6 +139,11 @@ const env = {
     url: process.env.EVOLUTION_API_URL || "http://localhost:8080",
     key: process.env.EVOLUTION_API_KEY || "",
     instance: process.env.WHATSAPP_INSTANCE || "arka-wapi-oficial",
+    // Ligado, o WhatsApp manda a agenda e o historico ao parear -- e sem ele a
+    // Evolution fica com 0 contatos. Em troca, toda reconexao refaz essa
+    // sincronizacao e demora mais para sair de `connecting`. Veja o comentario
+    // em createInstance (evolution-api.client.js) antes de desligar.
+    syncFullHistory: process.env.EVOLUTION_SYNC_FULL_HISTORY !== "false",
   },
   webhookSecret: segredo("WEBHOOK_SECRET", process.env.WEBHOOK_SECRET, "arka-webhook-secret"),
   admin: {

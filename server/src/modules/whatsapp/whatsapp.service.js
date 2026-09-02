@@ -3,6 +3,7 @@ const evolutionApi = require("../../infrastructure/external/evolution-api.client
 const instanciaRepository = require("../../infrastructure/repositories/instancia.repository");
 const conversaRepository = require("../../infrastructure/repositories/conversa.repository");
 const contatoService = require("../contatos/contato.service");
+const reconexao = require("./whatsapp.reconexao");
 const midiaStorage = require("../../infrastructure/storage/midia.storage");
 const { mapConversa } = require("../../shared/helpers/mapper.helper");
 const bus = require("../../shared/events/event-bus");
@@ -287,6 +288,10 @@ class WhatsAppService {
       return this._processarConexao(body, instance);
     }
 
+    if (event === "qrcode.updated" || event === "QRCODE_UPDATED") {
+      return this._processarQrcode(instance);
+    }
+
     if (event === "messages.update" || event === "MESSAGES_UPDATE") {
       return this._processarAck(body);
     }
@@ -352,66 +357,32 @@ class WhatsAppService {
       }, 15000);
     }
 
-    // AUTO-RECONEXAO: quando a Evolution sinaliza que a conexao caiu (state
-    // "close" ou "refused"), tentamos reconectar automaticamente. Isso cobre o
-    // bug de keep-alive do 2.4.0-rc2 e qualquer queda temporaria de rede entre
-    // a Evolution e os servidores do WhatsApp.
+    // AUTO-RECONEXAO: quem religa e o `whatsapp.reconexao`, e so ele. Aqui
+    // apenas avisamos que a Evolution sinalizou a queda, para o vigia agir no
+    // ciclo seguinte em vez de esperar o proximo minuto.
     //
-    // Estrategia: backoff exponencial com 5 tentativas (10s, 20s, 40s, 80s,
-    // 160s). Se na tentativa a instancia ja voltou (outra via), abortamos.
-    // So tentamos se a instancia existia antes (evita loop em instancias novas
-    // ainda sem QR escaneado).
+    // Este modulo ja teve o seu proprio backoff, rodando em paralelo ao do
+    // watchdog. Duas vias chamando `connect()` sem se enxergar abriam sockets
+    // Baileys concorrentes com a mesma credencial -- o WhatsApp derrubava um
+    // com `conflict: replaced` e a instancia nunca fechava o handshake.
     if (!conectado && (state === "close" || state === "refused") && eraConectado) {
-      logger.warn("Conexao WhatsApp perdida -- iniciando auto-reconexao", {
-        instance: instanceName,
-        state,
-      });
-      this._agendarReconexao(instanceName, 1);
+      reconexao.notificarQueda(state);
     }
 
     return { recebido: true, evento: "connection.update", conectado, state };
   }
 
-  // Agenda uma tentativa de reconexao com backoff exponencial.
-  // 1ª tentativa: 3s. Seguintes: dobra a cada vez (3s, 6s, 12s, 24s, 48s).
-  _agendarReconexao(instanceName, tentativa) {
-    const MAX_TENTATIVAS = 5;
-    if (tentativa > MAX_TENTATIVAS) {
-      logger.error("Auto-reconexao desistiu apos tentativas maximas", {
-        instance: instanceName,
-        tentativas: MAX_TENTATIVAS,
-      });
-      return;
+  // QR gerado sem ninguem ter pedido no painel significa uma coisa so: a
+  // credencial do pareamento se perdeu e a Evolution voltou a pedir o scan.
+  // Reiniciar a instancia nao resolve -- so o celular resolve. Marcamos para o
+  // /status contar isso na tela em vez de deixar o badge em "Conectando".
+  async _processarQrcode(instanceName) {
+    const instancia = await instanciaRepository.findByNome(instanceName);
+    if (instancia?.conectado) {
+      await instanciaRepository.updateConectado(instancia.id, false);
     }
-
-    const esperaMs = 3_000 * Math.pow(2, tentativa - 1); // 3s, 6s, 12s, 24s, 48s
-    logger.info(`Auto-reconexao tentativa ${tentativa}/${MAX_TENTATIVAS} em ${esperaMs / 1000}s`, {
-      instance: instanceName,
-    });
-
-    setTimeout(async () => {
-      try {
-        // Verifica se ja voltou por conta propria antes de forcar
-        const estadoAtual = await evolutionApi.getConnectionState(instanceName);
-        const estadoStr = estadoAtual?.instance?.state || estadoAtual?.state || "close";
-        if (estadoStr === "open") {
-          logger.info("Auto-reconexao: instancia ja voltou sozinha", { instance: instanceName });
-          return;
-        }
-
-        logger.info(`Auto-reconexao: chamando connect() (tentativa ${tentativa})`, {
-          instance: instanceName,
-        });
-        await evolutionApi.connect(instanceName);
-      } catch (err) {
-        logger.warn(`Auto-reconexao tentativa ${tentativa} falhou`, {
-          instance: instanceName,
-          message: err.message,
-        });
-        // Agenda proxima tentativa (backoff)
-        this._agendarReconexao(instanceName, tentativa + 1);
-      }
-    }, esperaMs);
+    reconexao.marcarPrecisaParear("a Evolution emitiu um QR novo");
+    return { recebido: true, evento: "qrcode.updated", conectado: false };
   }
 
 
@@ -596,11 +567,20 @@ class WhatsAppService {
       delete this._conectadoDesde[nome];
     }
 
+    // "Conectando" para sempre e a pior tela possivel: parece que esta quase la
+    // e nunca esta. Quando o vigia desistiu (pareamento perdido), o badge tem
+    // de dizer o que falta -- alguem com o celular escaneando o QR.
+    const { precisaParear, perdeuPareamento, tentativa, maxTentativas } = reconexao.estado();
+
     return {
       instancia: nome,
       conectado,
       state,
-      statusLabel: this._rotuloStatus(state),
+      statusLabel: this._rotuloStatus(state, perdeuPareamento),
+      precisaParear,
+      perdeuPareamento,
+      tentativaReconexao: tentativa,
+      maxTentativasReconexao: maxTentativas,
       conectadoDesde: this._conectadoDesde[nome] || null,
       ultimaSincronizacao: new Date().toISOString(),
       webhookUrl: `/api/webhook/v1/whatsapp`,
@@ -609,8 +589,11 @@ class WhatsAppService {
     };
   }
 
-  _rotuloStatus(state) {
+  _rotuloStatus(state, perdeuPareamento) {
     if (state === "open") return "Online";
+    // So quem JA esteve online muda de rotulo: numa instalacao nova pedir QR e
+    // o caminho normal, e "Reescaneie" ali soaria como defeito.
+    if (perdeuPareamento) return "Reescaneie o QR";
     if (state === "connecting") return "Conectando";
     if (state === "unavailable") return "Offline";
     return "Desconectado";
