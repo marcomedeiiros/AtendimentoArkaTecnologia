@@ -134,6 +134,10 @@ services:
       WEBHOOK_EVENTS_MESSAGES_UPSERT: "true"
       WEBHOOK_EVENTS_CONNECTION_UPDATE: "true"
       WEBHOOK_EVENTS_MESSAGES_UPDATE: "true"
+      # QR emitido sem ninguem ter pedido = o pareamento se perdeu. E o unico
+      # aviso confiavel de que so o celular resolve, e sem ele o painel fica
+      # eternamente em "Conectando" sem contar a ninguem o que falta.
+      WEBHOOK_EVENTS_QRCODE_UPDATED: "true"
       WEBHOOK_BASE64: "true"
     volumes:
       - evolution_instances:/evolution/instances

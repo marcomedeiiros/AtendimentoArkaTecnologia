@@ -16,54 +16,9 @@ const logger = require("./config/logger");
 const prisma = require("./infrastructure/database/prisma.client");
 const inatividade = require("./modules/chatbot/chatbot.inatividade");
 const sessaoRefreshRepository = require("./infrastructure/repositories/sessaoRefresh.repository");
-const evolutionApi = require("./infrastructure/external/evolution-api.client");
+const reconexaoWhatsApp = require("./modules/whatsapp/whatsapp.reconexao");
 
 const app = createApp();
-
-// WATCHDOG DE CONEXAO WHATSAPP
-// Verifica a cada 30s se a instancia esta conectada. Se nao estiver,
-// chama connect() automaticamente. Funciona como segunda camada alem do
-// auto-reconexao por webhook -- garante a volta mesmo se o evento
-// CONNECTION_UPDATE nao chegar ao back-end (queda de rede entre containers).
-let _watchdogConectadoAntes = false;
-let _watchdogReconectando = false;
-
-async function _watchdogWhatsApp() {
-  try {
-    const instancia = env.evolutionApi.instance;
-    if (!instancia) return;
-
-    const estado = await evolutionApi.getConnectionState(instancia);
-    const state = estado?.instance?.state || estado?.state || "close";
-    const conectado = state === "open";
-
-    if (conectado) {
-      _watchdogConectadoAntes = true;
-      _watchdogReconectando = false;
-      return;
-    }
-
-    // So tenta se ja esteve conectado antes (evita loop antes do 1o QR)
-    if (!_watchdogConectadoAntes || _watchdogReconectando) return;
-
-    logger.warn("[Watchdog] WhatsApp desconectado -- reconectando automaticamente", {
-      instance: instancia, state,
-    });
-    _watchdogReconectando = true;
-
-    try {
-      await evolutionApi.connect(instancia);
-      logger.info("[Watchdog] Reconexao solicitada com sucesso", { instance: instancia });
-    } catch (err) {
-      logger.warn("[Watchdog] Falha ao solicitar reconexao", { message: err.message });
-    } finally {
-      // Libera para tentar novamente no proximo ciclo se necessario
-      setTimeout(() => { _watchdogReconectando = false; }, 15_000);
-    }
-  } catch {
-    // Silencioso: a Evolution pode estar subindo ainda
-  }
-}
 
 async function start() {
   try {
@@ -91,12 +46,10 @@ async function start() {
       .then(({ count }) => { if (count) logger.info("Sessoes expiradas removidas", { count }); })
       .catch((e) => logger.warn("Nao foi possivel limpar sessoes expiradas", { message: e.message }));
 
-    // Watchdog: verifica conexao WhatsApp a cada 30s e reconecta se necessario.
-    // Aguarda 20s no boot para dar tempo da Evolution e do Baileys inicializarem.
-    setTimeout(() => {
-      _watchdogWhatsApp();
-      setInterval(_watchdogWhatsApp, 30_000);
-    }, 20_000);
+    // Vigia da conexao com o WhatsApp: reinicia a instancia quando ela cai de
+    // verdade e, se o pareamento tiver se perdido, para de tentar e avisa o
+    // painel. A regra toda vive no modulo -- ele e a UNICA via de reconexao.
+    reconexaoWhatsApp.iniciar();
   });
 }
 

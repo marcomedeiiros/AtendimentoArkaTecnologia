@@ -143,7 +143,15 @@ class EvolutionApiClient {
       integration: "WHATSAPP-BAILEYS",
       // Sem isto o WhatsApp nao envia a agenda/conversas ao parear e a Evolution
       // fica com 0 contatos e 0 chats.
-      syncFullHistory: true,
+      //
+      // Tem um custo: a sincronizacao inicial e refeita a CADA reconexao (dezenas
+      // de chats, centenas de mensagens), o que estica bastante o tempo em
+      // `connecting`. Isso ja foi fatal, quando o watchdog reconectava por cima
+      // do handshake; hoje o `whatsapp.reconexao` espera o handshake terminar e
+      // a demora voltou a ser so demora. Deixamos ligado por causa da agenda --
+      // `EVOLUTION_SYNC_FULL_HISTORY=false` desliga para quem prefere reconexao
+      // rapida a importacao de contatos.
+      syncFullHistory: env.evolutionApi.syncFullHistory,
     };
     if (webhookUrl) {
       body.webhook = {
