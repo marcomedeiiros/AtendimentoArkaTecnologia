@@ -12,6 +12,7 @@ import { BugsAPI } from '../services/api';
 import Portal from '../components/Portal';
 import { FUSO_BR } from '../utils/data';
 import { confirmar } from '../utils/dialogo';
+import VisualizadorImagem from '../components/VisualizadorImagem';
 
 // ── Constantes de imagem (espelham o servidor: bug.imagens.js) ─────────────
 // A barreira real fica no backend (whitelist de mime + magic bytes +
@@ -323,7 +324,9 @@ export default function BugsPage() {
   const [prioridadeFiltro, setPrioridadeFiltro] = useState(''); // filtro client-side
   const [loadingId, setLoadingId] = useState(null);
   const [erro, setErro] = useState('');
-  const [ampliada, setAmpliada] = useState(null); // data URL do print aberto
+  // { url, nome } do print aberto no visualizador. O nome vira o do arquivo
+  // baixado -- sem ele, o download de um data URL sai como "download" sem extensão.
+  const [ampliada, setAmpliada] = useState(null);
   // Relato aberto no modal de edicao (o lapis da lista).
   const [editando, setEditando] = useState(null);
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
@@ -548,7 +551,7 @@ export default function BugsPage() {
                       <button
                         key={i}
                         type="button"
-                        onClick={() => setAmpliada(src)}
+                        onClick={() => setAmpliada({ url: src, nome: `print-${i + 1}.png` })}
                         className="h-20 w-20 overflow-hidden rounded-lg border border-linha bg-grafite-800 transition-transform hover:scale-[1.03]"
                         title="Ampliar print"
                       >
@@ -626,26 +629,22 @@ export default function BugsPage() {
         />
       )}
 
+      {/* PRINT AMPLIADO -- o mesmo visualizador da Central.
+          
+          Aqui havia um `<img>` limitado a `max-h-[85dvh] object-contain` e nada
+          mais. Dava para ver que existe um print; não dava para LER o print --
+          que é o motivo de alguém anexar uma captura de tela num relato de bug.
+          Uma captura de 1920px encolhida para caber na altura da janela fica com
+          o texto ilegível, e não havia zoom, arraste nem download.
+          
+          Agora vem com roda do mouse, +/-, duplo clique, arraste acima de 100% e
+          botão de baixar. Ver components/VisualizadorImagem. */}
       {ampliada && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-          onClick={() => setAmpliada(null)}
-        >
-          <button
-            type="button"
-            onClick={() => setAmpliada(null)}
-            title="Fechar"
-            className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
-          >
-            <X size={18} />
-          </button>
-          <img
-            src={ampliada}
-            alt="Print ampliado"
-            onClick={e => e.stopPropagation()}
-            className="max-h-[85dvh] sm:max-h-[90vh] max-w-full rounded-lg object-contain shadow-2xl"
-          />
-        </div>
+        <VisualizadorImagem
+          url={ampliada.url}
+          nomeArquivo={ampliada.nome}
+          onFechar={() => setAmpliada(null)}
+        />
       )}
     </div>
   );

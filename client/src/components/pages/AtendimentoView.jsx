@@ -8,7 +8,7 @@ import {
   // midia girava um icone de IMAGEM. Agora e o Loader2 de verdade.
   FileText, MapPin, Contact, Paperclip, Smile, Loader2,
   SlidersHorizontal, Star, Archive, EyeOff, MoreVertical,
-  ZoomIn, ZoomOut, Maximize2, Download, CornerUpLeft, CornerUpRight, Share2, Pencil, MoreHorizontal, Mic, Tag, PenLine,
+  Maximize2, CornerUpLeft, CornerUpRight, Share2, Pencil, MoreHorizontal, Mic, Tag, PenLine,
   Sun, Moon, Bot, StickyNote, SpellCheck, Undo2
 } from 'lucide-react';
 import { EmojiIcon, FormattedMessage, TextoFormatado } from './EmojiIcon';
@@ -16,6 +16,10 @@ import { useMensagensRapidas } from './MensagensRapidas';
 import Avatar from '../Avatar';
 import Portal from '../Portal';
 import ModoTv from '../ModoTv';
+// O visualizador saiu deste arquivo para components/VisualizadorImagem.jsx: os
+// Relatos de Bugs precisavam do mesmo zoom, e duas telas de imagem com duas
+// implementações era garantia de uma delas ficar para trás (foi o que aconteceu).
+import VisualizadorImagem from '../VisualizadorImagem';
 import AudioPlayer from '../AudioPlayer';
 import AudioRecorder from '../AudioRecorder';
 import { useAppContext } from '../../context/AppContext';
@@ -1029,110 +1033,6 @@ function MenuMensagem({ m, ehPropria, onResponder, onEncaminhar, onEditar, onApa
         </Portal>
       )}
     </div>
-  );
-}
-
-// Visualizador de imagem em tela cheia, com zoom e arraste.
-// Substitui o antigo window.open(): os navegadores bloqueiam navegacao para
-// data: URLs (que e o formato em que a midia chega da Evolution), entao o
-// clique simplesmente nao fazia nada.
-function VisualizadorImagem({ url, legenda, nomeArquivo, onFechar }) {
-  const [zoom, setZoom] = useState(1);
-  const [pos, setPos] = useState({ x: 0, y: 0 });
-  const arrastando = useRef(null);
-
-  const ajustarZoom = useCallback((delta) => {
-    setZoom(z => {
-      const novo = Math.min(Math.max(z + delta, 1), 6);
-      if (novo === 1) setPos({ x: 0, y: 0 });
-      return novo;
-    });
-  }, []);
-
-  useEffect(() => {
-    const onTecla = (e) => {
-      if (e.key === 'Escape') onFechar();
-      if (e.key === '+' || e.key === '=') ajustarZoom(0.4);
-      if (e.key === '-') ajustarZoom(-0.4);
-      if (e.key === '0') { setZoom(1); setPos({ x: 0, y: 0 }); }
-    };
-    window.addEventListener('keydown', onTecla);
-    return () => window.removeEventListener('keydown', onTecla);
-  }, [onFechar, ajustarZoom]);
-
-  const aoRolar = (e) => { e.preventDefault(); ajustarZoom(e.deltaY < 0 ? 0.3 : -0.3); };
-
-  const iniciarArraste = (e) => {
-    if (zoom <= 1) return;
-    arrastando.current = { x: e.clientX - pos.x, y: e.clientY - pos.y };
-  };
-  const moverArraste = (e) => {
-    if (!arrastando.current) return;
-    setPos({ x: e.clientX - arrastando.current.x, y: e.clientY - arrastando.current.y });
-  };
-  const pararArraste = () => { arrastando.current = null; };
-
-  const btn = 'p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-200 transition-colors disabled:opacity-40';
-
-  return (
-    <Portal>
-      <div
-        className="fixed inset-0 z-[60] bg-slate-950/95 backdrop-blur-sm flex flex-col"
-        onMouseMove={moverArraste}
-        onMouseUp={pararArraste}
-        onMouseLeave={pararArraste}
-      >
-        <div className="shrink-0 flex items-center justify-between gap-3 p-3 bg-grafite-800/90 border-b border-linha">
-          <span className="text-xs text-slate-300 font-semibold truncate min-w-0">
-            {nomeArquivo || legenda || 'Imagem'}
-          </span>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button onClick={() => ajustarZoom(-0.4)} disabled={zoom <= 1} className={btn} title="Diminuir (-)">
-              <ZoomOut size={16} />
-            </button>
-            <span className="text-[11px] text-slate-400 font-mono w-12 text-center">{Math.round(zoom * 100)}%</span>
-            <button onClick={() => ajustarZoom(0.4)} disabled={zoom >= 6} className={btn} title="Aumentar (+)">
-              <ZoomIn size={16} />
-            </button>
-            <button onClick={() => { setZoom(1); setPos({ x: 0, y: 0 }); }} className={btn} title="Tamanho original (0)">
-              <Maximize2 size={16} />
-            </button>
-            <a href={url} download={nomeArquivo || 'imagem.jpg'} className={btn} title="Baixar">
-              <Download size={16} />
-            </a>
-            <button onClick={onFechar} className={btn} title="Fechar (Esc)">
-              <X size={16} />
-            </button>
-          </div>
-        </div>
-
-        <div
-          className="flex-1 overflow-hidden flex items-center justify-center p-4"
-          onWheel={aoRolar}
-          onClick={e => { if (e.target === e.currentTarget) onFechar(); }}
-        >
-          <img
-            src={url}
-            alt={legenda || 'imagem'}
-            draggable={false}
-            onMouseDown={iniciarArraste}
-            onDoubleClick={() => (zoom > 1 ? (setZoom(1), setPos({ x: 0, y: 0 })) : ajustarZoom(1))}
-            style={{
-              transform: `translate(${pos.x}px, ${pos.y}px) scale(${zoom})`,
-              cursor: zoom > 1 ? (arrastando.current ? 'grabbing' : 'grab') : 'zoom-in',
-              transition: arrastando.current ? 'none' : 'transform 0.15s ease-out'
-            }}
-            className="max-w-full max-h-full object-contain select-none"
-          />
-        </div>
-
-        {legenda && (
-          <div className="shrink-0 p-3 bg-grafite-800/90 border-t border-linha text-xs text-slate-300 text-center">
-            {legenda}
-          </div>
-        )}
-      </div>
-    </Portal>
   );
 }
 
