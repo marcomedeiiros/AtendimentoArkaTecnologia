@@ -14,8 +14,8 @@
 //
 // Por isso a prévia só atualiza depois de SALVAR: ela é a resposta do servidor,
 // não um palpite da tela. O aviso no rodapé diz isso ao operador.
-import { useState } from 'react';
-import { Clock, Plus, X, CalendarOff, Info } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Clock, Plus, X, CalendarOff, Info, Pencil, Eye, CornerDownLeft } from 'lucide-react';
 
 // `Date#getDay`: 0 = domingo. Mesma numeração do JSON e do motor -- nenhuma
 // tradução em lugar nenhum.
@@ -90,6 +90,8 @@ export default function HorarioAtendimento({ horario, resumo, mensagemPrevia, se
   const [reavisar, setReavisar] = useState(
     Number.isFinite(horario?.reavisarAposMin) ? horario.reavisarAposMin : 120
   );
+  // O campo da mensagem, para o atalho da prévia levar o foco até ele.
+  const campoMensagemRef = useRef(null);
 
   // Serializa e entrega ao pai. Recebe os pedaços que acabaram de mudar porque o
   // `setState` do React é assíncrono: ler o estado aqui pegaria o valor anterior.
@@ -392,7 +394,34 @@ export default function HorarioAtendimento({ horario, resumo, mensagemPrevia, se
 
       {/* ── A MENSAGEM ─────────────────────────────────────────────────────── */}
       <div className="space-y-2">
-        <div className="text-xs font-semibold text-slate-300">Mensagem enviada fora do horário</div>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+            <Pencil size={12} className="text-acao-200" /> Mensagem enviada fora do horário
+            <span className="font-normal text-[10px] text-acao-200">(este é o campo que se edita)</span>
+          </div>
+          {/* CARREGAR O PADRAO PARA EDITAR.
+              
+              Com o campo vazio o bot usa o texto padrao, que aparece aqui apenas
+              como sugestao (placeholder) -- e sugestao nao da para editar. Para
+              mudar uma frase, a pessoa tinha de redigitar as onze linhas do
+              zero. Este botao traz o padrao para dentro do campo.
+              
+              Copia o TEMPLATE, com `{{horarios}}` no lugar da tabela -- e nunca
+              a previa de baixo, que ja vem com os horarios expandidos. Copiar a
+              previa chumbaria "08:00 as 18:00" no texto, e trocar o expediente
+              deixaria o cliente lendo o horario antigo: exatamente o que o aviso
+              logo abaixo pede para nao fazer. */}
+          {mensagemPadrao && !mensagem.trim() && (
+            <button
+              type="button"
+              onClick={() => { setMensagem(mensagemPadrao); publicar({ mensagem: mensagemPadrao }); }}
+              title="Traz o texto padrão para o campo, para você editar em vez de digitar tudo de novo"
+              className="shrink-0 px-2 py-1 rounded-lg text-[10px] font-semibold bg-acao/10 border border-acao/30 text-acao-200 hover:bg-acao/20 flex items-center gap-1"
+            >
+              <CornerDownLeft size={11} /> Editar o texto padrão
+            </button>
+          )}
+        </div>
         <p className="text-[10px] text-slate-500 leading-relaxed">
           Use <code className="text-acao-200 font-mono">{'{{horarios}}'}</code> para inserir a tabela
           acima e <code className="text-acao-200 font-mono">{'{{excecao}}'}</code> para a descrição do
@@ -400,14 +429,17 @@ export default function HorarioAtendimento({ horario, resumo, mensagemPrevia, se
           trocar o expediente aqui em cima tem de trocar o que o cliente lê.
         </p>
         <textarea
+          ref={campoMensagemRef}
           rows={7}
           value={mensagem}
           onChange={(e) => { setMensagem(e.target.value); publicar({ mensagem: e.target.value }); }}
           placeholder={mensagemPadrao || ''}
+          lang="pt-BR"
+          spellCheck
           className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-acao/50 leading-relaxed"
         />
         <p className="text-[10px] text-slate-500">
-          Em branco = usa o texto padrão (mostrado como sugestão no campo).
+          Em branco = usa o texto padrão (mostrado em cinza no campo, como sugestão).
         </p>
       </div>
 
@@ -424,17 +456,40 @@ export default function HorarioAtendimento({ horario, resumo, mensagemPrevia, se
           )}
           {mensagemPrevia && (
             <div>
-              <div className="text-[10px] uppercase text-slate-500 tracking-wide mb-1">
-                Prévia da mensagem
+              {/* ESTE BLOCO NAO SE EDITA -- e precisa dizer isso.
+                  
+                  Ele parece um campo de texto (moldura, fundo proprio, texto da
+                  mensagem inteira) e e a primeira coisa que a pessoa tenta
+                  editar. Nao da: e a resposta do SERVIDOR, com `{{horarios}}` ja
+                  trocado pela tabela real -- e existe justamente para conferir o
+                  que o cliente vai ler. O rotulo diz o que e, e o atalho leva
+                  para o campo certo em vez de deixar a pessoa procurando. */}
+              <div className="flex items-center justify-between gap-3 mb-1">
+                <div className="text-[10px] uppercase text-slate-500 tracking-wide flex items-center gap-1">
+                  <Eye size={11} /> Prévia da mensagem · somente leitura
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = campoMensagemRef.current;
+                    if (!el) return;
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    el.focus();
+                  }}
+                  className="shrink-0 text-[10px] font-semibold text-acao-200 hover:underline underline-offset-2 flex items-center gap-1"
+                >
+                  <Pencil size={10} /> Editar a mensagem
+                </button>
               </div>
-              <pre className="text-[11px] text-slate-300 whitespace-pre-wrap leading-relaxed bg-grafite-700/60 rounded-lg p-2.5 border border-linha/60">
+              <pre className="text-[11px] text-slate-300 whitespace-pre-wrap leading-relaxed bg-grafite-700/60 rounded-lg p-2.5 border border-linha/60 select-text">
                 {mensagemPrevia}
               </pre>
             </div>
           )}
           <p className="text-[10px] text-slate-500 leading-relaxed">
-            Este bloco é calculado pelo servidor pela mesma regra que o bot usa e por isso só
-            muda depois de <strong className="text-slate-400">Salvar horário</strong>.
+            Este bloco é o retrato do que está <strong className="text-slate-400">gravado</strong>,
+            calculado pelo servidor pela mesma regra que o bot usa não é um campo, e só muda
+            depois de <strong className="text-slate-400">Salvar horário</strong>.
           </p>
         </div>
       )}
