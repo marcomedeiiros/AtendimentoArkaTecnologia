@@ -9,7 +9,7 @@ import {
   FileText, MapPin, Contact, Paperclip, Smile, Loader2,
   SlidersHorizontal, Star, Archive, EyeOff, MoreVertical,
   Maximize2, Download, CornerUpLeft, CornerUpRight, Share2, Pencil, MoreHorizontal, Mic, Tag, PenLine,
-  Sun, Moon, Bot, StickyNote, SpellCheck, Undo2, History, MessageSquarePlus
+  Sun, Moon, Bot, StickyNote, SpellCheck, Undo2, History, MessageSquarePlus, Copy
 } from 'lucide-react';
 import { EmojiIcon, FormattedMessage, TextoFormatado } from './EmojiIcon';
 import { useMensagensRapidas } from './MensagensRapidas';
@@ -1614,10 +1614,299 @@ function arquivoPermitido(file) {
   return (MIMES_PERMITIDOS[tipo] || []).includes(mime);
 }
 
+/**
+ * PERFIL DO CONTATO -- gaveta que abre ao clicar no nome ou na foto.
+ *
+ * Existe porque o cabecalho do chat nao e lugar para dado de consulta. Ele e
+ * lido a todo instante e so cabe o que muda o que a pessoa faz agora: quem e,
+ * em que estado esta, qual OS. Numero, recado e dados da empresa sao coisas
+ * que se olha uma vez e fecha -- morar no cabecalho custava atencao em toda
+ * mensagem e ainda por cima empurrava o nome.
+ *
+ * DE ONDE VEM CADA COISA, porque sao duas fontes com garantias diferentes:
+ *
+ *   do NOSSO banco (`conversa`)  nome, empresa, CNPJ, setor, atendente, OS.
+ *                                Sempre presente; e a verdade do atendimento.
+ *   do WHATSAPP (`perfil`)       recado, foto fresca, conta comercial.
+ *                                Best-effort: a Evolution pode estar fora, e
+ *                                por isso `perfil.disponivel` existe -- "nao
+ *                                consegui perguntar" nao e a mesma coisa que
+ *                                "este contato nao tem recado".
+ */
+// FORA do PainelPerfilContato, e nao dentro dele.
+//
+// Declaradas la dentro, estas duas seriam funcoes NOVAS a cada render -- e um
+// tipo de componente novo faz o React desmontar e remontar a subarvore inteira
+// em vez de atualiza-la. Os campos de busca e de documento vivem dentro de
+// `Secao`: cada tecla digitada os remontaria e o foco saltaria para fora,
+// deixando o operador digitando uma letra por clique.
+function SecaoPerfil({ titulo, children }) {
+  return (
+    <div className="rounded-xl bg-grafite-700/50 border border-linha p-3">
+      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">{titulo}</p>
+      {children}
+    </div>
+  );
+}
+
+function LinhaPerfil({ rotulo, valor, mono }) {
+  return (
+    <div className="mb-2 last:mb-0">
+      <p className="text-[10px] text-slate-500">{rotulo}</p>
+      <p className={`text-xs text-slate-200 break-words ${mono ? 'font-mono' : ''}`}>{valor}</p>
+    </div>
+  );
+}
+
+function PainelPerfilContato({
+  conversa, parceiros, atendente, onFechar, onAmpliarFoto, onVincularDocumento, vinculando,
+}) {
+  const [perfil, setPerfil] = useState(null);
+  const [carregando, setCarregando] = useState(true);
+  const [busca, setBusca] = useState('');
+  const [doc, setDoc] = useState('');
+  const [copiado, setCopiado] = useState(false);
+  const [erroDoc, setErroDoc] = useState('');
+
+  useEffect(() => {
+    const onTecla = (e) => { if (e.key === 'Escape') onFechar(); };
+    window.addEventListener('keydown', onTecla);
+    return () => window.removeEventListener('keydown', onTecla);
+  }, [onFechar]);
+
+  // `vivo` porque trocar de conversa com a gaveta aberta dispara duas buscas: a
+  // que voltar por ultimo venceria, e podia ser a da conversa ANTERIOR.
+  useEffect(() => {
+    let vivo = true;
+    setCarregando(true);
+    setPerfil(null);
+    ConversasAPI.perfil(conversa.id)
+      .then((r) => { if (vivo) setPerfil(r); })
+      .catch(() => { if (vivo) setPerfil(null); })
+      .finally(() => { if (vivo) setCarregando(false); });
+    return () => { vivo = false; };
+  }, [conversa.id]);
+
+  const empresa = empresaDaConversa(conversa, parceiros);
+  const tipoCliente = tipoDoCliente(conversa, parceiros);
+  const foto = perfil?.fotoUrl || conversa.fotoUrl || null;
+
+  const copiarNumero = async () => {
+    try {
+      await navigator.clipboard.writeText(conversa.telefone);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 1500);
+    } catch {
+      // Sem permissao de area de transferencia (http, navegador antigo): o
+      // numero continua visivel e selecionavel na tela, entao nao ha o que
+      // avisar -- um alerta aqui seria ruido para um problema que nao impede
+      // nada.
+    }
+  };
+
+  // Busca local sobre a lista que a Central ja tem em memoria. NAO existe rota
+  // nova para isto de proposito: `/api/parceiros` exige o modulo `parceiros`, e
+  // criar um atalho por fora entregaria a lista inteira a quem o modulo nega.
+  // Quem nao tem o modulo recebe `parceiros: []` do AppContext e ve so o campo
+  // de documento -- exatamente o que ja podia fazer antes.
+  const achados = (() => {
+    const q = busca.trim().toLowerCase();
+    if (q.length < 2) return [];
+    return parceiros
+      .filter(p => p.status !== 'inativo')
+      .filter(p =>
+        String(p.razaoSocial || '').toLowerCase().includes(q) ||
+        limparDocumento(p.cnpj).includes(limparDocumento(busca))
+      )
+      .slice(0, 8);
+  })();
+
+  const vincularDoc = () => {
+    const limpo = limparDocumento(doc);
+    if (!documentoValido(limpo)) { setErroDoc('CPF ou CNPJ inválido.'); return; }
+    setErroDoc('');
+    onVincularDocumento(limpo);
+    setDoc('');
+  };
+
+  return (
+    <Portal>
+      <div className="fixed inset-0 z-50 flex justify-end">
+        <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" onClick={onFechar} aria-hidden="true" />
+
+        <aside
+          role="dialog"
+          aria-label="Perfil do contato"
+          className="relative w-full sm:max-w-sm h-full bg-grafite-800 border-l border-linha shadow-2xl flex flex-col fade-in"
+        >
+          <div className="p-4 bg-grafite-600 border-b border-linha flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-2 font-bold text-sm text-white min-w-0">
+              <Users size={16} className="text-acao-200 shrink-0" />
+              <span className="truncate">Perfil do contato</span>
+            </div>
+            <button onClick={onFechar} className="text-slate-400 hover:text-white shrink-0 ml-2" title="Fechar (Esc)">
+              <X size={16} />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-3">
+            {/* IDENTIDADE */}
+            <div className="rounded-xl bg-grafite-700/50 border border-linha p-4 flex flex-col items-center text-center">
+              <button
+                onClick={() => foto && onAmpliarFoto(foto)}
+                disabled={!foto}
+                title={foto ? 'Ver a foto em tamanho grande' : 'Este contato não tem foto pública'}
+                className="rounded-full transition-transform enabled:hover:scale-105 disabled:cursor-default focus:outline-none focus:ring-2 focus:ring-acao/50"
+              >
+                <Avatar nome={conversa.cliente} size="xl" fotoUrl={foto} />
+              </button>
+
+              <p className="mt-3 font-bold text-sm text-white break-words">{conversa.cliente}</p>
+
+              {/* O nome do PERFIL so aparece quando difere do que esta na lista.
+                  Mostrar os dois iguais seria repetir a mesma linha duas vezes. */}
+              {perfil?.nomeWhatsApp && perfil.nomeWhatsApp !== conversa.cliente && (
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  No WhatsApp: {perfil.nomeWhatsApp}
+                </p>
+              )}
+
+              <button
+                onClick={copiarNumero}
+                title="Copiar o número"
+                className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-grafite-700 border border-linha text-xs font-mono text-slate-300 hover:text-white hover:border-linha-forte transition-colors"
+              >
+                {copiado ? <Check size={12} className="text-ativo-400" /> : <Copy size={12} />}
+                {conversa.telefone}
+              </button>
+
+              {perfil?.comercial && (
+                <span className="mt-2 inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-acao/15 text-acao-200 border border-acao/30 font-bold">
+                  Conta comercial
+                </span>
+              )}
+            </div>
+
+            {/* RECADO ("sobre" do WhatsApp) */}
+            <SecaoPerfil titulo="Recado">
+              {carregando ? (
+                <p className="text-xs text-slate-500 flex items-center gap-2">
+                  <Loader2 size={12} className="animate-spin" /> Consultando o WhatsApp...
+                </p>
+              ) : !perfil?.disponivel ? (
+                // NAO dizer "sem recado" aqui: a diferenca entre "ele nao tem"
+                // e "nao consegui perguntar" e o que evita o operador concluir
+                // coisa errada sobre o contato.
+                <p className="text-xs text-slate-500">
+                  Não foi possível consultar o WhatsApp agora.
+                </p>
+              ) : perfil.recado ? (
+                <p className="text-xs text-slate-200 italic break-words">"{perfil.recado}"</p>
+              ) : (
+                <p className="text-xs text-slate-500">Este contato não publicou recado.</p>
+              )}
+            </SecaoPerfil>
+
+            {/* DADOS DE CONTA COMERCIAL -- so existem quando ha */}
+            {perfil?.comercial && (perfil.email || perfil.site || perfil.descricao) && (
+              <SecaoPerfil titulo="Dados comerciais">
+                {perfil.descricao && <LinhaPerfil rotulo="Descrição" valor={perfil.descricao} />}
+                {perfil.email && <LinhaPerfil rotulo="E-mail" valor={perfil.email} mono />}
+                {perfil.site && <LinhaPerfil rotulo="Site" valor={perfil.site} mono />}
+              </SecaoPerfil>
+            )}
+
+            {/* EMPRESA */}
+            <SecaoPerfil titulo="Empresa">
+              <div className="mb-3">
+                {empresa ? (
+                  <>
+                    <p className="text-xs font-semibold text-white break-words">{empresa}</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      {tipoCliente === 'cadastrado' ? 'Cliente cadastrado' : 'Cliente avulso'}
+                      {conversa.cnpj ? ` · ${mascararDocumento(conversa.cnpj)}` : ''}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-xs text-slate-500">Nenhuma empresa vinculada.</p>
+                )}
+              </div>
+
+              {/* Busca por nome: so aparece com a lista carregada, que por sua
+                  vez so vem para quem tem o modulo `parceiros`. */}
+              {parceiros.length > 0 && (
+                <div className="mb-2">
+                  <input
+                    value={busca}
+                    onChange={e => setBusca(e.target.value)}
+                    placeholder="Buscar empresa cadastrada..."
+                    disabled={vinculando}
+                    className="w-full bg-grafite-700 border border-linha rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 disabled:opacity-50"
+                  />
+                  {achados.length > 0 && (
+                    <div className="mt-1.5 space-y-1 max-h-44 overflow-y-auto">
+                      {achados.map(p => (
+                        <button
+                          key={p.cnpj}
+                          onClick={() => { onVincularDocumento(limparDocumento(p.cnpj)); setBusca(''); }}
+                          disabled={vinculando}
+                          className="w-full text-left px-2.5 py-1.5 rounded-lg bg-grafite-700 border border-linha hover:border-acao/50 transition-colors disabled:opacity-50"
+                        >
+                          <p className="text-[11px] font-semibold text-slate-200 truncate">{p.razaoSocial}</p>
+                          <p className="text-[10px] text-slate-500 font-mono">{mascararDocumento(p.cnpj)}</p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {busca.trim().length >= 2 && achados.length === 0 && (
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Nenhuma empresa cadastrada com esse nome. Use o CNPJ/CPF abaixo.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Documento avulso: quem NAO e parceiro cadastrado nao aparece na
+                  busca, e continua precisando ser registrado. E o mesmo caminho
+                  do "Validar CNPJ" que ja existia na Central. */}
+              <div className="flex gap-1.5">
+                <input
+                  value={doc}
+                  onChange={e => { setDoc(mascararDocumento(e.target.value)); setErroDoc(''); }}
+                  onKeyDown={e => { if (e.key === 'Enter') vincularDoc(); }}
+                  placeholder="CNPJ ou CPF"
+                  inputMode="numeric"
+                  disabled={vinculando}
+                  className="flex-1 min-w-0 bg-grafite-700 border border-linha rounded-lg px-3 py-2 text-xs text-white font-mono placeholder-slate-500 focus:outline-none focus:border-acao/50 disabled:opacity-50"
+                />
+                <button
+                  onClick={vincularDoc}
+                  disabled={vinculando || !doc.trim()}
+                  className="shrink-0 px-3 py-2 rounded-lg bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {vinculando ? <Loader2 size={13} className="animate-spin" /> : 'Vincular'}
+                </button>
+              </div>
+              {erroDoc && <p className="text-[10px] text-falha-400 mt-1">{erroDoc}</p>}
+            </SecaoPerfil>
+
+            {/* ATENDIMENTO */}
+            <SecaoPerfil titulo="Atendimento">
+              <LinhaPerfil rotulo="OS atual" valor={`#${conversa.ticket || idCurto(conversa.id)}`} mono />
+              <LinhaPerfil rotulo="Setor" valor={conversa.setor || 'Sem setor'} />
+              <LinhaPerfil rotulo="Atendente" valor={atendente?.nome || 'Ninguém atendendo'} />
+            </SecaoPerfil>
+          </div>
+        </aside>
+      </div>
+    </Portal>
+  );
+}
+
 function PainelChat({
   conversa, parceiros,
   texto, setTexto, scrollRef, onEnviar, onAdicionarNota, onEnviarMidia, onFechar, onPendente, onReabrir,
-  onMarcarLido, onSolicitarCnpj, onValidarCnpjModal,
+  onMarcarLido, onSolicitarCnpj, onValidarCnpjModal, onAbrirPerfil,
   onVoltar, atendente, onTransferir,
   onEditar, onEncaminharPara, conversas, onAtender,
   assinar, onToggleAssinar, assinaturaNome, onApagarMensagem,
@@ -1977,12 +2266,28 @@ function PainelChat({
             className="lg:hidden p-1.5 -ml-1 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
             <ChevronLeft size={18} />
           </button>
-          <Avatar nome={conversa.cliente} size="md" fotoUrl={conversa.fotoUrl} />
+          {/* FOTO E NOME VIRARAM A PORTA DO PERFIL.
+              O numero saiu daqui: ele roubava a atencao do nome em toda
+              conversa e so serve quando alguem precisa DELE -- e ai o perfil o
+              mostra por inteiro, com botao de copiar. O que fica no cabecalho e
+              o que se le a todo instante: quem e, em que estado esta e qual OS. */}
+          <button
+            onClick={onAbrirPerfil}
+            title={`Ver o perfil de ${conversa.cliente}`}
+            className="shrink-0 rounded-full transition-opacity hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-acao/50"
+          >
+            <Avatar nome={conversa.cliente} size="md" fotoUrl={conversa.fotoUrl} />
+          </button>
           <div>
           <div className="font-bold text-sm text-white flex items-center gap-2 flex-wrap">
-            {conversa.cliente}
-            <span className="text-xs font-normal text-slate-400 font-mono">({conversa.telefone})</span>
-         
+            <button
+              onClick={onAbrirPerfil}
+              title={`Ver o perfil de ${conversa.cliente}`}
+              className="font-bold text-sm text-white hover:text-acao-200 transition-colors text-left"
+            >
+              {conversa.cliente}
+            </button>
+
             <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold border ${meta.chip}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
               {meta.label}
@@ -2770,6 +3075,12 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   const [texto,         setTexto]        = useState('');
   const [espiandoChat,  setEspiandoChat] = useState(null);
   const [modalCnpj,     setModalCnpj]    = useState(false);
+  // Painel de perfil do contato (gaveta a direita) e a foto que ele amplia.
+  // `fotoPerfilAmpliada` e separado de `perfilAberto` porque o visualizador
+  // cobre a gaveta: fechar a foto tem de devolver o perfil, nao sumir com tudo.
+  const [perfilAberto,  setPerfilAberto] = useState(false);
+  const [fotoPerfilAmpliada, setFotoPerfilAmpliada] = useState(null);
+  const [vinculandoEmpresa, setVinculandoEmpresa] = useState(false);
   // Fechamento em curso: { id, motivos, carregando, erro, salvando } ou null.
   // Um objeto só, e não cinco estados soltos, porque as cinco coisas nascem e
   // morrem juntas -- e estado espalhado é como um modal fica meio aberto.
@@ -3617,6 +3928,26 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     }
   }, [conversa, aplicarConversa]);
 
+  // VINCULAR EMPRESA PELO PAINEL DE PERFIL.
+  //
+  // Mesma rota do "Validar CNPJ" que ja existia -- escolher na lista ou digitar
+  // o documento sao duas MANEIRAS de chegar no mesmo documento, nao dois
+  // poderes diferentes. Um caminho novo no servidor seria uma segunda regra de
+  // autorizacao para a mesma acao, e a que ninguem lembra de atualizar
+  // envelhece aberta.
+  const vincularEmpresaPerfil = useCallback(async (documento) => {
+    if (!conversa) return;
+    const id = conversa.id;
+    setVinculandoEmpresa(true);
+    try {
+      aplicarConversa(await ConversasAPI.validarCnpj(id, documento));
+    } catch (e) {
+      avisar('Não foi possível vincular a empresa: ' + (e?.message || 'erro desconhecido'));
+    } finally {
+      setVinculandoEmpresa(false);
+    }
+  }, [aplicarConversa, conversa, avisar]);
+
   const validarCnpjManual = useCallback(async () => {
     const c = limparDocumento(inputCnpj);
     if (!documentoValido(c)) { alert('CPF ou CNPJ inválido!'); return; }
@@ -3929,6 +4260,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               onMarcarLido={marcarComoLido}
               onSolicitarCnpj={solicitarCnpjBot}
               onValidarCnpjModal={() => setModalCnpj(true)}
+              onAbrirPerfil={() => setPerfilAberto(true)}
               onVoltar={() => setSelecionada(null)}
               atendente={atendenteDaConversa(conversa)}
               onTransferir={() => setTransferindo(conversa)}
@@ -4012,6 +4344,35 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
           </div>
         </div>
         </Portal>
+      )}
+
+      {/* Perfil do contato: abre pelo nome ou pela foto no cabecalho do chat.
+          Depende de `conversa` -- sem conversa aberta nao ha perfil a mostrar,
+          e a gaveta some sozinha ao trocar para a lista no celular. */}
+      {perfilAberto && conversa && (
+        <PainelPerfilContato
+          conversa={conversa}
+          parceiros={parceiros}
+          atendente={atendenteDaConversa(conversa)}
+          onFechar={() => setPerfilAberto(false)}
+          onAmpliarFoto={setFotoPerfilAmpliada}
+          onVincularDocumento={vincularEmpresaPerfil}
+          vinculando={vinculandoEmpresa}
+        />
+      )}
+
+      {/* A foto em tamanho grande usa o MESMO visualizador das midias da
+          conversa (zoom, arraste, download). Fica fora da gaveta de proposito:
+          renderizado dentro dela, herdaria o empilhamento do painel e abriria
+          por baixo do proprio perfil. */}
+      {fotoPerfilAmpliada && (
+        <VisualizadorMidia
+          url={fotoPerfilAmpliada}
+          tipo="imagem"
+          legenda={conversa?.cliente}
+          nomeArquivo={`perfil-${conversa?.telefone || 'contato'}.jpg`}
+          onFechar={() => setFotoPerfilAmpliada(null)}
+        />
       )}
 
       {modalNova && (

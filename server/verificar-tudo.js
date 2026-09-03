@@ -93,6 +93,13 @@ const VERIFICACOES = [
     resumo: "com texto manda; sem texto NAO manda nada, e o fio existente e reaproveitado",
   },
   {
+    // A Evolution fora do ar nao pode virar erro na tela nem fazer o perfil
+    // dizer "sem recado" quando a verdade e "nao consegui perguntar".
+    arquivo: "verificar-perfil-contato.js",
+    titulo: "Perfil do contato",
+    resumo: "recado/foto/conta comercial, guarda de setor, e a Evolution fora do ar sem derrubar nada",
+  },
+  {
     arquivo: "verificar-inatividade.js",
     titulo: "Inatividade",
     resumo: "os dois relógios do bot; a Parte B roda contra o banco quando há DATABASE_URL",

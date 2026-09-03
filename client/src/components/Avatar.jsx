@@ -28,7 +28,11 @@ function corDoNome(nome = '') {
 const TAMANHOS = {
   sm: 'w-8 h-8 text-[11px]',
   md: 'w-10 h-10 text-xs',
-  lg: 'w-12 h-12 text-sm'
+  lg: 'w-12 h-12 text-sm',
+  // Retrato do painel de perfil. Existe porque ali a foto e o ASSUNTO da tela,
+  // nao um adorno ao lado de um nome -- no `lg` (48px) nao da para reconhecer
+  // ninguem, que e justamente para o que a pessoa abriu o perfil.
+  xl: 'w-24 h-24 text-2xl',
 };
 
 export default function Avatar({ nome = '', size = 'md', online = null, fotoUrl = null, className = '' }) {

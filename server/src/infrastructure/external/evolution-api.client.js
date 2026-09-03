@@ -493,6 +493,42 @@ class EvolutionApiClient {
       return null;
     }
   }
+
+  /**
+   * PERFIL PUBLICO DO CONTATO NO WHATSAPP -- foto, recado e dados de Business.
+   *
+   * E o que o proprio WhatsApp mostra a qualquer um que abra a conversa: a
+   * frase do "recado" (o campo `status`), e, quando a conta e comercial, o
+   * e-mail, o site e a descricao que a empresa publicou. Nada aqui e privado
+   * nem exige permissao especial -- e a mesma tela que o atendente veria com o
+   * celular na mao.
+   *
+   * Best-effort ate o fim. A Evolution devolve 400 quando o numero nao existe
+   * no WhatsApp, e 503 quando ela mesma esta fora do ar; nenhum dos dois pode
+   * derrubar a abertura do perfil, porque o resto dos dados (nome, empresa,
+   * setor) vem do NOSSO banco e continua valendo. Por isso o retorno tem
+   * sempre a mesma forma, com `null` onde nao deu.
+   */
+  async fetchPerfilContato(number, instance = this.defaultInstance) {
+    try {
+      const d = await this.request("POST", `/chat/fetchProfile/${instance}`, { number });
+      return {
+        // `status` no vocabulario do Baileys e o "recado" da tela do WhatsApp
+        // -- nao confundir com status de conexao nem de atendimento. Renomeado
+        // aqui para o nome que aparece para o usuario.
+        recado: d?.status || null,
+        foto: d?.picture || null,
+        nomeWhatsApp: d?.name || null,
+        existeNoWhatsApp: d?.numberExists !== false,
+        comercial: !!d?.isBusiness,
+        email: d?.email || null,
+        site: d?.website || null,
+        descricao: d?.description || null,
+      };
+    } catch {
+      return null;
+    }
+  }
 }
 
 module.exports = new EvolutionApiClient();

@@ -143,6 +143,12 @@ router.post("/mensagens/:mensagemId/transcrever", (req, res, next) =>
 router.delete("/mensagens/:mensagemId", (req, res, next) =>
   conversaController.apagarMensagem(req, res).catch(next)
 );
+// Perfil publico do contato no WhatsApp (recado, foto, conta comercial).
+// Leitura pura e best-effort; o guard de setor esta no service, como nas
+// demais rotas por conversa.
+router.get("/:id/perfil", (req, res, next) =>
+  conversaController.perfilContato(req, res).catch(next)
+);
 router.post("/:id/solicitar-cnpj", (req, res, next) =>
   conversaController.solicitarCnpj(req, res).catch(next)
 );

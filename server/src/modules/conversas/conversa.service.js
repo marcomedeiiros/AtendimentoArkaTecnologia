@@ -936,6 +936,54 @@ class ConversaService {
     return this.enviarMensagem(id, msg, "bot");
   }
 
+  /**
+   * PERFIL DO CONTATO -- o que o WhatsApp sabe dele, para o painel de perfil.
+   *
+   * Devolve SO a parte que vem de fora: recado, foto e dados de conta
+   * comercial. Nome, empresa, setor, atendente e OS ja viajam no DTO da
+   * conversa que a tela tem em maos -- repetir aqui criaria uma segunda copia
+   * dos mesmos campos, e duas copias divergem.
+   *
+   * Nunca falha por causa da Evolution: se ela nao responder, o painel abre com
+   * o que temos e as linhas de fora ficam vazias. Ver `fetchPerfilContato`.
+   */
+  async perfilContato(id, acesso = null) {
+    const conversa = await conversaRepository.findByIdBasico(id);
+    if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
+    exigirAcessoSetor(acesso, conversa.setor);
+
+    const perfil = await evolutionApi.fetchPerfilContato(
+      conversa.telefone,
+      env.evolutionApi.instance
+    );
+
+    // A FOTO APROVEITA A VIAGEM.
+    //
+    // O link de foto do WhatsApp vence em poucos dias e passa a devolver 403 --
+    // e quem leva o 403 e o navegador do operador, calado (ver
+    // conversa.fotos.js, que varre isso em segundo plano). Aqui a foto acabou
+    // de ser buscada e esta fresca: gravar custa um UPDATE e conserta o avatar
+    // justamente na hora em que alguem foi olhar para ele.
+    if (perfil?.foto && perfil.foto !== conversa.fotoUrl) {
+      await conversaRepository.update(id, { fotoUrl: perfil.foto });
+    }
+
+    return {
+      telefone: conversa.telefone,
+      fotoUrl: perfil?.foto || conversa.fotoUrl || null,
+      // `disponivel: false` diz a tela que nao e "este contato nao tem recado",
+      // e sim "nao consegui perguntar" -- sao coisas diferentes para quem le.
+      disponivel: !!perfil,
+      recado: perfil?.recado || null,
+      nomeWhatsApp: perfil?.nomeWhatsApp || null,
+      existeNoWhatsApp: perfil?.existeNoWhatsApp ?? null,
+      comercial: perfil?.comercial || false,
+      email: perfil?.email || null,
+      site: perfil?.site || null,
+      descricao: perfil?.descricao || null,
+    };
+  }
+
   async validarCnpjManual(id, cnpj, acesso = null) {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");

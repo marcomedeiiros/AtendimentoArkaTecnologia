@@ -682,6 +682,9 @@ export const ConversasAPI = {
   corrigirTexto: (texto) => request('/conversas/corrigir-texto', { method: 'POST', body: JSON.stringify({ texto }) }),
   apagarMensagem: (mensagemId) => request(`/conversas/mensagens/${mensagemId}`, { method: 'DELETE' }),
   encaminharMensagem: (mensagemId, conversaDestinoId) => request('/conversas/mensagens/encaminhar', { method: 'POST', body: JSON.stringify({ mensagemId, conversaDestinoId }) }),
+  // Perfil publico do contato no WhatsApp: recado, foto e dados de conta
+  // comercial. O resto (nome, empresa, setor, OS) ja vem no DTO da conversa.
+  perfil: (id) => request(`/conversas/${id}/perfil`),
   solicitarCnpj: (id) => request(`/conversas/${id}/solicitar-cnpj`, { method: 'POST' }),
   validarCnpj: (id, cnpj) => request(`/conversas/${id}/validar-cnpj`, { method: 'POST', body: JSON.stringify({ cnpj }) }),
   // NAO existe mais `desvincularCnpj`: o "X" saiu do cabecalho da conversa e a

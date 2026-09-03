@@ -196,6 +196,12 @@ class ConversaController {
       .then((data) => success(res, data));
   }
 
+  perfilContato(req, res) {
+    return conversaService
+      .perfilContato(req.params.id, req.user)
+      .then((data) => success(res, data));
+  }
+
   solicitarCnpj(req, res) {
     return conversaService.solicitarCnpj(req.params.id, req.user).then((data) => success(res, data));
   }
