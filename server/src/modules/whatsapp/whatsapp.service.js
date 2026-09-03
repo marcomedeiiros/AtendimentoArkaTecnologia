@@ -366,24 +366,43 @@ class WhatsAppService {
     // watchdog. Duas vias chamando `connect()` sem se enxergar abriam sockets
     // Baileys concorrentes com a mesma credencial -- o WhatsApp derrubava um
     // com `conflict: replaced` e a instancia nunca fechava o handshake.
-    if (!conectado && (state === "close" || state === "refused") && eraConectado) {
+    //
+    // O `eraConectado` saiu da condicao de proposito. Ele so deixava o aviso
+    // passar quando o NOSSO banco ainda achava a instancia online -- e depois de
+    // um restart da API esse campo pode chegar `false` com a sessao de pe, o que
+    // engolia a notificacao justamente na hora em que ela mais importa. O vigia
+    // ja e idempotente: `notificarQueda` so adianta o relogio, nao reconecta.
+    if (!conectado && (state === "close" || state === "refused")) {
       reconexao.notificarQueda(state);
     }
 
     return { recebido: true, evento: "connection.update", conectado, state };
   }
 
-  // QR gerado sem ninguem ter pedido no painel significa uma coisa so: a
-  // credencial do pareamento se perdeu e a Evolution voltou a pedir o scan.
-  // Reiniciar a instancia nao resolve -- so o celular resolve. Marcamos para o
-  // /status contar isso na tela em vez de deixar o badge em "Conectando".
+  // QR CHEGOU. Isso, sozinho, NAO prova que o pareamento se perdeu.
+  //
+  // O codigo antigo tratava todo QR nao solicitado como pareamento perdido e
+  // congelava a reconexao na hora. Mas `/instance/connect` devolve o `qrCode`
+  // que estiver na memoria da instancia sem checar se ele e novo
+  // (instance.controller.ts:332-336) -- ou seja, a nossa PROPRIA tentativa de
+  // religar podia disparar o evento e se autocondenar. Foi assim que quedas de
+  // segundos viraram pedidos de QR.
+  //
+  // Agora quem decide e `avaliarQrRecebido`, e ele decide com evidencia: o
+  // `disconnectionReasonCode` da Evolution e a presenca da credencial no banco
+  // dela. Ver whatsapp.reconexao.js.
   async _processarQrcode(instanceName) {
     const instancia = await instanciaRepository.findByNome(instanceName);
     if (instancia?.conectado) {
       await instanciaRepository.updateConectado(instancia.id, false);
     }
-    reconexao.marcarPrecisaParear("a Evolution emitiu um QR novo");
-    return { recebido: true, evento: "qrcode.updated", conectado: false };
+    const veredito = await reconexao.avaliarQrRecebido();
+    return {
+      recebido: true,
+      evento: "qrcode.updated",
+      conectado: false,
+      conclusao: veredito.conclusao,
+    };
   }
 
 
@@ -589,7 +608,8 @@ class WhatsAppService {
     // "Conectando" para sempre e a pior tela possivel: parece que esta quase la
     // e nunca esta. Quando o vigia desistiu (pareamento perdido), o badge tem
     // de dizer o que falta -- alguem com o celular escaneando o QR.
-    const { precisaParear, perdeuPareamento, tentativa, maxTentativas } = reconexao.estado();
+    const vigia = reconexao.estado();
+    const { precisaParear, perdeuPareamento, tentativa } = vigia;
 
     return {
       instancia: nome,
@@ -599,7 +619,16 @@ class WhatsAppService {
       precisaParear,
       perdeuPareamento,
       tentativaReconexao: tentativa,
-      maxTentativasReconexao: maxTentativas,
+      // Nao ha mais teto: o vigia continua tentando a cada 60s enquanto a
+      // sessao for valida. O campo fica como `null` para nao quebrar a tela.
+      maxTentativasReconexao: null,
+      // CONNECTED | RECONNECTING | DISCONNECTED_TEMPORARY | LOGGED_OUT | UNKNOWN
+      situacao: vigia.situacao,
+      // `statusCode` do Baileys que fechou o socket, direto da Evolution. E o
+      // numero que responde "por que caiu?" sem depender de log.
+      motivoDesconexao: vigia.ultimoMotivoCodigo,
+      proximaTentativaEm: vigia.proximaTentativaEm,
+      cofreSessao: vigia.cofre,
       conectadoDesde: this._conectadoDesde[nome] || null,
       ultimaSincronizacao: new Date().toISOString(),
       webhookUrl: `/api/webhook/v1/whatsapp`,
