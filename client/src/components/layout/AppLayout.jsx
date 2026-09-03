@@ -216,8 +216,13 @@ function Sidebar({ aberto, onClose }) {
           Por isso `gap-2` e `p-1` aqui NAO sao gosto: sao o que faz caber. E o
           `truncate` no h1 e a rede: se a fonte cair para uma substituta mais
           larga, o titulo corta com reticencia em vez de voltar a quebrar. */}
+      {/* RECOLHIDA, O BOTAO DESCE PARA BAIXO DO LOGO.
+          Lado a lado nao cabe e nao e questao de ajuste fino: a caixa do logo
+          mede 48px, mais 8 de gap, mais 24 do botao = 80px num vao util de
+          60px (76 da faixa menos os 16 do padding). O botao vazava pela
+          direita da barra. Empilhado, cada um usa os 60px inteiros. */}
       <div className={`flex items-center gap-2 px-2 py-3 mb-4 baixa:lg:py-1.5 baixa:lg:mb-2 shrink-0 ${
-        recolhida ? 'lg:justify-center lg:px-0' : ''
+        recolhida ? 'lg:flex-col lg:gap-2 lg:px-0 lg:py-2' : ''
       }`}>
         <div className="shrink-0 p-2 rounded-xl bg-gradient-to-br from-acao/20 to-espera/10 border border-acao/30 shadow-lg shadow-acao/10">
           <ArkaLogo size={32} />
