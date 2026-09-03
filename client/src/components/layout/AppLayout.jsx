@@ -10,7 +10,8 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { aplicarTema } from '../../utils/tema';
 import {
   LayoutGrid, Users, Zap, MessageSquare, ShieldCheck,
-  GitFork, MessageCircle, CalendarDays, Send, Loader2, Menu, X, WifiOff, Settings, LogOut, Bug
+  GitFork, MessageCircle, CalendarDays, Send, Loader2, Menu, X, WifiOff, Settings, LogOut, Bug,
+  PanelLeftClose, PanelLeftOpen, Sun, Moon
 } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
@@ -73,14 +74,24 @@ function ArkaLogo({ size = 32, className = '' }) {
 // mais justos abrem folga suficiente para o texto caber por inteiro mesmo com
 // badge de dois digitos, entao a reticencia so apareceria num caso extremo --
 // e para esse caso o `title` mostra o nome completo.
-function NavItem({ to, label, icon: Icon, badge, onNavigate }) {
+//
+// RECOLHIDA: o `recolhida` sempre vira classe `lg:`, nunca classe seca.
+//
+// No celular a barra nao e uma coluna do layout -- e uma gaveta que cobre a
+// tela e some ao escolher um item. Recolher ali seria trocar rotulos legiveis
+// por icones mudos num painel que ja ocupa a tela toda, sem devolver espaco
+// nenhum. Entao a faixa de icones existe SO do `lg` para cima; abaixo disso a
+// gaveta continua completa mesmo com a preferencia ligada.
+function NavItem({ to, label, icon: Icon, badge, onNavigate, recolhida }) {
   return (
     <NavLink
       to={to}
       onClick={onNavigate}
       title={label}
       className={({ isActive }) =>
-        `flex items-center justify-between gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 border ${
+        `relative flex items-center justify-between gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 border ${
+          recolhida ? 'lg:justify-center lg:px-0' : ''
+        } ${
           isActive
             ? 'bg-gradient-to-r from-acao/20 to-espera/10 border-acao/40 text-acao-200 shadow-md shadow-acao/5'
             : 'bg-transparent border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
@@ -89,17 +100,32 @@ function NavItem({ to, label, icon: Icon, badge, onNavigate }) {
     >
       {({ isActive }) => (
         <>
-          <div className="flex items-center gap-2.5 min-w-0">
+          <div className={`flex items-center gap-2.5 min-w-0 ${recolhida ? 'lg:gap-0' : ''}`}>
             <Icon size={15} className={`shrink-0 ${isActive ? 'text-acao-200' : 'text-slate-400'}`} />
-            <span className="truncate">{label}</span>
+            <span className={`truncate ${recolhida ? 'lg:hidden' : ''}`}>{label}</span>
           </div>
           {badge > 0 && (
-            // `leading-none`: sem isso a altura da linha do badge (20px) passava
-            // da linha do texto (16px) e era ELA quem definia a altura do item,
-            // deixando so este 4px mais alto que os vizinhos.
-            <span className="shrink-0 px-1.5 py-0.5 leading-none rounded-full bg-acao text-slate-950 font-bold text-[10px] shadow-sm">
-              {badge}
-            </span>
+            <>
+              {/* `leading-none`: sem isso a altura da linha do badge (20px)
+                  passava da linha do texto (16px) e era ELA quem definia a
+                  altura do item, deixando so este 4px mais alto que os vizinhos. */}
+              <span className={`shrink-0 px-1.5 py-0.5 leading-none rounded-full bg-acao text-slate-950 font-bold text-[10px] shadow-sm ${
+                recolhida ? 'lg:hidden' : ''
+              }`}>
+                {badge}
+              </span>
+              {/* Recolhida nao cabe o numero, mas "ha conversa esperando" e a
+                  informacao que nao pode sumir -- e o unico motivo de alguem
+                  olhar para a barra sem estar navegando. Vira um ponto no canto
+                  do icone; o numero exato continua no `title`. O `ring` da cor
+                  da barra separa o ponto do icone por baixo. */}
+              <span
+                className={`absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-acao ring-2 ring-grafite-800 ${
+                  recolhida ? 'hidden lg:block' : 'hidden'
+                }`}
+                aria-hidden="true"
+              />
+            </>
           )}
         </>
       )}
@@ -107,10 +133,31 @@ function NavItem({ to, label, icon: Icon, badge, onNavigate }) {
   );
 }
 
+// Titulo de secao ("Principal", "Ferramentas"). Recolhida, o texto nao cabe --
+// mas a SEPARACAO entre os grupos precisa sobreviver, senao os doze icones
+// viram uma coluna unica sem hierarquia nenhuma. Vira um filete.
+function TituloSecao({ children, recolhida, className = '' }) {
+  return (
+    <>
+      <p className={`text-[9px] font-bold text-slate-500 uppercase tracking-wider px-3 ${className} ${
+        recolhida ? 'lg:hidden' : ''
+      }`}>
+        {children}
+      </p>
+      {recolhida && (
+        <div className="hidden lg:block h-px bg-linha mx-3 mt-3 mb-2" aria-hidden="true" />
+      )}
+    </>
+  );
+}
+
 function Sidebar({ aberto, onClose }) {
   const { conversas } = useAppContext();
-  const { usuario, sair } = useAuth();
+  const { usuario, sair, tema, alternarTema, navRecolhida, alternarNav } = useAuth();
   const navigate = useNavigate();
+
+  // A gaveta do celular ignora a preferencia: ver o comentario em NavItem.
+  const recolhida = navRecolhida;
 
   const naFila = conversas.filter(c => c.statusAtendimento === 'pendente').length;
   const naoLidos = conversas.filter(
@@ -138,28 +185,56 @@ function Sidebar({ aberto, onClose }) {
          (ver comentário acima), e estreitar cortaria texto. Numa tela curta o
          que falta é altura -- com o menu inteiro visível, ninguém precisa rolar
          a barra para achar um item. */
-      className={`w-[17rem] shrink-0 bg-grafite-800 border-r border-linha flex flex-col p-4 baixa:lg:p-3 altura-app select-none overflow-y-auto
+      /* `transition-[width]` junto do `transition-transform` que a gaveta ja
+         usava: sem ele a barra SALTA de 17rem para 4.75rem e o conteudo ao lado
+         pula junto. `overflow-x-hidden` evita que os rotulos, no meio da
+         animacao, empurrem uma barra de rolagem horizontal. */
+      /* Padding em ramos EXCLUSIVOS, nao somado ao de baixo: `baixa:lg:p-3` e
+         `baixa:lg:p-2` na mesma classe casariam com a mesma media query, e quem
+         venceria seria a ordem em que o Tailwind emite as regras -- nao a ordem
+         em que eu escrevi. Assim so um dos dois existe no DOM. */
+      className={`shrink-0 bg-grafite-800 border-r border-linha flex flex-col altura-app select-none overflow-y-auto overflow-x-hidden
         seguro-barra
-        fixed inset-y-0 left-0 z-50 transition-transform duration-300 lg:static lg:translate-x-0
+        w-[17rem] ${recolhida ? 'p-4 lg:w-[4.75rem] lg:p-2' : 'p-4 baixa:lg:p-3'}
+        fixed inset-y-0 left-0 z-50 transition-[transform,width] duration-300 lg:static lg:translate-x-0
         ${aberto ? 'translate-x-0 shadow-2xl shadow-black/50' : '-translate-x-full'}`}
     >
-      <div className="flex items-center gap-3 px-2 py-3 mb-4 baixa:lg:py-1.5 baixa:lg:mb-2 shrink-0">
+      <div className={`flex items-center gap-3 px-2 py-3 mb-4 baixa:lg:py-1.5 baixa:lg:mb-2 shrink-0 ${
+        recolhida ? 'lg:flex-col lg:gap-2 lg:px-0 lg:py-2' : ''
+      }`}>
         <div className="p-2 rounded-xl bg-gradient-to-br from-acao/20 to-espera/10 border border-acao/30 shadow-lg shadow-acao/10">
           <ArkaLogo size={32} />
         </div>
-        <div className="flex-1 min-w-0">
+        <div className={`flex-1 min-w-0 ${recolhida ? 'lg:hidden' : ''}`}>
           <h1 className="font-bold text-base text-white leading-tight tracking-tight font-display">
             Arka Tecnologia
           </h1>
           <p className="text-[11px] text-slate-400 font-medium">Painel de Atendimento</p>
         </div>
+
+        {/* Recolher/expandir. So no desktop: no celular quem fecha a barra e o
+            X ao lado, e a gaveta nao tem estado intermediario. */}
+        <button
+          onClick={alternarNav}
+          title={recolhida ? 'Expandir menu' : 'Recolher menu'}
+          aria-label={recolhida ? 'Expandir menu' : 'Recolher menu'}
+          aria-expanded={!recolhida}
+          className="hidden lg:flex shrink-0 items-center justify-center rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+        >
+          {recolhida ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
+        </button>
+
         <button onClick={onClose} className="lg:hidden p-1.5 -mr-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800" title="Fechar menu">
           <X size={18} />
         </button>
       </div>
 
       <nav className="flex flex-col gap-1 flex-1">
-        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-1">
+        {/* O primeiro grupo nao ganha filete: ele ja esta encostado no cabecalho,
+            e uma linha ali leria como borda do logo, nao como divisao. */}
+        <p className={`text-[9px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-1 ${
+          recolhida ? 'lg:hidden' : ''
+        }`}>
           Principal
         </p>
         {principais.map(item => (
@@ -168,27 +243,24 @@ function Sidebar({ aberto, onClose }) {
             {...item}
             badge={item.to === '/atendimento' ? badgeAtendimento : 0}
             onNavigate={onClose}
+            recolhida={recolhida}
           />
         ))}
 
         {monitoramento.length > 0 && (
           <>
-            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider px-3 mt-3 mb-1">
-              Monitoramento
-            </p>
+            <TituloSecao recolhida={recolhida} className="mt-3 mb-1">Monitoramento</TituloSecao>
             {monitoramento.map(item => (
-              <NavItem key={item.to} {...item} onNavigate={onClose} />
+              <NavItem key={item.to} {...item} onNavigate={onClose} recolhida={recolhida} />
             ))}
           </>
         )}
 
         {ferramentas.length > 0 && (
           <>
-            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider px-3 mt-3 mb-1">
-              Ferramentas
-            </p>
+            <TituloSecao recolhida={recolhida} className="mt-3 mb-1">Ferramentas</TituloSecao>
             {ferramentas.map(item => (
-              <NavItem key={item.to} {...item} onNavigate={onClose} />
+              <NavItem key={item.to} {...item} onNavigate={onClose} recolhida={recolhida} />
             ))}
           </>
         )}
@@ -197,15 +269,37 @@ function Sidebar({ aberto, onClose }) {
       {/* Quem esta logado, e a saida. No rodape porque e o unico item que nao e
           navegacao: nao leva a lugar nenhum do painel, encerra a sessao. */}
       <div className="mt-3 shrink-0 border-t border-linha pt-3">
-        <div className="flex items-center gap-2.5 px-1">
+        {/* Claro/escuro, logo acima do nome. O estado mora no AuthContext (e a
+            preferencia por usuario no servidor) -- este botao so alterna, nao
+            guarda nada nem toca no DOM: quem aplica o tema e o AppLayout.
+            O rotulo diz o DESTINO, nao o estado atual: "Modo claro" quando se
+            esta no escuro. Botao que anuncia onde voce ja esta nao ajuda a
+            decidir se vale clicar. */}
+        <button
+          onClick={alternarTema}
+          title={tema === 'light' ? 'Mudar para o modo escuro' : 'Mudar para o modo claro'}
+          aria-label="Alternar entre modo claro e modo escuro"
+          className={`mb-2 flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-xs font-semibold text-texto-suave transition-colors hover:bg-slate-800/40 hover:text-texto ${
+            recolhida ? 'lg:justify-center lg:px-0' : ''
+          }`}
+        >
+          {tema === 'light' ? <Moon size={15} className="shrink-0" /> : <Sun size={15} className="shrink-0" />}
+          <span className={`truncate ${recolhida ? 'lg:hidden' : ''}`}>
+            {tema === 'light' ? 'Modo escuro' : 'Modo claro'}
+          </span>
+        </button>
+
+        <div className={`flex items-center gap-2.5 px-1 ${recolhida ? 'lg:flex-col lg:gap-1 lg:px-0' : ''}`}>
           {/* Bloco do usuario = atalho para a pagina de perfil (/perfil). */}
           <button
             onClick={() => { navigate('/perfil'); onClose(); }}
-            title="Meu perfil"
-            className="flex min-w-0 flex-1 items-center gap-2.5 -mx-1 rounded-lg px-1 py-1 text-left transition-colors hover:bg-slate-800/40"
+            title={usuario?.nome ? `Meu perfil (${usuario.nome})` : 'Meu perfil'}
+            className={`flex min-w-0 flex-1 items-center gap-2.5 -mx-1 rounded-lg px-1 py-1 text-left transition-colors hover:bg-slate-800/40 ${
+              recolhida ? 'lg:mx-0 lg:flex-none lg:justify-center' : ''
+            }`}
           >
             <Avatar nome={usuario?.nome || ''} size="sm" />
-            <div className="min-w-0 flex-1">
+            <div className={`min-w-0 flex-1 ${recolhida ? 'lg:hidden' : ''}`}>
               <p className="truncate text-xs font-semibold text-texto">{usuario?.nome}</p>
               <p className="truncate font-mono text-[10px] text-texto-fraco">{usuario?.email}</p>
             </div>

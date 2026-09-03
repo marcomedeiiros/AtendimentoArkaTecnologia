@@ -17,6 +17,10 @@ const AuthContext = createContext(null);
 const CHAVE_ASSINATURA = 'central.assinatura.nome';
 // Preferencia (por usuario, no servidor) com o tema escolhido (claro/escuro).
 const CHAVE_TEMA = 'interface.tema';
+// Preferencia (por usuario) com a barra lateral recolhida na faixa de icones.
+// Fica no servidor pelo mesmo motivo do tema: quem trabalha em duas maquinas
+// (mesa e notebook) espera encontrar o painel do mesmo jeito nas duas.
+const CHAVE_NAV = 'interface.navRecolhida';
 const primeiroNomeDe = (nome) => String(nome || '').trim().split(/\s+/)[0] || '';
 
 // Entrada e saida cobrem a tela inteira, entao saem rapido: tempo de ler a
@@ -37,6 +41,9 @@ export function AuthProvider({ children }) {
   const [assinaturaCustom, setAssinaturaCustom] = useState(null);
   // Tema efetivo APOS o login (claro/escuro). Antes do login e sempre escuro.
   const [tema, setTema] = useState('dark');
+  // Barra lateral na faixa de icones. Comeca expandida: e o estado em que a
+  // barra se explica sozinha, e a preferencia salva chega logo depois.
+  const [navRecolhida, setNavRecolhida] = useState(false);
 
   const avisar = useCallback((texto, tipo = 'entrada') => {
     clearTimeout(timerAviso.current);
@@ -125,6 +132,27 @@ export function AuthProvider({ children }) {
     return () => { vivo = false; };
   }, [usuario?.id]);
 
+  // Carrega o estado da barra lateral. Diferente do tema, este NAO precisa
+  // esperar o painel carregar para ser aplicado: mudar a largura da barra nao
+  // pinta a tela de branco no meio do "Inicializando...", que era o motivo de o
+  // tema ser aplicado tarde.
+  useEffect(() => {
+    if (!usuario?.id) return;
+    let vivo = true;
+    PreferenciasAPI.obter(CHAVE_NAV)
+      .then((r) => { if (vivo) setNavRecolhida(r?.valor === true); })
+      .catch(() => { if (vivo) setNavRecolhida(false); });
+    return () => { vivo = false; };
+  }, [usuario?.id]);
+
+  const alternarNav = useCallback(() => {
+    setNavRecolhida((atual) => {
+      const novo = !atual;
+      PreferenciasAPI.salvar(CHAVE_NAV, novo).catch(() => {});
+      return novo;
+    });
+  }, []);
+
   // Alterna e SALVA o tema no backend (preferencia por usuario). Nao aplica no
   // DOM aqui: o AppLayout reage a mudanca de `tema` e aplica (painel ja pronto).
   const alternarTema = useCallback(() => {
@@ -173,6 +201,10 @@ export function AuthProvider({ children }) {
     setUsuario(null);
     // Ao sair, a interface volta ao tema escuro fixo das telas de acesso.
     setTema('dark');
+    // E a barra volta ao padrao: sem isto, quem entrasse depois na mesma
+    // maquina veria por um instante a barra recolhida de outra pessoa, ate a
+    // preferencia dela chegar do servidor.
+    setNavRecolhida(false);
     aplicarTemaAcesso();
     avisar('Você saiu da plataforma.', 'saida');
   }, [avisar]);
@@ -186,6 +218,7 @@ export function AuthProvider({ children }) {
       atualizarUsuario,
       assinaturaNome, assinaturaCustom, salvarAssinatura,
       tema, alternarTema,
+      navRecolhida, alternarNav,
     }}>
       {children}
       <AvisoSessao aviso={aviso} onFechar={() => setAviso(null)} />
