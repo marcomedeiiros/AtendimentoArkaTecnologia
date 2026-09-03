@@ -199,26 +199,50 @@ function Sidebar({ aberto, onClose }) {
         fixed inset-y-0 left-0 z-50 transition-[transform,width] duration-300 lg:static lg:translate-x-0
         ${aberto ? 'translate-x-0 shadow-2xl shadow-black/50' : '-translate-x-full'}`}
     >
-      {/* O CABECALHO NAO GANHA BOTAO NENHUM.
-          O de recolher morava aqui e custou 41px de largura (o botao mais o
-          gap). "Arka Tecnologia" em negrito 16px pede ~150px e sobravam ~139:
-          o titulo quebrava em tres linhas e empurrava o menu inteiro para
-          baixo. Como a largura da barra e definida pelo rotulo mais longo do
-          proprio menu (ver o comentario do <aside>), nao havia folga para
-          negociar -- entao o controle desceu para o rodape, junto do tema. */}
-      <div className={`flex items-center gap-3 px-2 py-3 mb-4 baixa:lg:py-1.5 baixa:lg:mb-2 shrink-0 ${
+      {/* O ORCAMENTO DE LARGURA DESTE CABECALHO, medido e nao estimado.
+          (Poppins 700 16px com tracking-tight, fontes carregadas.)
+
+            barra 272 - padding 32 - px-2 16          =  224px
+            logo 48 + gap 8 + gap 8 + botao 24        =   88px
+            sobra para o texto                        =  136px
+            "Arka Tecnologia" ocupa                   =  129px   -> folga 7px
+
+          Com `gap-3` (12px) e o botao em `p-1.5` (24+12=36px) sobravam 123px
+          para 129px de texto: faltavam 6px e o titulo quebrava em TRES linhas,
+          empurrando o menu inteiro. Nao da para alargar a barra em troca --
+          as 17rem existem porque "Central de Atendimento" mede 148px e e ele
+          que define a largura minima.
+
+          Por isso `gap-2` e `p-1` aqui NAO sao gosto: sao o que faz caber. E o
+          `truncate` no h1 e a rede: se a fonte cair para uma substituta mais
+          larga, o titulo corta com reticencia em vez de voltar a quebrar. */}
+      <div className={`flex items-center gap-2 px-2 py-3 mb-4 baixa:lg:py-1.5 baixa:lg:mb-2 shrink-0 ${
         recolhida ? 'lg:justify-center lg:px-0' : ''
       }`}>
-        <div className="p-2 rounded-xl bg-gradient-to-br from-acao/20 to-espera/10 border border-acao/30 shadow-lg shadow-acao/10">
+        <div className="shrink-0 p-2 rounded-xl bg-gradient-to-br from-acao/20 to-espera/10 border border-acao/30 shadow-lg shadow-acao/10">
           <ArkaLogo size={32} />
         </div>
         <div className={`flex-1 min-w-0 ${recolhida ? 'lg:hidden' : ''}`}>
-          <h1 className="font-bold text-base text-white leading-tight tracking-tight font-display">
+          <h1 className="truncate font-bold text-base text-white leading-tight tracking-tight font-display">
             Arka Tecnologia
           </h1>
-          <p className="text-[11px] text-slate-400 font-medium">Painel de Atendimento</p>
+          <p className="truncate text-[11px] text-slate-400 font-medium">Painel de Atendimento</p>
         </div>
-        <button onClick={onClose} className="lg:hidden p-1.5 -mr-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800" title="Fechar menu">
+
+        {/* Recolher/expandir. So no desktop: no celular a barra e uma gaveta
+            que cobre a tela e some ao escolher um item -- ela nao tem estado
+            intermediario, e quem a fecha e o X ao lado. */}
+        <button
+          onClick={alternarNav}
+          title={recolhida ? 'Expandir menu' : 'Recolher menu'}
+          aria-label={recolhida ? 'Expandir menu' : 'Recolher menu'}
+          aria-expanded={!recolhida}
+          className="hidden lg:flex shrink-0 items-center justify-center rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+        >
+          {recolhida ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+        </button>
+
+        <button onClick={onClose} className="lg:hidden shrink-0 p-1 -mr-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800" title="Fechar menu">
           <X size={18} />
         </button>
       </div>
@@ -260,30 +284,12 @@ function Sidebar({ aberto, onClose }) {
         )}
       </nav>
 
-      {/* AJUSTES DA INTERFACE -- ACIMA DO FILETE.
+      {/* AJUSTE DE INTERFACE -- ACIMA DO FILETE.
           O filete separa duas coisas de naturezas diferentes: aqui em cima e o
-          que a pessoa CONFIGURA (largura da barra, claro/escuro); embaixo dele
-          e QUEM ela e (perfil e sair). Misturar os dois faria a linha nao
-          significar nada. */}
-      <div className="mt-3 shrink-0 flex flex-col gap-0.5">
-        {/* Recolher/expandir. So no desktop: no celular a barra e uma gaveta
-            que cobre a tela e some ao escolher um item -- ela nao tem estado
-            intermediario, e quem a fecha e o X do cabecalho. */}
-        <button
-          onClick={alternarNav}
-          title={recolhida ? 'Expandir menu' : 'Recolher menu'}
-          aria-label={recolhida ? 'Expandir menu' : 'Recolher menu'}
-          aria-expanded={!recolhida}
-          className={`hidden lg:flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-xs font-semibold text-texto-suave transition-colors hover:bg-slate-800/40 hover:text-texto ${
-            recolhida ? 'lg:justify-center lg:px-0' : ''
-          }`}
-        >
-          {recolhida
-            ? <PanelLeftOpen size={15} className="shrink-0" />
-            : <PanelLeftClose size={15} className="shrink-0" />}
-          <span className={`truncate ${recolhida ? 'lg:hidden' : ''}`}>Recolher menu</span>
-        </button>
-
+          que a pessoa CONFIGURA (claro/escuro); embaixo dele e QUEM ela e
+          (perfil e sair). Misturar os dois faria a linha nao significar nada.
+          O recolher voltou para o cabecalho, junto do logo. */}
+      <div className="mt-3 shrink-0">
         {/* Claro/escuro. O estado mora no AuthContext (e a preferencia por
             usuario no servidor) -- este botao so alterna, nao guarda nada nem
             toca no DOM: quem aplica o tema e o AppLayout.
