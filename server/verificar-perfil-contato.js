@@ -31,6 +31,14 @@ function substituir(rel, exports) {
   require.cache[id] = { id, filename: id, loaded: true, exports };
 }
 
+// A CLASSE REAL, capturada ANTES do duble entrar no lugar dela.
+//
+// O bloco 0 testa a normalizacao de texto do cliente de verdade -- se ele fosse
+// lido depois da substituicao, o teste estaria conferindo o proprio duble e
+// passaria para sempre, inclusive com a normalizacao quebrada.
+const ClienteEvolutionReal =
+  require("./src/infrastructure/external/evolution-api.client").constructor;
+
 substituir("src/infrastructure/external/evolution-api.client.js", {
   fetchPerfilContato: async () => { chamouEvolution += 1; return perfilDaEvolution; },
   sendText: async () => ({ key: { id: "x" } }),
@@ -68,6 +76,36 @@ const PERFIL_COMPLETO = {
 };
 
 (async () => {
+  // ── 0. TODO CAMPO DE TEXTO E STRING OU NULL, NUNCA OBJETO ─────────────────
+  //
+  // O bug que derrubou a Central em producao (03/09/2026): o recado chegou como
+  // `{ status, setAt }` -- a forma que o Baileys usa -- e foi para o JSX. React
+  // #31, "Objects are not valid as a React child", e tela preta.
+  //
+  // A Evolution TENTA desaninhar com `status?.status`; quando a versao do
+  // Baileys aninha um nivel a mais, o desaninhamento fica pela metade. Confiar
+  // que o outro lado entrega string foi o erro. Este bloco e a trava.
+  console.log("\n=== 0. campos de texto nunca chegam como objeto ===");
+  const t = ClienteEvolutionReal._texto;
+  check(t("Disponível") === "Disponível", "string passa direto");
+  check(t("  oi  ") === "oi", "string e aparada");
+  check(t("") === null, "string vazia vira null");
+  check(t(null) === null && t(undefined) === null, "null/undefined viram null");
+  check(
+    t({ status: "No trabalho", setAt: new Date() }) === "No trabalho",
+    "{status,setAt} -- a forma EXATA que quebrou -- vira o texto"
+  );
+  check(
+    t({ status: { status: "Aninhado", setAt: 1 } }) === "Aninhado",
+    "aninhado a mais tambem e desembrulhado"
+  );
+  check(t({ value: "Por value" }) === "Por value", "{value} tambem e aceito");
+  check(t({ coisa: 1 }) === null, "objeto de forma desconhecida vira null, nao vaza");
+  check(t([1, 2]) === null, "array vira null");
+  // Referencia circular: sem o teto de profundidade isto seria recursao infinita.
+  const circular = {}; circular.status = circular;
+  check(t(circular) === null, "referencia circular nao trava o processo");
+
   // ── 1. A EVOLUTION RESPONDEU ──────────────────────────────────────────────
   console.log("\n=== 1. perfil completo vindo do WhatsApp ===");
   zerar();

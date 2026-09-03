@@ -495,6 +495,39 @@ class EvolutionApiClient {
   }
 
   /**
+   * TEXTO, CUSTE O QUE CUSTAR -- normaliza um campo que DEVERIA ser string.
+   *
+   * O caso que motivou isto: o "recado" chegou como `{ status, setAt }` e foi
+   * parar direto no JSX, derrubando a Central inteira com o React #31
+   * ("Objects are not valid as a React child").
+   *
+   * A culpa nao e de um bug pontual, e da forma do dado: no Baileys,
+   * `fetchStatus` devolve `{ status, setAt }`, e a Evolution tenta desaninhar
+   * com `status?.status`. Quando a versao do Baileys aninha um nivel a mais, o
+   * desaninhamento fica pela metade e o objeto passa adiante. Confiar que o
+   * outro lado vai entregar string e o que quebrou.
+   *
+   * Entao esta funcao desce enquanto encontrar `{ status: ... }` (com teto, por
+   * causa de referencia circular) e devolve string ou `null` -- nunca objeto.
+   * Vale para TODOS os campos de texto do perfil, nao so o recado: se um deles
+   * mudar de forma amanha, ele vira `null` em vez de tela preta.
+   */
+  static _texto(bruto, profundidade = 0) {
+    if (bruto == null || profundidade > 4) return null;
+    if (typeof bruto === "string") return bruto.trim() || null;
+    if (typeof bruto === "number" || typeof bruto === "boolean") return String(bruto);
+    // `{ status, setAt }` e a forma que o Baileys usa para o recado; algumas
+    // rotas devolvem `{ value }`. Qualquer outra coisa vira null de proposito.
+    if (typeof bruto === "object") {
+      return (
+        EvolutionApiClient._texto(bruto.status, profundidade + 1) ??
+        EvolutionApiClient._texto(bruto.value, profundidade + 1)
+      );
+    }
+    return null;
+  }
+
+  /**
    * PERFIL PUBLICO DO CONTATO NO WHATSAPP -- foto, recado e dados de Business.
    *
    * E o que o proprio WhatsApp mostra a qualquer um que abra a conversa: a
@@ -512,18 +545,22 @@ class EvolutionApiClient {
   async fetchPerfilContato(number, instance = this.defaultInstance) {
     try {
       const d = await this.request("POST", `/chat/fetchProfile/${instance}`, { number });
+      const texto = EvolutionApiClient._texto;
       return {
         // `status` no vocabulario do Baileys e o "recado" da tela do WhatsApp
         // -- nao confundir com status de conexao nem de atendimento. Renomeado
         // aqui para o nome que aparece para o usuario.
-        recado: d?.status || null,
-        foto: d?.picture || null,
-        nomeWhatsApp: d?.name || null,
+        //
+        // TODO campo de texto passa pelo `_texto`: e o unico ponto do sistema
+        // que toca esse dado, e depois daqui a tela confia que sao strings.
+        recado: texto(d?.status),
+        foto: texto(d?.picture),
+        nomeWhatsApp: texto(d?.name),
         existeNoWhatsApp: d?.numberExists !== false,
         comercial: !!d?.isBusiness,
-        email: d?.email || null,
-        site: d?.website || null,
-        descricao: d?.description || null,
+        email: texto(d?.email),
+        site: texto(d?.website),
+        descricao: texto(d?.description),
       };
     } catch {
       return null;
