@@ -9,7 +9,7 @@ import {
   FileText, MapPin, Contact, Paperclip, Smile, Loader2,
   SlidersHorizontal, Star, Archive, EyeOff, MoreVertical,
   Maximize2, Download, CornerUpLeft, CornerUpRight, Share2, Pencil, MoreHorizontal, Mic, Tag, PenLine,
-  Sun, Moon, Bot, StickyNote, SpellCheck, Undo2, History
+  Sun, Moon, Bot, StickyNote, SpellCheck, Undo2, History, MessageSquarePlus
 } from 'lucide-react';
 import { EmojiIcon, FormattedMessage, TextoFormatado } from './EmojiIcon';
 import { useMensagensRapidas } from './MensagensRapidas';
@@ -696,11 +696,26 @@ function ModalNovaConversa({ onFechar, onEnviar, enviando, erro, inicial }) {
   const digitos = telefone.replace(/\D/g, '');
   // Mesma regra do servidor: 10-11 digitos (DDD + numero) ou 12-13 com o DDI.
   const numeroOk = [10, 11, 12, 13].includes(digitos.length);
-  const podeEnviar = numeroOk && texto.trim().length > 0 && !enviando;
+  // DOIS DESFECHOS, e a diferenca entre eles nao e de grau.
+  //
+  // "Enviar e abrir" fala com o cliente. "Abrir sem enviar" nao manda nada --
+  // so cria o fio no painel. Por isso sao dois botoes e nao um que muda de
+  // texto: o segundo precisa estar disponivel MESMO com mensagem escrita (a
+  // pessoa pode ter rascunhado e decidido nao mandar ainda), e um botao unico
+  // obrigaria a apagar o rascunho para chegar no outro caminho.
+  const podeAbrir  = numeroOk && !enviando;
+  const podeEnviar = podeAbrir && texto.trim().length > 0;
 
   const enviar = () => {
     if (!podeEnviar) return;
     onEnviar({ telefone: digitos, nome: nome.trim(), setor, texto: texto.trim() });
+  };
+
+  // `texto: ''` explicito, e nao omitido: e o servidor que decide o que fazer
+  // com a string vazia, e mandar o campo deixa a intencao legivel no payload.
+  const abrirSemEnviar = () => {
+    if (!podeAbrir) return;
+    onEnviar({ telefone: digitos, nome: nome.trim(), setor, texto: '' });
   };
 
   return (
@@ -785,7 +800,7 @@ function ModalNovaConversa({ onFechar, onEnviar, enviando, erro, inicial }) {
 
           <div>
             <label className="text-[11px] font-semibold text-slate-300 block mb-1.5">
-              Mensagem
+              Mensagem <span className="text-slate-500 font-normal">(opcional)</span>
             </label>
             <textarea
               value={texto}
@@ -800,6 +815,10 @@ function ModalNovaConversa({ onFechar, onEnviar, enviando, erro, inicial }) {
               placeholder="Escreva a mensagem que abre a conversa..."
               className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 resize-none"
             />
+            <p className="text-[10px] text-slate-500 mt-1">
+              Em branco, use <strong className="font-semibold text-slate-400">Abrir sem enviar</strong>:
+              a conversa entra na sua lista e o cliente não recebe nada.
+            </p>
           </div>
 
           {erro && (
@@ -814,6 +833,21 @@ function ModalNovaConversa({ onFechar, onEnviar, enviando, erro, inicial }) {
             className="px-3 py-2 sm:py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors disabled:opacity-50">
             Cancelar
           </button>
+
+          {/* ABRIR SEM ENVIAR -- secundario de proposito.
+              Ele nao fala com o cliente, so cria o fio aqui dentro. Dar a ele o
+              mesmo peso visual do "Enviar e abrir" faria a acao que MANDA
+              mensagem parecer intercambiavel com a que nao manda -- e a unica
+              das duas que o atendente nao consegue desfazer e justamente a que
+              envia. Fica disponivel mesmo com texto escrito: rascunho nao
+              obriga a mandar. */}
+          <button onClick={abrirSemEnviar} disabled={!podeAbrir}
+            title={!numeroOk ? 'Informe DDD + número' : 'Cria a conversa no painel sem mandar nada ao cliente'}
+            className="px-3 py-2 sm:py-1.5 rounded-lg bg-grafite-700 border border-linha text-slate-300 hover:text-white hover:border-linha-forte text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+            <MessageSquarePlus size={13} />
+            Abrir sem enviar
+          </button>
+
           <button onClick={enviar} disabled={!podeEnviar}
             title={!numeroOk ? 'Informe DDD + número' : !texto.trim() ? 'Escreva a mensagem' : 'Enviar (Ctrl+Enter)'}
             className="px-4 py-2 sm:py-1.5 rounded-lg bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-acao/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed">

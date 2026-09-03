@@ -209,10 +209,11 @@ class ConversaService {
    * waMessageId, o status de entrega e a emissao no SSE.
    */
   async iniciarConversa({ telefone, nome, setor, texto, atendenteId = null, acesso = null }) {
+    // Sem texto = ABRIR SEM ENVIAR. Nao e erro: e o modo em que o atendente
+    // deixa o fio pronto (numero, nome, setor, dono) para falar depois. O
+    // efeito colateral importante e o que NAO acontece -- nenhuma mensagem sai
+    // para o WhatsApp, entao o cliente nao recebe nem fica sabendo.
     const conteudo = String(texto || "").trim();
-    if (!conteudo) {
-      throw new AppError("Escreva a mensagem que abre a conversa", 400, "TEXTO_OBRIGATORIO");
-    }
 
     const numero = normalizarTelefoneBr(telefone);
     if (!numero) {
@@ -284,6 +285,24 @@ class ConversaService {
         .fetchProfilePictureUrl(numero, nomeInstancia)
         .catch(() => null);
       if (fotoUrl) await conversaRepository.update(conversaId, { fotoUrl });
+    }
+
+    // ABRIR SEM ENVIAR: a conversa ja esta criada/reaberta acima, no setor e
+    // com o dono certos. So falta anunciar -- nao ha mensagem para despachar.
+    //
+    // O evento sai pela cauda (`_emitir` sem `completo`), como todo o resto do
+    // sistema: SSE e patch, nao redesenho. Ja a RESPOSTA leva o retrato
+    // inteiro, porque quem chamou vai abrir esta conversa na tela em seguida e
+    // precisa dela por completo.
+    if (!conteudo) {
+      const conversa = await conversaRepository.findById(conversaId);
+      this._emitir(conversa);
+      logger.info("Conversa aberta sem mensagem", {
+        conversaId,
+        criada: !existente,
+        setor: setorFinal,
+      });
+      return { ...mapConversa(conversa), criada: !existente };
     }
 
     const dto = await this.enviarMensagem(conversaId, conteudo, "equipe");

@@ -51,11 +51,21 @@ const corrigirTextoSchema = z.object({
 // O telefone e validado de leve aqui (tamanho plausivel) e normalizado de
 // verdade no service, que e quem sabe as regras de DDI/DDD -- deixar a
 // normalizacao no schema esconderia a regra num lugar onde ninguem procura.
+// A MENSAGEM E OPCIONAL, e essa e a unica coisa que muda entre os dois modos.
+//
+// Sem texto, a conversa e so ABERTA no painel: nada sai para o WhatsApp e o
+// cliente nao recebe nada. Serve para deixar o fio pronto antes de falar --
+// registrar quem vai ser atendido, ja no setor certo, e escrever depois.
+//
+// Continua sendo `string` quando vem: quem decide se esta vazia e o service,
+// que ja fazia o `trim`. Exigir `min(1)` aqui de novo obrigaria a tela a NAO
+// mandar o campo, em vez de poder mandar string vazia -- duas formas de dizer
+// a mesma coisa, e a que ninguem lembra vira erro 400 sem motivo.
 const iniciarConversaSchema = z.object({
   telefone: z.string().min(8, "Informe DDD + numero"),
   nome: z.string().max(120).optional(),
   setor: z.enum(SETORES).optional(),
-  texto: z.string().min(1, "Escreva a mensagem"),
+  texto: z.string().optional(),
 });
 
 const atualizarStatusSchema = z.object({

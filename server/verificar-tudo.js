@@ -85,6 +85,14 @@ const VERIFICACOES = [
     resumo: "queda temporaria nunca vira QR; logout real sempre vira; um socket por instancia",
   },
   {
+    // Dubles em `require.cache`: o que ele observa nao e o retorno da funcao, e
+    // se `evolutionApi.sendText` foi chamado. Um envio a mais nao aparece como
+    // defeito em lugar nenhum do painel -- aparece no WhatsApp do cliente.
+    arquivo: "verificar-conversa-sem-mensagem.js",
+    titulo: "Abrir conversa sem mensagem",
+    resumo: "com texto manda; sem texto NAO manda nada, e o fio existente e reaproveitado",
+  },
+  {
     arquivo: "verificar-inatividade.js",
     titulo: "Inatividade",
     resumo: "os dois relógios do bot; a Parte B roda contra o banco quando há DATABASE_URL",
