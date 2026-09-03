@@ -199,8 +199,15 @@ function Sidebar({ aberto, onClose }) {
         fixed inset-y-0 left-0 z-50 transition-[transform,width] duration-300 lg:static lg:translate-x-0
         ${aberto ? 'translate-x-0 shadow-2xl shadow-black/50' : '-translate-x-full'}`}
     >
+      {/* O CABECALHO NAO GANHA BOTAO NENHUM.
+          O de recolher morava aqui e custou 41px de largura (o botao mais o
+          gap). "Arka Tecnologia" em negrito 16px pede ~150px e sobravam ~139:
+          o titulo quebrava em tres linhas e empurrava o menu inteiro para
+          baixo. Como a largura da barra e definida pelo rotulo mais longo do
+          proprio menu (ver o comentario do <aside>), nao havia folga para
+          negociar -- entao o controle desceu para o rodape, junto do tema. */}
       <div className={`flex items-center gap-3 px-2 py-3 mb-4 baixa:lg:py-1.5 baixa:lg:mb-2 shrink-0 ${
-        recolhida ? 'lg:flex-col lg:gap-2 lg:px-0 lg:py-2' : ''
+        recolhida ? 'lg:justify-center lg:px-0' : ''
       }`}>
         <div className="p-2 rounded-xl bg-gradient-to-br from-acao/20 to-espera/10 border border-acao/30 shadow-lg shadow-acao/10">
           <ArkaLogo size={32} />
@@ -211,19 +218,6 @@ function Sidebar({ aberto, onClose }) {
           </h1>
           <p className="text-[11px] text-slate-400 font-medium">Painel de Atendimento</p>
         </div>
-
-        {/* Recolher/expandir. So no desktop: no celular quem fecha a barra e o
-            X ao lado, e a gaveta nao tem estado intermediario. */}
-        <button
-          onClick={alternarNav}
-          title={recolhida ? 'Expandir menu' : 'Recolher menu'}
-          aria-label={recolhida ? 'Expandir menu' : 'Recolher menu'}
-          aria-expanded={!recolhida}
-          className="hidden lg:flex shrink-0 items-center justify-center rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
-        >
-          {recolhida ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
-        </button>
-
         <button onClick={onClose} className="lg:hidden p-1.5 -mr-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800" title="Fechar menu">
           <X size={18} />
         </button>
@@ -266,12 +260,33 @@ function Sidebar({ aberto, onClose }) {
         )}
       </nav>
 
-      {/* Quem esta logado, e a saida. No rodape porque e o unico item que nao e
-          navegacao: nao leva a lugar nenhum do painel, encerra a sessao. */}
-      <div className="mt-3 shrink-0 border-t border-linha pt-3">
-        {/* Claro/escuro, logo acima do nome. O estado mora no AuthContext (e a
-            preferencia por usuario no servidor) -- este botao so alterna, nao
-            guarda nada nem toca no DOM: quem aplica o tema e o AppLayout.
+      {/* AJUSTES DA INTERFACE -- ACIMA DO FILETE.
+          O filete separa duas coisas de naturezas diferentes: aqui em cima e o
+          que a pessoa CONFIGURA (largura da barra, claro/escuro); embaixo dele
+          e QUEM ela e (perfil e sair). Misturar os dois faria a linha nao
+          significar nada. */}
+      <div className="mt-3 shrink-0 flex flex-col gap-0.5">
+        {/* Recolher/expandir. So no desktop: no celular a barra e uma gaveta
+            que cobre a tela e some ao escolher um item -- ela nao tem estado
+            intermediario, e quem a fecha e o X do cabecalho. */}
+        <button
+          onClick={alternarNav}
+          title={recolhida ? 'Expandir menu' : 'Recolher menu'}
+          aria-label={recolhida ? 'Expandir menu' : 'Recolher menu'}
+          aria-expanded={!recolhida}
+          className={`hidden lg:flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-xs font-semibold text-texto-suave transition-colors hover:bg-slate-800/40 hover:text-texto ${
+            recolhida ? 'lg:justify-center lg:px-0' : ''
+          }`}
+        >
+          {recolhida
+            ? <PanelLeftOpen size={15} className="shrink-0" />
+            : <PanelLeftClose size={15} className="shrink-0" />}
+          <span className={`truncate ${recolhida ? 'lg:hidden' : ''}`}>Recolher menu</span>
+        </button>
+
+        {/* Claro/escuro. O estado mora no AuthContext (e a preferencia por
+            usuario no servidor) -- este botao so alterna, nao guarda nada nem
+            toca no DOM: quem aplica o tema e o AppLayout.
             O rotulo diz o DESTINO, nao o estado atual: "Modo claro" quando se
             esta no escuro. Botao que anuncia onde voce ja esta nao ajuda a
             decidir se vale clicar. */}
@@ -279,7 +294,7 @@ function Sidebar({ aberto, onClose }) {
           onClick={alternarTema}
           title={tema === 'light' ? 'Mudar para o modo escuro' : 'Mudar para o modo claro'}
           aria-label="Alternar entre modo claro e modo escuro"
-          className={`mb-2 flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-xs font-semibold text-texto-suave transition-colors hover:bg-slate-800/40 hover:text-texto ${
+          className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-xs font-semibold text-texto-suave transition-colors hover:bg-slate-800/40 hover:text-texto ${
             recolhida ? 'lg:justify-center lg:px-0' : ''
           }`}
         >
@@ -288,7 +303,11 @@ function Sidebar({ aberto, onClose }) {
             {tema === 'light' ? 'Modo escuro' : 'Modo claro'}
           </span>
         </button>
+      </div>
 
+      {/* Quem esta logado, e a saida. No rodape porque e o unico item que nao e
+          navegacao: nao leva a lugar nenhum do painel, encerra a sessao. */}
+      <div className="mt-2 shrink-0 border-t border-linha pt-3">
         <div className={`flex items-center gap-2.5 px-1 ${recolhida ? 'lg:flex-col lg:gap-1 lg:px-0' : ''}`}>
           {/* Bloco do usuario = atalho para a pagina de perfil (/perfil). */}
           <button
