@@ -696,26 +696,30 @@ function ModalNovaConversa({ onFechar, onEnviar, enviando, erro, inicial }) {
   const digitos = telefone.replace(/\D/g, '');
   // Mesma regra do servidor: 10-11 digitos (DDD + numero) ou 12-13 com o DDI.
   const numeroOk = [10, 11, 12, 13].includes(digitos.length);
-  // DOIS DESFECHOS, e a diferenca entre eles nao e de grau.
+  // UM BOTAO SO, QUE MUDA DE FUNCAO CONFORME O CAMPO MENSAGEM.
   //
-  // "Enviar e abrir" fala com o cliente. "Abrir sem enviar" nao manda nada --
-  // so cria o fio no painel. Por isso sao dois botoes e nao um que muda de
-  // texto: o segundo precisa estar disponivel MESMO com mensagem escrita (a
-  // pessoa pode ter rascunhado e decidido nao mandar ainda), e um botao unico
-  // obrigaria a apagar o rascunho para chegar no outro caminho.
+  // Com texto ele envia e abre; em branco, so abre o fio no painel sem mandar
+  // nada ao cliente. O rotulo e o icone acompanham, entao o botao sempre
+  // anuncia o que vai fazer antes do clique -- que e o que evita a surpresa de
+  // um envio nao intencional.
+  //
+  // Consequencia assumida: nao da para abrir SEM enviar mantendo um rascunho
+  // escrito; para isso e preciso limpar o campo. E o preco de ter dois
+  // desfechos num controle so.
+  const temTexto   = texto.trim().length > 0;
   const podeAbrir  = numeroOk && !enviando;
-  const podeEnviar = podeAbrir && texto.trim().length > 0;
 
-  const enviar = () => {
-    if (!podeEnviar) return;
-    onEnviar({ telefone: digitos, nome: nome.trim(), setor, texto: texto.trim() });
-  };
-
-  // `texto: ''` explicito, e nao omitido: e o servidor que decide o que fazer
-  // com a string vazia, e mandar o campo deixa a intencao legivel no payload.
-  const abrirSemEnviar = () => {
+  // `texto: ''` explicito quando vazio, e nao omitido: e o servidor que decide
+  // o que fazer com a string vazia, e mandar o campo deixa a intencao legivel
+  // no payload.
+  const confirmar = () => {
     if (!podeAbrir) return;
-    onEnviar({ telefone: digitos, nome: nome.trim(), setor, texto: '' });
+    onEnviar({
+      telefone: digitos,
+      nome: nome.trim(),
+      setor,
+      texto: temTexto ? texto.trim() : '',
+    });
   };
 
   return (
@@ -806,9 +810,9 @@ function ModalNovaConversa({ onFechar, onEnviar, enviando, erro, inicial }) {
               value={texto}
               onChange={e => setTexto(e.target.value)}
               onKeyDown={e => {
-                // Ctrl+Enter envia; Enter sozinho continua quebrando linha,
+                // Ctrl+Enter confirma; Enter sozinho continua quebrando linha,
                 // porque aqui se escreve mensagem de varias linhas.
-                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); enviar(); }
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); confirmar(); }
               }}
               rows={4}
               autoFocus={!!inicial?.telefone}
@@ -816,8 +820,8 @@ function ModalNovaConversa({ onFechar, onEnviar, enviando, erro, inicial }) {
               className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 resize-none"
             />
             <p className="text-[10px] text-slate-500 mt-1">
-              Em branco, use <strong className="font-semibold text-slate-400">Abrir sem enviar</strong>:
-              a conversa entra na sua lista e o cliente não recebe nada.
+              Deixe em branco para só abrir a conversa: ela entra na sua lista e o
+              cliente não recebe nada.
             </p>
           </div>
 
@@ -834,25 +838,24 @@ function ModalNovaConversa({ onFechar, onEnviar, enviando, erro, inicial }) {
             Cancelar
           </button>
 
-          {/* ABRIR SEM ENVIAR -- secundario de proposito.
-              Ele nao fala com o cliente, so cria o fio aqui dentro. Dar a ele o
-              mesmo peso visual do "Enviar e abrir" faria a acao que MANDA
-              mensagem parecer intercambiavel com a que nao manda -- e a unica
-              das duas que o atendente nao consegue desfazer e justamente a que
-              envia. Fica disponivel mesmo com texto escrito: rascunho nao
-              obriga a mandar. */}
-          <button onClick={abrirSemEnviar} disabled={!podeAbrir}
-            title={!numeroOk ? 'Informe DDD + número' : 'Cria a conversa no painel sem mandar nada ao cliente'}
-            className="px-3 py-2 sm:py-1.5 rounded-lg bg-grafite-700 border border-linha text-slate-300 hover:text-white hover:border-linha-forte text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-            <MessageSquarePlus size={13} />
-            Abrir sem enviar
-          </button>
-
-          <button onClick={enviar} disabled={!podeEnviar}
-            title={!numeroOk ? 'Informe DDD + número' : !texto.trim() ? 'Escreva a mensagem' : 'Enviar (Ctrl+Enter)'}
+          {/* O MESMO BOTAO, DUAS FUNCOES -- e ele diz qual antes do clique.
+              Com mensagem escrita: "Enviar e abrir" (aviao de papel).
+              Em branco:            "Abrir conversa" (balao com +), sem enviar.
+              O rotulo e o icone mudam junto para que a acao que FALA com o
+              cliente nunca seja disparada sem estar anunciada. */}
+          <button onClick={confirmar} disabled={!podeAbrir}
+            title={
+              !numeroOk
+                ? 'Informe DDD + número'
+                : temTexto
+                  ? 'Envia a mensagem e abre a conversa (Ctrl+Enter)'
+                  : 'Abre a conversa no painel sem mandar nada ao cliente'
+            }
             className="px-4 py-2 sm:py-1.5 rounded-lg bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-acao/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-            {enviando ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-            {enviando ? 'Enviando...' : 'Enviar e abrir'}
+            {enviando
+              ? <Loader2 size={13} className="animate-spin" />
+              : temTexto ? <Send size={13} /> : <MessageSquarePlus size={13} />}
+            {enviando ? (temTexto ? 'Enviando...' : 'Abrindo...') : (temTexto ? 'Enviar e abrir' : 'Abrir conversa')}
           </button>
         </div>
       </div>

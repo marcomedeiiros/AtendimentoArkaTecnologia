@@ -108,8 +108,9 @@ function zerar() {
 (async () => {
   // ── 1. O SCHEMA ACEITA OS DOIS MODOS ──────────────────────────────────────
   //
-  // A tela manda `texto: ''` explicitamente no "Abrir sem enviar". Se o schema
-  // exigisse `min(1)`, o pedido morreria em 400 na borda e nada disso rodaria.
+  // Com o campo mensagem em branco, a tela manda `texto: ''` explicitamente. Se
+  // o schema exigisse `min(1)`, o pedido morreria em 400 na borda e nada disso
+  // rodaria -- o botao ficaria dizendo "Abrir conversa" e devolvendo erro.
   console.log("\n=== 1. o schema aceita mensagem vazia e ausente ===");
   const base = { telefone: "27999990000", setor: "Geral" };
   check(iniciarConversaSchema.safeParse({ ...base, texto: "oi" }).success, "com texto: aceito");
