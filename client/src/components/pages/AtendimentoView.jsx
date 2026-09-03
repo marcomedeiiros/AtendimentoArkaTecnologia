@@ -1930,6 +1930,13 @@ function PainelChat({
   const [corrigindo, setCorrigindo] = useState(false);
   const [textoAntes, setTextoAntes] = useState(null);
   const [avisoCorrecao, setAvisoCorrecao] = useState('');
+  // Referencia da caixa de texto, para DEVOLVER O FOCO depois de corrigir.
+  //
+  // Sem ela, quem clicava em "corrigir" ficava com o foco no BOTAO: o Enter
+  // seguinte nao enviava a mensagem -- reativava o botao, porque e isso que o
+  // navegador faz com um botao focado. Parecia que "o Enter parou de
+  // funcionar", quando na verdade o cursor tinha saido do campo.
+  const campoRef = useRef(null);
   // MODO NOTA: a mesma caixa de texto, escrevendo para dentro em vez de para o
   // cliente. Um estado, e não uma segunda caixa, porque duas caixas na mesma
   // barra é o desenho que faz a pessoa digitar na errada.
@@ -2018,6 +2025,18 @@ function PainelChat({
    * transcrição) porque um dicionário no navegador não resolve acentuação e
    * concordância -- e porque a regra tem de ser a mesma para toda a equipe.
    */
+  // Devolve o cursor para o fim do texto na caixa. Chamado depois de corrigir e
+  // de desfazer: nas duas, quem estava com o foco era um botao.
+  const focarCampo = useCallback(() => {
+    const el = campoRef.current;
+    if (!el) return;
+    el.focus();
+    // Fim do texto, nao o inicio: a pessoa vai continuar escrevendo dali, e
+    // `focus()` sozinho deixaria o cursor onde estava antes da troca de valor.
+    const fim = el.value.length;
+    try { el.setSelectionRange(fim, fim); } catch { /* input sem selecao */ }
+  }, []);
+
   const corrigirTexto = useCallback(async () => {
     const original = texto.trim();
     if (!original || corrigindo) return;
@@ -2039,14 +2058,18 @@ function PainelChat({
       setTimeout(() => setAvisoCorrecao(''), 6000);
     } finally {
       setCorrigindo(false);
+      // Depois do `setTexto`, para o cursor cair no fim do texto JA corrigido.
+      setTimeout(focarCampo, 0);
     }
-  }, [texto, corrigindo, setTexto]);
+  }, [texto, corrigindo, setTexto, focarCampo]);
 
   const desfazerCorrecao = useCallback(() => {
     if (textoAntes == null) return;
     setTexto(textoAntes);
     setTextoAntes(null);
-  }, [textoAntes, setTexto]);
+    setAvisoCorrecao('');
+    setTimeout(focarCampo, 0);
+  }, [textoAntes, setTexto, focarCampo]);
 
   const colarDaAreaTransferencia = useCallback((e) => {
     const items = e.clipboardData?.items;
@@ -2154,8 +2177,22 @@ function PainelChat({
   }, [conversa.mensagens.length, irParaFim]);
 
   const enviar = useCallback(() => {
-    if (anexo) { enviarAnexo(); return; }
+    // A FAIXA DA CORRECAO MORRE COM O ENVIO.
+    //
+    // "Texto corrigido - confira antes de enviar" e um pedido para conferir
+    // ALGO QUE AINDA ESTA NA CAIXA. Depois que a mensagem foi embora, ela nao
+    // pede mais nada: fica pendurada sobre uma caixa vazia mandando revisar uma
+    // frase que ja chegou ao cliente, e o "Desfazer" ao lado sugere um desfazer
+    // que nao existe mais.
+    //
+    // Limpa em TODOS os caminhos (anexo, nota, edicao e envio normal) porque a
+    // faixa nao pertence a nenhum deles em particular -- ela pertence ao texto
+    // que estava na caixa, e a caixa esvazia nos quatro.
+    const limparCorrecao = () => { setTextoAntes(null); setAvisoCorrecao(''); };
+
+    if (anexo) { limparCorrecao(); enviarAnexo(); return; }
     if (!texto.trim()) return;
+    limparCorrecao();
 
     // A NOTA VEM ANTES DE TUDO. Se o modo está ligado, nada mais nesta função
     // pode levar o texto ao cliente -- nem a assinatura, nem a citação, nem o
@@ -2246,7 +2283,16 @@ function PainelChat({
   // Um modo que sobrevive à troca é o jeito de anotar na conversa errada -- ou,
   // pior, de achar que se está anotando quando já se voltou a falar com um
   // cliente. Cada conversa começa no estado normal, respondendo.
-  useEffect(() => { setModoNota(false); }, [conversa.id]);
+  //
+  // A faixa da correcao vai junto, e pelo mesmo motivo: ela fala do texto que
+  // estava na caixa DAQUELA conversa. Sobrevivendo a troca, ela mandaria
+  // conferir uma frase que nao esta mais na tela, e o "Desfazer" traria o texto
+  // de um cliente para dentro da conversa de outro.
+  useEffect(() => {
+    setModoNota(false);
+    setTextoAntes(null);
+    setAvisoCorrecao('');
+  }, [conversa.id]);
 
   // Puxa o atendimento anterior para dentro da conversa, mantendo o ponto de
   // leitura: sem a âncora, o conteúdo novo entra ACIMA e a tela salta.
@@ -2939,6 +2985,7 @@ function PainelChat({
           />
         ) : (
           <textarea
+            ref={campoRef}
             value={texto}
             rows={1}
             /* Corretor NATIVO do navegador, de graça e sempre ligado: sublinha o
@@ -2958,6 +3005,12 @@ function PainelChat({
             onPaste={colarDaAreaTransferencia}
             onKeyDown={e => {
               // Enter envia; Ctrl/Cmd+Enter envia; Shift+Enter quebra linha.
+              //
+              // `isComposing` protege quem digita com acento morto ou teclado
+              // com composicao: nesse modo o Enter CONFIRMA a letra que esta
+              // sendo montada, e nao deve significar "envie". Sem a checagem, um
+              // "ç" ou um "ã" em formacao dispararia a mensagem pela metade.
+              if (e.nativeEvent?.isComposing) return;
               if (e.key === 'Enter' && (!e.shiftKey || e.ctrlKey || e.metaKey)) {
                 e.preventDefault();
                 enviar();
