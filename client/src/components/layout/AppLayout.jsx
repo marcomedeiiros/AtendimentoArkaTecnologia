@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
+import LimiteDeErro from '../LimiteDeErro';
 import NotificacoesToast from '../NotificacoesToast';
 import Avatar from '../Avatar';
 import ReportarBug from '../ReportarBug';
@@ -428,7 +429,13 @@ export default function AppLayout() {
               : 'p-4 sm:p-6 lg:p-8 baixa:lg:px-6 baixa:lg:py-4 overflow-y-auto'
           }`}
         >
-          <Outlet />
+          {/* O limite envolve SO o conteudo da rota: uma tela que quebra deixa
+              de levar a barra lateral junto, e o erro aparece escrito em vez de
+              virar tela preta. `chave` e o caminho -- trocar de tela limpa o
+              erro, senao um defeito numa rota contaminaria todas as outras. */}
+          <LimiteDeErro chave={location.pathname}>
+            <Outlet />
+          </LimiteDeErro>
         </main>
       </div>
     </div>

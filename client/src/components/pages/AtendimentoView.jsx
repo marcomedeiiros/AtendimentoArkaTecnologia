@@ -1659,7 +1659,12 @@ function LinhaPerfil({ rotulo, valor, mono }) {
 }
 
 function PainelPerfilContato({
-  conversa, parceiros, atendente, onFechar, onAmpliarFoto, onVincularDocumento, vinculando,
+  // `parceiros = []`: a lista chega vazia para quem nao tem o modulo, e chega
+  // `undefined` durante o primeiro render do AppContext. Sem o padrao, o
+  // `.filter` e o `.length` abaixo estouram -- e uma excecao aqui apagava o
+  // painel inteiro, porque nao havia limite de erro entre este componente e a
+  // raiz (agora ha: ver LimiteDeErro em AppLayout).
+  conversa, parceiros = [], atendente, onFechar, onAmpliarFoto, onVincularDocumento, vinculando,
 }) {
   const [perfil, setPerfil] = useState(null);
   const [carregando, setCarregando] = useState(true);
@@ -1712,11 +1717,11 @@ function PainelPerfilContato({
   const achados = (() => {
     const q = busca.trim().toLowerCase();
     if (q.length < 2) return [];
-    return parceiros
-      .filter(p => p.status !== 'inativo')
+    return (Array.isArray(parceiros) ? parceiros : [])
+      .filter(p => p && p.status !== 'inativo')
       .filter(p =>
         String(p.razaoSocial || '').toLowerCase().includes(q) ||
-        limparDocumento(p.cnpj).includes(limparDocumento(busca))
+        limparDocumento(p.cnpj || '').includes(limparDocumento(busca))
       )
       .slice(0, 8);
   })();
@@ -1834,7 +1839,7 @@ function PainelPerfilContato({
 
               {/* Busca por nome: so aparece com a lista carregada, que por sua
                   vez so vem para quem tem o modulo `parceiros`. */}
-              {parceiros.length > 0 && (
+              {(parceiros?.length || 0) > 0 && (
                 <div className="mb-2">
                   <input
                     value={busca}
