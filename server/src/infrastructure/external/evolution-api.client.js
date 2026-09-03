@@ -92,6 +92,24 @@ class EvolutionApiClient {
         );
       }
 
+      // FALHA DISFARCADA DE SUCESSO.
+      //
+      // Varios controllers da Evolution 2.4 envolvem o corpo inteiro num
+      // try/catch que devolve `{error:true, message}` com HTTP **200** -- o
+      // `restartInstance` e o `connectToWhatsapp` fazem exatamente isso
+      // (instance.controller.ts:346 e :392). Sem checar aqui, o vigia lia 200,
+      // anotava "reiniciada" e ia dormir enquanto NADA tinha acontecido: uma
+      // reconexao que falha em silencio e pior que uma que estoura.
+      if (data && data.error === true) {
+        const detalhe = mensagemDaEvolution(data) || data.message || "";
+        logger.warn("Evolution API respondeu 200 com erro no corpo", { path, detalhe });
+        throw new AppError(
+          detalhe || "A Evolution recusou a operacao",
+          502,
+          "EVOLUTION_API_ERROR"
+        );
+      }
+
       return data;
     } catch (error) {
       if (error instanceof AppError) throw error;
@@ -180,12 +198,54 @@ class EvolutionApiClient {
     });
   }
 
+  // POST, NAO PUT.
+  //
+  // Ate a 2.3.x a rota aceitava PUT. Na 2.4.0-rc2 o router registra so
+  // `.post(this.routerPath('restart'))` (instance.router.ts:27), entao o PUT
+  // caia no 404 do Express -- e o nosso proprio tratamento de 404 traduzia isso
+  // para "A instancia nao existe mais na Evolution". Resultado: TODA tentativa
+  // de reconexao automatica falhava, o vigia queimava as seis tentativas em
+  // ~31 min e o painel mandava reescanear o QR com a sessao intacta no banco.
+  //
+  // Vale lembrar o limite desta rota (instance.controller.ts:361): ela RECUSA
+  // instancia em `close` -- e devolve a recusa como HTTP 200 `{error:true}`,
+  // nao como erro. Quem esta em `close` se recupera por `/instance/connect`.
+  // Ver `whatsapp.reconexao.js`, que escolhe a chamada pelo estado.
   async restartInstance(instance = this.defaultInstance) {
-    return this.request("PUT", `/instance/restart/${instance}`);
+    return this.request("POST", `/instance/restart/${instance}`);
   }
 
   async deleteInstance(instance = this.defaultInstance) {
     return this.request("DELETE", `/instance/delete/${instance}`);
+  }
+
+  /**
+   * POR QUE A CONEXAO CAIU -- o numero, nao o palpite.
+   *
+   * A Evolution grava na propria linha da instancia o `statusCode` do Baileys
+   * que fechou o socket (`disconnectionReasonCode`), a hora e o objeto bruto do
+   * `lastDisconnect`. Isso ja vinha em `/instance/fetchInstances` e nunca era
+   * lido: sem esse numero, "caiu" e "deslogou" sao indistinguiveis e a unica
+   * saida e adivinhar -- foi o que fez a tela pedir QR sem motivo.
+   *
+   * Best-effort de proposito: se a Evolution nao responder, devolvemos tudo
+   * nulo e quem chama trata como "desconhecido", nunca como "deslogado".
+   */
+  async diagnosticoConexao(instance = this.defaultInstance) {
+    try {
+      const info = await this.fetchInstances(instance);
+      if (!info) return { conhecido: false };
+      return {
+        conhecido: true,
+        connectionStatus: info.connectionStatus || null,
+        motivoCodigo:
+          info.disconnectionReasonCode == null ? null : Number(info.disconnectionReasonCode),
+        motivoEm: info.disconnectionAt || null,
+        motivoObjeto: info.disconnectionObject || null,
+      };
+    } catch {
+      return { conhecido: false };
+    }
   }
 
   // Webhook configurado na instancia (url + eventos).

@@ -293,6 +293,29 @@ O webhook nao esta alcancando a API. Confira nos logs da Evolution se ela chama
 `http://api:3000/...` e nao `host.docker.internal` (esse era o endereco do setup
 local em Windows).
 
+**O WhatsApp caiu esta pedindo QR de novo?**
+Antes de escanear qualquer coisa, confira se a sessao ainda existe. Escanear um
+QR sem necessidade nao e inofensivo: ele substitui o pareamento que estava la.
+
+```bash
+docker exec arka-evolution-db psql -U evolution -d evolution -c \
+  'SELECT i.name, i."connectionStatus", i."disconnectionReasonCode", length(s.creds) AS creds FROM "Instance" i LEFT JOIN "Session" s ON s."sessionId"=i.id;'
+```
+
+- `creds` com numero: **a sessao esta viva**. Nao escaneie nada o vigia religa
+  sozinho (`docker logs arka-api | grep "\[WhatsApp\]"` mostra as tentativas).
+- `creds` vazio e `disconnectionReasonCode` **401 ou 403**: logout de verdade.
+  So aqui o QR e necessario.
+- `creds` vazio com qualquer OUTRO codigo (408, 428, 440, 515...): a Evolution
+  apagou a credencial numa queda temporaria, que e um bug conhecido da 2.4.0-rc2
+  (ver `server/src/modules/whatsapp/whatsapp.sessao.js`). O cofre devolve a
+  credencial sozinho no proximo ciclo procure `[Cofre] CREDENCIAL RESTAURADA`
+  nos logs da API.
+
+Estado completo pelo painel: `GET /api/whatsapp/status` traz `situacao`
+(`CONNECTED` / `RECONNECTING` / `DISCONNECTED_TEMPORARY` / `LOGGED_OUT`),
+`motivoDesconexao` (o `statusCode` do Baileys) e `cofreSessao`.
+
 **A tela de Configuracoes sobrepoe o `.env`**
 A URL da Evolution salva pelo painel tem prioridade sobre a variavel de
 ambiente. Se alguem salvar `http://localhost:8080` ali, a API para de achar a

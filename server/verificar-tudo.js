@@ -76,6 +76,15 @@ const VERIFICACOES = [
     resumo: "payload real da Evolution: botões só onde deve, texto puro no resto, teto de 3",
   },
   {
+    // Modulo puro com dubles: nao fala com a Evolution nem com o Postgres, e
+    // por isso da para exercitar aqui os cenarios que so aconteceriam
+    // derrubando a internet -- timeout 408, logout 401, credencial apagada,
+    // dois reconnects ao mesmo tempo. Vem cedo porque e barato.
+    arquivo: "verificar-reconexao-whatsapp.js",
+    titulo: "Reconexao do WhatsApp",
+    resumo: "queda temporaria nunca vira QR; logout real sempre vira; um socket por instancia",
+  },
+  {
     arquivo: "verificar-inatividade.js",
     titulo: "Inatividade",
     resumo: "os dois relógios do bot; a Parte B roda contra o banco quando há DATABASE_URL",

@@ -63,12 +63,32 @@ services:
       # codigo (src/server.js), mas declarar aqui deixa explicito no deploy --
       # sem isto o log sai em UTC e a hora local do processo fica 3h adiantada.
       TZ: "America/Sao_Paulo"
+
+      # COFRE DA SESSAO DO WHATSAPP -- ver server/src/modules/whatsapp/whatsapp.sessao.js.
+      #
+      # A Evolution 2.4.0-rc2 APAGA a credencial do pareamento num timeout de
+      # rede (statusCode 408 entrou em `codesToNotReconnect` e o ramo emite
+      # `logout.instance`, que roda `session.deleteMany`). Sem cofre, uma queda
+      # de internet custa um QR novo.
+      #
+      # Com estas duas variaveis a API copia a credencial enquanto tudo esta bem
+      # e a devolve quando o WhatsApp NAO deslogou de verdade. Sem elas o modulo
+      # se declara inativo e o resto do vigia continua funcionando normalmente.
+      EVOLUTION_DB_URL: "postgresql://evolution:${EVOLUTION_DB_PASSWORD}@evolution-db:5432/evolution?schema=public"
+      # Onde a Evolution guarda as chaves do Signal (INSTANCE_DIR = /evolution/instances).
+      # Montado abaixo em modo leitura+escrita porque o cofre tambem restaura.
+      EVOLUTION_INSTANCES_DIR: "/evolution-instances"
     volumes:
       - arka_data:/data
       - ./backups:/backups
+      # Mesmo volume que a Evolution usa. O cofre precisa dele para copiar e
+      # devolver as chaves do Signal junto com a credencial.
+      - evolution_instances:/evolution-instances
     depends_on:
       evolution-api:
         condition: service_started
+      evolution-db:
+        condition: service_healthy
 
   # ------------------------------------------------------------------------
   # Evolution API: ponte com o WhatsApp (le o QR e entrega as mensagens).
@@ -120,10 +140,27 @@ services:
       CACHE_LOCAL_ENABLED: "true"
 
       DEL_INSTANCE: "false"
-      QRCODE_LIMIT: "30"
+
+      # 3, NAO 30 -- e um limite de SEGURANCA, nao de conveniencia.
+      #
+      # Ao estourar o limite a Evolution nao para de emitir QR: ela chama
+      # `client.logout()` (monitor.service.ts:435, via o evento `no.connection`),
+      # que remove o aparelho DO LADO DO WHATSAPP. Com o Baileys renovando o QR
+      # a cada ~20s, "30" significa que uma tela de QR esquecida aberta por ~10
+      # minutos provoca um logout de verdade. Com 3, a tela expira em ~1 min e o
+      # operador so precisa clicar em "Gerar QR" outra vez -- sem consequencia.
+      QRCODE_LIMIT: "3"
+
       CONFIG_SESSION_PHONE_CLIENT: "Arka Tecnologia"
       CONFIG_SESSION_PHONE_NAME: "Chrome"
-      LOG_LEVEL: "ERROR"
+
+      # ERROR sozinho escondia exatamente a linha que diz POR QUE a conexao caiu
+      # ("Connection closed, evaluating reconnection ... statusCode"), que a
+      # Evolution loga em INFO. Sem ela, toda investigacao de queda virava
+      # adivinhacao. LOG_BAILEYS=warn traz o `stream:error` sem despejar o
+      # trafego inteiro do socket no log.
+      LOG_LEVEL: "ERROR,WARN,INFO"
+      LOG_BAILEYS: "warn"
 
       # Webhook -> Arka. Na VM tudo esta na mesma rede do compose, entao o
       # destino e o nome do servico. (No setup local em Windows isso era
@@ -141,6 +178,19 @@ services:
       WEBHOOK_BASE64: "true"
     volumes:
       - evolution_instances:/evolution/instances
+    # Saber se o processo esta VIVO, separado de saber se o WhatsApp esta
+    # conectado -- sao duas falhas diferentes e ate agora nada distinguia as
+    # duas: "Offline" no painel tanto podia ser a Evolution morta quanto a
+    # sessao caida. `GET /` nao exige apikey e responde 200 com a versao.
+    #
+    # E so sinalizacao: nada depende de `service_healthy` da Evolution, entao
+    # um health vermelho aparece no `docker compose ps` sem derrubar ninguem.
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:8080/',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
   # ------------------------------------------------------------------------
   # Postgres exclusivo da Evolution (instancias, contatos, chats). Nao publica
