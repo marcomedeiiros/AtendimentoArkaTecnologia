@@ -1753,7 +1753,7 @@ function PainelPerfilContato({
   // `.filter` e o `.length` abaixo estouram -- e uma excecao aqui apagava o
   // painel inteiro, porque nao havia limite de erro entre este componente e a
   // raiz (agora ha: ver LimiteDeErro em AppLayout).
-  conversa, parceiros = [], atendente, onFechar, onAmpliarFoto, onVincularDocumento, vinculando,
+  conversa, parceiros = [], atendente, onFechar, onAmpliarFoto, onVincularDocumento, onMarcarAvulso, vinculando,
 }) {
   const [perfil, setPerfil] = useState(null);
   const [carregando, setCarregando] = useState(true);
@@ -2005,6 +2005,55 @@ function PainelPerfilContato({
                 </p>
               )}
               {erroDoc && <p className="text-[10px] text-falha-400 mt-1">{erroDoc}</p>}
+
+              {/* ATENDIMENTO AVULSO -- o par simetrico do "Vincular".
+                  Escreve o mesmo campo que a escolha do cliente no menu, e por
+                  isso vive aqui embaixo, junto do vinculo: as duas afirmacoes
+                  sao sobre a mesma coisa (por qual contrato este chamado e
+                  atendido) e nao podem ficar em cantos diferentes da tela. */}
+              <div className="mt-3 pt-3 border-t border-linha/60">
+                {conversa.atendimentoAvulso ? (
+                  <>
+                    <p className="text-[10px] text-espera-400 font-semibold mb-1.5">
+                      Marcado como atendimento avulso.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => onMarcarAvulso(false)}
+                      disabled={vinculando}
+                      className="w-full px-3 py-2 rounded-lg bg-grafite-700 hover:bg-grafite-600 border border-linha text-slate-200 text-xs font-semibold transition-colors disabled:opacity-40"
+                    >
+                      Desfazer atendimento avulso
+                    </button>
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Desfazer não devolve o CNPJ que estava vinculado — vincule de novo acima.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // CONFIRMA SO QUANDO HA O QUE PERDER. Com empresa
+                        // vinculada, marcar avulso APAGA o vinculo e nao ha como
+                        // devolve-lo depois: perguntar aqui e barato, e refazer
+                        // a identificacao no meio de um atendimento nao e.
+                        if (empresa && !window.confirm(
+                          `Marcar como atendimento avulso vai desvincular ${empresa} desta conversa. O cadastro da empresa não é alterado. Continuar?`
+                        )) return;
+                        onMarcarAvulso(true);
+                      }}
+                      disabled={vinculando}
+                      className="w-full px-3 py-2 rounded-lg bg-espera/15 hover:bg-espera/25 border border-espera/40 text-espera-400 text-xs font-bold transition-colors disabled:opacity-40"
+                    >
+                      Marcar como atendimento avulso
+                    </button>
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Para quem é atendido fora de contrato. {empresa ? 'Desvincula a empresa desta conversa.' : ''}
+                    </p>
+                  </>
+                )}
+              </div>
             </SecaoPerfil>
 
             {/* ATENDIMENTO */}
@@ -4244,6 +4293,27 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     }
   }, [aplicarConversa, conversa, avisar]);
 
+  /**
+   * MARCAR / DESMARCAR "ATENDIMENTO AVULSO" pelo painel de perfil.
+   *
+   * Reaproveita `vinculandoEmpresa` como estado de ocupado: as duas acoes
+   * disputam o mesmo campo da conversa, e deixar as duas clicaveis ao mesmo
+   * tempo permitiria mandar "vincula" e "avulso" na mesma conversa sem saber
+   * qual chega por ultimo.
+   */
+  const marcarAvulsoPerfil = useCallback(async (avulso) => {
+    if (!conversa) return;
+    const id = conversa.id;
+    setVinculandoEmpresa(true);
+    try {
+      aplicarConversa(await ConversasAPI.marcarAvulso(id, avulso));
+    } catch (e) {
+      avisar('Não foi possível alterar o atendimento avulso: ' + (e?.message || 'erro desconhecido'));
+    } finally {
+      setVinculandoEmpresa(false);
+    }
+  }, [aplicarConversa, conversa, avisar]);
+
   const validarCnpjManual = useCallback(async () => {
     const c = limparDocumento(inputCnpj);
     if (!documentoValido(c)) { alert('CPF ou CNPJ inválido!'); return; }
@@ -4691,6 +4761,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
           onFechar={() => setPerfilAberto(false)}
           onAmpliarFoto={setFotoPerfilAmpliada}
           onVincularDocumento={vincularEmpresaPerfil}
+          onMarcarAvulso={marcarAvulsoPerfil}
           vinculando={vinculandoEmpresa}
         />
       )}

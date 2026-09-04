@@ -489,6 +489,61 @@ async function main() {
   );
 
   // ─────────────────────────────────────────────────────────────────────────
+  titulo("11. O BOTAO 'atendimento avulso' da Central (par simetrico do Vincular)");
+
+  // A equipe passou a poder afirmar o avulso pela tela, do mesmo jeito que ja
+  // afirmava o vinculo. Escreve o MESMO campo que a escolha do cliente no menu
+  // -- nao e uma segunda regra de vinculo (ver a nota em conversa.service.js
+  // sobre o "X" que foi removido).
+  conversa = await criarConversa(instancia.id);
+  await conversaService.validarCnpjManual(conversa.id, CNPJ_PARCEIRO);
+  const comEmpresa = await conversaService.obter(conversa.id);
+  check(comEmpresa.cnpjVerificado === true, "ponto de partida: empresa parceira vinculada");
+  check(
+    badge.chip(comEmpresa, parceirosNaTela).label === "TESTE-AVULSO EMPRESA PARCEIRA",
+    "e a badge mostra a empresa"
+  );
+
+  await conversaService.marcarAvulso(conversa.id, true);
+  const marcada = await conversaService.obter(conversa.id);
+  check(marcada.atendimentoAvulso === true, "o botao marca o atendimento como avulso");
+  // Desassocia igual ao motor: quem e atendido como avulso nao esta sendo
+  // atendido por aquele contrato.
+  check(marcada.cnpjVerificado === false, "e desassocia o CNPJ (como o motor faz)");
+  check(marcada.cnpj === null && marcada.empresa === null, "cnpj e empresa saem da conversa");
+  check(
+    badge.chip(marcada, parceirosNaTela).label === "CLIENTE AVULSO",
+    "a badge vira CLIENTE AVULSO"
+  );
+
+  // O CADASTRO DA EMPRESA NAO E TOCADO -- esta e a garantia que separa
+  // "desvincular desta conversa" de "descadastrar o parceiro".
+  const parceiroIntacto = await parceiroRepository.findAtivoByCnpj(CNPJ_PARCEIRO);
+  check(!!parceiroIntacto, "o cadastro do parceiro continua intacto");
+
+  // `clienteTipo` nao pode ser congelado aqui: quem manda na badge e a marca
+  // mais o cadastro vivo. Escrever nele foi o erro que este arquivo ja pegou.
+  check(marcada.clienteTipo === "cadastrado", "clienteTipo NAO e reescrito (segue sendo retrato do cadastro)");
+
+  // DESFAZER: tira a marca e nao inventa CNPJ nenhum de volta.
+  await conversaService.marcarAvulso(conversa.id, false);
+  const desfeita = await conversaService.obter(conversa.id);
+  check(desfeita.atendimentoAvulso === false, "desfazer remove a marca");
+  check(desfeita.cnpj === null, "e NAO devolve o CNPJ (nao ha como adivinhar qual era)");
+  check(
+    badge.chip(desfeita, parceirosNaTela).label === "CLIENTE NÃO IDENTIFICADO",
+    "sem marca e sem CNPJ, volta a 'nao identificado' -- e preciso vincular de novo"
+  );
+
+  // E o caminho de volta funciona: vincular outra vez devolve a empresa.
+  await conversaService.validarCnpjManual(conversa.id, CNPJ_PARCEIRO);
+  const revinculada = await conversaService.obter(conversa.id);
+  check(
+    badge.chip(revinculada, parceirosNaTela).label === "TESTE-AVULSO EMPRESA PARCEIRA",
+    "vincular de novo devolve a empresa (o ciclo fecha nos dois sentidos)"
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────
   titulo("limpeza");
   await limpar();
   const sobrou = await prisma.conversa.count({ where: { cliente: { startsWith: MARCA } } });

@@ -12,6 +12,7 @@ const {
   iniciarConversaSchema,
   atualizarStatusSchema,
   validarCnpjSchema,
+  marcarAvulsoSchema,
   enviarMidiaSchema,
   atualizarFlagsSchema,
   encaminharMensagemSchema,
@@ -157,6 +158,12 @@ router.post("/:id/solicitar-cnpj", (req, res, next) =>
 // administrador desvincula o contato em Clientes (CNPJ).
 router.post("/:id/validar-cnpj", validate(validarCnpjSchema), (req, res, next) =>
   conversaController.validarCnpj(req, res).catch(next)
+);
+// Par simetrico do "Vincular": marca o atendimento como AVULSO. Escreve o mesmo
+// campo que a escolha do cliente no menu (`atendimentoAvulso`) -- nao e uma
+// segunda regra de vinculo, e por isso nao recria o DELETE /:id/cnpj de cima.
+router.patch("/:id/avulso", validate(marcarAvulsoSchema), (req, res, next) =>
+  conversaController.marcarAvulso(req, res).catch(next)
 );
 router.patch("/:id/status", validate(atualizarStatusSchema), (req, res, next) =>
   conversaController.atualizarStatus(req, res).catch(next)

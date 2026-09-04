@@ -928,6 +928,51 @@ class ConversaService {
   // (CNPJ) -- tambem foi removido, junto com a rota que ele chamava: eram duas
   // regras disputando o mesmo vinculo, e a manual nao tinha contexto nenhum.
 
+  /**
+   * MARCA (ou desmarca) O ATENDIMENTO COMO AVULSO, pela Central.
+   *
+   * ── POR QUE ISTO NAO CONTRADIZ A NOTA ACIMA ────────────────────────────────
+   *
+   * A nota diz que o "X" que removia o CNPJ saiu da tela, porque era um clique
+   * sem contexto disputando o vinculo com a regra do bot. Isto e outra coisa: e
+   * a MESMA afirmacao que o cliente faz ao escolher "atendimento avulso" no
+   * menu, escrita no MESMO campo (`atendimentoAvulso`), pelo mesmo motivo --
+   * este chamado e cobrado a parte. Nao e uma segunda regra de vinculo; e o par
+   * simetrico do "Vincular", que ja e decisao da equipe.
+   *
+   * Marcar avulso DESASSOCIA o CNPJ, igual ao motor faz (`_desassociarCnpj`):
+   * quem e atendido como avulso nao esta sendo atendido por aquele contrato. O
+   * cadastro da empresa nao e tocado.
+   *
+   * DESMARCAR nao devolve o CNPJ. Nao da para adivinhar qual era: o vinculo foi
+   * apagado, e inventar um a partir do historico seria pior do que pedir para
+   * vincular de novo. A tela avisa isso antes do clique.
+   */
+  async marcarAvulso(id, avulso, acesso = null) {
+    const conversa = await conversaRepository.findById(id);
+    if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
+    exigirAcessoSetor(acesso, conversa.setor);
+
+    const dados = { atendimentoAvulso: !!avulso };
+    if (avulso) {
+      dados.cnpj = null;
+      dados.empresa = null;
+      dados.cnpjVerificado = false;
+      // `clienteTipo` NAO e tocado: ele e o retrato do cadastro no instante da
+      // validacao, e quem manda na badge e `atendimentoAvulso` (que ganha de
+      // tudo) mais a consulta ao cadastro vivo. Escrever aqui congelaria a
+      // classificacao -- o erro que o verificar-cliente-avulso ja pegou uma vez.
+    }
+    await conversaRepository.update(id, dados);
+
+    logger.info(avulso ? "Atendimento marcado como avulso pela equipe" : "Marca de avulso removida pela equipe", {
+      conversaId: id,
+      cnpjDesassociado: !!(avulso && conversa.cnpj),
+    });
+
+    return this._emitir(await conversaRepository.findById(id));
+  }
+
   async solicitarCnpj(id, acesso = null) {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");

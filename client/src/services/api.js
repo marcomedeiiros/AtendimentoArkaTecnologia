@@ -702,6 +702,8 @@ export const ConversasAPI = {
   perfil: (id) => request(`/conversas/${id}/perfil`),
   solicitarCnpj: (id) => request(`/conversas/${id}/solicitar-cnpj`, { method: 'POST' }),
   validarCnpj: (id, cnpj) => request(`/conversas/${id}/validar-cnpj`, { method: 'POST', body: JSON.stringify({ cnpj }) }),
+  // Par simetrico do validarCnpj: marca (ou desfaz) o atendimento avulso.
+  marcarAvulso: (id, avulso) => request(`/conversas/${id}/avulso`, { method: 'PATCH', body: JSON.stringify({ avulso }) }),
   // NAO existe mais `desvincularCnpj`: o "X" saiu do cabecalho da conversa e a
   // rota DELETE /conversas/:id/cnpj deixou de existir no servidor. A correcao de
   // um CNPJ errado e feita pelo proprio cliente (responde "NAO" ao bot) ou pelo

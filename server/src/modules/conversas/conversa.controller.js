@@ -210,6 +210,13 @@ class ConversaController {
     return conversaService.validarCnpjManual(req.params.id, req.body.cnpj, req.user).then((data) => success(res, data));
   }
 
+  // Par simetrico do validarCnpj: marca/desmarca o atendimento como avulso.
+  marcarAvulso(req, res) {
+    return conversaService
+      .marcarAvulso(req.params.id, req.body.avulso, req.user)
+      .then((data) => success(res, data));
+  }
+
   atualizarStatus(req, res) {
     return conversaService
       .atualizarStatus(req.params.id, req.body.status, req.user, req.user, req.body.motivo, req.body.semPesquisa === true)

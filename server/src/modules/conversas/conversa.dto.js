@@ -96,6 +96,13 @@ const validarCnpjSchema = z.object({
   cnpj: z.string().min(11),
 });
 
+// Marca do atendimento avulso, feita pela Central. Booleano explicito (e nao
+// um toggle sem corpo) para o pedido dizer o estado desejado: dois cliques
+// rapidos no mesmo botao acabam no mesmo lugar, em vez de se cancelarem.
+const marcarAvulsoSchema = z.object({
+  avulso: z.boolean(),
+});
+
 const atualizarFlagsSchema = z
   .object({
     favorita: z.boolean().optional(),
@@ -417,6 +424,7 @@ module.exports = {
   atualizarStatusSchema,
   validarCnpjSchema,
   enviarMidiaSchema,
+  marcarAvulsoSchema,
   atualizarFlagsSchema,
   encaminharMensagemSchema,
   editarMensagemSchema,
