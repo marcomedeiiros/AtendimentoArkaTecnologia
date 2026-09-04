@@ -295,6 +295,8 @@ function DestaqueDoMes({ item, minimo }) {
 function LinhaPosicao({ posicao, item, minimo }) {
   const cor = MEDALHAS[posicao - 1] || '--quieto';
   const vago = !item;
+  // Ouro, prata e bronze existem; do 4o em diante nao ha metal a mostrar.
+  const temMedalha = posicao <= MEDALHAS.length;
 
   return (
     <li
@@ -316,19 +318,56 @@ function LinhaPosicao({ posicao, item, minimo }) {
         <span className="flex-1 text-slate-600" style={T.apoio}>em aberto</span>
       ) : (
         <>
-          <span
-            className="shrink-0 rounded-full border grid place-items-center font-display font-bold"
-            style={{
-              width: AVATAR_POSICAO,
-              height: AVATAR_POSICAO,
-              fontSize: `calc(${AVATAR_POSICAO} * 0.36)`,
-              borderColor: medalha(cor, 0.5),
-              background: medalha(cor, 0.15),
-              color: medalha(cor),
-            }}
-            title={item.nome}
-          >
-            {iniciais(item.nome)}
+          {/* AVATAR + MEDALHA.
+              O `relative` existe so para pendurar o disco na base do circulo;
+              o `AVATAR_POSICAO` continua definindo o tamanho, entao a linha nao
+              muda de altura por causa da medalha. */}
+          <span className="relative shrink-0" style={{ width: AVATAR_POSICAO, height: AVATAR_POSICAO }}>
+            <span
+              className="w-full h-full rounded-full border grid place-items-center font-display font-bold"
+              style={{
+                fontSize: `calc(${AVATAR_POSICAO} * 0.36)`,
+                borderColor: medalha(cor, 0.5),
+                background: medalha(cor, 0.15),
+                color: medalha(cor),
+              }}
+              title={item.nome}
+            >
+              {iniciais(item.nome)}
+            </span>
+
+            {/* SO DO 1o AO 3o: e o que faz a medalha significar alguma coisa.
+                Um disco em toda posicao viraria enfeite, e a lista mostra mais
+                de tres lugares quando a equipe cresce.
+
+                DISCO SOLIDO, e nao um icone de medalha: esta e uma tela de
+                PAREDE, lida a metros de distancia. O desenho de uma fita e de
+                um pingente some nesse tamanho; um circulo cheio na cor do metal
+                continua legivel do outro lado da sala.
+
+                O degrade claro-para-escuro e o que faz o olho ler METAL em vez
+                de "bolinha colorida" -- e a mesma leitura de brilho que uma
+                medalha de verdade tem sob luz. */}
+            {temMedalha && (
+              <span
+                className="absolute left-1/2 grid place-items-center rounded-full font-display font-extrabold tabular-nums"
+                style={{
+                  width: `calc(${AVATAR_POSICAO} * 0.46)`,
+                  height: `calc(${AVATAR_POSICAO} * 0.46)`,
+                  bottom: `calc(${AVATAR_POSICAO} * -0.12)`,
+                  transform: 'translateX(-50%)',
+                  fontSize: `calc(${AVATAR_POSICAO} * 0.26)`,
+                  background: `linear-gradient(145deg, ${medalha(cor)}, ${medalha(cor, 0.72)})`,
+                  // Anel na cor do fundo do painel: e ele que descola a medalha
+                  // do avatar em vez de deixar os dois virarem uma mancha so.
+                  boxShadow: '0 0 0 0.14em rgb(var(--grafite-900))',
+                  color: 'rgb(var(--grafite-900))',
+                }}
+                title={`${posicao}º lugar`}
+              >
+                {posicao}
+              </span>
+            )}
           </span>
 
           <span className="flex-1 min-w-0">
