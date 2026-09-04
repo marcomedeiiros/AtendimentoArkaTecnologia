@@ -3229,7 +3229,10 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   // mexeu passa a assinar. O padrão nunca é gravado sozinho -- só uma ação da
   // pessoa escreve no servidor.
   const [assinar, setAssinar] = usePreferencia('central.assinatura', true);
-  const [abaAtual,      setAbaAtual]     = usePreferencia('central.aba', 'abertas');
+  // `abaCarregada` diz que a preferencia JA veio do servidor. Sem esperar por
+  // ela, um pulo para outra aba feito nos primeiros instantes era desfeito pela
+  // resposta que chegava depois -- ver o efeito do `?abrir=`.
+  const [abaAtual, setAbaAtual, abaCarregada] = usePreferencia('central.aba', 'abertas');
   const [selecionada,   setSelecionada]  = useState(null);
   const [texto,         setTexto]        = useState('');
   const [espiandoChat,  setEspiandoChat] = useState(null);
@@ -3887,62 +3890,6 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     }
   }, [setConversas, setAbaAtual, assinar, assinaturaNome]);
 
-  /**
-   * "Conversar" no cartao de contato que o CLIENTE encaminhou.
-   *
-   * Um clique so, e sem mandar mensagem nenhuma: se ja existe fio com aquele
-   * numero, pula para ele; se nao existe, o servidor cria a conversa ja ABERTA
-   * (statusAtendimento "aberta") e ela aparece na aba Abertas, pronta para o
-   * atendente escrever quando quiser. Abrir o fio nao notifica o contato.
-   *
-   * Se a criacao falhar (numero recusado, WhatsApp fora do ar), caimos no modal
-   * de conversa nova ja preenchido: e la que o erro tem onde aparecer, e a
-   * pessoa corrige o numero em vez de levar um clique silencioso.
-   */
-  const conversarComContatoRecebido = useCallback(async (contato) => {
-    const tel = telefoneComparavel(contato.telefone);
-    const existente = conversas.find(c => telefoneComparavel(c.telefone) === tel);
-    if (existente) { irParaConversa(existente.id); return; }
-
-    setErroNova('');
-    const nova = await iniciarConversaNova({
-      telefone: contato.telefone,
-      nome: contato.nome || '',
-      setor: 'Geral',
-      texto: '',
-    });
-    if (!nova) {
-      setNovaInicial({ telefone: contato.telefone, nome: contato.nome || '' });
-      setModalNova(true);
-    }
-  }, [conversas, irParaConversa, iniciarConversaNova]);
-
-  /**
-   * Executa o `?abrir=` que veio de outra tela (hoje, o "Conversar" dos
-   * Contatos). Uma vez so, e depois some da URL.
-   *
-   * ESPERA A LISTA CARREGAR (`carregando`) de proposito. Agindo antes, a busca
-   * pelo fio existente olharia uma lista vazia, concluiria "nao existe" e
-   * mandaria criar -- e o servidor, achando o fio la, REABRIRIA um atendimento
-   * que estava fechado. Um clique que muda o status de uma OS encerrada e
-   * exatamente o tipo de efeito colateral que ninguem espera de "Conversar".
-   *
-   * O `replaceState` tira o parametro do endereco: sem isso, um F5 (ou o
-   * "voltar" do navegador) repetiria a abertura mais tarde, fora de contexto.
-   */
-  const abriuPedido = useRef(false);
-  useEffect(() => {
-    if (!pedidoAbrir || carregando || abriuPedido.current) return;
-    abriuPedido.current = true;
-    setPedidoAbrir(null);
-    // Limpa qualquer filtro de busca que ja estivesse na tela. "Conversar" e um
-    // pedido para ABRIR uma conversa, nao para procurar: chegar com a lista
-    // recortada por um texto antigo e o que fazia parecer que as conversas
-    // tinham sumido.
-    setBusca('');
-    window.history.replaceState({}, '', window.location.pathname);
-    conversarComContatoRecebido(pedidoAbrir);
-  }, [pedidoAbrir, carregando, conversarComContatoRecebido]);
 
   /**
    * Assumir a conversa.
@@ -4041,6 +3988,91 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     ));
     try { aplicarConversa(await ConversasAPI.reabrir(id)); } catch {}
   }, [setConversas, aplicarConversa]);
+
+  /**
+   * "CONVERSAR": vindo do cartao de contato encaminhado ou da lista de Contatos.
+   *
+   * Tres desfechos, e o do meio e o que estava faltando:
+   *
+   *   nao existe fio      -> o servidor cria a conversa ja ABERTA, sem enviar
+   *                          mensagem nenhuma. Abrir nao notifica o contato.
+   *   existe e esta viva  -> pula para ela, sem tocar em nada.
+   *   existe e esta FECHADA -> REABRE, e ela vai para Abertas.
+   *
+   * ── O QUE O TERCEIRO CASO CONSERTA ─────────────────────────────────────────
+   *
+   * Antes ele caia no "pula para ela": a tela trocava para a aba Fechadas e
+   * selecionava a conversa. Quando dava certo, abria no lugar errado (o pedido
+   * era conversar, nao consultar o encerrado). Quando dava errado -- e dava --
+   * o atendimento simplesmente FECHAVA sem abrir nada, porque a troca de aba
+   * podia ser desfeita logo em seguida e ha um efeito que limpa a selecao
+   * assim que a conversa nao pertence mais a aba visivel.
+   *
+   * Reabrir tambem preserva o SETOR, e por isso nao passamos por
+   * `iniciarConversaNova` aqui: aquele caminho manda `setor: 'Geral'`, e o
+   * servidor sobrescreve o setor do fio existente com ele -- uma conversa do
+   * Tecnico voltaria como Geral so por causa de um clique em "Conversar".
+   */
+  const conversarComContatoRecebido = useCallback(async (contato) => {
+    const tel = telefoneComparavel(contato.telefone);
+    const existente = conversas.find(c => telefoneComparavel(c.telefone) === tel);
+    if (existente) {
+      if (existente.statusAtendimento === 'fechada') reabrirConversa(existente.id);
+      else irParaConversa(existente.id);
+      return;
+    }
+
+    setErroNova('');
+    const nova = await iniciarConversaNova({
+      telefone: contato.telefone,
+      nome: contato.nome || '',
+      setor: 'Geral',
+      texto: '',
+    });
+    // Falhou (numero recusado, WhatsApp fora do ar): cai no modal ja
+    // preenchido, que e onde o erro tem onde aparecer.
+    if (!nova) {
+      setNovaInicial({ telefone: contato.telefone, nome: contato.nome || '' });
+      setModalNova(true);
+    }
+  }, [conversas, irParaConversa, reabrirConversa, iniciarConversaNova]);
+
+  /**
+   * Executa o `?abrir=` que veio de outra tela (hoje, o "Conversar" dos
+   * Contatos). Uma vez so, e depois some da URL.
+   *
+   * ESPERA DUAS COISAS, e ambas por um motivo concreto:
+   *
+   * `carregando` -- a lista de conversas. Agindo antes, a busca pelo fio
+   *   existente olharia uma lista vazia, concluiria "nao existe" e mandaria
+   *   criar; o servidor acharia o fio la e reabriria um atendimento encerrado
+   *   sem ninguem ter pedido.
+   *
+   * `abaCarregada` -- a aba salva do operador. Esta e a CORRIDA que fazia o
+   *   clique "abrir e fechar na cara": a aba atual vem de uma preferencia que
+   *   chega do servidor DEPOIS da primeira renderizacao. Se pulassemos para a
+   *   conversa antes disso, a resposta da preferencia sobrescrevia a aba logo
+   *   em seguida -- e o efeito que limpa a selecao fora da aba visivel jogava
+   *   a conversa fora. Dava certo quando a aba salva por acaso ja era a aba de
+   *   destino, e errado quando nao era: exatamente o "alguns contatos abrem,
+   *   outros nao".
+   *
+   * O `replaceState` tira o parametro do endereco: sem isso, um F5 (ou o
+   * "voltar" do navegador) repetiria a abertura mais tarde, fora de contexto.
+   */
+  const abriuPedido = useRef(false);
+  useEffect(() => {
+    if (!pedidoAbrir || carregando || !abaCarregada || abriuPedido.current) return;
+    abriuPedido.current = true;
+    setPedidoAbrir(null);
+    // Limpa qualquer filtro de busca que ja estivesse na tela. "Conversar" e um
+    // pedido para ABRIR uma conversa, nao para procurar: chegar com a lista
+    // recortada por um texto antigo e o que fazia parecer que as conversas
+    // tinham sumido.
+    setBusca('');
+    window.history.replaceState({}, '', window.location.pathname);
+    conversarComContatoRecebido(pedidoAbrir);
+  }, [pedidoAbrir, carregando, abaCarregada, conversarComContatoRecebido]);
 
   const marcarComoLido = useCallback(async (id) => {
     setConversas(prev => prev.map(c => c.id === id ? { ...c, lido: true, naoLidas: 0 } : c));

@@ -174,7 +174,7 @@ console.log('\n=== 7. "CONVERSAR" DOS CONTATOS NAO FILTRA A CENTRAL ===\n');
   check(/const \[pedidoAbrir,\s+setPedidoAbrir\]/.test(view), "a Central le o parametro `abrir`");
   const efeito = view.slice(view.indexOf("const abriuPedido"));
   const trecho = efeito.slice(0, 700);
-  check(/if \(!pedidoAbrir \|\| carregando \|\| abriuPedido\.current\) return;/.test(trecho),
+  check(/if \(!pedidoAbrir \|\| carregando \|\|/.test(trecho),
     "espera a lista carregar antes de agir (senao reabriria uma OS fechada)");
   check(/abriuPedido\.current = true;/.test(trecho), "roda uma vez so");
   check(/history\.replaceState/.test(trecho),
@@ -200,6 +200,47 @@ console.log('\n=== 7. "CONVERSAR" DOS CONTATOS NAO FILTRA A CENTRAL ===\n');
   // caminho do botao. Se alguem a remover junto, um link antigo passa a nao
   // fazer nada em silencio.
   check(/get\('busca'\)/.test(view), "o `?busca=` avulso continua funcionando para quem tiver o link");
+}
+
+console.log("\n=== 8. CONTATO COM ATENDIMENTO FECHADO ===\n");
+{
+  // O relato: "quando o contato esta nas fechadas ele nao abre, meio que fecha".
+  //
+  // Duas causas somadas. (a) O clique caia no "pula para a conversa", que
+  // levava para a aba FECHADAS -- nao era o pedido, que e conversar. (b) Uma
+  // CORRIDA: a aba atual vem de uma preferencia que chega do servidor depois da
+  // primeira renderizacao; o pulo acontecia antes, a resposta sobrescrevia a
+  // aba, e o efeito que limpa a selecao fora da aba visivel jogava a conversa
+  // fora. Dava certo quando a aba salva por acaso ja era a de destino -- por
+  // isso "alguns contatos abrem, outros nao".
+  const view = lerCliente("src/components/pages/AtendimentoView.jsx");
+  const handler = view.slice(view.indexOf("const conversarComContatoRecebido"));
+  const corpo = handler.slice(0, handler.indexOf("}, ["));
+
+  check(/statusAtendimento === 'fechada'\) reabrirConversa\(existente\.id\)/.test(corpo),
+    "conversa fechada e REABERTA (nao apenas selecionada na aba Fechadas)");
+  check(/else irParaConversa\(existente\.id\)/.test(corpo),
+    "conversa viva so recebe o pulo, sem mexer no status");
+
+  // reabrirConversa e quem leva para Abertas -- e preserva o setor. Passar pelo
+  // `iniciarConversaNova` aqui mandaria `setor: 'Geral'`, e o servidor
+  // sobrescreve o setor do fio existente com ele: uma conversa do Tecnico
+  // voltaria como Geral so por causa de um clique em "Conversar".
+  const reabrir = view.slice(view.indexOf("const reabrirConversa"));
+  check(/setAbaAtual\('abertas'\)/.test(reabrir.slice(0, 300)), "reabrir leva para a aba Abertas");
+  check(!/setor/.test(reabrir.slice(0, 400)), "reabrir NAO mexe no setor da conversa");
+
+  // A ordem importa de verdade: `conversarComContatoRecebido` cita
+  // `reabrirConversa` na lista de dependencias, que e lida durante a
+  // renderizacao. Declarado depois, isso e ReferenceError e a tela nao abre.
+  check(view.indexOf("const reabrirConversa") < view.indexOf("const conversarComContatoRecebido"),
+    "reabrirConversa e declarado ANTES de quem o usa (senao a tela quebra no render)");
+
+  check(/const \[abaAtual, setAbaAtual, abaCarregada\]/.test(view),
+    "a tela sabe quando a aba salva terminou de chegar do servidor");
+  const efeito = view.slice(view.indexOf("const abriuPedido"));
+  check(/if \(!pedidoAbrir \|\| carregando \|\| !abaCarregada \|\| abriuPedido\.current\) return;/.test(efeito.slice(0, 400)),
+    "so abre depois da lista E da preferencia de aba (fecha a corrida)");
 }
 
 console.log(`\n${erros.length === 0 ? "TUDO OK" : `${erros.length} FALHA(S)`}\n`);
