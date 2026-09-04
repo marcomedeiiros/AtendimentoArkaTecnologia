@@ -9,7 +9,7 @@ import {
   FileText, MapPin, Contact, Paperclip, Smile, Loader2,
   SlidersHorizontal, Star, Archive, EyeOff, MoreVertical,
   Maximize2, Download, CornerUpLeft, CornerUpRight, Share2, Pencil, MoreHorizontal, Mic, Tag, PenLine,
-  Sun, Moon, Bot, StickyNote, SpellCheck, Undo2, History, MessageSquarePlus, Copy, StarOff
+  Bot, StickyNote, SpellCheck, Undo2, History, MessageSquarePlus, Copy, StarOff
 } from 'lucide-react';
 import { EmojiIcon, FormattedMessage, TextoFormatado } from './EmojiIcon';
 import { useMensagensRapidas } from './MensagensRapidas';
@@ -3288,7 +3288,7 @@ const ItemContatoAgenda = React.memo(function ItemContatoAgenda({ contato, onAbr
 // vem da própria conversa (`atendenteDaConversa`).
 export default function AtendimentoView({ conversas, setConversas, fluxos, parceiros }) {
   const { whatsAppConectado, carregando, historico = [], marcarNotificacoesLidas, limparHistorico, sinalContatos, sinalMensagemNova } = useAppContext();
-  const { usuario, assinaturaNome, tema, alternarTema } = useAuth();
+  const { usuario, assinaturaNome } = useAuth();
   // Nome usado ao assinar mensagens: vem do perfil (personalizavel no menu de
   // perfil) e cai no primeiro nome como padrao. Fica no AuthContext, entao muda
   // na hora quando o operador edita no perfil.
@@ -4359,15 +4359,11 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
             <Send size={15} />
           </button>
 
-          {/* Alternar tema (claro/escuro). */}
-          <button
-            onClick={alternarTema}
-            title={tema === 'light' ? 'Mudar para modo escuro' : 'Mudar para modo claro'}
-            aria-label="Alternar tema claro/escuro"
-            className="flex items-center justify-center w-9 h-9 rounded-full border bg-slate-800/60 border-linha text-slate-400 hover:text-acao-200 hover:border-acao/50 transition-colors"
-          >
-            {tema === 'light' ? <Moon size={15} /> : <Sun size={15} />}
-          </button>
+          {/* O botao de tema saiu DAQUI. Ele existe uma vez so, na barra
+              lateral (AppLayout), logo acima do perfil: o mesmo controle em dois
+              lugares e um convite a discordarem, e este ficava no meio das acoes
+              do atendimento -- entre "iniciar conversa" e "modo TV" -- onde nada
+              mais e sobre preferencia de quem olha a tela. */}
 
           {/* Sino de notificacoes: abre o painel; NAO toca som ao clicar
               (o som so dispara quando chega mensagem, via AppContext). */}
