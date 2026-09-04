@@ -3252,10 +3252,28 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   const [erroNova,      setErroNova]     = useState('');
   // Preenche o modal de conversa nova a partir de um contato da agenda.
   const [novaInicial,   setNovaInicial]  = useState(null);
-  // Semente vinda de "Iniciar chat" nos Contatos (/atendimento?busca=5511...).
+  // Semente de busca por URL (/atendimento?busca=5511...). NAO e mais o caminho
+  // do botao "Conversar" dos Contatos -- ver `pedidoAbrir` logo abaixo.
   const [busca,         setBusca]        = useState(
     () => new URLSearchParams(window.location.search).get('busca') || ''
   );
+  /**
+   * PEDIDO DE ABERTURA vindo de outra tela (/atendimento?abrir=27999...&nome=).
+   *
+   * Quem manda e o "Conversar" da lista de Contatos. Antes ele mandava
+   * `?busca=`, e a Central chegava com a lista FILTRADA por aquele numero: as
+   * conversas abertas, pendentes e fechadas sumiam da tela. Nada tinha sumido
+   * -- era o campo de busca preenchido -- mas parecia que o painel tinha aberto
+   * uma sessao nova e vazia.
+   *
+   * Agora o parametro nao filtra nada: e uma ordem de abrir o fio daquele
+   * contato, executada uma vez e apagada da URL em seguida.
+   */
+  const [pedidoAbrir,   setPedidoAbrir]  = useState(() => {
+    const p = new URLSearchParams(window.location.search);
+    const telefone = p.get('abrir');
+    return telefone ? { telefone, nome: p.get('nome') || '' } : null;
+  });
   // Agenda de Contatos (a mesma de /contatos), usada SO na busca. Sem ela, a
   // busca da Central so via o que estava na conversa: procurar pelo nome da
   // pessoa, pela empresa ou pelo e-mail nao achava nada, porque a conversa
@@ -3898,6 +3916,28 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       setModalNova(true);
     }
   }, [conversas, irParaConversa, iniciarConversaNova]);
+
+  /**
+   * Executa o `?abrir=` que veio de outra tela (hoje, o "Conversar" dos
+   * Contatos). Uma vez so, e depois some da URL.
+   *
+   * ESPERA A LISTA CARREGAR (`carregando`) de proposito. Agindo antes, a busca
+   * pelo fio existente olharia uma lista vazia, concluiria "nao existe" e
+   * mandaria criar -- e o servidor, achando o fio la, REABRIRIA um atendimento
+   * que estava fechado. Um clique que muda o status de uma OS encerrada e
+   * exatamente o tipo de efeito colateral que ninguem espera de "Conversar".
+   *
+   * O `replaceState` tira o parametro do endereco: sem isso, um F5 (ou o
+   * "voltar" do navegador) repetiria a abertura mais tarde, fora de contexto.
+   */
+  const abriuPedido = useRef(false);
+  useEffect(() => {
+    if (!pedidoAbrir || carregando || abriuPedido.current) return;
+    abriuPedido.current = true;
+    setPedidoAbrir(null);
+    window.history.replaceState({}, '', window.location.pathname);
+    conversarComContatoRecebido(pedidoAbrir);
+  }, [pedidoAbrir, carregando, conversarComContatoRecebido]);
 
   /**
    * Assumir a conversa.

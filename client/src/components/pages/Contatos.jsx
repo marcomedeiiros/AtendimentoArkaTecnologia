@@ -296,17 +296,30 @@ export default function Contatos({ setAba }) {
     }
   }, [contatos]);
 
-  // Leva para a Central ja procurando por este contato.
-  //
-  // Antes esta funcao montava uma conversa no estado do navegador, com id
-  // inventado ('c_'+timestamp) e status que nao existe mais. Nada disso ia para
-  // o banco: a conversa parecia criada e sumia no F5 seguinte. Conversa de
-  // verdade nasce quando chega mensagem pelo webhook -- nao da para fabricar
-  // uma daqui. Entao apenas navegamos com a busca preenchida: se ja existe
-  // conversa com esse numero ela aparece; se nao existe, nada e inventado.
+  /**
+   * "Conversar": leva para a Central e ABRE o atendimento deste contato.
+   *
+   * ── O QUE ISTO CONSERTA ────────────────────────────────────────────────────
+   *
+   * Antes navegavamos com a BUSCA preenchida (`atendimento?busca=27999...`).
+   * O efeito colateral era que a Central chegava filtrada por aquele numero:
+   * as conversas abertas, pendentes e fechadas sumiam da lista -- e parecia
+   * que o painel tinha aberto "uma sessao nova", vazia. Nada tinha sumido; era
+   * um filtro esquecido no campo de busca.
+   *
+   * (Antes DISSO, esta funcao chegou a montar uma conversa so no estado do
+   * navegador, com id inventado -- que sumia no F5 seguinte. Conversa de
+   * verdade nasce no banco, nunca aqui.)
+   *
+   * Agora mandamos uma INTENCAO, nao um filtro: a Central acha o fio existente
+   * e pula para ele, ou cria a conversa ja aberta -- sem enviar mensagem
+   * nenhuma e sem mexer no que estava na tela.
+   */
   function iniciarChat(contato) {
     if (!setAba) return;
-    setAba(`atendimento?busca=${encodeURIComponent(limparTel(contato.telefone))}`);
+    const params = new URLSearchParams({ abrir: limparTel(contato.telefone) });
+    if (contato.nome) params.set('nome', contato.nome);
+    setAba(`atendimento?${params}`);
   }
 
   const listaFiltrada = useMemo(() => {

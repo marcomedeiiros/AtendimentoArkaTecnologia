@@ -156,6 +156,38 @@ console.log("\n=== 6. A TELA ESTA LIGADA NO CAMINHO CERTO ===\n");
     "falha cai no modal preenchido, onde o erro tem onde aparecer");
 }
 
+console.log('\n=== 7. "CONVERSAR" DOS CONTATOS NAO FILTRA A CENTRAL ===\n');
+{
+  // O defeito: o botao navegava com `?busca=<telefone>`, e a Central chegava
+  // com a lista filtrada por aquele numero. As conversas abertas, pendentes e
+  // fechadas sumiam da tela -- parecia que o painel tinha aberto uma sessao
+  // nova e vazia. Nada tinha sumido: era um filtro esquecido no campo de busca.
+  const contatos = lerCliente("src/components/pages/Contatos.jsx");
+  const inicia = contatos.slice(contatos.indexOf("function iniciarChat"));
+  const corpo = inicia.slice(0, inicia.indexOf("\n  }"));
+  check(!/busca=/.test(corpo), "o botao NAO manda mais `busca=` (era o que esvaziava a lista)");
+  check(/abrir:\s*limparTel\(contato\.telefone\)/.test(corpo),
+    "manda `abrir=<telefone>`: uma intencao de abrir, nao um filtro");
+  check(/params\.set\('nome'/.test(corpo), "leva o nome junto, para a conversa nova nascer rotulada");
+
+  const view = lerCliente("src/components/pages/AtendimentoView.jsx");
+  check(/const \[pedidoAbrir,\s+setPedidoAbrir\]/.test(view), "a Central le o parametro `abrir`");
+  const efeito = view.slice(view.indexOf("const abriuPedido"));
+  const trecho = efeito.slice(0, 700);
+  check(/if \(!pedidoAbrir \|\| carregando \|\| abriuPedido\.current\) return;/.test(trecho),
+    "espera a lista carregar antes de agir (senao reabriria uma OS fechada)");
+  check(/abriuPedido\.current = true;/.test(trecho), "roda uma vez so");
+  check(/history\.replaceState/.test(trecho),
+    "limpa a URL (um F5 nao pode reabrir a conversa outra vez)");
+  check(/conversarComContatoRecebido\(pedidoAbrir\)/.test(trecho),
+    "usa o MESMO caminho do cartao encaminhado (uma regra so para abrir conversa)");
+
+  // A semente de busca por URL continua existindo -- ela so nao e mais o
+  // caminho do botao. Se alguem a remover junto, um link antigo passa a nao
+  // fazer nada em silencio.
+  check(/get\('busca'\)/.test(view), "o `?busca=` avulso continua funcionando para quem tiver o link");
+}
+
 console.log(`\n${erros.length === 0 ? "TUDO OK" : `${erros.length} FALHA(S)`}\n`);
 if (erros.length) {
   erros.forEach((e) => console.log(`  - ${e}`));
