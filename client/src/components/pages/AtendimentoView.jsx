@@ -3935,6 +3935,11 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     if (!pedidoAbrir || carregando || abriuPedido.current) return;
     abriuPedido.current = true;
     setPedidoAbrir(null);
+    // Limpa qualquer filtro de busca que ja estivesse na tela. "Conversar" e um
+    // pedido para ABRIR uma conversa, nao para procurar: chegar com a lista
+    // recortada por um texto antigo e o que fazia parecer que as conversas
+    // tinham sumido.
+    setBusca('');
     window.history.replaceState({}, '', window.location.pathname);
     conversarComContatoRecebido(pedidoAbrir);
   }, [pedidoAbrir, carregando, conversarComContatoRecebido]);
@@ -4387,9 +4392,26 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               <input
                 value={busca}
                 onChange={e => setBusca(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Escape' && busca) { e.stopPropagation(); setBusca(''); } }}
                 placeholder="Buscar conversa..."
-                className="w-full bg-grafite-700 border border-linha rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50"
+                className={`w-full bg-grafite-700 border border-linha rounded-xl pl-8 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 ${busca ? 'pr-8' : 'pr-3'}`}
               />
+              {/* LIMPAR A BUSCA.
+                  Com a lista filtrada e nenhuma conversa a vista, nao havia
+                  saida obvia: quem nao percebia o texto no campo achava que as
+                  conversas tinham sumido e recarregava a pagina para traze-las
+                  de volta. Um X (e o Esc) resolvem no lugar do F5. */}
+              {busca && (
+                <button
+                  type="button"
+                  onClick={() => setBusca('')}
+                  title="Limpar a busca (Esc)"
+                  aria-label="Limpar a busca"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-md text-slate-400 hover:text-white hover:bg-grafite-600 transition-colors"
+                >
+                  <X size={12} />
+                </button>
+              )}
             </div>
 
             <div className="relative shrink-0" ref={filtrosRef}>
@@ -4469,9 +4491,28 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                   <Inbox size={30} />
                 </div>
                 <p className="text-xs font-semibold text-slate-300">Nenhuma conversa encontrada.</p>
-                <p className="text-[11px] text-slate-500 mt-1">
-                  {busca.trim() ? 'Ajuste a busca ou os filtros.' : 'As novas conversas aparecem aqui automaticamente.'}
-                </p>
+                {/* DIZ O QUE ESTA ESCONDENDO A LISTA, e nao so "ajuste a
+                    busca". A lista vazia com um filtro ativo se parece com
+                    lista vazia de verdade -- e foi assim que uma busca
+                    esquecida no campo virou "as conversas sumiram". */}
+                {busca.trim() ? (
+                  <>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      A lista está filtrada por <span className="text-slate-300 font-semibold">“{busca.trim()}”</span>.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setBusca('')}
+                      className="mt-3 px-3 py-1.5 rounded-xl bg-acao/15 hover:bg-acao/25 border border-acao/40 text-acao-200 text-[11px] font-bold transition-colors"
+                    >
+                      Limpar a busca e ver tudo
+                    </button>
+                  </>
+                ) : (
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    As novas conversas aparecem aqui automaticamente.
+                  </p>
+                )}
               </div>
             )}
           </div>

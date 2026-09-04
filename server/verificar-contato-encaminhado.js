@@ -182,6 +182,20 @@ console.log('\n=== 7. "CONVERSAR" DOS CONTATOS NAO FILTRA A CENTRAL ===\n');
   check(/conversarComContatoRecebido\(pedidoAbrir\)/.test(trecho),
     "usa o MESMO caminho do cartao encaminhado (uma regra so para abrir conversa)");
 
+  check(/setBusca\(''\);/.test(trecho),
+    "limpa qualquer busca que ja estivesse no campo ao abrir a conversa");
+
+  // SAIDA DA LISTA FILTRADA. O campo de busca nao tinha como ser limpo num
+  // clique, e a lista vazia nao dizia que estava filtrada -- entao a unica
+  // saida que a pessoa encontrava era recarregar a pagina (F5). O estado da
+  // busca so nasce no mount (`useState`), e por isso navegar pela barra lateral
+  // estando JA na Central nao remonta a tela e nao limpava nada.
+  check(/aria-label="Limpar a busca"/.test(view), "o campo de busca tem um X para limpar");
+  check(/e\.key === 'Escape' && busca/.test(view), "Esc no campo tambem limpa a busca");
+  check(/A lista está filtrada por/.test(view),
+    "a lista vazia DIZ que esta filtrada, em vez de parecer vazia de verdade");
+  check(/Limpar a busca e ver tudo/.test(view), "a lista vazia oferece a saida num clique");
+
   // A semente de busca por URL continua existindo -- ela so nao e mais o
   // caminho do botao. Se alguem a remover junto, um link antigo passa a nao
   // fazer nada em silencio.
