@@ -3,6 +3,7 @@ import { FileText, Download, RefreshCw, Loader2, Search, AlertCircle } from 'luc
 import { RelatoriosAPI } from '../../services/api';
 import { exportarRelatorioEmpresaPdf } from '../../utils/exportarPdf';
 import { mascararDocumento } from '../../utils/documento';
+import { normalizarBusca } from '../../utils/busca';
 
 /**
  * RELATORIOS POR CLIENTE (CNPJ).
@@ -78,13 +79,29 @@ export default function RelatoriosClientes() {
     }
   };
 
+  /**
+   * BUSCA POR NOME **OU** POR DOCUMENTO.
+   *
+   * O defeito que isto conserta: a condicao do CNPJ era
+   * `String(c.cnpj).includes(q.replace(/\D/g, ''))`. Digitando LETRAS, o
+   * `replace` devolve string VAZIA -- e `includes('')` e sempre verdadeiro.
+   * Toda linha passava, a lista nunca estreitava, e parecia que a busca por
+   * empresa nao existia. Por numero funcionava, porque ai havia digitos para
+   * comparar.
+   *
+   * Agora cada metade so opina quando tem o que comparar: o documento so entra
+   * na conta se o texto tiver digito.
+   *
+   * O nome usa `normalizarBusca` (o mesmo dos Contatos e da Central): ignora
+   * acento e caixa, entao "sao" acha "São" e "ARKA" acha "Arka". Sem isso,
+   * procurar uma empresa com acento no nome exigiria digitar o acento certo.
+   */
+  const termo = normalizarBusca(busca);
+  const digitos = busca.replace(/\D/g, '');
   const clientes = (dados?.clientes || []).filter((c) => {
-    const q = busca.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      String(c.razaoSocial || '').toLowerCase().includes(q) ||
-      String(c.cnpj || '').includes(q.replace(/\D/g, ''))
-    );
+    if (!termo) return true;
+    if (normalizarBusca(c.razaoSocial).includes(termo)) return true;
+    return digitos.length > 0 && String(c.cnpj || '').includes(digitos);
   });
 
   return (
