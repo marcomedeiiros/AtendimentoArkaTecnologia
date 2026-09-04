@@ -344,13 +344,16 @@ function Sidebar({ aberto, onClose }) {
           Por isso `gap-2` e `p-1` aqui NAO sao gosto: sao o que faz caber. E o
           `truncate` no h1 e a rede: se a fonte cair para uma substituta mais
           larga, o titulo corta com reticencia em vez de voltar a quebrar. */}
-      {/* RECOLHIDA, O BOTAO DESCE PARA BAIXO DO LOGO.
-          Lado a lado nao cabe e nao e questao de ajuste fino: a caixa do logo
-          mede 48px, mais 8 de gap, mais 24 do botao = 80px num vao util de
-          60px (76 da faixa menos os 16 do padding). O botao vazava pela
-          direita da barra. Empilhado, cada um usa os 60px inteiros. */}
+      {/* RECOLHIDA, O BOTAO NAO FICA AQUI.
+          Ele desce para o pe da barra, logo acima do claro/escuro (ver o bloco
+          "AJUSTE DE INTERFACE"). Lado a lado com o logo nunca coube -- a caixa
+          do logo mede 48px, mais 8 de gap, mais 24 do botao = 80px num vao util
+          de 60px -- e empilhado embaixo do logo ele empurrava o menu inteiro
+          para baixo e disputava a atencao com a marca. No pe, fica junto do
+          outro controle que tambem e preferencia de quem olha a tela, e nao
+          navegacao. */}
       <div className={`flex items-center gap-2 px-2 py-3 mb-4 baixa:lg:py-1.5 baixa:lg:mb-2 shrink-0 ${
-        recolhida ? 'lg:flex-col lg:gap-2 lg:px-0 lg:py-2' : ''
+        recolhida ? 'lg:justify-center lg:px-0 lg:py-2' : ''
       }`}>
         <div className="shrink-0 p-2 rounded-xl bg-gradient-to-br from-acao/20 to-espera/10 border border-acao/30 shadow-lg shadow-acao/10">
           <ArkaLogo size={32} />
@@ -362,18 +365,22 @@ function Sidebar({ aberto, onClose }) {
           <p className="truncate text-[11px] text-slate-400 font-medium">Painel de Atendimento</p>
         </div>
 
-        {/* Recolher/expandir. So no desktop: no celular a barra e uma gaveta
-            que cobre a tela e some ao escolher um item -- ela nao tem estado
-            intermediario, e quem a fecha e o X ao lado. */}
-        <button
-          onClick={alternarNav}
-          title={recolhida ? 'Expandir menu' : 'Recolher menu'}
-          aria-label={recolhida ? 'Expandir menu' : 'Recolher menu'}
-          aria-expanded={!recolhida}
-          className="hidden lg:flex shrink-0 items-center justify-center rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
-        >
-          {recolhida ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-        </button>
+        {/* RECOLHER. So aparece com a barra aberta -- expandida ele cabe aqui,
+            ao lado do titulo, que e onde se espera achar o controle da propria
+            barra. Recolhida, o par dele ("expandir") mora no pe. So no desktop:
+            no celular a barra e uma gaveta que cobre a tela e some ao escolher
+            um item -- nao tem estado intermediario, e quem a fecha e o X. */}
+        {!recolhida && (
+          <button
+            onClick={alternarNav}
+            title="Recolher menu"
+            aria-label="Recolher menu"
+            aria-expanded={true}
+            className="hidden lg:flex shrink-0 items-center justify-center rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+          >
+            <PanelLeftClose size={16} />
+          </button>
+        )}
 
         <button onClick={onClose} className="lg:hidden shrink-0 p-1 -mr-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800" title="Fechar menu">
           <X size={18} />
@@ -423,6 +430,24 @@ function Sidebar({ aberto, onClose }) {
           (perfil e sair). Misturar os dois faria a linha nao significar nada.
           O recolher voltou para o cabecalho, junto do logo. */}
       <div className="mt-3 shrink-0">
+        {/* EXPANDIR, so com a barra recolhida. No topo ele empurrava o menu
+            para baixo e brigava com o logo pela atencao; aqui fica junto do
+            claro/escuro, que e o outro controle de PREFERENCIA da tela -- e os
+            dois viram um par no mesmo canto em vez de dois botoes soltos em
+            pontas opostas da barra. `hidden lg:flex` porque a gaveta do celular
+            nao tem estado recolhido. */}
+        {recolhida && (
+          <button
+            onClick={alternarNav}
+            title="Expandir menu"
+            aria-label="Expandir menu"
+            aria-expanded={false}
+            className="hidden lg:flex w-full items-center justify-center gap-2.5 rounded-lg px-0 py-2 text-xs font-semibold text-texto-suave transition-colors hover:bg-slate-800/40 hover:text-texto"
+          >
+            <PanelLeftOpen size={15} className="shrink-0" />
+          </button>
+        )}
+
         {/* Claro/escuro. O estado mora no AuthContext (e a preferencia por
             usuario no servidor) -- este botao so alterna, nao guarda nada nem
             toca no DOM: quem aplica o tema e o AppLayout.
