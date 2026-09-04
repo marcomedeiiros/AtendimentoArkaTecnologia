@@ -37,4 +37,19 @@ router.get("/painel", (req, res, next) =>
   dashboardController.painel(req, res).catch(next)
 );
 
+/**
+ * @openapi
+ * /api/dashboard/ranking-equipe:
+ *   get:
+ *     tags: [Dashboard]
+ *     security: [{ bearerAuth: [] }]
+ *     summary: Ranking do time (todos), com o ultimo atendimento de cada um
+ *     responses:
+ *       200:
+ *         description: Classificacao do mes por pontos, com ultimo atendimento
+ */
+router.get("/ranking-equipe", (req, res, next) =>
+  dashboardController.rankingEquipe(req, res).catch(next)
+);
+
 module.exports = router;

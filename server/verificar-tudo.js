@@ -100,6 +100,15 @@ const VERIFICACOES = [
     resumo: "recado/foto/conta comercial, guarda de setor, e a Evolution fora do ar sem derrubar nada",
   },
   {
+    // A Visao Geral e a parede ficam abertas ao mesmo tempo, uma na mesa e
+    // outra na sala. Medalha de ouro para pessoas diferentes no mesmo minuto
+    // destroi a confianca nas duas -- por isso a pontuacao e UMA funcao so, e
+    // este vigia confere que as duas telas continuam concordando.
+    arquivo: "verificar-ranking-equipe.js",
+    titulo: "Ranking do time (Visão Geral)",
+    resumo: "mesma pontuacao da parede, time inteiro sem corte, e o ultimo atendimento de cada um",
+  },
+  {
     // A foto mora em dois lugares com prazos de validade diferentes (conversa,
     // renovada por varredura; agenda, parada desde a ultima sincronizacao).
     // Inverter a prioridade mostra links vencidos para quem tem foto boa

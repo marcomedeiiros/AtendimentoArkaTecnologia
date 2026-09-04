@@ -174,7 +174,7 @@ class PainelService {
    * ainda nao tem tres notas pontua ZERO nessa parcela, e a tela diz que esta
    * faltando (ver `aCaminho`), em vez de fingir que a pessoa e ruim de nota.
    */
-  _ranking(atendimentos) {
+  _ranking(atendimentos, { limite = TOP, incluirZerados = false } = {}) {
     const porPessoa = new Map();
     for (const a of atendimentos) {
       // Sem responsavel = atendimento resolvido so pelo bot. Nao entra em
@@ -217,14 +217,18 @@ class PainelService {
     // Zero ponto nao entra: e quem so tem conversa em aberto, e uma linha
     // "0 pts" na parede parece cobranca publica. Ha podio, e nao lanterna.
     const classificacao = pontuadas
-      .filter((p) => p.pontos > 0)
+      // Na PAREDE, zero ponto nao entra: e quem so tem conversa em aberto, e uma
+      // linha "0 pts" exposta na sala parece cobranca publica. Na Visao Geral
+      // (`incluirZerados`) entra, porque ali a pergunta e outra -- "como esta o
+      // time inteiro" -- e uma lista que esconde parte do time nao responde.
+      .filter((p) => incluirZerados || p.pontos > 0)
       .sort(
         (a, b) =>
           b.pontos - a.pontos ||
           b.atendimentos.valor - a.atendimentos.valor ||
           a.nome.localeCompare(b.nome)
       )
-      .slice(0, TOP)
+      .slice(0, limite)
       .map((p, i) => ({ posicao: i + 1, ...p }));
 
     // QUEM ESTA A CAMINHO -- so os nomes, nunca a nota.
@@ -248,6 +252,109 @@ class PainelService {
       aCaminho,
       minimoAvaliacoes: MINIMO_AVALIACOES,
       pesos: { nota: PESO_NOTA, agilidade: FAIXAS_AGILIDADE },
+    };
+  }
+
+  /**
+   * RANKING DO TIME para a Visao Geral -- a lista inteira, com o ultimo
+   * atendimento de cada um.
+   *
+   * ── POR QUE A MESMA PONTUACAO DA PAREDE ────────────────────────────────────
+   *
+   * Este ranking e o da TV usam `_ranking`, a MESMA funcao. Nao e economia de
+   * codigo: e a unica forma de as duas telas nao discordarem sobre quem esta em
+   * primeiro. Duas contas parecidas, escritas em lugares diferentes, divergem
+   * no dia em que alguem ajusta uma delas -- e ai a equipe ve medalha de ouro
+   * para uma pessoa na parede e para outra no painel, no mesmo minuto.
+   *
+   * Duas coisas mudam, e so essas: entra TODO MUNDO (a parede corta no top 3,
+   * que e o que cabe de longe) e vem junto o ULTIMO ATENDIMENTO de cada um.
+   *
+   * ── O ULTIMO ATENDIMENTO NAO E DO MES ──────────────────────────────────────
+   *
+   * A pontuacao e do mes corrente; o "ultimo atendimento" e o mais recente que
+   * existir, de qualquer data. Sao perguntas diferentes: a primeira e "como foi
+   * este mes", a segunda e "quando esta pessoa atendeu pela ultima vez" -- e a
+   * segunda so e util justamente quando a resposta e antiga.
+   *
+   * Uma consulta por pessoa (o time tem dezenas, nao milhares), em vez de
+   * arrastar o historico inteiro para achar um maximo por nome.
+   */
+  async rankingEquipe() {
+    const desdeMes = inicioDoMes();
+
+    const doMes = await prisma.atendimento.findMany({
+      where: { abertoEm: { gte: desdeMes } },
+      select: {
+        atendenteNome: true,
+        status: true,
+        avaliacao: true,
+        abertoEm: true,
+        atendidoEm: true,
+        fechadoEm: true,
+      },
+    });
+
+    const { classificacao, minimoAvaliacoes, pesos } = this._ranking(doMes, {
+      limite: Number.MAX_SAFE_INTEGER,
+      incluirZerados: true,
+    });
+
+    const comUltimo = await Promise.all(
+      classificacao.map(async (p) => ({ ...p, ultimo: await this._ultimoAtendimento(p.nome) }))
+    );
+
+    return {
+      geradoEm: new Date().toISOString(),
+      periodo: { desde: desdeMes.toISOString(), rotulo: "mês corrente" },
+      classificacao: comUltimo,
+      minimoAvaliacoes,
+      pesos,
+    };
+  }
+
+  /**
+   * O atendimento mais recente de uma pessoa, com a empresa atendida.
+   *
+   * Ordena por `atualizadoEm`, e nao por `fechadoEm`: quem esta com uma OS
+   * ABERTA agora nao tem data de fechamento, e ordenar por um campo nulo joga
+   * essas linhas para uma ponta qualquer da lista conforme o banco -- o
+   * "ultimo atendimento" apareceria como um de semanas atras justamente para
+   * quem esta atendendo neste instante.
+   *
+   * A empresa vem da CONVERSA porque e la que o CNPJ mora. Consequencia
+   * assumida (a mesma dos relatorios por cliente): se o vinculo mudar depois, o
+   * que esta linha mostra muda junto.
+   */
+  async _ultimoAtendimento(nome) {
+    const a = await prisma.atendimento.findFirst({
+      where: { atendenteNome: nome },
+      orderBy: { atualizadoEm: "desc" },
+      select: {
+        numeroOS: true,
+        status: true,
+        setor: true,
+        abertoEm: true,
+        atendidoEm: true,
+        fechadoEm: true,
+        conversa: { select: { cliente: true, empresa: true } },
+      },
+    });
+    if (!a) return null;
+
+    const encerrado = a.status === "fechada" && !!a.fechadoEm;
+    return {
+      os: a.numeroOS != null ? `OS${String(a.numeroOS).padStart(5, "0")}` : null,
+      status: a.status,
+      setor: a.setor || null,
+      encerrado,
+      // A data que a tela mostra: quando fechou, se fechou; senao quando
+      // assumiu; e, sem nem isso, quando o chamado abriu. Vai junto o
+      // `encerrado` para a tela poder escrever "fechado em" ou "aberto desde"
+      // em vez de uma data solta que nao diz o que aconteceu.
+      quando: (a.fechadoEm || a.atendidoEm || a.abertoEm)?.toISOString() || null,
+      cliente: a.conversa?.cliente || null,
+      empresa: a.conversa?.empresa || null,
     };
   }
 

@@ -588,6 +588,9 @@ export const WhatsAppAPI = {
 export const DashboardAPI = {
   metricas: () => request('/dashboard'),
   painel: () => request('/dashboard/painel'),
+  // Ranking do time inteiro (a mesma pontuacao da parede), com o ultimo
+  // atendimento de cada pessoa.
+  rankingEquipe: () => request('/dashboard/ranking-equipe'),
 };
 
 // ── n8n API ──

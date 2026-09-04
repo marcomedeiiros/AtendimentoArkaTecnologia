@@ -2,7 +2,8 @@ import { useState, useMemo, useRef, useCallback } from 'react';
 import {
   Users, ShieldCheck, Clock, TrendingUp,
   Download, ArrowRight, Activity, CheckCircle2, Inbox,
-  BarChart3, FileText, Loader2, Star, MessageCircle, X, LifeBuoy, ClipboardList, UserCheck, Bot
+  BarChart3, FileText, Loader2, Star, MessageCircle, X, LifeBuoy, ClipboardList, UserCheck, Bot,
+  Trophy
 } from 'lucide-react';
 // So o Doughnut sobrou nesta tela: ele precisa de ArcElement. Escalas e
 // elementos de linha/barra ficaram registrados sem grafico que os usasse.
@@ -14,6 +15,7 @@ import { hojeISO, FUSO_BR } from '../../utils/data';
 import HelpDeskPainel from './HelpDeskPainel';
 import RegistroConversas from './RegistroConversas';
 import RelatoriosClientes from './RelatoriosClientes';
+import RankingEquipe from './RankingEquipe';
 import { avisar } from '../../utils/dialogo';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
@@ -323,6 +325,18 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                 : 'bg-grafite-700 border-linha text-slate-400 hover:text-white hover:border-slate-500'
             }`}>
             <FileText size={13} className="inline mr-1.5 -mt-0.5" /> Relatórios Clientes (CNPJ)
+          </button>
+          {/* Cor de medalha (ambar), e nao o verde das demais: e a unica aba
+              sobre DESEMPENHO DA EQUIPE, e o ambar e a cor que a plataforma ja
+              usa para o podio no painel de parede. */}
+          <button
+            onClick={() => setAbaAtiva('ranking')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
+              abaAtiva === 'ranking'
+                ? 'bg-espera/15 border-espera/40 text-espera-400'
+                : 'bg-grafite-700 border-linha text-slate-400 hover:text-white hover:border-slate-500'
+            }`}>
+            <Trophy size={13} className="inline mr-1.5 -mt-0.5" /> Ranking do Time
           </button>
         </div>
         {abaAtiva === 'geral' && (
@@ -752,6 +766,8 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
       {/* Sem props: busca do servidor. `conversas` esta aqui em maos, mas vem
           filtrada por setor -- ver o comentario no topo de RelatoriosClientes. */}
       {abaAtiva === 'relatorios' && <RelatoriosClientes />}
+
+      {abaAtiva === 'ranking' && <RankingEquipe />}
     </div>
   );
 }
