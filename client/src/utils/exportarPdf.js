@@ -23,8 +23,112 @@ async function libs() {
 }
 
 const LOGO_URL = '/arka_tecnologia_logo-removebg-preview.png';
-const LARANJA = [249, 115, 22];
-const CINZA = [100, 116, 139];
+
+/**
+ * A PALETA DO PDF -- os tokens do painel, na versao do TEMA CLARO.
+ *
+ * O laranja `[249, 115, 22]` que estava aqui nao existe em lugar nenhum da
+ * plataforma: a marca da Arka e o teal do `--acao`, que e o que colore o botao
+ * de enviar, a aba ativa e o selo de conversa aberta. Um relatorio com outra
+ * cor primaria parece ter saido de outro sistema -- e ele vai para o cliente
+ * junto do resto.
+ *
+ * SAO OS VALORES DO TEMA CLARO de propósito. Papel e branco: o `--acao` do tema
+ * escuro (0 168 132) e calibrado para brilhar sobre quase-preto e sai lavado na
+ * impressao; o do tema claro (1 117 97) foi escolhido justamente para ter
+ * contraste sobre fundo claro. Mesma logica para o texto -- `--texto` no tema
+ * claro e o quase-preto 17 27 33, e nao o cinza-claro do escuro.
+ *
+ * Nao da para LER as variaveis CSS aqui: o PDF pode ser gerado com a
+ * plataforma no tema escuro, e ai `getComputedStyle` devolveria a paleta
+ * errada. O documento nao acompanha o tema de quem o gerou.
+ */
+const MARCA = [1, 117, 97];          // --acao-600 (claro): teal profundo, para regra e titulos
+const MARCA_FUNDO = [0, 143, 112];   // --acao (claro): preenchimento de cabecalho de tabela
+const TINTA = [17, 27, 33];          // --texto (claro)
+const TINTA_SUAVE = [84, 101, 110];  // --texto-suave (claro)
+const LINHA = [209, 215, 219];       // --linha (claro)
+const FAIXA = [246, 248, 249];       // zebra da tabela: um passo acima do branco
+const VERMELHO = [176, 42, 56];      // --falha-600 (claro), para a nota interna
+
+// Mantido como apelido para nao reescrever as ~20 chamadas existentes de uma
+// vez so -- e o mesmo cinza de texto, agora vindo do token.
+const CINZA = TINTA_SUAVE;
+
+/**
+ * CABECALHO PADRAO -- os tres PDFs passam a abrir igual.
+ *
+ * Ate agora cada exportador desenhava o proprio topo, com tamanhos e espacos
+ * ligeiramente diferentes: lado a lado, os tres pareciam de sistemas
+ * diferentes. Um so lugar significa que ajustar a marca ajusta tudo.
+ *
+ * Devolve o `y` de onde o conteudo comeca.
+ */
+function cabecalhoPdf(pdf, { logo, titulo, subtitulo, margem = 14 }) {
+  const largura = pdf.internal.pageSize.getWidth();
+  let y = margem;
+
+  if (logo) {
+    try { pdf.addImage(logo, 'PNG', margem, y, 26, 12); } catch { /* formato invalido */ }
+  }
+  const x = logo ? margem + 32 : margem;
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(15);
+  pdf.setTextColor(...TINTA);
+  pdf.text(titulo, x, y + 6);
+
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(8.5);
+  pdf.setTextColor(...TINTA_SUAVE);
+  pdf.text(subtitulo, x, y + 11);
+
+  y += 17;
+  // Regra dupla: um traco firme da marca e um fio claro logo abaixo. Custa duas
+  // linhas e e o que separa "documento" de "impressao de tela".
+  pdf.setDrawColor(...MARCA);
+  pdf.setLineWidth(0.8);
+  pdf.line(margem, y, largura - margem, y);
+  pdf.setDrawColor(...LINHA);
+  pdf.setLineWidth(0.2);
+  pdf.line(margem, y + 1.1, largura - margem, y + 1.1);
+
+  return y + 8;
+}
+
+/**
+ * TITULO DE SECAO -- maiuscula, espacado, na cor da marca.
+ *
+ * E o que da ritmo ao documento: em corpo de texto do mesmo tamanho, o olho nao
+ * acha onde uma parte termina e a outra comeca.
+ */
+function tituloSecao(pdf, texto, margem, y) {
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(8);
+  pdf.setTextColor(...MARCA);
+  // `charSpace` espaca as letras: e o detalhe que faz um titulo curto em
+  // maiuscula parecer rotulo de relatorio, e nao grito.
+  pdf.text(String(texto).toUpperCase(), margem, y, { charSpace: 0.4 });
+  return y + 5;
+}
+
+/** Rodape identico em todas as paginas de todos os PDFs. */
+function rodapePdf(pdf, { legenda, margem = 14 }) {
+  const largura = pdf.internal.pageSize.getWidth();
+  const altura = pdf.internal.pageSize.getHeight();
+  const total = pdf.internal.getNumberOfPages();
+  for (let i = 1; i <= total; i += 1) {
+    pdf.setPage(i);
+    pdf.setDrawColor(...LINHA);
+    pdf.setLineWidth(0.2);
+    pdf.line(margem, altura - 11, largura - margem, altura - 11);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(...TINTA_SUAVE);
+    pdf.text(legenda, margem, altura - 7);
+    pdf.text(`Página ${i} de ${total}`, largura - margem, altura - 7, { align: 'right' });
+  }
+}
 
 // Carrega a logo como dataURL. Best-effort: sem ela o PDF sai só com o titulo.
 async function carregarLogo() {
@@ -59,34 +163,17 @@ export async function exportarRelatorioPdf({ elemento, metricas = [], filtros = 
   const margem = 14;
   let y = margem;
 
-  // ---------- Cabecalho: logo + titulo + data ----------
+  // ---------- Cabecalho ----------
   const logo = await carregarLogo();
-  if (logo) {
-    try { pdf.addImage(logo, 'PNG', margem, y, 26, 12); } catch { /* formato invalido */ }
-  }
-
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(16);
-  pdf.setTextColor(15, 23, 42);
-  pdf.text('Relatório de Atendimentos', logo ? margem + 32 : margem, y + 6);
-
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(9);
-  pdf.setTextColor(...CINZA);
-  pdf.text(`Gerado em ${new Date().toLocaleString('pt-BR', { timeZone: FUSO_BR })}`, logo ? margem + 32 : margem, y + 11);
-
-  y += 18;
-  pdf.setDrawColor(...LARANJA);
-  pdf.setLineWidth(0.6);
-  pdf.line(margem, y, larguraPg - margem, y);
-  y += 7;
+  y = cabecalhoPdf(pdf, {
+    logo,
+    titulo: 'Relatório de Atendimentos',
+    subtitulo: `Gerado em ${new Date().toLocaleString('pt-BR', { timeZone: FUSO_BR })}`,
+    margem,
+  });
 
   // ---------- Filtros utilizados ----------
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(10);
-  pdf.setTextColor(15, 23, 42);
-  pdf.text('Filtros utilizados', margem, y);
-  y += 5;
+  y = tituloSecao(pdf, 'Filtros utilizados', margem, y);
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(9);
   pdf.setTextColor(...CINZA);
@@ -97,16 +184,12 @@ export async function exportarRelatorioPdf({ elemento, metricas = [], filtros = 
   y += 4;
 
   // ---------- Tabela de metricas ----------
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(10);
-  pdf.setTextColor(15, 23, 42);
-  pdf.text('Indicadores', margem, y);
-  y += 5;
+  y = tituloSecao(pdf, 'Indicadores', margem, y);
 
   const alturaLinha = 7;
   const colValor = larguraPg - margem - 30;
 
-  pdf.setFillColor(...LARANJA);
+  pdf.setFillColor(...MARCA_FUNDO);
   pdf.rect(margem, y, larguraPg - margem * 2, alturaLinha, 'F');
   pdf.setTextColor(255, 255, 255);
   pdf.setFontSize(9);
@@ -117,10 +200,10 @@ export async function exportarRelatorioPdf({ elemento, metricas = [], filtros = 
   pdf.setFont('helvetica', 'normal');
   metricas.forEach(([rotulo, valor], i) => {
     if (i % 2 === 0) {
-      pdf.setFillColor(244, 246, 250);
+      pdf.setFillColor(...FAIXA);
       pdf.rect(margem, y, larguraPg - margem * 2, alturaLinha, 'F');
     }
-    pdf.setTextColor(30, 41, 59);
+    pdf.setTextColor(...TINTA);
     pdf.text(String(rotulo), margem + 3, y + 4.8);
     pdf.setFont('helvetica', 'bold');
     pdf.text(String(valor), colValor, y + 4.8);
@@ -131,11 +214,7 @@ export async function exportarRelatorioPdf({ elemento, metricas = [], filtros = 
 
   // ---------- Resumo ----------
   if (resumo) {
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(10);
-    pdf.setTextColor(15, 23, 42);
-    pdf.text('Resumo', margem, y);
-    y += 5;
+    y = tituloSecao(pdf, 'Resumo', margem, y);
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(9);
     pdf.setTextColor(...CINZA);
@@ -167,7 +246,7 @@ export async function exportarRelatorioPdf({ elemento, metricas = [], filtros = 
       }
       pdf.setFont('helvetica', 'bold');
       pdf.setFontSize(10);
-      pdf.setTextColor(15, 23, 42);
+      pdf.setTextColor(...TINTA);
       pdf.text('Gráficos', margem, y);
       y += 5;
 
@@ -190,17 +269,7 @@ export async function exportarRelatorioPdf({ elemento, metricas = [], filtros = 
     }
   }
 
-  // ---------- Rodape em todas as paginas ----------
-  const totalPgs = pdf.internal.getNumberOfPages();
-  for (let i = 1; i <= totalPgs; i++) {
-    pdf.setPage(i);
-    pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(8);
-    pdf.setTextColor(...CINZA);
-    pdf.text('Arka Tecnologia • Central de Atendimento', margem, alturaPg - 8);
-    pdf.text(`Página ${i} de ${totalPgs}`, larguraPg - margem - 20, alturaPg - 8);
-  }
-
+  rodapePdf(pdf, { legenda: 'Arka Tecnologia · Central de Atendimento', margem });
   pdf.save(`relatorio-arka-${hojeISO()}.pdf`);
 }
 
@@ -233,23 +302,12 @@ export async function exportarTranscricaoPdf(conversa, { atendente = '-', status
 
   // ---------- Cabecalho ----------
   const logo = await carregarLogo();
-  if (logo) {
-    try { pdf.addImage(logo, 'PNG', margem, y, 26, 12); } catch { /* formato invalido */ }
-  }
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(15);
-  pdf.setTextColor(15, 23, 42);
-  pdf.text('Transcrição da Conversa', logo ? margem + 32 : margem, y + 6);
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(9);
-  pdf.setTextColor(...CINZA);
-  pdf.text(`Gerado em ${new Date().toLocaleString('pt-BR', { timeZone: FUSO_BR })}`, logo ? margem + 32 : margem, y + 11);
-
-  y += 18;
-  pdf.setDrawColor(...LARANJA);
-  pdf.setLineWidth(0.6);
-  pdf.line(margem, y, larguraPg - margem, y);
-  y += 7;
+  y = cabecalhoPdf(pdf, {
+    logo,
+    titulo: 'Transcrição da Conversa',
+    subtitulo: `Gerado em ${new Date().toLocaleString('pt-BR', { timeZone: FUSO_BR })}`,
+    margem,
+  });
 
   // ---------- Metadados (com o ID da conversa) ----------
   // Protocolo curto (igual ao da Central: #408619D2) + o UUID completo.
@@ -273,7 +331,7 @@ export async function exportarTranscricaoPdf(conversa, { atendente = '-', status
   meta.forEach(([rotulo, valor]) => {
     quebraPagina(6);
     pdf.setFont('helvetica', 'bold');
-    pdf.setTextColor(30, 41, 59);
+    pdf.setTextColor(...TINTA);
     pdf.text(`${rotulo}:`, rotuloX, y);
     pdf.setFont('helvetica', 'normal');
     pdf.setTextColor(...CINZA);
@@ -286,18 +344,14 @@ export async function exportarTranscricaoPdf(conversa, { atendente = '-', status
   });
 
   y += 2;
-  pdf.setDrawColor(...CINZA);
+  pdf.setDrawColor(...LINHA);
   pdf.setLineWidth(0.2);
   pdf.line(margem, y, larguraPg - margem, y);
   y += 7;
 
   // ---------- Mensagens ----------
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(10);
-  pdf.setTextColor(15, 23, 42);
   quebraPagina(6);
-  pdf.text('Mensagens', margem, y);
-  y += 6;
+  y = tituloSecao(pdf, 'Mensagens', margem, y) + 1;
 
   const mensagens = conversa.mensagens || [];
   if (mensagens.length === 0) {
@@ -336,7 +390,7 @@ export async function exportarTranscricaoPdf(conversa, { atendente = '-', status
         // relance. A nota interna sai em vermelho: terceira cor, terceira
         // categoria -- quem folheia o PDF não precisa ler o rótulo para ver que
         // aquela linha não é da conversa com o cliente.
-        pdf.setTextColor(...(ehNota ? [153, 27, 27] : ehCliente ? CINZA : [180, 83, 9]));
+        pdf.setTextColor(...(ehNota ? VERMELHO : ehCliente ? TINTA_SUAVE : MARCA));
         pdf.text(linha, margem, y);
         y += 4.6;
         if (i === 0) { /* mantem cor nas continuacoes */ }
@@ -345,16 +399,7 @@ export async function exportarTranscricaoPdf(conversa, { atendente = '-', status
     });
   }
 
-  // ---------- Rodape ----------
-  const totalPgs = pdf.internal.getNumberOfPages();
-  for (let i = 1; i <= totalPgs; i++) {
-    pdf.setPage(i);
-    pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(8);
-    pdf.setTextColor(...CINZA);
-    pdf.text('Arka Tecnologia • Transcrição de Atendimento', margem, alturaPg - 8);
-    pdf.text(`Página ${i} de ${totalPgs}`, larguraPg - margem - 20, alturaPg - 8);
-  }
+  rodapePdf(pdf, { legenda: 'Arka Tecnologia · Transcrição de Atendimento', margem });
 
   const slug = String(conversa.cliente || 'cliente').replace(/[^\w]+/g, '-').toLowerCase();
   const idCurto = String(conversa.id || '').slice(0, 8);
@@ -411,27 +456,12 @@ export async function exportarRelatorioEmpresaPdf(relatorio) {
 
   // ---------- Cabecalho ----------
   const logo = await carregarLogo();
-  if (logo) {
-    try { pdf.addImage(logo, 'PNG', margem, y, 26, 12); } catch { /* formato invalido */ }
-  }
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(15);
-  pdf.setTextColor(15, 23, 42);
-  pdf.text('Relatório de Atendimento', logo ? margem + 32 : margem, y + 6);
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(9);
-  pdf.setTextColor(...CINZA);
-  pdf.text(
-    `${periodo.rotulo || 'Período'} · ${fmtDataCurta(periodo.inicio)} a ${fmtDataCurta(periodo.fim)}`,
-    logo ? margem + 32 : margem,
-    y + 11
-  );
-
-  y += 18;
-  pdf.setDrawColor(...LARANJA);
-  pdf.setLineWidth(0.6);
-  pdf.line(margem, y, larguraPg - margem, y);
-  y += 7;
+  y = cabecalhoPdf(pdf, {
+    logo,
+    titulo: 'Relatório de Atendimento',
+    subtitulo: `${periodo.rotulo || 'Período'} · ${fmtDataCurta(periodo.inicio)} a ${fmtDataCurta(periodo.fim)}`,
+    margem,
+  });
 
   // ---------- Identificacao ----------
   const meta = [
@@ -444,7 +474,7 @@ export async function exportarRelatorioEmpresaPdf(relatorio) {
   meta.forEach(([rotulo, valor]) => {
     quebra(6);
     pdf.setFont('helvetica', 'bold');
-    pdf.setTextColor(30, 41, 59);
+    pdf.setTextColor(...TINTA);
     pdf.text(`${rotulo}:`, margem, y);
     pdf.setFont('helvetica', 'normal');
     pdf.setTextColor(...CINZA);
@@ -455,11 +485,7 @@ export async function exportarRelatorioEmpresaPdf(relatorio) {
 
   // ---------- Resumo ----------
   quebra(24);
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(11);
-  pdf.setTextColor(15, 23, 42);
-  pdf.text('Resumo do período', margem, y);
-  y += 6;
+  y = tituloSecao(pdf, 'Resumo do período', margem, y) + 1;
 
   const cartoes = [
     ['Chamados encerrados', String(resumo.totalOS ?? 0)],
@@ -471,17 +497,21 @@ export async function exportarRelatorioEmpresaPdf(relatorio) {
   const largCartao = util / cartoes.length;
   cartoes.forEach(([rotulo, valor], i) => {
     const x = margem + i * largCartao;
-    pdf.setDrawColor(226, 232, 240);
-    pdf.setLineWidth(0.3);
-    pdf.roundedRect(x, y, largCartao - 3, 16, 2, 2);
+    // Cartao com fundo suave e um filete da marca na lateral esquerda -- o
+    // mesmo recurso que o painel usa para marcar o que e numero de destaque,
+    // e que na impressao sobrevive melhor que uma borda cinza fina.
+    pdf.setFillColor(...FAIXA);
+    pdf.rect(x, y, largCartao - 3, 16, 'F');
+    pdf.setFillColor(...MARCA);
+    pdf.rect(x, y, 1, 16, 'F');
     pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(8);
-    pdf.setTextColor(...CINZA);
-    pdf.text(rotulo, x + 3, y + 6);
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(...TINTA_SUAVE);
+    pdf.text(rotulo, x + 4, y + 6);
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(13);
-    pdf.setTextColor(15, 23, 42);
-    pdf.text(valor, x + 3, y + 13);
+    pdf.setTextColor(...TINTA);
+    pdf.text(valor, x + 4, y + 13);
   });
   y += 22;
 
@@ -489,23 +519,19 @@ export async function exportarRelatorioEmpresaPdf(relatorio) {
   const distribuicao = (titulo, itens) => {
     if (!itens.length) return;
     quebra(14);
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(11);
-    pdf.setTextColor(15, 23, 42);
-    pdf.text(titulo, margem, y);
-    y += 6;
+    y = tituloSecao(pdf, titulo, margem, y) + 1;
     const maior = itens[0].total || 1;
     pdf.setFontSize(9);
     itens.forEach((it) => {
       quebra(7);
       pdf.setFont('helvetica', 'normal');
-      pdf.setTextColor(30, 41, 59);
+      pdf.setTextColor(...TINTA);
       pdf.text(pdf.splitTextToSize(String(it.nome), util - 40)[0], margem, y);
       pdf.setTextColor(...CINZA);
       pdf.text(`${it.total}  (${it.pct}%)`, larguraPg - margem, y, { align: 'right' });
       // Barrinha proporcional: o numero ja esta escrito ao lado; a barra existe
       // para o olho achar o maior sem ler a coluna inteira.
-      pdf.setFillColor(...LARANJA);
+      pdf.setFillColor(...MARCA_FUNDO);
       pdf.rect(margem, y + 1.4, Math.max(1, (util - 45) * (it.total / maior)), 0.8, 'F');
       y += 6.5;
     });
@@ -517,11 +543,7 @@ export async function exportarRelatorioEmpresaPdf(relatorio) {
 
   // ---------- Extrato ----------
   quebra(14);
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(11);
-  pdf.setTextColor(15, 23, 42);
-  pdf.text('Chamados encerrados no período', margem, y);
-  y += 6;
+  y = tituloSecao(pdf, 'Chamados encerrados no período', margem, y) + 1;
 
   if (!chamados.length) {
     pdf.setFont('helvetica', 'italic');
@@ -541,59 +563,61 @@ export async function exportarRelatorioEmpresaPdf(relatorio) {
       { t: 'Nota', w: 14 },
     ];
 
+    // Cabecalho preenchido na cor da marca, com texto branco -- o mesmo
+    // tratamento da tabela de Indicadores do outro relatorio. Duas tabelas com
+    // desenhos diferentes no mesmo sistema e o que faz o conjunto parecer
+    // improvisado.
     const cabecalhoTabela = () => {
+      pdf.setFillColor(...MARCA_FUNDO);
+      pdf.rect(margem, y - 3.6, util, 6, 'F');
       pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(8);
-      pdf.setTextColor(...CINZA);
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(255, 255, 255);
       let x = margem;
-      COLS.forEach((c) => { pdf.text(c.t, x, y); x += c.w; });
-      y += 2;
-      pdf.setDrawColor(...CINZA);
-      pdf.setLineWidth(0.2);
-      pdf.line(margem, y, larguraPg - margem, y);
-      y += 4;
+      COLS.forEach((c) => { pdf.text(c.t, x + 1.5, y); x += c.w; });
+      y += 5.5;
     };
     cabecalhoTabela();
 
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(8);
+    let zebra = 0;
     chamados.forEach((c) => {
       // O motivo pode ocupar mais de uma linha, e a ALTURA DA LINHA acompanha.
       // Sem isto o texto do motivo invadiria a linha de baixo -- e numa tabela
       // de trinta chamados o estrago vira uma mancha ilegivel.
       const linhasMotivo = pdf.splitTextToSize(String(c.motivo || '-'), COLS[2].w - 2);
       const altura = Math.max(5, linhasMotivo.length * 4);
-      if (y + altura > alturaPg - margem - 6) {
+      if (y + altura > alturaPg - margem - 12) {
         pdf.addPage();
-        y = margem;
+        y = margem + 4;
         cabecalhoTabela();
         pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(8);
       }
+      // Zebra: numa tabela de seis colunas estreitas, e o que impede o olho de
+      // pular de linha no meio do caminho. Pintada ANTES do texto.
+      if (zebra % 2 === 1) {
+        pdf.setFillColor(...FAIXA);
+        pdf.rect(margem, y - 3.4, util, altura, 'F');
+      }
+      zebra += 1;
+
       let x = margem;
-      pdf.setTextColor(30, 41, 59);
-      pdf.text(String(c.os || '-'), x, y); x += COLS[0].w;
-      pdf.text(fmtDataCurta(c.fechadoEm), x, y); x += COLS[1].w;
-      pdf.setTextColor(...CINZA);
-      linhasMotivo.forEach((l, i) => pdf.text(l, x, y + i * 4));
+      pdf.setTextColor(...TINTA);
+      pdf.text(String(c.os || '-'), x + 1.5, y); x += COLS[0].w;
+      pdf.text(fmtDataCurta(c.fechadoEm), x + 1.5, y); x += COLS[1].w;
+      pdf.setTextColor(...TINTA_SUAVE);
+      linhasMotivo.forEach((l, i) => pdf.text(l, x + 1.5, y + i * 4));
       x += COLS[2].w;
-      pdf.text(String(c.setor || '-'), x, y); x += COLS[3].w;
-      pdf.text(c.duracaoHoras != null ? `${c.duracaoHoras}h` : '-', x, y); x += COLS[4].w;
-      pdf.text(c.avaliacao != null ? `${c.avaliacao}/5` : '-', x, y);
+      pdf.text(String(c.setor || '-'), x + 1.5, y); x += COLS[3].w;
+      pdf.text(c.duracaoHoras != null ? `${c.duracaoHoras}h` : '-', x + 1.5, y); x += COLS[4].w;
+      pdf.text(c.avaliacao != null ? `${c.avaliacao}/5` : '-', x + 1.5, y);
       y += altura;
     });
   }
 
-  // ---------- Rodape ----------
-  const totalPgs = pdf.internal.getNumberOfPages();
-  for (let i = 1; i <= totalPgs; i++) {
-    pdf.setPage(i);
-    pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(8);
-    pdf.setTextColor(...CINZA);
-    pdf.text('Arka Tecnologia • Relatório de Atendimento', margem, alturaPg - 8);
-    pdf.text(`Página ${i} de ${totalPgs}`, larguraPg - margem - 20, alturaPg - 8);
-  }
+  rodapePdf(pdf, { legenda: 'Arka Tecnologia · Relatório de Atendimento', margem });
 
   const slug = String(empresa.razaoSocial || 'empresa')
     .replace(/[^\w]+/g, '-').toLowerCase().slice(0, 40);
