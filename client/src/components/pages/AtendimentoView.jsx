@@ -2115,6 +2115,60 @@ function PainelChat({
   // navegador faz com um botao focado. Parecia que "o Enter parou de
   // funcionar", quando na verdade o cursor tinha saido do campo.
   const campoRef = useRef(null);
+
+  /**
+   * QUANTO ROTULO CABE NO CABECALHO -- medido, nao adivinhado.
+   *
+   * ── POR QUE NAO E BREAKPOINT DO TAILWIND ───────────────────────────────────
+   *
+   * `lg:`, `xl:` e companhia olham a JANELA. Quem manda aqui e a largura DESTE
+   * painel, que muda por dois motivos alheios ao tamanho da tela: ele ocupa 8
+   * de 12 colunas, e a barra lateral recolhida devolve ~200px. Dois monitores
+   * do mesmo tamanho podem ter cabecalhos de larguras bem diferentes, e um
+   * breakpoint de viewport erra nos dois.
+   *
+   * ── OS NUMEROS ─────────────────────────────────────────────────────────────
+   *
+   * Medidos no DOM real (Poppins carregada), nao estimados:
+   *
+   *   identidade (foto + nome + status + OS)      290px
+   *   os cinco botoes com todos os rotulos        538px
+   *   ... sem o rotulo de "Fechar sem avaliacao"  ~400px
+   *   ... so com icones                           199px
+   *   padding do cabecalho + gap                   44px
+   *
+   * Os cortes saem de uma busca binaria no DOM: com todos os rotulos o
+   * cabecalho so fecha em duas faixas ate 875px; com o rotulo longo fora, ate
+   * 736px; so com icones, ate 536px. Arredondados para 880 e 740, com folga.
+   *
+   * Abaixo de 880px sai o rotulo mais longo (e o unico com tres
+   * palavras, e o botao menos usado); abaixo de 704px saem todos os rotulos e
+   * ficam so os icones, cada um com seu `title`. Abaixo de ~530px nem os
+   * icones cabem ao lado do nome, e a linha quebra sozinha -- que e o certo no
+   * celular.
+   *
+   * Guardamos o NIVEL, e nao a largura: durante a animacao da barra lateral
+   * isto dispara dezenas de vezes, e re-renderizar o chat inteiro a cada pixel
+   * seria caro para uma decisao que muda duas vezes no caminho.
+   */
+  const cabecalhoRef = useRef(null);
+  const [nivelRotulo, setNivelRotulo] = useState('todos');
+  useLayoutEffect(() => {
+    const el = cabecalhoRef.current;
+    if (!el) return;
+    const nivelDe = (w) => (w >= 880 ? 'todos' : w >= 740 ? 'curtos' : 'icones');
+    const aplicar = (w) => setNivelRotulo((antes) => {
+      const novo = nivelDe(w);
+      return antes === novo ? antes : novo;
+    });
+    aplicar(el.getBoundingClientRect().width);
+    if (typeof ResizeObserver === 'undefined') return; // navegador antigo: fica no nivel inicial
+    const ro = new ResizeObserver((entradas) => aplicar(entradas[0].contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const mostrarRotulo = nivelRotulo !== 'icones';
+  const mostrarRotuloSecundario = nivelRotulo === 'todos';
   // MODO NOTA: a mesma caixa de texto, escrevendo para dentro em vez de para o
   // cliente. Um estado, e não uma segunda caixa, porque duas caixas na mesma
   // barra é o desenho que faz a pessoa digitar na errada.
@@ -2489,8 +2543,9 @@ function PainelChat({
 
   return (
     <>
-      <div className="p-4 bg-grafite-600/80 border-b border-linha flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 sm:gap-3">
+      <div ref={cabecalhoRef} className="p-4 bg-grafite-600/80 border-b border-linha">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <button onClick={onVoltar} title="Voltar para a lista"
             className="lg:hidden p-1.5 -ml-1 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
             <ChevronLeft size={18} />
@@ -2507,12 +2562,11 @@ function PainelChat({
           >
             <Avatar contato nome={conversa.cliente} size="md" fotoUrl={conversa.fotoUrl} />
           </button>
-          <div>
-          <div className="font-bold text-sm text-white flex items-center gap-2 flex-wrap">
+          <div className="min-w-0 flex items-center gap-2 flex-wrap">
             <button
               onClick={onAbrirPerfil}
               title={`Ver o perfil de ${conversa.cliente}`}
-              className="font-bold text-sm text-white hover:text-acao-200 transition-colors text-left"
+              className="font-bold text-sm text-white hover:text-acao-200 transition-colors text-left truncate"
             >
               {conversa.cliente}
             </button>
@@ -2529,46 +2583,20 @@ function PainelChat({
               #{conversa.ticket || idCurto(conversa.id)}
             </span>
           </div>
-          <div className="mt-1 flex items-center gap-2 flex-wrap">
-            {/* Identificação do cliente: NOME DA EMPRESA, sem o número do CNPJ
-                e sem botão de remover. Uma vez identificado, o cliente fica
-                identificado -- corrigir um CNPJ errado é feito pelo próprio
-                cliente (responde "NÃO" quando o bot confirma) ou pelo
-                administrador em Clientes (CNPJ). */}
-            {!tipoCliente
-              ? <EmojiIcon name="question" label="Cliente não identificado" size="sm" />
-              : tipoCliente === 'cadastrado'
-                ? <EmojiIcon name="shield" label={empresa || 'Cliente cadastrado'} size="sm" />
-                // AVULSO: o rótulo diz o TIPO. Antes escrevia "Cliente
-                // identificado (Sem Contrato)" -- e "identificado" era
-                // justamente a palavra errada, porque a Central não distinguia
-                // o cadastrado do avulso.
-                : <EmojiIcon name="warning" label={empresa ? `${empresa} (Avulso)` : 'Cliente avulso'} size="sm" />
-            }
-            {/* Mesma badge de setor do cartao: com o chat aberto ela continua
-                sendo o motivo pelo qual o cliente chamou. */}
-            {setorPedido && (
-              <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border ${setorPedido.classe}`}
-                title={setorPedido.id === 'geral' ? 'Ainda sem triagem: o cliente nao escolheu setor no menu' : `Setor escolhido pelo cliente: ${setorPedido.setor}`}>
-                {setorPedido.label}
-              </span>
-            )}
-            {atendente && (
-              <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 font-semibold"
-                title={`Conversa atribuida a ${atendente.nome}`}>
-                <UserCheck size={11} /> {atendente.nome}
-              </span>
-            )}
-          </div>
-          </div>
         </div>
 
-        <div className="flex items-center gap-1.5 flex-wrap">
+        {/* AS ACOES SOBEM PARA A LINHA DO NOME, e as badges descem para a sua.
+            Antes o bloco da esquerda ja tinha DUAS faixas (nome+status+OS e as
+            badges de empresa/setor/atendente) e os cinco botoes -- que juntos
+            medem 538px -- nao cabiam ao lado: viravam sempre uma terceira
+            faixa. O cabecalho fechava em 126px de altura em QUALQUER largura,
+            roubados da area da conversa. Medido, nao estimado. */}
+        <div className="flex items-center gap-1.5 flex-wrap justify-end">
           {conversa.naoLidas > 0 && (
             <button onClick={() => onMarcarLido(conversa.id)}
               title="Marcar como lido"
               className="px-2.5 py-1.5 rounded-lg bg-slate-700/50 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-linha transition-all flex items-center gap-1">
-              <CheckCheck size={13} /> Lido
+              <CheckCheck size={13} /> {mostrarRotulo && 'Lido'}
             </button>
           )}
 
@@ -2576,7 +2604,7 @@ function PainelChat({
             <button onClick={() => onReabrir(conversa.id)}
               title="Reabrir atendimento"
               className="px-2.5 py-1.5 rounded-lg bg-ativo/15 hover:bg-ativo/25 text-ativo-400 text-xs font-semibold border border-ativo/30 transition-all flex items-center gap-1">
-              <RotateCcw size={13} /> Reabrir
+              <RotateCcw size={13} /> {mostrarRotulo && 'Reabrir'}
             </button>
           ) : (
             <>
@@ -2584,19 +2612,19 @@ function PainelChat({
                 <button onClick={() => onAtender(conversa.id)}
                   title="Assumir o atendimento (libera a resposta)"
                   className="px-2.5 py-1.5 rounded-lg bg-ativo/15 hover:bg-ativo/25 text-ativo-400 text-xs font-semibold border border-ativo/30 transition-all flex items-center gap-1">
-                  <UserCheck size={13} /> Atender
+                  <UserCheck size={13} /> {mostrarRotulo && 'Atender'}
                 </button>
               ) : (
                 <button onClick={() => onPendente(conversa.id)}
                   title="Devolver para a fila (Pendente)"
                   className="px-2.5 py-1.5 rounded-lg bg-espera/15 hover:bg-espera/25 text-espera-400 text-xs font-semibold border border-espera/30 transition-all flex items-center gap-1">
-                  <Clock size={13} /> Pendente
+                  <Clock size={13} /> {mostrarRotulo && 'Pendente'}
                 </button>
               )}
               <button onClick={() => onFechar(conversa.id)}
                 title="Fechar atendimento e enviar a pesquisa de satisfação ao cliente"
                 className="px-2.5 py-1.5 rounded-lg bg-falha/15 hover:bg-falha/25 text-falha-400 text-xs font-semibold border border-falha/30 transition-all flex items-center gap-1">
-                <CheckCircle2 size={13} /> Fechar
+                <CheckCircle2 size={13} /> {mostrarRotulo && 'Fechar'}
               </button>
               {/* FECHAMENTO À FORÇA. Segundo botão, e não uma opção escondida
                   dentro do primeiro: quem precisa dele (engano, teste, cliente
@@ -2606,17 +2634,55 @@ function PainelChat({
               <button onClick={() => onFechar(conversa.id, true)}
                 title="Fechar à força: encerra sem enviar a pesquisa de satisfação ao cliente"
                 className="px-2.5 py-1.5 rounded-lg bg-grafite-700 hover:bg-grafite-600 text-slate-300 hover:text-white text-xs font-semibold border border-linha hover:border-linha-forte transition-all flex items-center gap-1">
-                <StarOff size={13} /> Fechar sem avaliação
+                <StarOff size={13} /> {mostrarRotuloSecundario && 'Fechar sem avaliação'}
               </button>
             </>
           )}
 
           <button onClick={onTransferir}
             title="Transferir conversa para outro atendente"
+            aria-label="Transferir conversa para outro atendente"
             className="px-2.5 py-1.5 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 text-xs font-semibold border border-purple-500/30 transition-all flex items-center gap-1">
-            <ArrowRightLeft size={13} /> Transferir
+            <ArrowRightLeft size={13} /> {mostrarRotulo && 'Transferir'}
           </button>
         </div>
+      </div>
+
+      {/* SEGUNDA FAIXA: quem e o cliente do lado do negocio (empresa, setor,
+          responsavel). Fica embaixo, e nao ao lado do nome, porque e a linha
+          que cresce sem limite -- uma razao social pode ter 50 caracteres e
+          empurraria tudo o mais para fora. */}
+      <div className="mt-2 flex items-center gap-2 flex-wrap">
+        {/* Identificação do cliente: NOME DA EMPRESA, sem o número do CNPJ
+            e sem botão de remover. Uma vez identificado, o cliente fica
+            identificado -- corrigir um CNPJ errado é feito pelo próprio
+            cliente (responde "NÃO" quando o bot confirma) ou pelo
+            administrador em Clientes (CNPJ). */}
+        {!tipoCliente
+          ? <EmojiIcon name="question" label="Cliente não identificado" size="sm" />
+          : tipoCliente === 'cadastrado'
+            ? <EmojiIcon name="shield" label={empresa || 'Cliente cadastrado'} size="sm" />
+            // AVULSO: o rótulo diz o TIPO. Antes escrevia "Cliente
+            // identificado (Sem Contrato)" -- e "identificado" era
+            // justamente a palavra errada, porque a Central não distinguia
+            // o cadastrado do avulso.
+            : <EmojiIcon name="warning" label={empresa ? `${empresa} (Avulso)` : 'Cliente avulso'} size="sm" />
+        }
+        {/* Mesma badge de setor do cartao: com o chat aberto ela continua
+            sendo o motivo pelo qual o cliente chamou. */}
+        {setorPedido && (
+          <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border ${setorPedido.classe}`}
+            title={setorPedido.id === 'geral' ? 'Ainda sem triagem: o cliente nao escolheu setor no menu' : `Setor escolhido pelo cliente: ${setorPedido.setor}`}>
+            {setorPedido.label}
+          </span>
+        )}
+        {atendente && (
+          <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 font-semibold"
+            title={`Conversa atribuida a ${atendente.nome}`}>
+            <UserCheck size={11} /> {atendente.nome}
+          </span>
+        )}
+      </div>
       </div>
 
       <div ref={scrollRef} onScroll={aoRolar}
