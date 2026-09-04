@@ -28,6 +28,7 @@ import { useAuth } from '../../context/AuthContext';
 import { ConversasAPI, ContatosAPI } from '../../services/api';
 import { usePreferencia } from '../../hooks/usePreferencia';
 import { contatoCombina, normalizarBusca, telefoneComparavel } from '../../utils/busca';
+import { contatoDoVcard } from '../../utils/vcard';
 // CPF ou CNPJ: a validacao e a mascara vivem em utils/documento -- estavam
 // duplicadas aqui e em ParceirosPage, com as mesmas regras copiadas, e a
 // mudanca para aceitar CPF teria de ser feita duas vezes.
@@ -1233,7 +1234,7 @@ function nomeArquivoMidia(md = {}, m = {}) {
 // `onAbrirMidia` (era `onAbrirImagem`): o visualizador passou a atender vídeo
 // também, e um nome que diz "imagem" faria o próximo leitor procurar um segundo
 // mecanismo para vídeo -- que não existe.
-function MensagemMidia({ m, escuro, onAbrirMidia }) {
+function MensagemMidia({ m, escuro, onAbrirMidia, onAbrirContato }) {
   const md = m.midia || {};
   const semArquivo = !md.url && m.tipo !== 'localizacao' && m.tipo !== 'contato';
   // Nome com que o arquivo é SALVO no computador. Calculado uma vez porque tanto
@@ -1326,13 +1327,81 @@ function MensagemMidia({ m, escuro, onAbrirMidia }) {
     );
   }
   if (m.tipo === 'contato') {
-    return (
-      <div className={`flex items-center gap-2 p-2 rounded-lg ${escuro ? 'bg-grafite-700 border border-linha text-slate-100' : 'bg-slate-900/10 text-slate-900'}`}>
-        <Contact size={18} /> <span className="text-[11px] font-semibold">{md.displayName || 'Contato'}</span>
-      </div>
-    );
+    return <CartaoContato md={md} escuro={escuro} onAbrirContato={onAbrirContato} />;
   }
   return null;
+}
+
+/**
+ * CARTÃO DE CONTATO ENCAMINHADO PELO CLIENTE.
+ *
+ * Antes isto era um rótulo morto: mostrava o nome do contato e mais nada. Para
+ * falar com a pessoa indicada, o atendente abria o WhatsApp no celular, copiava
+ * o número na mão e voltava para digitar em "Nova conversa" -- e um número
+ * copiado à mão é um número digitado errado de vez em quando.
+ *
+ * Agora o número sai do próprio vCard (ver utils/vcard) e um clique abre a
+ * conversa direto na aba Abertas. Sem mensagem nenhuma: abrir o fio não avisa o
+ * contato -- quem decide o que dizer, e quando, é o atendente.
+ *
+ * Componente separado, e não um trecho dentro de `MensagemMidia`, porque ele
+ * tem estado próprio (o "Abrindo…" enquanto o servidor responde) e os hooks não
+ * podem ficar depois dos vários `return` antecipados daquela função.
+ */
+function CartaoContato({ md, escuro, onAbrirContato }) {
+  const [abrindo, setAbrindo] = useState(false);
+  const contato = useMemo(
+    () => contatoDoVcard(md.vcard, md.displayName),
+    [md.vcard, md.displayName]
+  );
+  const nome = contato?.nome || md.displayName || 'Contato';
+
+  const conversar = async () => {
+    if (!contato || abrindo) return;
+    setAbrindo(true);
+    try { await onAbrirContato?.(contato); } finally { setAbrindo(false); }
+  };
+
+  return (
+    <div className={`p-2 rounded-lg min-w-[11rem] ${escuro ? 'bg-grafite-700 border border-linha text-slate-100' : 'bg-slate-900/10 text-slate-900'}`}>
+      <div className="flex items-center gap-2">
+        <Contact size={18} className="shrink-0" />
+        <div className="min-w-0">
+          <div className="text-[11px] font-semibold truncate">{nome}</div>
+          {contato && (
+            <div className={`text-[9px] font-mono ${escuro ? 'text-slate-400' : 'text-slate-900/60'}`}>
+              {mascararTelefone(contato.telefone)}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {contato ? (
+        <button
+          type="button"
+          onClick={conversar}
+          disabled={abrindo}
+          title={contato.temWhatsApp
+            ? `Abrir conversa com ${nome}`
+            : 'Este número não veio marcado como WhatsApp. A conversa abre, mas o envio pode falhar.'}
+          className={`mt-2 w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[10px] font-bold transition-colors disabled:opacity-60 ${
+            escuro
+              ? 'bg-acao/20 hover:bg-acao/30 border border-acao/40 text-acao-200'
+              : 'bg-slate-900/10 hover:bg-slate-900/20 border border-slate-900/20 text-slate-900'
+          }`}
+        >
+          {abrindo ? <Loader2 size={12} className="animate-spin" /> : <MessageSquarePlus size={12} />}
+          {abrindo ? 'Abrindo…' : 'Conversar'}
+        </button>
+      ) : (
+        // Cartão sem telefone discável (só e-mail, ou número fora do formato
+        // brasileiro). Dizemos isso em vez de oferecer um botão que só falharia.
+        <div className={`mt-1.5 text-[9px] italic ${escuro ? 'text-slate-400' : 'text-slate-900/60'}`}>
+          Cartão sem número utilizável.
+        </div>
+      )}
+    </div>
+  );
 }
 
 const CardConversa = React.memo(function CardConversa({
@@ -1935,7 +2004,9 @@ function PainelChat({
   onVoltar, atendente, onTransferir,
   onEditar, onEncaminharPara, conversas, onAtender,
   assinar, onToggleAssinar, assinaturaNome, onApagarMensagem,
-  podeBuscarHistorico, buscandoHistorico, onBuscarHistorico
+  podeBuscarHistorico, buscandoHistorico, onBuscarHistorico,
+  // Clique em "Conversar" no cartao de contato que o cliente encaminhou.
+  onAbrirContato
 }) {
   const [showMsgRapidas, setShowMsgRapidas] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
@@ -2678,7 +2749,7 @@ function PainelChat({
                   // duas vezes na bolha: uma dentro do bloco da imagem, outra
                   // logo abaixo. Não era duplicação de dados -- a mensagem
                   // sempre esteve gravada uma vez só.
-                  <MensagemMidia m={m} escuro onAbrirMidia={setImagemAmpliada} />
+                  <MensagemMidia m={m} escuro onAbrirMidia={setImagemAmpliada} onAbrirContato={onAbrirContato} />
                 ) : (
                   <FormattedMessage text={m.texto} />
                 )}
@@ -3786,12 +3857,47 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       setSelecionada(nova.id);
       setModalNova(false);
       setNovaInicial(null);
+      // Devolve a conversa (ou `null` no erro) porque nem sempre quem chama e o
+      // modal: o cartao de contato encaminhado chama isto direto, sem tela
+      // aberta para mostrar `erroNova` -- e precisa saber se deu certo.
+      return nova;
     } catch (e) {
       setErroNova(e.message || 'Não foi possível iniciar a conversa.');
+      return null;
     } finally {
       setEnviandoNova(false);
     }
   }, [setConversas, setAbaAtual, assinar, assinaturaNome]);
+
+  /**
+   * "Conversar" no cartao de contato que o CLIENTE encaminhou.
+   *
+   * Um clique so, e sem mandar mensagem nenhuma: se ja existe fio com aquele
+   * numero, pula para ele; se nao existe, o servidor cria a conversa ja ABERTA
+   * (statusAtendimento "aberta") e ela aparece na aba Abertas, pronta para o
+   * atendente escrever quando quiser. Abrir o fio nao notifica o contato.
+   *
+   * Se a criacao falhar (numero recusado, WhatsApp fora do ar), caimos no modal
+   * de conversa nova ja preenchido: e la que o erro tem onde aparecer, e a
+   * pessoa corrige o numero em vez de levar um clique silencioso.
+   */
+  const conversarComContatoRecebido = useCallback(async (contato) => {
+    const tel = telefoneComparavel(contato.telefone);
+    const existente = conversas.find(c => telefoneComparavel(c.telefone) === tel);
+    if (existente) { irParaConversa(existente.id); return; }
+
+    setErroNova('');
+    const nova = await iniciarConversaNova({
+      telefone: contato.telefone,
+      nome: contato.nome || '',
+      setor: 'Geral',
+      texto: '',
+    });
+    if (!nova) {
+      setNovaInicial({ telefone: contato.telefone, nome: contato.nome || '' });
+      setModalNova(true);
+    }
+  }, [conversas, irParaConversa, iniciarConversaNova]);
 
   /**
    * Assumir a conversa.
@@ -4368,6 +4474,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               podeBuscarHistorico={ehAdmin && !historicoVazio.has(conversa.id)}
               buscandoHistorico={importandoHistorico}
               onBuscarHistorico={importarHistorico}
+              onAbrirContato={conversarComContatoRecebido}
             />
           )}
         </div>

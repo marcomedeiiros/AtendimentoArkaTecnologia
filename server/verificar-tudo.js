@@ -100,6 +100,14 @@ const VERIFICACOES = [
     resumo: "recado/foto/conta comercial, guarda de setor, e a Evolution fora do ar sem derrubar nada",
   },
   {
+    // O vCard traz DOIS numeros na mesma linha: o `waid` (a conta no WhatsApp)
+    // e o texto que a pessoa digitou ao salvar o contato. Ler o errado abre
+    // conversa com outra pessoa -- e so se descobre quando a mensagem chega la.
+    arquivo: "verificar-contato-encaminhado.js",
+    titulo: "Contato encaminhado pelo cliente",
+    resumo: "telefone sai do waid, cartao sem numero nao vira botao, e o fio abre na aba Abertas sem enviar nada",
+  },
+  {
     // O relatorio SAI da empresa para o cliente dela: um numero errado vira um
     // documento com a conta errada, e ninguem do outro lado consegue conferir.
     // O que este vigia acima de tudo e o vazamento entre empresas.
