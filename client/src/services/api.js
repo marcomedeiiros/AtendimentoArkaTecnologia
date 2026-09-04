@@ -478,6 +478,21 @@ export const ParceirosAPI = {
   // servidor -- ver parceiro.routes.js.
 };
 
+// ── Relatorios por cliente (CNPJ) ──
+//
+// Vem do SERVIDOR, e nao das `conversas` que o painel ja tem em maos: a
+// listagem da Central e filtrada por setor para quem nao e Administrador, e um
+// relatorio montado a partir dela sairia sem os chamados dos outros setores --
+// sem nada na tela indicando a falta. O documento vai para o cliente.
+export const RelatoriosAPI = {
+  // `periodo`: dia | 7dias | mes | ano. `referencia` (AAAA-MM-DD) permite gerar
+  // um periodo passado; ausente = hoje.
+  clientes: (periodo = 'mes', referencia = null) =>
+    request(`/relatorios/clientes?periodo=${encodeURIComponent(periodo)}${referencia ? `&referencia=${referencia}` : ''}`),
+  empresa: (cnpj, periodo = 'mes', referencia = null) =>
+    request(`/relatorios/clientes/${encodeURIComponent(cnpj)}?periodo=${encodeURIComponent(periodo)}${referencia ? `&referencia=${referencia}` : ''}`),
+};
+
 // ── Fluxos API ──
 export const FluxosAPI = {
   listar: () => request('/fluxos'),

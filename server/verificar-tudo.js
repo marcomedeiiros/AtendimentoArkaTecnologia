@@ -100,6 +100,14 @@ const VERIFICACOES = [
     resumo: "recado/foto/conta comercial, guarda de setor, e a Evolution fora do ar sem derrubar nada",
   },
   {
+    // O relatorio SAI da empresa para o cliente dela: um numero errado vira um
+    // documento com a conta errada, e ninguem do outro lado consegue conferir.
+    // O que este vigia acima de tudo e o vazamento entre empresas.
+    arquivo: "verificar-relatorios-cnpj.js",
+    titulo: "Relatórios por cliente (CNPJ)",
+    resumo: "janela de periodo no fuso BR, recorte que nao vaza entre empresas, motivo ausente nomeado",
+  },
+  {
     arquivo: "verificar-inatividade.js",
     titulo: "Inatividade",
     resumo: "os dois relógios do bot; a Parte B roda contra o banco quando há DATABASE_URL",

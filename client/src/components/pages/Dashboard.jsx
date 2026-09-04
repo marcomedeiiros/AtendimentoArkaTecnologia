@@ -13,6 +13,7 @@ import { exportarRelatorioPdf } from '../../utils/exportarPdf';
 import { hojeISO, FUSO_BR } from '../../utils/data';
 import HelpDeskPainel from './HelpDeskPainel';
 import RegistroConversas from './RegistroConversas';
+import RelatoriosClientes from './RelatoriosClientes';
 import { avisar } from '../../utils/dialogo';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
@@ -274,7 +275,10 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
     <div className="fade-in space-y-6 baixa:lg:space-y-4">
       {/* Header com abas */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-linha">
-        <div className="flex items-center gap-3">
+        {/* `flex-wrap`: com cinco abas a barra estourava a largura em tela
+            estreita. O header pai ja quebra em coluna no `sm`, mas os botoes
+            entre si nao quebravam -- eles saiam para fora da tela. */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <button
             onClick={() => setAbaAtiva('geral')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
@@ -310,6 +314,15 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                 : 'bg-grafite-700 border-linha text-slate-400 hover:text-white hover:border-slate-500'
             }`}>
             <ClipboardList size={13} className="inline mr-1.5 -mt-0.5" /> Registro
+          </button>
+          <button
+            onClick={() => setAbaAtiva('relatorios')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
+              abaAtiva === 'relatorios'
+                ? 'bg-acao/15 border-acao/40 text-acao-200'
+                : 'bg-grafite-700 border-linha text-slate-400 hover:text-white hover:border-slate-500'
+            }`}>
+            <FileText size={13} className="inline mr-1.5 -mt-0.5" /> Relatórios Clientes (CNPJ)
           </button>
         </div>
         {abaAtiva === 'geral' && (
@@ -735,6 +748,10 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
 
       {/* ============= ABA: REGISTRO DE CONVERSAS ============= */}
       {abaAtiva === 'registro' && <RegistroConversas conversas={conversas} equipe={equipe} />}
+
+      {/* Sem props: busca do servidor. `conversas` esta aqui em maos, mas vem
+          filtrada por setor -- ver o comentario no topo de RelatoriosClientes. */}
+      {abaAtiva === 'relatorios' && <RelatoriosClientes />}
     </div>
   );
 }
