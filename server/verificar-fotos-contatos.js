@@ -123,6 +123,74 @@ async function main() {
   check(/onError=\{\(\) => setErroFoto\(true\)\}/.test(avatar),
     "o Avatar cai para o boneco quando o link da foto vence (403)");
 
+  titulo("6. O TELEFONE NA LISTA MOSTRA O DDD, NAO O DDI");
+
+  // O relato: a agenda mostrava "(55) 27995-0906". O 55 e o DDI do Brasil, nao
+  // um DDD -- e o numero desenhado nao existe. A causa era a ordem das
+  // operacoes: a mascara cortava em 11 digitos ANTES de tirar o DDI, entao
+  // "5527999724004" virava "55279997240" e os quatro ultimos digitos do
+  // telefone eram jogados fora junto.
+  const vm = require("vm");
+  const fonte = fs.readFileSync(
+    path.join(__dirname, "..", "client", "src", "components", "pages", "Contatos.jsx"),
+    "utf8"
+  );
+  const inicio = fonte.indexOf("function limparTel");
+  const fim = fonte.indexOf("const TAGS_CORES");
+  check(inicio > 0 && fim > inicio, "achei as funcoes de telefone no arquivo da tela");
+  const caixaTel = {};
+  vm.createContext(caixaTel);
+  // O CODIGO DE VERDADE, lido do arquivo da tela -- uma copia aqui envelheceria
+  // em silencio no dia em que a mascara mudasse.
+  vm.runInContext(`${fonte.slice(inicio, fim)}; this.mascararTel = mascararTel;`, caixaTel);
+  const { mascararTel } = caixaTel;
+
+  const esperados = [
+    ["5527999724004", "(27) 99972-4004", "celular com DDI (o caso do relato)"],
+    ["27999724004", "(27) 99972-4004", "celular sem DDI"],
+    ["552733334444", "(27) 3333-4444", "fixo com DDI"],
+    ["2733334444", "(27) 3333-4444", "fixo sem DDI"],
+    ["5511987654321", "(11) 98765-4321", "outro DDD, para o 27 nao estar chumbado"],
+  ];
+  for (const [entrada, saida, descricao] of esperados) {
+    const veio = mascararTel(entrada);
+    check(veio === saida, `${descricao}: ${entrada} -> ${veio}`);
+  }
+  check(!/\(55\)/.test(esperados.map(([e]) => mascararTel(e)).join(" ")),
+    "nenhum numero sai com (55) na frente");
+
+  titulo("7. O NUMERO COLADO NO NOME SAI DO NOME");
+
+  // O relato: contatos como "27999724004 João S.Damace". E assim que a pessoa
+  // salvou no celular, e a Evolution devolve o texto cru. Na lista o numero
+  // aparecia DUAS vezes -- no nome e na linha do telefone logo abaixo -- e a
+  // ordem alfabetica agrupava essa gente pelo digito, longe do proprio nome.
+  const { limparNomeContato } = require("./src/shared/helpers/nomeContato.helper");
+
+  const nomes = [
+    ["27999724004 João S.Damace", "João S.Damace", "numero na frente (o caso do relato)"],
+    ["(27) 99972-4004 Pedro", "Pedro", "numero mascarado na frente"],
+    ["+55 27 99972-4004 - Maria (financeiro)", "Maria (financeiro)", "com DDI e separador"],
+    ["João S.Damace 27999724004", "João S.Damace", "numero no fim"],
+  ];
+  for (const [entrada, saida, descricao] of nomes) {
+    const veio = limparNomeContato(entrada);
+    check(veio === saida, `${descricao}: "${entrada}" -> "${veio}"`);
+  }
+
+  // O QUE NAO PODE SER TOCADO. Um limpador agressivo demais estraga nome de
+  // verdade, e o estrago passa despercebido -- ninguem confere 726 contatos.
+  const intactos = ["João S.Damace", "Loja 2", "Suporte 24h", "Sala 101", "Ana (2º turno)", "Miguel 🎮🎮"];
+  for (const n of intactos) {
+    check(limparNomeContato(n) === n, `"${n}" passa intacto`);
+  }
+  // So numero: nao ha nome a preservar, e quem chama cai no telefone como
+  // rotulo -- que e o comportamento que ja existia para contato sem nome.
+  check(limparNomeContato("5527999724004") === null, "nome que e so o numero devolve null");
+  check(limparNomeContato("(27) 99972-4004") === null, "idem com mascara");
+  check(limparNomeContato("") === null, "vazio devolve null");
+  check(limparNomeContato(null) === null, "nulo nao quebra");
+
   titulo("limpeza");
   await limpar();
   const sobrou =

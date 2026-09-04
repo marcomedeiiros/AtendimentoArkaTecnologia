@@ -5,6 +5,7 @@ const { limparTelefone } = require("../../shared/helpers/cnpj.helper");
 const logger = require("../../config/logger");
 const AppError = require("../../shared/errors/AppError");
 const bus = require("../../shared/events/event-bus");
+const { limparNomeContato } = require("../../shared/helpers/nomeContato.helper");
 
 // Telefone comparavel: so digitos e SEM o DDI 55. A agenda importada grava
 // 5527999990000 e a conversa pode ter so 27999990000 (ou o contrario) -- sem
@@ -108,7 +109,12 @@ class ContatoService {
       const telefone = limparTelefone(jid.split("@")[0]);
       if (telefone.length < 10) { ignorados += 1; continue; }
 
-      const nome = String(bruto?.pushName || bruto?.name || "").trim() || telefone;
+      // O nome vem como esta salvo no aparelho, e muita gente cola o numero na
+      // frente ("27999724004 João S.Damace"). Sem faxina, a lista mostrava o
+      // numero duas vezes -- no nome e na linha do telefone logo abaixo -- e a
+      // ordem alfabetica agrupava essas pessoas pelo digito, longe do proprio
+      // nome. Ver nomeContato.helper.
+      const nome = limparNomeContato(bruto?.pushName || bruto?.name) || telefone;
       // A Evolution nomeia este campo de um jeito diferente conforme a versao;
       // lemos os tres em vez de apostar num. Sem foto, fica `null` e a tela
       // desenha o boneco cinza -- que e a resposta honesta.
@@ -122,7 +128,25 @@ class ContatoService {
       } else {
         const mudancas = {};
         // So completa o nome de quem ainda estava sem: nao mexe no que foi editado.
-        if (existente.nome === existente.telefone && nome !== telefone) mudancas.nome = nome;
+        if (existente.nome === existente.telefone && nome !== telefone) {
+          mudancas.nome = nome;
+        } else if (
+          // FAXINA DO QUE JA ESTA GRAVADO SUJO.
+          //
+          // Os contatos importados antes desta limpeza continuam com o numero
+          // colado no nome, e ninguem vai reeditar centenas deles a mao. Aqui
+          // corrigimos SO quando a limpeza muda alguma coisa -- ou seja, quando
+          // o nome guardado realmente comeca ou termina com um telefone.
+          //
+          // Isto NAO e "sobrescrever o que foi editado a mao": um nome digitado
+          // por uma pessoa nao tem 11 digitos grudados nele, e se tiver, e o
+          // mesmo defeito. O que a pessoa escreveu de proposito (empresa, tag,
+          // observacoes) continua intocado.
+          existente.nome !== existente.telefone
+        ) {
+          const limpo = limparNomeContato(existente.nome);
+          if (limpo && limpo !== existente.nome) mudancas.nome = limpo;
+        }
         // A FOTO, ao contrario do nome, e sempre atualizada: ela nao e um campo
         // que alguem edita aqui -- e um retrato do WhatsApp, e o link antigo
         // vence. Preservar o velho seria preservar um 403.

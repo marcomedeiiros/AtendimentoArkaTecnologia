@@ -12,8 +12,26 @@ import { useAppContext } from '../../context/AppContext';
 import { avisar, confirmar } from '../../utils/dialogo';
 
 function limparTel(v) { return String(v || '').replace(/\D/g, ''); }
+
+/**
+ * "5527999724004" -> "(27) 99972-4004".
+ *
+ * ── O DEFEITO ──────────────────────────────────────────────────────────────
+ *
+ * Antes: `limparTel(v).slice(0, 11)`. O corte vinha ANTES de tirar o DDI, e a
+ * agenda importada do WhatsApp grava o numero com o 55 na frente. Em
+ * "5527999724004" (13 digitos) o corte deixava "55279997240", que o padrao de
+ * 11 digitos desenhava como "(55) 27999-7240" -- o DDI virava DDD, o DDD real
+ * sumia dentro do prefixo, e os quatro ultimos digitos do numero eram jogados
+ * fora. Todo contato sincronizado aparecia com um telefone que nao existe.
+ *
+ * Agora o DDI sai primeiro (mesma regra de `telefoneComparavel`, em
+ * utils/busca) e so entao a mascara e aplicada ao que sobrou.
+ */
 function mascararTel(v) {
-  const n = limparTel(v).slice(0, 11);
+  const d = limparTel(v);
+  const semDdi = d.length > 11 && d.startsWith('55') ? d.slice(2) : d;
+  const n = semDdi.slice(0, 11);
   if (n.length === 11) return n.replace(/^(\d{2})(\d{5})(\d{4})$/, '($1) $2-$3');
   if (n.length === 10) return n.replace(/^(\d{2})(\d{4})(\d{4})$/, '($1) $2-$3');
   return n;
