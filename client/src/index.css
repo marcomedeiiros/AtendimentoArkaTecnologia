@@ -180,6 +180,55 @@
   50% { opacity: 0.5; transform: scale(0.96); }
 }
 
+/* FILA COM GENTE ESPERANDO -- o brilho no painel do Modo TV.
+ *
+ * A TV fica na parede e ninguem a encara: ela e vista de canto de olho, do
+ * outro lado da sala. O numero da fila mudando de 0 para 1 e uma diferenca de
+ * poucos pixels a tres metros de distancia -- nao chama ninguem. O painel
+ * inteiro acender chama.
+ *
+ * Ambar (`--espera`), a mesma cor que o cartao de quem espera ja usa, e nao
+ * vermelho: vermelho e o que esta ATRASADO (ver `urgencia`), e gastar o
+ * vermelho no primeiro segundo de espera apaga essa distincao.
+ *
+ * A pulsacao e lenta de proposito (2.4s). Piscar rapido numa tela que fica
+ * ligada oito horas vira ruido que a equipe aprende a ignorar -- e ai o alerta
+ * nao alerta mais ninguem.
+ */
+@keyframes brilhoFila {
+  0%, 100% {
+    box-shadow: 0 0 0 1px rgb(var(--espera) / 0.45), 0 0 22px -4px rgb(var(--espera) / 0.40);
+  }
+  50% {
+    box-shadow: 0 0 0 1px rgb(var(--espera) / 0.80), 0 0 42px -2px rgb(var(--espera) / 0.70);
+  }
+}
+/* A CLASSE APARECE DUAS VEZES DE PROPOSITO -- nao e engano de digitacao.
+ *
+ * `.glass-panel` (mais abaixo neste arquivo) pinta a borda pelo ATALHO
+ * `border: 1px solid rgb(var(--linha))`, e atalho reescreve `border-color`
+ * inteiro. Com a mesma especificidade das duas classes, quem vence e a que vem
+ * depois no arquivo -- e o painel da fila usa as duas juntas, entao a borda
+ * ambar era descartada em silencio: sobrava o brilho, com a moldura cinza.
+ *
+ * Repetir a classe leva a especificidade a (0,2,0) e resolve sem depender da
+ * ordem das regras, que e o tipo de coisa que quebra sozinha quando alguem
+ * reorganiza o arquivo.
+ */
+.fila-alerta.fila-alerta {
+  border-color: rgb(var(--espera) / 0.55);
+  animation: brilhoFila 2.4s ease-in-out infinite;
+}
+/* Movimento reduzido: o BRILHO fica, a pulsacao sai. O brilho aqui nao e
+   enfeite -- e a informacao "tem gente esperando", a mesma que o numero da. Quem
+   pede menos movimento nao esta pedindo menos informacao. */
+@media (prefers-reduced-motion: reduce) {
+  .fila-alerta.fila-alerta {
+    animation: none;
+    box-shadow: 0 0 0 1px rgb(var(--espera) / 0.65), 0 0 26px -4px rgb(var(--espera) / 0.55);
+  }
+}
+
 @keyframes fadeInScale {
   from {
     opacity: 0;

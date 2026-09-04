@@ -128,8 +128,12 @@ function tempoEspera(iso, agora) {
 //
 //   DIA DA SEMANA na frente. Numa TV que fica ligada o dia inteiro, "que dia e
 //   hoje?" quase sempre quer dizer "e quinta ou sexta?" -- o numero do dia
-//   responde a outra pergunta. Vai apenas "quinta", sem o "-feira": o sufixo
-//   dobra a largura e nao acrescenta nada que ja nao esteja dito.
+//   responde a outra pergunta.
+//
+//   POR EXTENSO, com o "-feira". A primeira versao cortava o sufixo para
+//   economizar largura, e o resultado ficou lendo como abreviacao ("sexta,"),
+//   nao como a data escrita por extenso que o resto da linha promete. Numa
+//   parede, meia palavra chama mais atencao do que a palavra inteira.
 //
 //   DIA COM ZERO A ESQUERDA. Sem ele a largura do bloco muda no dia 10 e a
 //   linha inteira se desloca -- num mostrador que fica parado na parede,
@@ -139,7 +143,7 @@ function tempoEspera(iso, agora) {
 //   MES ESCRITO, e nao numerico: "03 de setembro" nao tem como ser lido como
 //   9 de marco por quem passa de longe.
 function dataPorExtenso(d) {
-  const semana = d.toLocaleDateString('pt-BR', { weekday: 'long' }).replace(/-feira$/, '');
+  const semana = d.toLocaleDateString('pt-BR', { weekday: 'long' });
   const dia = String(d.getDate()).padStart(2, '0');
   const mes = d.toLocaleDateString('pt-BR', { month: 'long' });
   return `${semana}, ${dia} de ${mes} de ${d.getFullYear()}`;
@@ -743,7 +747,12 @@ export default function ModoTv({ onFechar, fila = [] }) {
           )}
 
           <aside className="shrink-0 min-h-0 flex flex-col gap-3 xl:gap-4 xl:w-[25%] xl:min-w-[330px] xl:max-w-[460px]">
-            <section className="flex-1 min-h-0 glass-panel border border-linha rounded-2xl p-3 xl:p-4 flex flex-col gap-2.5">
+            {/* O PAINEL INTEIRO ACENDE quando ha alguem na fila. Ver
+                `.fila-alerta` em index.css: da distancia da parede, o numero
+                indo de 0 para 1 nao chama ninguem; a moldura acesa chama. */}
+            <section className={`flex-1 min-h-0 glass-panel border rounded-2xl p-3 xl:p-4 flex flex-col gap-2.5 ${
+              fila.length ? 'fila-alerta' : 'border-linha'
+            }`}>
               <div className="flex items-center justify-between gap-2 shrink-0">
                 <Rotulo icon={Inbox}>Aguardando atendimento</Rotulo>
                 <span
