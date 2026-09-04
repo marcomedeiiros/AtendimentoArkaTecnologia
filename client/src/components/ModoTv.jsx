@@ -122,11 +122,27 @@ function tempoEspera(iso, agora) {
   return `${Math.floor(h / 24)} d`;
 }
 
-// Data por extenso: "1, setembro de 2026". Numa parede, mes escrito ganha do
-// numerico: "1, setembro" nao tem como ser lido como 9 de janeiro.
+// Data por extenso: "quinta, 03 de setembro de 2026".
+//
+// TRES DECISOES, e nenhuma e enfeite numa tela de parede:
+//
+//   DIA DA SEMANA na frente. Numa TV que fica ligada o dia inteiro, "que dia e
+//   hoje?" quase sempre quer dizer "e quinta ou sexta?" -- o numero do dia
+//   responde a outra pergunta. Vai apenas "quinta", sem o "-feira": o sufixo
+//   dobra a largura e nao acrescenta nada que ja nao esteja dito.
+//
+//   DIA COM ZERO A ESQUERDA. Sem ele a largura do bloco muda no dia 10 e a
+//   linha inteira se desloca -- num mostrador que fica parado na parede,
+//   isso e o tipo de tremida que chama atencao a toa. O relogio ao lado ja usa
+//   `2-digit` pelo mesmo motivo.
+//
+//   MES ESCRITO, e nao numerico: "03 de setembro" nao tem como ser lido como
+//   9 de marco por quem passa de longe.
 function dataPorExtenso(d) {
+  const semana = d.toLocaleDateString('pt-BR', { weekday: 'long' }).replace(/-feira$/, '');
+  const dia = String(d.getDate()).padStart(2, '0');
   const mes = d.toLocaleDateString('pt-BR', { month: 'long' });
-  return `${d.getDate()}, ${mes} de ${d.getFullYear()}`;
+  return `${semana}, ${dia} de ${mes} de ${d.getFullYear()}`;
 }
 
 // Espera longa = vermelho. E o dado que importa numa parede: quem esta
