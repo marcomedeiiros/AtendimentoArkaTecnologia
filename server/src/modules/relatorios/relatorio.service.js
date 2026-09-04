@@ -18,6 +18,7 @@
 // abril conta no relatorio de ABRIL.
 const prisma = require("../../infrastructure/database/prisma.client");
 const parceiroRepository = require("../../infrastructure/repositories/parceiro.repository");
+const { ATENDENTE_HISTORICO_IMPORTADO } = require("../../shared/helpers/atendimentoSintetico.helper");
 const configuracaoService = require("../configuracoes/configuracao.service");
 const { limparCnpj } = require("../../shared/helpers/cnpj.helper");
 const AppError = require("../../shared/errors/AppError");
@@ -121,7 +122,19 @@ async function _osFechadas({ inicio, fim }, cnpjs = null) {
   };
   if (cnpjs) where.conversa = { cnpj: { in: cnpjs } };
 
-  return prisma.atendimento.findMany({
+  // A OS SINTETICA DO HISTORICO IMPORTADO NAO E UM CHAMADO.
+  //
+  // Ela existe so para dar dono as mensagens antigas trazidas do celular (ver
+  // atendimentoSintetico.helper) e nasce ja "fechada", com data de fechamento
+  // no passado -- ou seja, entra direto neste recorte. Num relatorio que SAI DA
+  // EMPRESA para o cliente, isso vira um atendimento que nunca aconteceu, com
+  // "Histórico do WhatsApp" no lugar do atendente, inflando o total do periodo.
+  //
+  // Filtrado em memoria, e nao no `where`: em SQL, `atendenteNome != 'x'` e
+  // NULO quando a coluna e NULA, e a linha cai fora -- e atendimento com
+  // atendente nulo e o que o BOT resolveu sozinho, que E um chamado de verdade
+  // e precisa continuar no relatorio.
+  const linhas = await prisma.atendimento.findMany({
     where,
     select: {
       id: true,
@@ -139,6 +152,8 @@ async function _osFechadas({ inicio, fim }, cnpjs = null) {
     },
     orderBy: { fechadoEm: "asc" },
   });
+
+  return linhas.filter((o) => o.atendenteNome !== ATENDENTE_HISTORICO_IMPORTADO);
 }
 
 function _duracaoHoras(de, ate) {

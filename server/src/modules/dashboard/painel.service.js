@@ -26,6 +26,7 @@ const prisma = require("../../infrastructure/database/prisma.client");
 const equipeService = require("../equipe/equipe.service");
 const configuracaoService = require("../configuracoes/configuracao.service");
 const { podeAcessarSetor } = require("../../shared/helpers/setor.helper");
+const { ehAtendenteReal } = require("../../shared/helpers/atendimentoSintetico.helper");
 
 // Quantos tecnicos entram no ranking. Tres cabe na tela e ainda e disputavel:
 // com dez, quem esta em setimo nao olha mais.
@@ -177,10 +178,18 @@ class PainelService {
   _ranking(atendimentos, { limite = TOP, incluirZerados = false } = {}) {
     const porPessoa = new Map();
     for (const a of atendimentos) {
-      // Sem responsavel = atendimento resolvido so pelo bot. Nao entra em
-      // ranking de gente.
+      // SO GENTE ENTRA NO RANKING DE GENTE.
+      //
+      // Duas coisas ocupam este campo sem serem uma pessoa:
+      //   vazio                     -> o bot resolveu sozinho;
+      //   "Histórico do WhatsApp"   -> a OS sintetica que recebe o historico
+      //                                importado do celular (ver o helper).
+      //
+      // O segundo caso passou meses despercebido porque so aparece quando
+      // alguem importa historico: o rotulo virava um "atendente" com um
+      // atendimento fechado e um ponto, e subia na lista junto com a equipe.
       const nome = a.atendenteNome || null;
-      if (!nome) continue;
+      if (!ehAtendenteReal(nome)) continue;
       if (!porPessoa.has(nome)) porPessoa.set(nome, { nome, fechados: 0, notas: [], assumir: [] });
       const p = porPessoa.get(nome);
       if (a.status === "fechada") p.fechados += 1;

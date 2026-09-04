@@ -37,6 +37,7 @@ async function limpar() {
     data: { atendimentoAtualId: null },
   });
   await prisma.conversa.deleteMany({ where: { cliente: { startsWith: MARCA } } });
+  await prisma.parceiro.deleteMany({ where: { razaoSocial: { startsWith: MARCA } } });
 }
 
 async function main() {
@@ -188,6 +189,60 @@ async function main() {
   check(por("Bruno")?.nota.conta === false, "quem nao tem o minimo de notas nao pontua por nota");
   check(por("Bruno")?.nota.pontos === 0, "e a parcela vale 0, nao a media de uma amostra pequena");
   check(typeof r.minimoAvaliacoes === "number", `o minimo vai para a tela (${r.minimoAvaliacoes})`);
+
+  titulo("6. O HISTORICO IMPORTADO NAO E UMA PESSOA");
+
+  // O relato: "Historico do WhatsApp" apareceu na classificacao como se fosse
+  // um atendente, e ninguem na equipe conhecia essa pessoa.
+  //
+  // Nao era invencao da tela nova: quando alguem importa o historico do celular
+  // para dentro de uma conversa, as mensagens antigas precisam pertencer a
+  // alguma OS -- entao e criada uma OS sintetica, ja fechada, carimbada com
+  // esse rotulo no campo `atendenteNome`. E o MESMO campo em que moram os nomes
+  // de pessoas, e o ranking so descartava quem estava em branco (o bot).
+  const { ATENDENTE_HISTORICO_IMPORTADO } = require("./src/shared/helpers/atendimentoSintetico.helper");
+  const conversaRepository = require("./src/infrastructure/repositories/conversa.repository");
+
+  await prisma.parceiro.create({ data: { cnpj: "11222333000181", razaoSocial: MARCA + " Omega Industria", status: "ativo" } });
+  const cImport = await conversa("importado", "OMEGA INDUSTRIA LTDA");
+  await prisma.conversa.update({ where: { id: cImport.id }, data: { cnpj: "11222333000181" } });
+  const osImportada = await conversaRepository.criarAtendimentoImportado(cImport.id, {
+    abertoEm: min(120),
+    fechadoEm: min(60),
+  });
+  check(
+    osImportada.atendenteNome === ATENDENTE_HISTORICO_IMPORTADO,
+    "a OS sintetica continua sendo criada com o rotulo (nada mudou na importacao)"
+  );
+
+  const r3 = await painelService.rankingEquipe();
+  check(
+    !r3.classificacao.some((p) => p.nome === ATENDENTE_HISTORICO_IMPORTADO),
+    "e o rotulo NAO aparece no ranking da Visao Geral"
+  );
+  const parede3 = await painelService.obter(null);
+  check(
+    !parede3.ranking.classificacao.some((p) => p.nome === ATENDENTE_HISTORICO_IMPORTADO),
+    "nem no painel de parede (mesma funcao, mesma protecao)"
+  );
+
+  // O RELATORIO QUE VAI PARA O CLIENTE e o lugar mais caro desse vazamento: a
+  // OS sintetica nasce fechada com data no passado, entao entra no recorte do
+  // periodo e vira um atendimento que nunca aconteceu no documento da empresa.
+  const relatorioService = require("./src/modules/relatorios/relatorio.service");
+  const hoje = new Date();
+  const rel = await relatorioService.relatorioEmpresa("11222333000181", {
+    periodo: "mes",
+    referencia: hoje.toISOString().slice(0, 10),
+  }).catch(() => null);
+  if (rel) {
+    check(
+      !(rel.chamados || []).some((c) => c.atendente === ATENDENTE_HISTORICO_IMPORTADO),
+      "o relatorio do cliente nao lista o historico importado como chamado"
+    );
+  } else {
+    check(false, "nao consegui gerar o relatorio da empresa para conferir");
+  }
 
   titulo("limpeza");
   await limpar();

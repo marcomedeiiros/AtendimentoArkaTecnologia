@@ -1,5 +1,6 @@
 const prisma = require("../database/prisma.client");
 const { comLock } = require("../../shared/helpers/lock.helper");
+const { ATENDENTE_HISTORICO_IMPORTADO } = require("../../shared/helpers/atendimentoSintetico.helper");
 
 // Proximo numero da sequencia. Incremento atomico por linha: criacoes
 // simultaneas nunca recebem o mesmo numero.
@@ -892,7 +893,10 @@ class ConversaRepository {
           // Fechado: e historico, nao trabalho em aberto. Se nascesse "pendente"
           // este ciclo apareceria na fila da equipe como chamado a atender.
           status: "fechada",
-          atendenteNome: "Histórico do WhatsApp",
+          // Constante compartilhada: quem FILTRA este carimbo (o ranking) vive
+          // noutro modulo, e a string repetida nos dois lugares deixaria de
+          // casar em silencio se o rotulo mudasse. Ver o helper.
+          atendenteNome: ATENDENTE_HISTORICO_IMPORTADO,
           motivo: motivo || "Histórico importado do WhatsApp",
           abertoEm: abertoEm || new Date(),
           fechadoEm: fechadoEm || abertoEm || new Date(),
