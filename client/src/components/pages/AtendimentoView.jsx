@@ -2033,14 +2033,29 @@ function PainelPerfilContato({
                   <>
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={async () => {
                         // CONFIRMA SO QUANDO HA O QUE PERDER. Com empresa
                         // vinculada, marcar avulso APAGA o vinculo e nao ha como
                         // devolve-lo depois: perguntar aqui e barato, e refazer
                         // a identificacao no meio de um atendimento nao e.
-                        if (empresa && !window.confirm(
-                          `Marcar como atendimento avulso vai desvincular ${empresa} desta conversa. O cadastro da empresa não é alterado. Continuar?`
-                        )) return;
+                        //
+                        // Pelo dialogo da Arka (utils/dialogo), nao pelo
+                        // `window.confirm`: a caixa do navegador aparece colada
+                        // no alto da janela, com a cara do Chrome e o nome do
+                        // site -- no meio de uma gaveta que e toda da Central,
+                        // ela parece aviso de outro programa.
+                        if (empresa) {
+                          const ok = await confirmar(
+                            `${empresa} deixa de ser a empresa desta conversa. O cadastro dela em Clientes (CNPJ) não é alterado, e o vínculo pode ser refeito aqui mesmo.`,
+                            {
+                              titulo: 'Marcar como atendimento avulso?',
+                              rotuloConfirmar: 'Marcar como avulso',
+                              rotuloCancelar: 'Manter a empresa',
+                              perigo: true,
+                            }
+                          );
+                          if (!ok) return;
+                        }
                         onMarcarAvulso(true);
                       }}
                       disabled={vinculando}
@@ -4316,7 +4331,10 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
 
   const validarCnpjManual = useCallback(async () => {
     const c = limparDocumento(inputCnpj);
-    if (!documentoValido(c)) { alert('CPF ou CNPJ inválido!'); return; }
+    // Era o ultimo `alert` nativo do sistema, e bem ao lado deste mesmo
+    // recurso: deixar a caixa do navegador aqui, com o dialogo da Arka logo ali
+    // no botao de avulso, faria a mesma tela falar com duas vozes.
+    if (!documentoValido(c)) { avisar('CPF ou CNPJ inválido.', { titulo: 'Documento inválido', tipo: 'aviso' }); return; }
     const id = conversa.id;
     setInputCnpj('');
     setModalCnpj(false);
