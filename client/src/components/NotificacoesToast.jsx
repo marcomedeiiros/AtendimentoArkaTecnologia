@@ -17,7 +17,7 @@ export default function NotificacoesToast() {
           onClick={() => { navigate('/atendimento'); removerNotificacao(n.id); }}
           className="fade-in cursor-pointer glass-panel border border-acao/40 rounded-2xl shadow-2xl shadow-black/40 p-3 flex items-start gap-3 hover:border-acao/70 transition-colors"
         >
-          <Avatar nome={n.cliente} size="sm" fotoUrl={n.fotoUrl} />
+          <Avatar contato nome={n.cliente} size="sm" fotoUrl={n.fotoUrl} />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 text-xs font-bold text-white">
               <MessageSquare size={12} className="text-acao-200 shrink-0" />

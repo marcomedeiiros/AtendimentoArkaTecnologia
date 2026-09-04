@@ -1362,7 +1362,7 @@ const CardConversa = React.memo(function CardConversa({
           com a data/hora dela ao lado, mais o nao lidas (que vira as acoes
           rapidas ao passar o mouse). */}
       <div className="flex items-center gap-2 min-w-0">
-        <Avatar nome={c.cliente} size="sm" fotoUrl={c.fotoUrl} online={whatsAppConectado} />
+        <Avatar contato nome={c.cliente} size="sm" fotoUrl={c.fotoUrl} online={whatsAppConectado} />
 
         <div className="min-w-0 flex-1">
           {/* Linha 1: estado + nome + #id + badges */}
@@ -1763,7 +1763,7 @@ function PainelPerfilContato({
                 title={foto ? 'Ver a foto em tamanho grande' : 'Este contato não tem foto pública'}
                 className="rounded-full transition-transform enabled:hover:scale-105 disabled:cursor-default focus:outline-none focus:ring-2 focus:ring-acao/50"
               >
-                <Avatar nome={conversa.cliente} size="xl" fotoUrl={foto} />
+                <Avatar contato nome={conversa.cliente} size="xl" fotoUrl={foto} />
               </button>
 
               <p className="mt-3 font-bold text-sm text-white break-words">{conversa.cliente}</p>
@@ -2327,7 +2327,7 @@ function PainelChat({
             title={`Ver o perfil de ${conversa.cliente}`}
             className="shrink-0 rounded-full transition-opacity hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-acao/50"
           >
-            <Avatar nome={conversa.cliente} size="md" fotoUrl={conversa.fotoUrl} />
+            <Avatar contato nome={conversa.cliente} size="md" fotoUrl={conversa.fotoUrl} />
           </button>
           <div>
           <div className="font-bold text-sm text-white flex items-center gap-2 flex-wrap">
@@ -2775,7 +2775,7 @@ function PainelChat({
                   <button key={c.id}
                     onClick={() => { onEncaminharPara(encaminhando.id, c.id); setEncaminhando(null); }}
                     className="w-full text-left p-3 rounded-xl bg-grafite-700 border border-linha hover:border-acao/40 hover:bg-grafite-600 transition-all flex items-center gap-3">
-                    <Avatar nome={c.cliente} size="sm" fotoUrl={c.fotoUrl} />
+                    <Avatar contato nome={c.cliente} size="sm" fotoUrl={c.fotoUrl} />
                     <div className="min-w-0">
                       <div className="text-xs font-bold text-white truncate">{c.cliente}</div>
                       <div className="text-[10px] text-slate-500 font-mono">{c.telefone}</div>
@@ -3090,7 +3090,7 @@ const ItemContatoAgenda = React.memo(function ItemContatoAgenda({ contato, onAbr
       title={`Iniciar atendimento com ${contato.nome}`}
       className="w-full text-left p-2.5 rounded-xl bg-grafite-700/50 hover:bg-grafite-600 border border-linha hover:border-acao/40 transition-all flex items-center gap-2.5 group"
     >
-      <Avatar nome={contato.nome} size="sm" />
+      <Avatar contato nome={contato.nome} size="sm" />
       <div className="min-w-0 flex-1">
         <div className="text-xs font-semibold text-slate-200 group-hover:text-acao-200 transition-colors truncate">
           {contato.nome}

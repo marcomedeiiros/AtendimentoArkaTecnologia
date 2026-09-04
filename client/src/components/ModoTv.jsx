@@ -503,7 +503,7 @@ function CartaoDaFila({ conversa, agora }) {
 
   return (
     <li className={`shrink-0 border rounded-xl p-2 xl:p-2.5 flex items-center gap-2.5 ${u.linha}`}>
-      <Avatar nome={conversa.cliente} size="md" fotoUrl={conversa.fotoUrl} />
+      <Avatar contato nome={conversa.cliente} size="md" fotoUrl={conversa.fotoUrl} />
 
       <div className="min-w-0 flex-1 flex flex-col gap-1">
         {/* SO O NOME, como na lista da Central.
