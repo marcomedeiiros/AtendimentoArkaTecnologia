@@ -1761,6 +1761,11 @@ function PainelPerfilContato({
   const [doc, setDoc] = useState('');
   const [copiado, setCopiado] = useState(false);
   const [erroDoc, setErroDoc] = useState('');
+  // Empresa ESCOLHIDA na busca, ainda NAO vinculada. Clicar no resultado apenas
+  // preenche o documento -- quem vincula e o botao. Antes o clique vinculava na
+  // hora: um toque errado na lista trocava a empresa da conversa sem que
+  // ninguem tivesse confirmado nada, e o unico aviso era a badge mudando.
+  const [escolhida, setEscolhida] = useState(null);
 
   useEffect(() => {
     const onTecla = (e) => { if (e.key === 'Escape') onFechar(); };
@@ -1821,6 +1826,7 @@ function PainelPerfilContato({
     setErroDoc('');
     onVincularDocumento(limpo);
     setDoc('');
+    setEscolhida(null);
   };
 
   return (
@@ -1942,7 +1948,14 @@ function PainelPerfilContato({
                       {achados.map(p => (
                         <button
                           key={p.cnpj}
-                          onClick={() => { onVincularDocumento(limparDocumento(p.cnpj)); setBusca(''); }}
+                          onClick={() => {
+                            // SO PREENCHE. A vinculacao e um segundo passo, no
+                            // botao "Vincular" -- ver a nota em `escolhida`.
+                            setDoc(mascararDocumento(p.cnpj));
+                            setEscolhida(p.razaoSocial || null);
+                            setBusca('');
+                            setErroDoc('');
+                          }}
                           disabled={vinculando}
                           className="w-full text-left px-2.5 py-1.5 rounded-lg bg-grafite-700 border border-linha hover:border-acao/50 transition-colors disabled:opacity-50"
                         >
@@ -1966,7 +1979,7 @@ function PainelPerfilContato({
               <div className="flex gap-1.5">
                 <input
                   value={doc}
-                  onChange={e => { setDoc(mascararDocumento(e.target.value)); setErroDoc(''); }}
+                  onChange={e => { setDoc(mascararDocumento(e.target.value)); setErroDoc(''); setEscolhida(null); }}
                   onKeyDown={e => { if (e.key === 'Enter') vincularDoc(); }}
                   placeholder="CNPJ ou CPF"
                   inputMode="numeric"
@@ -1981,6 +1994,16 @@ function PainelPerfilContato({
                   {vinculando ? <Loader2 size={13} className="animate-spin" /> : 'Vincular'}
                 </button>
               </div>
+              {/* Confirma o que foi ESCOLHIDO antes de gravar. O documento
+                  sozinho nao diz nada a quem atende -- e trocar a empresa da
+                  conversa por engano e caro: o atendimento inteiro passa a
+                  contar para o relatorio de outro cliente. */}
+              {escolhida && !erroDoc && (
+                <p className="text-[10px] text-slate-400 mt-1.5">
+                  Selecionada: <span className="text-slate-200 font-semibold">{escolhida}</span>.
+                  {' '}Clique em <span className="text-acao-200 font-semibold">Vincular</span> para confirmar.
+                </p>
+              )}
               {erroDoc && <p className="text-[10px] text-falha-400 mt-1">{erroDoc}</p>}
             </SecaoPerfil>
 

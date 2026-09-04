@@ -435,6 +435,60 @@ async function main() {
   check(naListagem?.clienteTipo === "avulso", "a LISTAGEM tambem traz o tipo (o cartao usa a mesma badge)");
 
   // ─────────────────────────────────────────────────────────────────────────
+  titulo("10. VINCULAR UM CNPJ DESFAZ o 'atendimento avulso' escolhido no menu");
+
+  // O relato, com o caso real: o cliente marca "atendimento avulso" no menu por
+  // engano -- ele TEM contrato. O atendente vincula a empresa pela Central, e a
+  // badge continuava dizendo "A COLLI (AVULSO)": CNPJ vinculado, contrato
+  // ativo, e o atendimento aparecendo como avulso. Duas afirmacoes contrarias
+  // sobre a mesma conversa, e a errada ganhando.
+  conversa = await criarConversa(instancia.id);
+  await prisma.conversa.update({
+    where: { id: conversa.id },
+    data: { atendimentoAvulso: true, cnpj: null, empresa: null, cnpjVerificado: false },
+  });
+  const antesDoVinculo = await conversaService.obter(conversa.id);
+  check(antesDoVinculo.atendimentoAvulso === true, "ponto de partida: o cliente escolheu avulso");
+  check(
+    badge.chip(antesDoVinculo, parceirosNaTela).label === "CLIENTE AVULSO",
+    "e a badge diz avulso, como deve"
+  );
+
+  // O atendente vincula a empresa (parceiro com contrato ATIVO) pela Central.
+  await conversaService.validarCnpjManual(conversa.id, CNPJ_PARCEIRO);
+  const depoisDoVinculo = await conversaService.obter(conversa.id);
+
+  check(depoisDoVinculo.atendimentoAvulso === false,
+    "vincular o CNPJ desfaz a marca de atendimento avulso");
+  check(depoisDoVinculo.cnpjVerificado === true, "o CNPJ fica vinculado");
+  check(depoisDoVinculo.clienteTipo === "cadastrado", "e o tipo passa a ser cadastrado");
+  const chipDepois = badge.chip(depoisDoVinculo, parceirosNaTela);
+  // O sufixo " · AVULSO", e nao a palavra solta: a empresa fixture desta
+  // verificacao se chama "TESTE-AVULSO EMPRESA PARCEIRA", e procurar "AVULSO"
+  // em qualquer posicao reprovava a badge certa por causa do proprio nome dela.
+  check(!/· AVULSO$/.test(chipDepois.label),
+    `a badge NAO diz mais avulso (ficou "${chipDepois.label}")`);
+  check(chipDepois.label.includes("TESTE-AVULSO EMPRESA PARCEIRA"),
+    "a badge mostra o nome da empresa vinculada");
+
+  // O CONTRARIO NAO PODE ACONTECER: vincular um CNPJ que NAO e parceiro ativo
+  // tira a marca de escolha, mas o cliente continua sendo avulso -- quem decide
+  // isso e o cadastro, nao o vinculo. Sem esta metade, "vincular" viraria um
+  // atalho para carimbar qualquer conversa como cliente com contrato.
+  conversa = await criarConversa(instancia.id);
+  await prisma.conversa.update({
+    where: { id: conversa.id },
+    data: { atendimentoAvulso: true },
+  });
+  await conversaService.validarCnpjManual(conversa.id, CNPJ_FORA);
+  const semContrato = await conversaService.obter(conversa.id);
+  check(semContrato.atendimentoAvulso === false, "a marca sai tambem aqui (o vinculo e explicito)");
+  check(
+    badge.chip(semContrato, parceirosNaTela).label === "CLIENTE AVULSO",
+    "mas empresa sem contrato ativo CONTINUA avulso (o cadastro e que manda)"
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────
   titulo("limpeza");
   await limpar();
   const sobrou = await prisma.conversa.count({ where: { cliente: { startsWith: MARCA } } });

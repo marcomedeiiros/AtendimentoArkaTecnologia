@@ -1001,6 +1001,25 @@ class ConversaService {
       empresa: parceiro?.razaoSocial || null,
       cnpjVerificado: true,
       clienteTipo: parceiro ? "cadastrado" : "avulso",
+      // VINCULAR UM CNPJ DESFAZ O "ATENDIMENTO AVULSO".
+      //
+      // O cliente escolhe "atendimento avulso" no menu por engano com alguma
+      // frequencia -- ele TEM contrato, mas nao se reconhece na pergunta. Essa
+      // escolha desassocia o CNPJ e marca `atendimentoAvulso`, que ganha de
+      // tudo na badge. O atendente entao vincula a empresa aqui pela Central...
+      // e a badge continuava dizendo "A COLLI (AVULSO)": o CNPJ estava
+      // vinculado, a empresa tinha contrato ativo, e mesmo assim o atendimento
+      // aparecia como avulso -- que e o oposto do que acabou de ser afirmado.
+      //
+      // Quem vincula pela Central esta dizendo "este atendimento e desta
+      // empresa", e essa e uma decisao da equipe, tomada DEPOIS e com mais
+      // informacao do que o clique do cliente no menu. Ela desfaz a escolha
+      // anterior; nao ha por que guardar as duas afirmacoes contrarias.
+      //
+      // Isto NAO decide se o cliente e "cadastrado": quem decide e o cadastro
+      // vivo (`clienteTipo` acima, e a releitura na Central). Empresa sem
+      // contrato ativo continua saindo como avulso -- com o nome dela junto.
+      atendimentoAvulso: false,
     });
 
     // A TERCEIRA COPIA DA MESMA REGRA SAIU DAQUI.
