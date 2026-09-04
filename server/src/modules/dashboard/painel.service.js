@@ -121,7 +121,8 @@ class PainelService {
           id: true,
           cliente: true,
           empresa: true,
-          telefone: true,
+          // `telefone` saiu do select junto com o campo do payload: o banco nao
+          // precisa ler o que ninguem vai mandar nem desenhar.
           setor: true,
           numeroTicket: true,
           criadoEm: true,
@@ -315,7 +316,13 @@ class PainelService {
     return visiveis.map((c) => ({
       id: c.id,
       cliente: c.empresa || c.cliente,
-      telefone: c.telefone,
+      // O TELEFONE NAO VIAJA MAIS PARA A PAREDE.
+      //
+      // A TV nao o exibe desde que o cartao da fila passou a mostrar so o nome,
+      // e este payload alimenta EXCLUSIVAMENTE o Modo TV. Dado que a tela nao
+      // desenha nao precisa sair do servidor -- e este em particular e o
+      // telefone de um cliente, numa tela que fica ligada num painel do
+      // escritorio, a vista de qualquer pessoa que passe (visitante incluido).
       setor: c.setor || "Geral",
       ticket: c.numeroTicket,
       // Espera contada a partir da ULTIMA movimentacao, nao da criacao: a

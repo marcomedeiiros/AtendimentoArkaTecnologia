@@ -441,12 +441,16 @@ function CartaoDaFila({ conversa, agora }) {
       <Avatar nome={conversa.cliente} size="md" fotoUrl={conversa.fotoUrl} />
 
       <div className="min-w-0 flex-1 flex flex-col gap-1">
+        {/* SO O NOME, como na lista da Central.
+            O telefone tinha uma linha propria aqui, e ela nao pagava o espaco
+            que ocupava: para quem ja tem nome salvo, era um dado repetido logo
+            abaixo do nome; para quem ainda nao tem, `cliente` JA cai no proprio
+            numero -- e a linha virava o mesmo numero escrito duas vezes.
+            E esta e uma tela de PAREDE: o numero do cliente ficava exposto a
+            qualquer pessoa que passasse pelo escritorio, inclusive visitante. */}
         <div className="min-w-0">
           <p className="font-display font-semibold text-white leading-tight truncate" style={T.filaNome}>
             {conversa.cliente}
-          </p>
-          <p className="text-slate-400 font-mono leading-tight truncate" style={T.rotulo}>
-            {conversa.telefone}
           </p>
         </div>
 

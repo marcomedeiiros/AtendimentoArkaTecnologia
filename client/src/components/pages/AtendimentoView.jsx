@@ -3472,7 +3472,9 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
         return {
           id: c.id,
           cliente: c.cliente,
-          telefone: c.telefone,
+          // Sem `telefone`: o cartao da fila do Modo TV mostra so o nome (ver o
+          // comentario em ModoTv/CartaoDaFila). Montar um campo que ninguem
+          // desenha e o comeco de alguem voltar a desenha-lo sem perceber.
           fotoUrl: c.fotoUrl,
           naoLidas: c.naoLidas || 0,
           ticket: c.ticket,
