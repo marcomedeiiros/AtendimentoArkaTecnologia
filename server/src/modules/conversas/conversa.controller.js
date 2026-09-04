@@ -212,7 +212,7 @@ class ConversaController {
 
   atualizarStatus(req, res) {
     return conversaService
-      .atualizarStatus(req.params.id, req.body.status, req.user, req.user, req.body.motivo)
+      .atualizarStatus(req.params.id, req.body.status, req.user, req.user, req.body.motivo, req.body.semPesquisa === true)
       .then((data) => success(res, data));
   }
 

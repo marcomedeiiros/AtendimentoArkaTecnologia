@@ -745,7 +745,10 @@ export const ConversasAPI = {
   pendente: (id) => request(`/conversas/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'pendente' }) }),
   // Fechar exige o motivo do encerramento: o servidor recusa sem ele
   // (MOTIVO_OBRIGATORIO) e recusa o que não estiver na lista (MOTIVO_INVALIDO).
-  fechar: (id, motivo) => request(`/conversas/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'fechada', motivo }) }),
+  //
+  // `semPesquisa` é o fechamento "à força": mesmo fechamento, sem a pesquisa de
+  // satisfação indo para o WhatsApp do cliente. O motivo continua obrigatório.
+  fechar: (id, motivo, semPesquisa = false) => request(`/conversas/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'fechada', motivo, semPesquisa }) }),
   motivosEncerramento: () => request('/conversas/motivos-encerramento'),
   reabrir: (id) => request(`/conversas/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'aberta' }) }),
   marcarLido: (id) => request(`/conversas/${id}/lido`, { method: 'PATCH' }),

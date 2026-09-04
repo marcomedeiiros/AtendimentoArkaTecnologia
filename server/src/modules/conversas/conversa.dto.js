@@ -80,6 +80,14 @@ const atualizarStatusSchema = z.object({
   // Deixar as duas checagens juntas no service e o que impede a regra de valer
   // pela metade em um dos dois lugares.
   motivo: z.string().trim().min(1).max(60).optional(),
+  // FECHAMENTO A FORCA: fecha sem disparar a pesquisa de satisfacao.
+  //
+  // E uma escolha do atendente na hora de fechar (o botao "Fechar sem
+  // avaliacao"), nao uma configuracao: existe conversa que nao deve terminar
+  // com "de 1 a 5, como foi o atendimento?" -- engano, teste, cliente que ja
+  // encerrou aos berros. O motivo continua obrigatorio; o que some e so a
+  // pergunta enviada ao cliente.
+  semPesquisa: z.boolean().optional(),
 });
 
 const validarCnpjSchema = z.object({

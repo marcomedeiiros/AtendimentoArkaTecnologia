@@ -9,7 +9,7 @@ import {
   FileText, MapPin, Contact, Paperclip, Smile, Loader2,
   SlidersHorizontal, Star, Archive, EyeOff, MoreVertical,
   Maximize2, Download, CornerUpLeft, CornerUpRight, Share2, Pencil, MoreHorizontal, Mic, Tag, PenLine,
-  Sun, Moon, Bot, StickyNote, SpellCheck, Undo2, History, MessageSquarePlus, Copy
+  Sun, Moon, Bot, StickyNote, SpellCheck, Undo2, History, MessageSquarePlus, Copy, StarOff
 } from 'lucide-react';
 import { EmojiIcon, FormattedMessage, TextoFormatado } from './EmojiIcon';
 import { useMensagensRapidas } from './MensagensRapidas';
@@ -599,7 +599,7 @@ function PainelFiltros({ extras, setExtras, visib, setVisib, onLimpar, totalAtiv
  * mais discreto de encher o banco de dado falso, porque o relatório continua
  * saindo bonito.
  */
-function ModalMotivoEncerramento({ motivos, carregando, erro, salvando, onConfirmar, onFechar }) {
+function ModalMotivoEncerramento({ motivos, carregando, erro, salvando, semPesquisa, onConfirmar, onFechar }) {
   const [escolhido, setEscolhido] = useState('');
 
   useEffect(() => {
@@ -614,8 +614,10 @@ function ModalMotivoEncerramento({ motivos, carregando, erro, salvando, onConfir
       <div className="glass-panel border border-linha rounded-2xl w-full max-w-md shadow-2xl fade-in my-auto flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh]">
         <div className="p-4 bg-grafite-600 border-b border-linha flex items-center justify-between shrink-0 rounded-t-2xl">
           <div className="flex items-center gap-2 font-bold text-sm text-white min-w-0">
-            <CheckCircle2 size={16} className="text-ativo-400 shrink-0" />
-            <span className="truncate">Fechar atendimento</span>
+            {semPesquisa
+              ? <StarOff size={16} className="text-espera-400 shrink-0" />
+              : <CheckCircle2 size={16} className="text-ativo-400 shrink-0" />}
+            <span className="truncate">{semPesquisa ? 'Fechar sem avaliação' : 'Fechar atendimento'}</span>
           </div>
           <button onClick={onFechar} disabled={salvando}
             className="text-slate-400 hover:text-white shrink-0 ml-2 disabled:opacity-50">
@@ -628,6 +630,20 @@ function ModalMotivoEncerramento({ motivos, carregando, erro, salvando, onConfir
             Por que este cliente procurou? É o que permite descobrir o que mais
             gera chamado e reduzir, em vez de só atender.
           </p>
+
+          {/* O MOTIVO CONTINUA OBRIGATÓRIO no fechamento à força. O que o botão
+              dispensa é a pergunta ao cliente, não o registro interno -- sem
+              motivo, o atendimento sairia do relatório inteiro, e não só da
+              média de notas. */}
+          {semPesquisa && (
+            <div className="mb-3 p-2.5 rounded-xl bg-espera/10 border border-espera/30 text-[11px] text-espera-400 flex items-start gap-2">
+              <StarOff size={13} className="shrink-0 mt-px" />
+              <span>
+                O cliente <strong>não</strong> receberá a pesquisa de satisfação.
+                Este atendimento fica sem nota.
+              </span>
+            </div>
+          )}
 
           {carregando ? (
             <div className="flex items-center gap-2 text-xs text-slate-400 py-6 justify-center">
@@ -667,9 +683,13 @@ function ModalMotivoEncerramento({ motivos, carregando, erro, salvando, onConfir
           <button
             onClick={() => escolhido && onConfirmar(escolhido)}
             disabled={!escolhido || salvando}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-ativo hover:bg-ativo-400 disabled:opacity-40 text-slate-950 text-xs font-bold transition-colors">
-            {salvando ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
-            Fechar atendimento
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl disabled:opacity-40 text-slate-950 text-xs font-bold transition-colors ${
+              semPesquisa ? 'bg-espera hover:bg-espera-400' : 'bg-ativo hover:bg-ativo-400'
+            }`}>
+            {salvando
+              ? <Loader2 size={13} className="animate-spin" />
+              : semPesquisa ? <StarOff size={13} /> : <CheckCircle2 size={13} />}
+            {semPesquisa ? 'Fechar sem avaliação' : 'Fechar atendimento'}
           </button>
         </div>
       </div>
@@ -2416,9 +2436,19 @@ function PainelChat({
                 </button>
               )}
               <button onClick={() => onFechar(conversa.id)}
-                title="Fechar atendimento"
+                title="Fechar atendimento e enviar a pesquisa de satisfação ao cliente"
                 className="px-2.5 py-1.5 rounded-lg bg-falha/15 hover:bg-falha/25 text-falha-400 text-xs font-semibold border border-falha/30 transition-all flex items-center gap-1">
                 <CheckCircle2 size={13} /> Fechar
+              </button>
+              {/* FECHAMENTO À FORÇA. Segundo botão, e não uma opção escondida
+                  dentro do primeiro: quem precisa dele (engano, teste, cliente
+                  que já saiu irritado) precisa dele na hora, e quem não precisa
+                  continua clicando o "Fechar" de sempre. Deliberadamente
+                  discreto -- o padrão da casa é fechar COM avaliação. */}
+              <button onClick={() => onFechar(conversa.id, true)}
+                title="Fechar à força: encerra sem enviar a pesquisa de satisfação ao cliente"
+                className="px-2.5 py-1.5 rounded-lg bg-grafite-700 hover:bg-grafite-600 text-slate-300 hover:text-white text-xs font-semibold border border-linha hover:border-linha-forte transition-all flex items-center gap-1">
+                <StarOff size={13} /> Fechar sem avaliação
               </button>
             </>
           )}
@@ -3813,8 +3843,8 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
    * coisas é o que impede a tela de afirmar "fechada" antes de o servidor ter
    * aceitado -- e agora ele pode recusar, porque o motivo é obrigatório.
    */
-  const fecharConversa = useCallback((id) => {
-    setFechando({ id, motivos: [], carregando: true, erro: '', salvando: false });
+  const fecharConversa = useCallback((id, semPesquisa = false) => {
+    setFechando({ id, semPesquisa, motivos: [], carregando: true, erro: '', salvando: false });
     ConversasAPI.motivosEncerramento()
       .then(motivos => setFechando(f => (f?.id === id ? { ...f, motivos, carregando: false } : f)))
       .catch(e => setFechando(f => (f?.id === id
@@ -3836,7 +3866,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     if (!id) return;
     setFechando(f => ({ ...f, salvando: true, erro: '' }));
     try {
-      aplicarConversa(await ConversasAPI.fechar(id, motivo));
+      aplicarConversa(await ConversasAPI.fechar(id, motivo, fechando.semPesquisa === true));
       setFechando(null);
       setSelecionada(null);
       setAbaAtual('fechadas');
@@ -4380,6 +4410,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
           carregando={fechando.carregando}
           erro={fechando.erro}
           salvando={fechando.salvando}
+          semPesquisa={fechando.semPesquisa === true}
           onConfirmar={confirmarFechamento}
           onFechar={() => setFechando(null)}
         />

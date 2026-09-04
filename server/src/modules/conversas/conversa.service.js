@@ -1050,7 +1050,13 @@ class ConversaService {
     }
   }
 
-  async atualizarStatus(id, status, acesso = null, autor = null, motivo = null) {
+  /**
+   * `semPesquisa` = fechamento a forca: fecha igual, sem a pesquisa de
+   * satisfacao no fim. So chega aqui vindo de um atendente que clicou o botao
+   * proprio para isso -- o padrao continua sendo fechar COM pesquisa, para nao
+   * existir caminho em que a nota some por descuido.
+   */
+  async atualizarStatus(id, status, acesso = null, autor = null, motivo = null, semPesquisa = false) {
     const conversa = await conversaRepository.findById(id);
     if (!conversa) throw new AppError("Conversa nao encontrada", 404, "NOT_FOUND");
     exigirAcessoSetor(acesso, conversa.setor);
@@ -1150,7 +1156,17 @@ class ConversaService {
       if (status === "pendente") {
         await conversaRepository.addMensagem(id, "sistema", `${nome} devolveu a conversa para a fila (Pendente)`);
       } else if (status === "fechada") {
-        await conversaRepository.addMensagem(id, "sistema", `${nome} fechou o atendimento`);
+        // O "(sem pesquisa de satisfacao)" fica REGISTRADO no historico: seis
+        // meses depois, quando o relatorio mostrar um atendimento sem nota,
+        // esta linha e a diferenca entre "o cliente nao respondeu" e "ninguem
+        // perguntou".
+        await conversaRepository.addMensagem(
+          id,
+          "sistema",
+          semPesquisa
+            ? `${nome} fechou o atendimento (sem pesquisa de satisfacao)`
+            : `${nome} fechou o atendimento`
+        );
       }
     }
 
@@ -1161,7 +1177,10 @@ class ConversaService {
     // a nota de 1 a 5 e o comentario. Best-effort e nao-bloqueante - um erro na
     // pesquisa nunca deve impedir o fechamento pedido pelo atendente. O motor
     // respeita o modo "local", o toggle e nao repergunta se ja tem nota.
-    if (status === "fechada" && mudouStatus) {
+    //
+    // `semPesquisa` e a saida do atendente: fecha calado, sem perguntar nada ao
+    // cliente.
+    if (status === "fechada" && mudouStatus && !semPesquisa) {
       this._dispararPesquisaSatisfacao(recarregada).catch((e) =>
         logger.warn("Falha ao iniciar pesquisa de satisfacao", { id, message: e.message })
       );
