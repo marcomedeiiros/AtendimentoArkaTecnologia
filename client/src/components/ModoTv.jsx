@@ -337,36 +337,46 @@ function LinhaPosicao({ posicao, item, minimo }) {
             </span>
 
             {/* SO DO 1o AO 3o: e o que faz a medalha significar alguma coisa.
-                Um disco em toda posicao viraria enfeite, e a lista mostra mais
-                de tres lugares quando a equipe cresce.
+                Uma medalha em toda posicao viraria enfeite, e a lista mostra
+                mais de tres lugares quando a equipe cresce -- do 4o em diante
+                fica so o numero a esquerda.
 
-                DISCO SOLIDO, e nao um icone de medalha: esta e uma tela de
-                PAREDE, lida a metros de distancia. O desenho de uma fita e de
-                um pingente some nesse tamanho; um circulo cheio na cor do metal
-                continua legivel do outro lado da sala.
+                O ICONE DE MEDALHA (disco + fita), e nao um circulo chapado: e a
+                forma que se le como medalha sem precisar de legenda. O `fill`
+                na propria cor com pouca opacidade da corpo ao disco, para ele
+                nao virar so um contorno vazado sobre o fundo escuro.
 
-                O degrade claro-para-escuro e o que faz o olho ler METAL em vez
-                de "bolinha colorida" -- e a mesma leitura de brilho que uma
-                medalha de verdade tem sob luz. */}
+                Sem numero dentro: a posicao ja esta escrita em tamanho grande a
+                esquerda da linha, e o que a medalha acrescenta e o METAL. */}
             {temMedalha && (
-              <span
-                className="absolute left-1/2 grid place-items-center rounded-full font-display font-extrabold tabular-nums"
+              <Medal
+                className="absolute left-1/2"
                 style={{
-                  width: `calc(${AVATAR_POSICAO} * 0.46)`,
-                  height: `calc(${AVATAR_POSICAO} * 0.46)`,
-                  bottom: `calc(${AVATAR_POSICAO} * -0.12)`,
+                  // ESTES DOIS NUMEROS FORAM MEDIDOS, nao escolhidos no olho.
+                  //
+                  // A fita do icone aponta para CIMA: em 0.58/-0.18 ela cobria
+                  // as iniciais do avatar. Descendo a medalha o problema
+                  // inverte -- em -0.38 ela sobrava 0,3 px do fim da linha na
+                  // tela BAIXA (avatar no piso do clamp), ou seja, a um pixel
+                  // de ser cortada.
+                  //
+                  // -0.28 e o meio: 3,3 px de folga na linha apertada e 6 px de
+                  // sobreposicao com o circulo, que e o que faz a medalha ler
+                  // como PENDURADA no avatar em vez de solta embaixo dele.
+                  width: `calc(${AVATAR_POSICAO} * 0.48)`,
+                  height: `calc(${AVATAR_POSICAO} * 0.48)`,
+                  bottom: `calc(${AVATAR_POSICAO} * -0.28)`,
                   transform: 'translateX(-50%)',
-                  fontSize: `calc(${AVATAR_POSICAO} * 0.26)`,
-                  background: `linear-gradient(145deg, ${medalha(cor)}, ${medalha(cor, 0.72)})`,
-                  // Anel na cor do fundo do painel: e ele que descola a medalha
-                  // do avatar em vez de deixar os dois virarem uma mancha so.
-                  boxShadow: '0 0 0 0.14em rgb(var(--grafite-900))',
-                  color: 'rgb(var(--grafite-900))',
+                  color: medalha(cor),
+                  fill: medalha(cor, 0.22),
+                  // A sombra na cor do fundo separa a medalha do avatar: sem
+                  // ela, os dois contornos se encostam e viram uma mancha so a
+                  // distancia -- que e como esta tela e lida.
+                  filter: 'drop-shadow(0 0 0.14em rgb(var(--grafite-900))) drop-shadow(0 0 0.14em rgb(var(--grafite-900)))',
                 }}
-                title={`${posicao}º lugar`}
-              >
-                {posicao}
-              </span>
+                strokeWidth={2.2}
+                aria-label={`${posicao}º lugar`}
+              />
             )}
           </span>
 
