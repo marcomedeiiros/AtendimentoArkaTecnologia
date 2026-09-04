@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { ContatosAPI } from '../../services/api';
 import Portal from '../Portal';
+import Avatar from '../Avatar';
 import { contatoCombina } from '../../utils/busca';
 import { useAppContext } from '../../context/AppContext';
 import { avisar, confirmar } from '../../utils/dialogo';
@@ -116,15 +117,19 @@ function ModalContato({ contato, onSalvar, onFechar }) {
 // Item em lista vertical WhatsApp
 const ItemContatoWhatsApp = React.memo(function ItemContatoWhatsApp({ contato, onEditar, onRemover, onToggleFav, onIniciarChat }) {
   const tagCor = TAGS_CORES[contato.tag] || TAGS_CORES.inativo;
-  const iniciais = (contato.nome || 'CT').split(' ').slice(0,2).map(p => p[0]).join('').toUpperCase();
 
   return (
     <div className="p-3.5 hover:bg-grafite-600/70 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-linha/60 last:border-b-0">
       <div className="flex items-center gap-3.5 min-w-0 flex-1">
         <div className="relative shrink-0">
-          <div className="w-11 h-11 rounded-full bg-gradient-to-br from-acao/20 to-espera/20 border border-acao/30 text-acao-200 font-bold text-sm flex items-center justify-center shadow-inner">
-            {iniciais}
-          </div>
+          {/* O MESMO Avatar do resto da plataforma, e nao um circulo proprio.
+              O que havia aqui era uma copia: `nome.split(' ')[0][0]` -- que
+              pega METADE de um emoji quando o nome comeca por um, e foi
+              exatamente o "◇L" e o "◇◇" que apareciam nesta lista. O Avatar ja
+              percorre por code point, ja mostra a FOTO quando existe, ja cai
+              para o boneco cinza quando o link vence (`onError`) e ja trata
+              "contato salvo com o proprio numero". Uma regra so, num lugar so. */}
+          <Avatar contato nome={contato.nome} fotoUrl={contato.fotoUrl} size="lg" />
           <button onClick={() => onToggleFav(contato.id)} className="absolute -bottom-1 -right-1 bg-grafite-700 p-0.5 rounded-full border border-linha text-slate-500 hover:text-espera-400 transition-colors">
             {contato.favorito ? <Star size={11} className="text-espera-400 fill-espera-400"/> : <StarOff size={11}/>}
           </button>

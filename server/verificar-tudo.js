@@ -100,6 +100,15 @@ const VERIFICACOES = [
     resumo: "recado/foto/conta comercial, guarda de setor, e a Evolution fora do ar sem derrubar nada",
   },
   {
+    // A foto mora em dois lugares com prazos de validade diferentes (conversa,
+    // renovada por varredura; agenda, parada desde a ultima sincronizacao).
+    // Inverter a prioridade mostra links vencidos para quem tem foto boa
+    // guardada -- e o sintoma e um boneco cinza que ninguem entende.
+    arquivo: "verificar-fotos-contatos.js",
+    titulo: "Fotos na agenda de contatos",
+    resumo: "foto da conversa vence a da agenda, telefone casa sem DDI, e sem foto vira boneco",
+  },
+  {
     // O vCard traz DOIS numeros na mesma linha: o `waid` (a conta no WhatsApp)
     // e o texto que a pessoa digitou ao salvar o contato. Ler o errado abre
     // conversa com outra pessoa -- e so se descobre quando a mensagem chega la.

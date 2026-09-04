@@ -6,10 +6,41 @@ const logger = require("../../config/logger");
 const AppError = require("../../shared/errors/AppError");
 const bus = require("../../shared/events/event-bus");
 
+// Telefone comparavel: so digitos e SEM o DDI 55. A agenda importada grava
+// 5527999990000 e a conversa pode ter so 27999990000 (ou o contrario) -- sem
+// tirar o DDI dos dois lados, o mesmo numero nao casa consigo mesmo. Mesma
+// regra do `telefoneComparavel` da tela (client/src/utils/busca.js).
+function comparavel(v) {
+  const d = String(v || "").replace(/\D/g, "");
+  return d.length > 11 && d.startsWith("55") ? d.slice(2) : d;
+}
+
 class ContatoService {
+  /**
+   * A agenda, com a foto de perfil de cada um.
+   *
+   * ── DE ONDE VEM A FOTO, E POR QUE DE DOIS LUGARES ──────────────────────────
+   *
+   * O link de foto do WhatsApp VENCE em poucos dias e passa a devolver 403.
+   * Quem cuida disso hoje e `conversa.fotos.js`, que varre as CONVERSAS em
+   * segundo plano e renova o link. Entao a foto guardada numa conversa e, por
+   * construcao, mais fresca do que a que a sincronizacao da agenda gravou --
+   * essa envelhece parada ate alguem sincronizar de novo.
+   *
+   * Por isso a conversa manda quando existe, e o campo do contato e a reserva
+   * para quem NUNCA escreveu para o numero (foi importado da agenda e nao tem
+   * conversa nenhuma). O merge e feito aqui, e nao no banco, porque telefone
+   * nao e chave estrangeira entre as duas tabelas -- a agenda guarda o numero
+   * como texto, e a comparacao precisa ignorar o DDI.
+   *
+   * Custo: UMA consulta a mais, de dois campos, sem `include` nem `join`.
+   */
   async listar(filtros) {
     const itens = await contatoRepository.findAll(filtros);
-    return itens.map(mapContato);
+    const fotos = await contatoRepository.fotosDasConversas();
+    return itens.map((c) =>
+      mapContato({ ...c, fotoUrl: fotos.get(comparavel(c.telefone)) || c.fotoUrl || null })
+    );
   }
 
   async criar(data) {
@@ -78,15 +109,28 @@ class ContatoService {
       if (telefone.length < 10) { ignorados += 1; continue; }
 
       const nome = String(bruto?.pushName || bruto?.name || "").trim() || telefone;
+      // A Evolution nomeia este campo de um jeito diferente conforme a versao;
+      // lemos os tres em vez de apostar num. Sem foto, fica `null` e a tela
+      // desenha o boneco cinza -- que e a resposta honesta.
+      const foto =
+        bruto?.profilePicUrl || bruto?.profilePictureUrl || bruto?.picture || null;
       const existente = await contatoRepository.findByTelefone(telefone);
 
       if (!existente) {
-        await contatoRepository.create({ nome, telefone, tag: "cliente" });
+        await contatoRepository.create({ nome, telefone, tag: "cliente", fotoUrl: foto });
         criados += 1;
-      } else if (existente.nome === existente.telefone && nome !== telefone) {
+      } else {
+        const mudancas = {};
         // So completa o nome de quem ainda estava sem: nao mexe no que foi editado.
-        await contatoRepository.update(existente.id, { nome });
-        atualizados += 1;
+        if (existente.nome === existente.telefone && nome !== telefone) mudancas.nome = nome;
+        // A FOTO, ao contrario do nome, e sempre atualizada: ela nao e um campo
+        // que alguem edita aqui -- e um retrato do WhatsApp, e o link antigo
+        // vence. Preservar o velho seria preservar um 403.
+        if (foto && foto !== existente.fotoUrl) mudancas.fotoUrl = foto;
+        if (Object.keys(mudancas).length > 0) {
+          await contatoRepository.update(existente.id, mudancas);
+          atualizados += 1;
+        }
       }
     }
 

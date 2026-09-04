@@ -208,6 +208,10 @@ function mapContato(c) {
     tag: c.tag,
     favorito: c.favorito,
     observacoes: c.observacoes || "",
+    // Foto do WhatsApp. Pode ser a da CONVERSA (mais fresca, ver
+    // contato.service.listar) ou a guardada na sincronizacao da agenda. Vem
+    // `null` quando nao ha nenhuma -- e ai a tela desenha o boneco cinza.
+    fotoUrl: c.fotoUrl || null,
   };
 }
 
