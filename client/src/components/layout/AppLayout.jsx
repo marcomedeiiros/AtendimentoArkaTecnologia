@@ -5,14 +5,15 @@
  * e um <Outlet onde cada página é inserida pelo React Router
  * Substitui o sistema de aba/useState que estava em Home.jsx
  */
-import React, { useState, useLayoutEffect } from 'react';
+import React, { useState, useLayoutEffect, useEffect, useRef, useCallback } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { aplicarTema } from '../../utils/tema';
 import {
   LayoutGrid, Users, Zap, MessageSquare, ShieldCheck,
   GitFork, MessageCircle, CalendarDays, Send, Loader2, Menu, X, WifiOff, Settings, LogOut, Bug,
-  PanelLeftClose, PanelLeftOpen, Sun, Moon
+  PanelLeftClose, PanelLeftOpen, Sun, Moon, UserCog
 } from 'lucide-react';
+import Portal from '../Portal';
 import { useAppContext } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import LimiteDeErro from '../LimiteDeErro';
@@ -147,6 +148,132 @@ function TituloSecao({ children, recolhida, className = '' }) {
       </p>
       {recolhida && (
         <div className="hidden lg:block h-px bg-linha mx-3 mt-3 mb-2" aria-hidden="true" />
+      )}
+    </>
+  );
+}
+
+/**
+ * O BLOCO DO USUARIO, NO PE DA BARRA -- e o menu que ele abre.
+ *
+ * Antes eram dois controles lado a lado: o bloco levava para /perfil e um
+ * icone solto ao lado encerrava a sessao. Com a barra RECOLHIDA os dois
+ * viravam dois quadradinhos empilhados sem rotulo nenhum, e o de baixo -- o
+ * unico botao da tela que derruba a sessao -- ficava a um clique de distancia
+ * de quem so queria ver o proprio perfil.
+ *
+ * Agora ha um alvo so. Clicar abre um menu com as duas acoes escritas por
+ * extenso, e "Sair" so acontece depois de a pessoa ler a palavra.
+ *
+ * ── POR QUE PORTAL, E NAO UM `absolute` AQUI DENTRO ────────────────────────
+ *
+ * A barra e `overflow-y-auto overflow-x-hidden` (ela rola quando a tela e
+ * curta). Um menu posicionado dentro dela seria CORTADO -- e na barra
+ * recolhida, que tem 76px de largura, ele sairia inteiro pela direita. Por
+ * isso o menu vai para fora da arvore da barra e e posicionado por
+ * coordenadas medidas do botao (`getBoundingClientRect`).
+ *
+ * O preco disso: coordenada medida envelhece se a pagina rolar por baixo. Em
+ * vez de recalcular a cada quadro, FECHAMOS o menu ao rolar ou redimensionar
+ * -- um menu que acompanha o dedo enquanto a lista rola atras dele e mais
+ * estranho do que um menu que se fecha.
+ */
+function MenuUsuario({ usuario, recolhida, onIrParaPerfil, onSair }) {
+  const [pos, setPos] = useState(null);   // null = fechado
+  const botaoRef = useRef(null);
+  const menuRef = useRef(null);
+
+  const fechar = useCallback(() => setPos(null), []);
+
+  const abrir = () => {
+    const r = botaoRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const LARGURA = 200;
+    setPos({
+      // Clampado na viewport: na barra recolhida o botao quase encosta na
+      // borda esquerda, e num celular estreito o menu passaria da direita.
+      esquerda: Math.min(Math.max(8, r.left), Math.max(8, window.innerWidth - LARGURA - 8)),
+      // Ancorado por BAIXO: o bloco vive no pe da barra, entao o menu cresce
+      // para cima. Preso ao topo, ele nasceria fora da tela.
+      base: Math.max(8, window.innerHeight - r.top + 8),
+      largura: LARGURA,
+    });
+  };
+
+  useEffect(() => {
+    if (!pos) return;
+    const fora = (e) => {
+      if (menuRef.current?.contains(e.target)) return;
+      if (botaoRef.current?.contains(e.target)) return; // o proprio botao alterna
+      fechar();
+    };
+    const tecla = (e) => { if (e.key === 'Escape') fechar(); };
+    document.addEventListener('mousedown', fora);
+    document.addEventListener('keydown', tecla);
+    // `true` (captura) porque quem rola e a BARRA, nao a janela: sem a fase de
+    // captura, o scroll de um elemento interno nao chega ate aqui.
+    window.addEventListener('scroll', fechar, true);
+    window.addEventListener('resize', fechar);
+    return () => {
+      document.removeEventListener('mousedown', fora);
+      document.removeEventListener('keydown', tecla);
+      window.removeEventListener('scroll', fechar, true);
+      window.removeEventListener('resize', fechar);
+    };
+  }, [pos, fechar]);
+
+  const item = 'flex w-full items-center gap-2.5 px-3 py-2.5 text-xs font-semibold transition-colors';
+
+  return (
+    <>
+      <button
+        ref={botaoRef}
+        onClick={() => (pos ? fechar() : abrir())}
+        aria-haspopup="menu"
+        aria-expanded={!!pos}
+        title={usuario?.nome ? `${usuario.nome} — perfil e sair` : 'Perfil e sair'}
+        className={`flex w-full min-w-0 items-center gap-2.5 -mx-1 rounded-lg px-1 py-1 text-left transition-colors hover:bg-slate-800/40 ${
+          pos ? 'bg-slate-800/40' : ''
+        } ${recolhida ? 'lg:mx-0 lg:justify-center' : ''}`}
+      >
+        <Avatar nome={usuario?.nome || ''} size="sm" />
+        <div className={`min-w-0 flex-1 ${recolhida ? 'lg:hidden' : ''}`}>
+          <p className="truncate text-xs font-semibold text-texto">{usuario?.nome}</p>
+          <p className="truncate font-mono text-[10px] text-texto-fraco">{usuario?.email}</p>
+        </div>
+      </button>
+
+      {pos && (
+        <Portal>
+          <div
+            ref={menuRef}
+            role="menu"
+            aria-label="Conta"
+            style={{ left: pos.esquerda, bottom: pos.base, width: pos.largura }}
+            className="fixed z-[60] overflow-hidden rounded-xl border border-linha bg-grafite-700 shadow-2xl shadow-black/50 fade-in"
+          >
+            {/* Na barra recolhida o nome nao cabe ao lado do avatar; aqui ele
+                cabe -- e sem ele o menu nao diz de QUEM e a conta que vai sair. */}
+            <div className="border-b border-linha px-3 py-2">
+              <p className="truncate text-xs font-semibold text-texto">{usuario?.nome}</p>
+              <p className="truncate font-mono text-[10px] text-texto-fraco">{usuario?.email}</p>
+            </div>
+            <button
+              role="menuitem"
+              onClick={() => { fechar(); onIrParaPerfil(); }}
+              className={`${item} text-texto-suave hover:bg-slate-800/60 hover:text-texto`}
+            >
+              <UserCog size={15} className="shrink-0" /> Meu perfil
+            </button>
+            <button
+              role="menuitem"
+              onClick={() => { fechar(); onSair(); }}
+              className={`${item} text-texto-suave hover:bg-falha/15 hover:text-falha-400`}
+            >
+              <LogOut size={15} className="shrink-0" /> Sair
+            </button>
+          </div>
+        </Portal>
       )}
     </>
   );
@@ -320,28 +447,15 @@ function Sidebar({ aberto, onClose }) {
       {/* Quem esta logado, e a saida. No rodape porque e o unico item que nao e
           navegacao: nao leva a lugar nenhum do painel, encerra a sessao. */}
       <div className="mt-2 shrink-0 border-t border-linha pt-3">
-        <div className={`flex items-center gap-2.5 px-1 ${recolhida ? 'lg:flex-col lg:gap-1 lg:px-0' : ''}`}>
-          {/* Bloco do usuario = atalho para a pagina de perfil (/perfil). */}
-          <button
-            onClick={() => { navigate('/perfil'); onClose(); }}
-            title={usuario?.nome ? `Meu perfil (${usuario.nome})` : 'Meu perfil'}
-            className={`flex min-w-0 flex-1 items-center gap-2.5 -mx-1 rounded-lg px-1 py-1 text-left transition-colors hover:bg-slate-800/40 ${
-              recolhida ? 'lg:mx-0 lg:flex-none lg:justify-center' : ''
-            }`}
-          >
-            <Avatar nome={usuario?.nome || ''} size="sm" />
-            <div className={`min-w-0 flex-1 ${recolhida ? 'lg:hidden' : ''}`}>
-              <p className="truncate text-xs font-semibold text-texto">{usuario?.nome}</p>
-              <p className="truncate font-mono text-[10px] text-texto-fraco">{usuario?.email}</p>
-            </div>
-          </button>
-          <button
-            onClick={sair}
-            title="Sair da conta"
-            className="shrink-0 rounded-lg p-2 text-texto-suave transition-colors hover:bg-falha/15 hover:text-falha-400"
-          >
-            <LogOut size={15} />
-          </button>
+        {/* Um alvo so: o bloco abre o menu com "Meu perfil" e "Sair". O icone
+            de sair solto que ficava ao lado saiu -- ver MenuUsuario. */}
+        <div className="px-1">
+          <MenuUsuario
+            usuario={usuario}
+            recolhida={recolhida}
+            onIrParaPerfil={() => { navigate('/perfil'); onClose(); }}
+            onSair={sair}
+          />
         </div>
       </div>
     </aside>
