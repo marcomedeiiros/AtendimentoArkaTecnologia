@@ -99,15 +99,19 @@ const regrasRelatorioSchema = z.object({
   palavras: z.record(z.string(), z.union([z.array(z.string()), z.string()])).optional(),
 });
 
-const validarMapeamentoSchema = z.object({
-  aprovado: z.boolean(),
-  // Devolver SEM dizer o motivo deixa o tecnico sem saber o que corrigir -- e a
-  // devolucao desconta ponto dele. Por isso a observacao e obrigatoria aqui, e
-  // opcional na aprovacao.
-  observacao: z.string().trim().max(2000).optional(),
-}).refine((d) => d.aprovado || (d.observacao && d.observacao.length >= 5), {
-  message: "Diga o que precisa ser corrigido",
-  path: ["observacao"],
+/**
+ * DEVOLVER para correcao -- a unica validacao que sobrou.
+ *
+ * Nao ha mais `aprovado`: entregar virou o fim do caminho, e o supervisor so
+ * aponta problema quando ha (ver mapeamento.service.devolver).
+ *
+ * A observacao e OBRIGATORIA, e agora sem excecao. Devolver sem dizer o motivo
+ * deixa o tecnico sem saber o que corrigir -- e a devolucao ainda desconta
+ * ponto dele. Antes o `refine` a dispensava no caminho da aprovacao; sem
+ * aprovacao, ela e sempre exigida.
+ */
+const devolverMapeamentoSchema = z.object({
+  observacao: z.string().trim().min(5, "Diga o que precisa ser corrigido").max(2000),
 });
 
 const premiacaoSchema = z.object({
@@ -125,6 +129,6 @@ module.exports = {
   atualizarMapeamentoSchema,
   analisarMapeamentoSchema,
   regrasRelatorioSchema,
-  validarMapeamentoSchema,
+  devolverMapeamentoSchema,
   premiacaoSchema,
 };

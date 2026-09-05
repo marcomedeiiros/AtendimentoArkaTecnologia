@@ -10,7 +10,7 @@ const {
   atualizarMapeamentoSchema,
   analisarMapeamentoSchema,
   regrasRelatorioSchema,
-  validarMapeamentoSchema,
+  devolverMapeamentoSchema,
   premiacaoSchema,
 } = require("./ranking.dto");
 
@@ -95,8 +95,13 @@ router.patch("/mapeamentos/:id", exigirRelatorioDeVisita, validate(atualizarMape
 // Aprovar/devolver: o guarda de supervisor esta no service, que le o CADASTRO
 // (e nao o token) -- assim tirar a marca de supervisor vale na hora, sem
 // esperar o token da pessoa expirar.
-router.post("/mapeamentos/:id/validar", exigirRelatorioDeVisita, validate(validarMapeamentoSchema), (req, res, next) =>
-  controller.validarMapeamento(req, res).catch(next)
+router.post("/mapeamentos/:id/devolver", exigirRelatorioDeVisita, validate(devolverMapeamentoSchema), (req, res, next) =>
+  controller.devolverMapeamento(req, res).catch(next)
+);
+// A foto avulsa, pelo INDICE na lista do relatorio -- nunca pelo caminho em
+// disco, que seria aceitar do cliente qual arquivo o servidor vai ler.
+router.get("/mapeamentos/:id/evidencia/:indice", exigirRelatorioDeVisita, (req, res, next) =>
+  controller.baixarEvidencia(req, res).catch(next)
 );
 router.delete("/mapeamentos/:id", exigirRelatorioDeVisita, (req, res, next) => controller.removerMapeamento(req, res).catch(next));
 

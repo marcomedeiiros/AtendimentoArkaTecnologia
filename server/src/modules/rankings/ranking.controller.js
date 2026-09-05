@@ -135,8 +135,30 @@ class RankingController {
     return success(res, await mapeamentoService.atualizar(req.params.id, req.body, req.user));
   }
 
-  async validarMapeamento(req, res) {
-    return success(res, await mapeamentoService.validar(req.params.id, req.body, req.user));
+  // DEVOLVER para correcao. Nao ha mais aprovar -- entregar e o fim do caminho,
+  // e o supervisor so aponta problema quando ha (ver o service).
+  async devolverMapeamento(req, res) {
+    return success(res, await mapeamentoService.devolver(req.params.id, req.body, req.user));
+  }
+
+  /**
+   * ABRIR UMA EVIDENCIA (foto avulsa).
+   *
+   * `inline`: o navegador mostra a imagem, que e o que quem confere o relatorio
+   * quer. O mimetype vem do que foi gravado no upload, e nao do que o cliente
+   * pede -- deixar o pedido escolher o tipo e como uma imagem vira "text/html".
+   */
+  async baixarEvidencia(req, res) {
+    const { stream, tamanho, mimetype, nome } = await mapeamentoService.evidenciaDe(
+      req.params.id,
+      req.params.indice,
+      req.user
+    );
+    res.setHeader("Content-Type", mimetype);
+    res.setHeader("Content-Length", tamanho);
+    res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(nome)}`);
+    res.setHeader("Cache-Control", "private, no-store");
+    return stream.pipe(res);
   }
 
   async removerMapeamento(req, res) {

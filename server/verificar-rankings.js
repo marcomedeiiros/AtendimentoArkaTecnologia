@@ -418,11 +418,12 @@ async function main() {
   check(rJoao.posicao === 1, `Joao em 1o (${rJoao.pontos} pts) e Lucas em ${rLucas.posicao}o (${rLucas.pontos} pts)`);
   check(rJoao.pontos <= 100 && rLucas.pontos <= 100, "nenhum passa de 100 -- o teto da formula e real");
   // 90, e nao 100: quatro visitas impecaveis levam a faixa de volume de 15 (de
-  // 25), e os 25 restantes exigem OITO aprovados no mes. Escrevi 100 aqui na
+  // 25), e os 25 restantes exigem OITO relatorios ENTREGUES no mes (contava
+  // aprovados ate a aprovacao sair). Escrevi 100 aqui na
   // primeira versao e o teste reprovou -- a expectativa e que estava errada, nao
   // a formula. Fica registrado porque e a calibragem mais discutivel dela: os
   // 100 pontos sao um mes cheio, nao um mes bom.
-  check(rJoao.pontos === 90, `4 visitas impecaveis dao 90 -- os 100 exigem 8 aprovados (deu ${rJoao.pontos})`);
+  check(rJoao.pontos === 90, `4 visitas impecaveis dao 90 -- os 100 exigem 8 entregues (deu ${rJoao.pontos})`);
   const cJoao = Object.fromEntries(rJoao.criterios.map((c) => [c.chave, c.pontos]));
   check(cJoao.completude === 25 && cJoao.prazo === 20 && cJoao.evidencias === 15 && cJoao.retrabalho === 15,
     "com as quatro parcelas de qualidade cheias");
@@ -493,12 +494,33 @@ async function main() {
   check(await mapeamentoService.ehSupervisor(davi.id), "Davi e reconhecido como supervisor");
   check(!(await mapeamentoService.ehSupervisor(joao.id)), "e Joao nao");
 
+  /**
+   * O TECNICO NAO DEVOLVE RELATORIO -- nem o dos outros, nem o proprio.
+   *
+   * Este teste ja passou pelo motivo ERRADO: ele chamava `mapeamentoService
+   * .validar`, que deixou de existir quando a aprovacao saiu, e o `catch`
+   * engolia o TypeError como se fosse a permissao negando. Por isso agora ele
+   * confere o CODIGO do erro, e nao so que algo falhou.
+   */
   let barrou = false;
+  let motivo = "";
   try {
-    await mapeamentoService.validar((await prisma.mapeamentoTecnico.findFirst({ where: { tecnicoId: lucas.id } })).id,
-      { aprovado: true }, { sub: joao.id });
-  } catch { barrou = true; }
-  check(barrou, "tecnico nao consegue validar mapeamento (nem o dos outros, nem o proprio)");
+    await mapeamentoService.devolver(
+      (await prisma.mapeamentoTecnico.findFirst({ where: { tecnicoId: lucas.id } })).id,
+      { observacao: "tentativa indevida" },
+      { sub: joao.id }
+    );
+  } catch (e) {
+    barrou = e.code === "SEM_PERMISSAO";
+    motivo = e.code || e.message;
+  }
+  check(barrou, `tecnico nao devolve relatorio (${motivo})`);
+
+  // E NAO HA MAIS APROVAR: o metodo nao existe, e nenhum caminho cria o status.
+  check(
+    typeof mapeamentoService.validar !== "function" && typeof mapeamentoService.aprovar !== "function",
+    "nao existe mais caminho para aprovar relatorio"
+  );
 
   const soDoJoao = await mapeamentoService.listar({}, { sub: joao.id });
   check(
@@ -680,6 +702,57 @@ async function main() {
         so.evidencias.valor === 2 && so.evidencias.pontos > 0,
         `as fotos do PDF contam como evidencia (media ${so.evidencias.valor}, ${so.evidencias.pontos} pts)`
       );
+
+      /**
+       * AS FOTOS AVULSAS TAMBEM ABREM -- com a mesma regra do PDF.
+       *
+       * Elas ficavam gravadas sem nenhum caminho ate elas: quem anexava uma
+       * evidencia nunca mais a via. Agora ha rota, e o risco que ela cria e o
+       * mesmo do arquivo do relatorio -- endereco proprio, permissao a
+       * reconferir.
+       *
+       * Endereca por INDICE, e nao por caminho: aceitar o caminho seria deixar o
+       * cliente escolher qual arquivo o servidor le.
+       */
+      const pontinho =
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+      const comFoto = await mapeamentoService.criar(
+        {
+          empresa: `${MARCA} Empresa Foto`, dataVisita: previa.dataVisita, prazoEm: previa.dataVisita,
+          resumo: "y".repeat(60), itens: {}, evidencias: [pontinho], entregar: true,
+        },
+        { sub: joao.id, nome: joao.nome }
+      );
+      check(comFoto.evidencias === 1, `a foto avulsa fica anexada (${comFoto.evidencias})`);
+      const aberta = await mapeamentoService.evidenciaDe(comFoto.id, 0, { sub: joao.id });
+      check(!!aberta && aberta.mimetype === "image/png", `o dono abre a foto (${aberta?.mimetype})`);
+      check(!!(await mapeamentoService.evidenciaDe(comFoto.id, 0, { sub: davi.id })), "o administrador tambem");
+
+      let negouFoto = false;
+      try {
+        await mapeamentoService.evidenciaDe(comFoto.id, 0, { sub: lucas.id });
+      } catch (e) {
+        negouFoto = e.statusCode === 403;
+      }
+      check(negouFoto, "OUTRO TECNICO NAO abre a foto, mesmo com o id (403)");
+
+      // Indice fora da lista e recusado -- e nao lido como "o ultimo", nem
+      // virando caminho para um arquivo que este relatorio nao tem.
+      let indiceRuim = true;
+      for (const i of [1, -1, 99, "a"]) {
+        let recusou = false;
+        try {
+          await mapeamentoService.evidenciaDe(comFoto.id, i, { sub: joao.id });
+        } catch (e) {
+          recusou = e.code === "SEM_EVIDENCIA";
+        }
+        if (!recusou) { indiceRuim = false; break; }
+      }
+      check(indiceRuim, "indice invalido e recusado (fora da lista, negativo ou nao numero)");
+
+      const linhaFoto = await prisma.mapeamentoTecnico.findUnique({ where: { id: comFoto.id } });
+      for (const ev of linhaFoto.evidencias || []) await midiaStorage.remover(ev.arquivo).catch(() => {});
+      await prisma.mapeamentoTecnico.delete({ where: { id: comFoto.id } });
 
       if (linha.arquivoPath) await midiaStorage.remover(linha.arquivoPath).catch(() => {});
       await prisma.mapeamentoTecnico.delete({ where: { id: criado.id } });

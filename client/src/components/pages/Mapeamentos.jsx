@@ -79,6 +79,181 @@ function Selo({ status }) {
   return <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${m.classe}`}>{m.rotulo}</span>;
 }
 
+/**
+ * VER O RELATÓRIO -- tudo que foi enviado, aberto.
+ *
+ * ── O QUE FALTAVA ─────────────────────────────────────────────────────────
+ *
+ * Só o PDF abria. O resumo, o checklist, as pendências e as fotos avulsas
+ * ficavam gravados e sem nenhum caminho até eles: quem precisava conferir uma
+ * visita via o nome da empresa, a porcentagem e mais nada. Anexar evidência
+ * virava fé -- a pessoa mandava a foto e nunca mais a via.
+ *
+ * ── POR QUE UM MODAL, E NÃO A LINHA ABRINDO ────────────────────────────────
+ *
+ * A lista precisa continuar sendo uma lista: com o detalhe inteiro dentro dela,
+ * dois relatórios abertos já empurram o resto para fora da tela. E o detalhe
+ * tem foto, que quer espaço.
+ *
+ * As FOTOS abrem pela rota do servidor, por índice -- o caminho em disco nunca
+ * chega ao navegador, e a permissão é reconferida a cada arquivo.
+ */
+function ModalDetalhe({ id, itensRegra, onFechar, onEditar, podeEditar }) {
+  const [m, setM] = useState(null);
+  const [erro, setErro] = useState('');
+
+  useEffect(() => {
+    let vivo = true;
+    RankingsAPI.obterMapeamento(id)
+      .then((d) => { if (vivo) setM(d); })
+      .catch((e) => { if (vivo) setErro(e?.message || 'Não foi possível abrir.'); });
+    return () => { vivo = false; };
+  }, [id]);
+
+  const itensPreenchidos = (itensRegra || []).filter((i) => String(m?.itens?.[i.chave] || '').trim());
+
+  return (
+    <Portal>
+      <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center z-50 p-3 overflow-y-auto">
+        <div className="glass-panel border border-linha rounded-2xl w-full max-w-2xl shadow-2xl fade-in my-auto flex flex-col max-h-[calc(100dvh-1.5rem)]">
+          <div className="p-4 bg-grafite-600 border-b border-linha flex items-center justify-between shrink-0 rounded-t-2xl gap-3">
+            <span className="flex items-center gap-2 font-bold text-sm text-white min-w-0">
+              <Building2 size={16} className="text-acao-200 shrink-0" />
+              <span className="truncate">{m?.empresa || 'Relatório'}</span>
+              {m && <Selo status={m.status} />}
+            </span>
+            <button onClick={onFechar} className="text-slate-400 hover:text-white shrink-0"><X size={16} /></button>
+          </div>
+
+          <div className="p-4 sm:p-5 space-y-4 overflow-y-auto">
+            {erro && (
+              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-falha/10 border border-falha/30 text-falha-400 text-[11px]">
+                <AlertCircle size={13} className="shrink-0" /> {erro}
+              </div>
+            )}
+            {!m && !erro && <div className="py-10 grid place-items-center"><Loader2 size={20} className="animate-spin text-acao" /></div>}
+
+            {m && (
+              <>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-texto-fraco">
+                  <span>Técnico <strong className="text-texto-suave">{m.tecnicoNome}</strong></span>
+                  <span>Visita <strong className="text-texto-suave">{data(m.dataVisita)}</strong></span>
+                  <span>Prazo <strong className="text-texto-suave">{data(m.prazoEm)}</strong></span>
+                  {m.entregueEm && <span>Entregue <strong className={m.noPrazo ? 'text-ativo-400' : 'text-falha-400'}>{data(m.entregueEm)}</strong></span>}
+                  {m.cnpj && <span className="font-mono">{m.cnpj}</span>}
+                </div>
+
+                {m.observacaoValidacao && (
+                  <div className="p-2.5 rounded-xl bg-espera/10 border border-espera/30">
+                    <p className="text-[10px] font-bold text-espera-400 uppercase tracking-wider mb-1">
+                      Devolvido para correção{m.validadoPorNome ? ` por ${m.validadoPorNome}` : ''}
+                    </p>
+                    <p className="text-xs text-texto-suave leading-relaxed">{m.observacaoValidacao}</p>
+                  </div>
+                )}
+
+                {/* O PDF primeiro: é a entrega. */}
+                <div>
+                  <p className="text-[11px] font-semibold text-texto-suave mb-1.5">Relatório em PDF</p>
+                  {m.arquivo ? (
+                    <a href={RankingsAPI.urlArquivoMapeamento(m.id)} target="_blank" rel="noreferrer"
+                      className="flex items-center gap-2 p-2.5 rounded-xl border border-acao/30 bg-acao/10 hover:bg-acao/20 transition-colors">
+                      <FileText size={16} className="text-acao-200 shrink-0" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-xs font-semibold text-texto truncate">{m.arquivo.nome}</span>
+                        <span className="block text-[10px] text-texto-fraco">
+                          {tamanho(m.arquivo.bytes)}{m.arquivo.fotos ? ` · ${m.arquivo.fotos} foto${m.arquivo.fotos === 1 ? '' : 's'} dentro` : ''}
+                        </span>
+                      </span>
+                      <span className="text-[11px] font-bold text-acao-200 shrink-0">Abrir</span>
+                    </a>
+                  ) : (
+                    <p className="text-[11px] text-texto-fraco">Nenhum PDF anexado.</p>
+                  )}
+                </div>
+
+                {m.resumo && (
+                  <div>
+                    <p className="text-[11px] font-semibold text-texto-suave mb-1">Resumo</p>
+                    <p className="text-xs text-texto leading-relaxed whitespace-pre-wrap">{m.resumo}</p>
+                  </div>
+                )}
+
+                {/* O CHECKLIST, com o que foi escrito. Mostra só o preenchido:
+                    oito rótulos vazios não informam nada e afogam o que tem. */}
+                {itensPreenchidos.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-semibold text-texto-suave mb-1.5">
+                      Checklist técnico <span className="text-texto-fraco font-normal">({itensPreenchidos.length} de {itensRegra.length})</span>
+                    </p>
+                    <div className="space-y-2">
+                      {itensPreenchidos.map((i) => (
+                        <div key={i.chave} className="p-2.5 rounded-xl bg-grafite-700 border border-linha">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-ativo-400 flex items-center gap-1 mb-1">
+                            <CheckCircle2 size={10} /> {i.rotulo}
+                          </p>
+                          <p className="text-xs text-texto leading-relaxed whitespace-pre-wrap">{m.itens[i.chave]}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {m.pendencias && (
+                  <div>
+                    <p className="text-[11px] font-semibold text-texto-suave mb-1">Pendências e recomendações</p>
+                    <p className="text-xs text-texto leading-relaxed whitespace-pre-wrap">{m.pendencias}</p>
+                  </div>
+                )}
+
+                {/* AS FOTOS AVULSAS, abrindo. Cada uma pelo índice, na rota que
+                    reconfere a permissão -- o caminho em disco não sai daqui. */}
+                <div>
+                  <p className="text-[11px] font-semibold text-texto-suave mb-1.5">
+                    Evidências avulsas <span className="text-texto-fraco font-normal">({(m.arquivos || []).length})</span>
+                  </p>
+                  {(m.arquivos || []).length === 0 ? (
+                    <p className="text-[11px] text-texto-fraco">Nenhuma foto anexada fora do PDF.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {m.arquivos.map((ev, i) => {
+                        const url = RankingsAPI.urlEvidenciaMapeamento(m.id, i);
+                        const ehImagem = String(ev?.mimetype || '').startsWith('image/');
+                        return (
+                          <a key={i} href={url} target="_blank" rel="noreferrer"
+                            title={ev?.nome || `Evidência ${i + 1}`}
+                            className="w-20 h-20 rounded-lg border border-linha bg-grafite-700 grid place-items-center overflow-hidden hover:border-acao/50 transition-colors">
+                            {ehImagem
+                              ? <img src={url} alt={`Evidência ${i + 1}`} className="w-full h-full object-cover" />
+                              : <FileText size={18} className="text-texto-fraco" />}
+                          </a>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="p-4 bg-grafite-600 border-t border-linha flex flex-col-reverse sm:flex-row sm:justify-end gap-2 shrink-0 rounded-b-2xl">
+            <button onClick={onFechar}
+              className="px-3 py-2 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700">
+              Fechar
+            </button>
+            {m && podeEditar && (
+              <button onClick={() => onEditar(m)}
+                className="px-4 py-2 rounded-lg bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold">
+                Editar
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </Portal>
+  );
+}
+
 /** Formulário do mapeamento. Mostra o efeito de cada campo na pontuação. */
 function ModalMapeamento({ itensRegra, inicial, onFechar, onSalvo }) {
   const edicao = !!inicial?.id;
@@ -887,6 +1062,10 @@ export default function Mapeamentos() {
   const [erro, setErro] = useState('');
   const [editando, setEditando] = useState(null);
   const [aba, setAba] = useState('mapeamentos');
+  // Qual relatório está aberto para leitura. Só o id: o detalhe (resumo,
+  // checklist, pendências e as fotos) vem do servidor, que é quem reconfere se
+  // esta pessoa pode ver ESTE relatório.
+  const [vendo, setVendo] = useState(null);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -917,18 +1096,14 @@ export default function Mapeamentos() {
    * sem dizer o que corrigir seria tirar ponto de alguém e não deixar caminho
    * para recuperar. O servidor também exige, então não adianta contornar a tela.
    */
-  const validar = async (m, aprovado) => {
-    let observacao = '';
-    if (!aprovado) {
-      const texto = await pedirMotivo();
-      if (!texto) return;
-      observacao = texto;
-    }
+  const devolver = async (m) => {
+    const observacao = await pedirMotivo();
+    if (!observacao) return;
     try {
-      await RankingsAPI.validarMapeamento(m.id, { aprovado, observacao: observacao || undefined });
+      await RankingsAPI.devolverMapeamento(m.id, { observacao });
       await carregar();
     } catch (e) {
-      avisar(e?.message || 'Não foi possível validar.', { titulo: 'Validação não concluída' });
+      avisar(e?.message || 'Não foi possível devolver.', { titulo: 'Devolução não concluída' });
     }
   };
 
@@ -1085,25 +1260,29 @@ export default function Mapeamentos() {
                 </div>
 
                 <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                  {/* VER abre tudo que foi enviado -- inclusive as fotos
+                      avulsas e o que foi digitado à mão, que antes ficavam
+                      gravados sem nenhum caminho até eles. */}
+                  <button onClick={() => setVendo(m.id)}
+                    className="px-2.5 py-1.5 rounded-lg bg-grafite-700 border border-linha text-texto-suave hover:text-texto text-[11px] font-semibold">
+                    Ver
+                  </button>
                   {m.status !== 'aprovado' && m.tecnicoId === usuario?.id && (
                     <button onClick={() => abrirEdicao(m)}
                       className="px-2.5 py-1.5 rounded-lg bg-grafite-700 border border-linha text-texto-suave hover:text-texto text-[11px] font-semibold">
                       Editar
                     </button>
                   )}
+                  {/* SÓ DEVOLVER -- não há mais aprovar.
+                      Entregar virou o fim do caminho: o relatório vai para o
+                      cliente, e o supervisor aponta problema quando há. Um
+                      "aprovar" clicado sem leitura não validava nada, e ainda
+                      segurava a pontuação de quem já tinha entregado. */}
                   {ehSupervisor && m.status !== 'rascunho' && (
-                    <>
-                      {m.status !== 'aprovado' && (
-                        <button onClick={() => validar(m, true)}
-                          className="px-2.5 py-1.5 rounded-lg bg-ativo/15 border border-ativo/30 text-ativo-400 text-[11px] font-bold flex items-center gap-1">
-                          <ShieldCheck size={12} /> Aprovar
-                        </button>
-                      )}
-                      <button onClick={() => validar(m, false)}
-                        className="px-2.5 py-1.5 rounded-lg bg-espera/15 border border-espera/30 text-espera-400 text-[11px] font-bold flex items-center gap-1">
-                        <RotateCcw size={12} /> Devolver
-                      </button>
-                    </>
+                    <button onClick={() => devolver(m)}
+                      className="px-2.5 py-1.5 rounded-lg bg-espera/15 border border-espera/30 text-espera-400 text-[11px] font-bold flex items-center gap-1">
+                      <RotateCcw size={12} /> Devolver
+                    </button>
                   )}
                   {(m.status === 'rascunho' || ehSupervisor) && (
                     <button onClick={() => excluir(m)} title="Excluir"
@@ -1117,6 +1296,16 @@ export default function Mapeamentos() {
           </div>
         )}
       </div>
+      )}
+
+      {vendo && regras && (
+        <ModalDetalhe
+          id={vendo}
+          itensRegra={regras.itens}
+          onFechar={() => setVendo(null)}
+          podeEditar={lista.find((x) => x.id === vendo)?.tecnicoId === usuario?.id}
+          onEditar={(m) => { setVendo(null); abrirEdicao(m); }}
+        />
       )}
 
       {editando && regras && (

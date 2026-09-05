@@ -92,7 +92,7 @@ function competenciaAnterior(comp) {
  * Ordena e numera as posicoes.
  *
  * Desempate: pontos, depois o criterio de VOLUME de cada ranking (atendimentos
- * numa ponta, mapeamentos aprovados na outra) e por fim o nome, que garante
+ * numa ponta, relatorios entregues na outra) e por fim o nome, que garante
  * ordem estavel -- sem ele, dois empates trocariam de lugar a cada F5 e a
  * equipe veria o podio "mudando sozinho".
  */
@@ -242,7 +242,7 @@ class RankingService {
         nome: u.nome,
         pontos: p.pontos,
         criterios: [
-          { chave: "volume", rotulo: "Mapeamentos aprovados", valor: p.volume.valor, pontos: p.volume.pontos },
+          { chave: "volume", rotulo: "Relatórios entregues", valor: p.volume.valor, pontos: p.volume.pontos },
           { chave: "completude", rotulo: "Relatório completo", valor: p.completude.valor, conta: p.completude.conta, amostra: p.completude.amostra, sufixo: "%", pontos: p.completude.pontos },
           { chave: "prazo", rotulo: "Entregue no prazo", valor: p.prazo.valor, conta: p.prazo.conta, amostra: p.prazo.amostra, sufixo: "%", pontos: p.prazo.pontos },
           { chave: "evidencias", rotulo: "Evidências por visita", valor: p.evidencias.valor, conta: p.evidencias.conta, amostra: p.evidencias.amostra, pontos: p.evidencias.pontos },

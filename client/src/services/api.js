@@ -612,7 +612,18 @@ export const RankingsAPI = {
   salvarConfiguracaoRelatorios: (regras) => request('/rankings/configuracao', { method: 'PUT', body: JSON.stringify(regras) }),
   criarMapeamento: (dados) => request('/rankings/mapeamentos', { method: 'POST', body: JSON.stringify(dados) }),
   atualizarMapeamento: (id, dados) => request(`/rankings/mapeamentos/${id}`, { method: 'PATCH', body: JSON.stringify(dados) }),
-  validarMapeamento: (id, dados) => request(`/rankings/mapeamentos/${id}/validar`, { method: 'POST', body: JSON.stringify(dados) }),
+  // DEVOLVER para correcao -- nao ha mais aprovar. A observacao e obrigatoria
+  // no servidor: devolver sem dizer o que corrigir tira ponto de alguem sem
+  // deixar caminho de volta.
+  devolverMapeamento: (id, dados) => request(`/rankings/mapeamentos/${id}/devolver`, { method: 'POST', body: JSON.stringify(dados) }),
+  /**
+   * O ENDERECO de uma evidencia (foto avulsa), pelo INDICE na lista.
+   *
+   * Indice, e nao caminho: o caminho em disco nunca chega ao navegador, e o
+   * servidor so consegue abrir o que ESTE relatorio ja tem gravado. Destino da
+   * URL e um `<img>`/`<a>`, entao devolve endereco em vez dos bytes.
+   */
+  urlEvidenciaMapeamento: (id, indice) => `/api/rankings/mapeamentos/${id}/evidencia/${indice}`,
   removerMapeamento: (id) => request(`/rankings/mapeamentos/${id}`, { method: 'DELETE' }),
   /**
    * O ENDERECO do PDF do relatorio -- e nao o arquivo.

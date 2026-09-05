@@ -613,14 +613,11 @@ export default function Rankings() {
               equipe -- e o nome dele aparece na tabela logo abaixo. A frase
               antiga se contradizia na mesma tela.
 
-              Só na aba externa: é lá que existe algo a validar (o relatório de
-              visita). Na sede não há validação nenhuma, e anunciar validador
-              faria pensar que alguém aprova atendimento. */}
-          {aba === 'externo' && dados?.supervisores?.length > 0 && (
-            <span className="text-[11px] text-texto-fraco min-w-0 truncate" title={dados.supervisores.map((s) => s.nome).join(', ')}>
-              Valida os relatórios: {dados.supervisores.map((s) => s.nome).join(', ')}
-            </span>
-          )}
+              A LINHA SAIU. Ela anunciava quem "valida os relatórios", e não há
+              mais validação: entregar virou o fim do caminho e o administrador
+              só devolve o que tem problema. Anunciar um validador aqui faria a
+              equipe esperar um aval que ninguém dá -- e o ranking já conta o
+              relatório assim que ele é entregue. */}
         </div>
 
         {carregando && !dados ? (

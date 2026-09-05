@@ -321,6 +321,35 @@ class MapeamentoService {
     return { ...aberto, nome: m.arquivoNome || "relatorio.pdf" };
   }
 
+  /**
+   * UMA EVIDENCIA para abrir -- a foto avulsa, pelo indice na lista.
+   *
+   * Mesma regra do PDF, e refeita AQUI pelo mesmo motivo: o arquivo tem endereco
+   * proprio, e permissao so na listagem deixaria quem tivesse um id baixar a
+   * foto do cliente de outro tecnico.
+   *
+   * Endereca por INDICE, e nao pelo caminho em disco. Aceitar o caminho seria
+   * aceitar do cliente qual arquivo ler -- e "../../algo" e a primeira coisa que
+   * alguem tenta. Pelo indice, o unico universo possivel e o que ESTE relatorio
+   * ja tem gravado.
+   */
+  async evidenciaDe(id, indice, usuario) {
+    const m = await prisma.mapeamentoTecnico.findUnique({ where: { id } });
+    if (!m) throw new AppError("Relatório não encontrado", 404, "NOT_FOUND");
+    if (m.tecnicoId !== usuario?.sub && !(await ehSupervisor(usuario?.sub))) {
+      throw new AppError("Sem acesso a este relatório", 403, "SEM_PERMISSAO");
+    }
+    const lista = Array.isArray(m.evidencias) ? m.evidencias : [];
+    const i = Number(indice);
+    if (!Number.isInteger(i) || i < 0 || i >= lista.length) {
+      throw new AppError("Evidência não encontrada", 404, "SEM_EVIDENCIA");
+    }
+    const meta = lista[i];
+    const aberto = await midiaStorage.abrirParaLeitura(meta?.arquivo);
+    if (!aberto) throw new AppError("Arquivo não encontrado no servidor", 404, "ARQUIVO_SUMIU");
+    return { ...aberto, mimetype: meta?.mimetype || "application/octet-stream", nome: meta?.nome || `evidencia-${i + 1}` };
+  }
+
   async listar(filtros, usuario) {
     const supervisor = await ehSupervisor(usuario?.sub);
     const where = {};
@@ -458,29 +487,50 @@ class MapeamentoService {
    * aprovacao faria a parcela de qualidade premiar quem errou e corrigiu igual a
    * quem acertou de primeira.
    */
-  async validar(id, { aprovado, observacao }, usuario) {
+  /**
+   * DEVOLVER para correcao. Nao ha mais aprovar.
+   *
+   * ── POR QUE A APROVACAO SAIU ───────────────────────────────────────────────
+   *
+   * Entregar passou a ser o fim do caminho: o relatorio vai para o cliente, e o
+   * que o supervisor faz e apontar problema quando ha. Um "aprovar" que quase
+   * sempre e clicado sem leitura nao valida nada -- so cria uma fila que atrasa
+   * a pontuacao de quem ja entregou, e um estado a mais para explicar.
+   *
+   * O QUE ISSO MUDOU NA CONTA: a parcela de VOLUME contava os APROVADOS. Sem
+   * aprovacao, ela contaria zero para todo mundo, para sempre. Passou a contar
+   * os ENTREGUES (ver pontuacao.externa) -- que e o que ela sempre quis medir.
+   *
+   * O status "aprovado" continua existindo para os relatorios que JA foram
+   * aprovados antes desta mudanca: eles seguem valendo e aparecendo como estao.
+   * O que nao existe mais e o caminho para criar um novo.
+   */
+  async devolver(id, { observacao }, usuario) {
     if (!(await ehSupervisor(usuario?.sub))) {
-      throw new AppError("Só o supervisor valida mapeamentos", 403, "SEM_PERMISSAO");
+      throw new AppError("Só o supervisor devolve relatórios", 403, "SEM_PERMISSAO");
     }
     const atual = await prisma.mapeamentoTecnico.findUnique({ where: { id } });
-    if (!atual) throw new AppError("Mapeamento não encontrado", 404, "NOT_FOUND");
+    if (!atual) throw new AppError("Relatório não encontrado", 404, "NOT_FOUND");
     if (atual.status === "rascunho") {
-      throw new AppError("Este mapeamento ainda não foi entregue.", 409, "AINDA_RASCUNHO");
+      throw new AppError("Este relatório ainda não foi entregue.", 409, "AINDA_RASCUNHO");
     }
 
     const nome = await this._nomeDe(usuario);
     const salvo = await prisma.mapeamentoTecnico.update({
       where: { id },
       data: {
-        status: aprovado ? "aprovado" : "em_correcao",
-        devolucoes: aprovado ? undefined : { increment: 1 },
+        status: "em_correcao",
+        // O contador NUNCA e zerado, nem quando o relatorio e corrigido depois:
+        // o retrabalho aconteceu, e apagar o registro faria a parcela premiar
+        // quem errou e corrigiu igual a quem acertou de primeira.
+        devolucoes: { increment: 1 },
         validadoPorId: usuario.sub,
         validadoPorNome: nome,
         validadoEm: new Date(),
         observacaoValidacao: observacao ? String(observacao).trim() : null,
       },
     });
-    logger.info("Mapeamento validado", { id, aprovado: !!aprovado, por: nome });
+    logger.info("Relatorio devolvido para correcao", { id, por: nome });
     bus.emitRecurso("mapeamentos");
     return this._mapear(salvo, { completo: true });
   }

@@ -14,7 +14,7 @@
  *
  * ── AS CINCO PARCELAS, E O PORQUE DE CADA PESO ─────────────────────────────
  *
- *   VOLUME            25   quantos mapeamentos aprovados no mes
+ *   VOLUME            25   quantos relatorios entregues no mes
  *   COMPLETUDE        25   quanto do formulario tecnico foi preenchido
  *   PRAZO             20   quantos chegaram dentro do prazo
  *   EVIDENCIAS        15   fotos/anexos por mapeamento
@@ -53,7 +53,8 @@ const MINIMO_MAPEAMENTOS = 3;
 
 const PESOS = { volume: 25, completude: 25, prazo: 20, evidencias: 15, retrabalho: 15 };
 
-// Faixas de volume: aprovados no mes -> pontos. Lidas de cima para baixo.
+// Faixas de volume: relatorios ENTREGUES no mes -> pontos. Lidas de cima para
+// baixo. Contavam aprovados; a aprovacao saiu (ver o bloco em pontuarExterno).
 const FAIXAS_VOLUME = [
   { aPartirDe: 8, pontos: 25 },
   { aPartirDe: 6, pontos: 20 },
@@ -163,6 +164,8 @@ function pontuarExterno(lista, regras = null) {
   // So o que ja saiu da mao do tecnico entra na conta: rascunho e trabalho em
   // andamento, e pontuar rascunho premiaria abrir formulario.
   const entregues = lista.filter((m) => m.status !== "rascunho");
+  // Continua sendo lido para a TELA mostrar quantos foram aprovados no tempo em
+  // que a aprovacao existia. Nao entra mais em conta nenhuma.
   const aprovados = entregues.filter((m) => m.status === "aprovado");
   const temAmostra = entregues.length >= minimo;
 
@@ -180,7 +183,19 @@ function pontuarExterno(lista, regras = null) {
   const escalar = (pontos, tetoPadrao, tetoAtual) =>
     tetoPadrao === tetoAtual ? pontos : Math.round((pontos / tetoPadrao) * tetoAtual);
 
-  const ptsVolume = escalar(faixa(FAIXAS_VOLUME, aprovados.length), PESOS.volume, pesos.volume);
+  /**
+   * VOLUME conta os ENTREGUES, e nao os aprovados.
+   *
+   * Contava aprovados enquanto existia o passo de aprovacao. Ele saiu -- o
+   * supervisor agora so devolve o que tem problema -- e a parcela ficaria
+   * zerada para todo mundo, para sempre, se continuasse esperando um carimbo
+   * que ninguem mais da.
+   *
+   * Medir o entregue tambem e mais honesto com o que a parcela sempre quis
+   * dizer: "quantas visitas viraram relatorio neste mes". A qualidade continua
+   * cobrada nas outras quatro parcelas, e a devolucao desconta em retrabalho.
+   */
+  const ptsVolume = escalar(faixa(FAIXAS_VOLUME, entregues.length), PESOS.volume, pesos.volume);
 
   const mediaCompletude = media(entregues.map(completudeDe));
   const ptsCompletude = temAmostra ? Math.round(mediaCompletude * pesos.completude) : 0;
@@ -202,7 +217,7 @@ function pontuarExterno(lista, regras = null) {
 
   return {
     pontos: ptsVolume + ptsCompletude + ptsPrazo + ptsEvidencias + ptsRetrabalho,
-    volume: { valor: aprovados.length, entregues: entregues.length, pontos: ptsVolume },
+    volume: { valor: entregues.length, aprovados: aprovados.length, entregues: entregues.length, pontos: ptsVolume },
     completude: {
       valor: entregues.length ? Math.round(mediaCompletude * 100) : null,
       conta: temAmostra,
