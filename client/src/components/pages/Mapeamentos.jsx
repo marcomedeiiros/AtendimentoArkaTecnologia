@@ -97,7 +97,7 @@ function ModalMapeamento({ itensRegra, inicial, onFechar, onSalvo }) {
     if (entregar) {
       const ok = await confirmar(
         `O relatório entra na contagem de ${data(dataVisita)} e passa para a validação do supervisor. ` +
-        `Você ainda pode corrigir enquanto ele não aprovar, mas a data de entrega não muda depois — ` +
+        `Você ainda pode corrigir enquanto ele não aprovar, mas a data de entrega não muda depois` +
         `é ela que define se ficou dentro do prazo.`,
         { titulo: 'Entregar o mapeamento?', rotuloConfirmar: 'Entregar', rotuloCancelar: 'Continuar editando' }
       );
@@ -342,7 +342,7 @@ export default function Mapeamentos() {
             <ClipboardList size={20} className="text-acao-200" /> Mapeamentos técnicos
           </h2>
           <p className="text-xs text-texto-fraco mt-0.5">
-            Relatório das visitas fora da sede — é daqui que sai a pontuação do ranking externo.
+            Relatório das visitas fora da sede é daqui que sai a pontuação do ranking externo.
           </p>
         </div>
         <button onClick={abrirNovo}

@@ -446,7 +446,7 @@ export default function EquipePage() {
                     type="button"
                     disabled={!ehAdmin || loadingId === m.id}
                     onClick={() => alternarSupervisor(m)}
-                    title="Vê os dois rankings e valida os mapeamentos — e não concorre ao prêmio"
+                    title="Vê os dois rankings e valida os mapeamentos e não concorre ao prêmio"
                     className={`rounded-lg border px-2 py-1 text-[11px] font-semibold transition-colors ${
                       m.supervisorRanking
                         ? 'border-acao/40 bg-acao/15 text-acao-200'

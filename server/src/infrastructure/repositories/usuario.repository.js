@@ -14,7 +14,16 @@ class UsuarioRepository {
   findById(id) {
     return prisma.usuario.findUnique({
       where: { id },
-      select: { id: true, nome: true, email: true, cargo: true, ativo: true, setoresExtras: true },
+      select: {
+        id: true, nome: true, email: true, cargo: true, ativo: true, setoresExtras: true,
+        // Vao para a SESSAO (auth.me faz spread deste retorno). E o que permite
+        // a tela de Relatorios mostrar os botoes de aprovar/devolver so para
+        // quem supervisiona. Continua sendo so dica de interface: quem decide e
+        // `mapeamentoService.ehSupervisor`, que le o banco a cada chamada --
+        // assim tirar a marca de supervisor vale na hora, sem esperar o token
+        // da pessoa expirar.
+        equipeRanking: true, supervisorRanking: true,
+      },
     });
   }
 
@@ -26,6 +35,14 @@ class UsuarioRepository {
       select: {
         id: true, nome: true, email: true, cargo: true, setoresExtras: true,
         ativo: true, ultimoAcessoEm: true, criadoEm: true,
+        // COLUNA NOVA PRECISA ENTRAR AQUI TAMBEM.
+        //
+        // `select` explicito nao devolve o que nao for listado -- e o campo
+        // ausente nao vira erro em lugar nenhum: `u.equipeRanking` fica
+        // `undefined`, o DTO manda `null`, e a tela desenha "Nao concorre" para
+        // todo mundo. Era isso que fazia os botoes de ranking parecerem que nao
+        // salvavam: o servidor gravava certo e a listagem nunca contava.
+        equipeRanking: true, supervisorRanking: true,
       },
     });
   }

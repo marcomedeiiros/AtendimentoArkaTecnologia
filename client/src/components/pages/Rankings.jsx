@@ -438,7 +438,7 @@ export default function Rankings() {
     <div className="space-y-4 fade-in">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <p className="text-xs text-texto-fraco">
-          Duas competições separadas — as atividades e os indicadores são diferentes.
+          Duas competições separadas as atividades e os indicadores são diferentes.
         </p>
         <div className="flex items-center gap-2">
           <label className="text-[11px] font-semibold text-texto-suave">Mês</label>
@@ -498,7 +498,7 @@ export default function Rankings() {
       <div className="glass-panel border border-linha rounded-2xl p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
           <h3 className="text-sm font-bold text-texto">
-            {dados?.rotulo || ''} — {rotuloCompetencia(competencia)}
+            {dados?.rotulo || ''}  {rotuloCompetencia(competencia)}
           </h3>
           {/* Quem supervisiona fica escrito na tela, e não escondido numa regra:
               a equipe precisa saber que a pessoa que valida os relatórios é a
@@ -608,7 +608,7 @@ export default function Rankings() {
       {aba === 'externo' && (
         <p className="text-[11px] text-texto-fraco flex items-center gap-1.5">
           <ClipboardList size={12} className="shrink-0" />
-          Os pontos saem dos mapeamentos técnicos entregues — veja e valide em{' '}
+          Os pontos saem dos mapeamentos técnicos entregues veja e valide em{' '}
           <strong className="text-texto-suave">Mapeamentos</strong>.
         </p>
       )}

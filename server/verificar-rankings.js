@@ -157,6 +157,33 @@ async function main() {
     "e ninguem da sede aparece no ranking externo (os dois nunca se misturam)"
   );
 
+  titulo("3b. O QUE FOI GRAVADO VOLTA PARA A TELA");
+
+  // O DEFEITO QUE ISTO IMPEDE, e ele ja aconteceu: `listarTodos` tem `select`
+  // explicito, e as colunas novas nao foram adicionadas nele. O campo ausente
+  // nao vira erro em lugar nenhum -- `u.equipeRanking` fica `undefined`, o DTO
+  // manda `null`, e a Gestao da Equipe desenha "Nao concorre" para todo mundo.
+  //
+  // Da tela, isso parece que o botao NAO SALVA: o servidor gravava certo e a
+  // listagem nunca contava. Nenhuma verificacao de escrita pegaria, porque a
+  // escrita estava correta -- o buraco era a leitura.
+  const equipeService = require("./src/modules/equipe/equipe.service");
+  const listados = await equipeService.listar();
+  const listAna = listados.find((u) => u.id === ana.id);
+  const listDavi = listados.find((u) => u.id === davi.id);
+  check(listAna?.equipeRanking === "sede", `a listagem devolve a equipe gravada ("${listAna?.equipeRanking}")`);
+  check(listDavi?.supervisorRanking === true, "e a marca de supervisor");
+  check(
+    listados.find((u) => u.id === zeca.id)?.equipeRanking === null,
+    "quem nao concorre volta como null, e nao como undefined"
+  );
+
+  // A SESSAO tambem: e por ela que a tela de Relatorios decide mostrar os
+  // botoes de aprovar/devolver.
+  const usuarioRepository = require("./src/infrastructure/repositories/usuario.repository");
+  const daSessao = await usuarioRepository.findById(davi.id);
+  check(daSessao?.supervisorRanking === true, "e a sessao carrega o supervisor (findById)");
+
   titulo("4. A PONTUACAO EXTERNA");
 
   const itensCheios = Object.fromEntries(ITENS_MAPEAMENTO.map((i) => [i.chave, "levantado e conferido"]));
