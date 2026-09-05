@@ -440,9 +440,27 @@ export default function WhatsAppPage() {
                 {status.toUpperCase()}
               </span>
             </div>
+            {/* O NÚMERO NÃO VEM DA SESSÃO -- vem da linha `Instance` no banco da
+                Evolution (`ownerJid`/`profileName`), que sobrevive ao logout.
+                Ele é o registro do ÚLTIMO pareamento, não prova de conexão viva:
+                encerrar a sessão não o apaga, e só "Excluir Instância" apagaria.
+
+                Escondê-lo seria pior -- é justamente este número que se digita
+                em "Código por telefone". Então ele fica, com o rótulo dizendo a
+                verdade: "Número" quando conectado, "Último número pareado"
+                quando não. Sem isso a tela parecia dizer que o WhatsApp estava
+                de pé enquanto o badge ao lado dizia DESCONECTADO. */}
             <p className="text-xs text-slate-400 mt-0.5">
               {detalhes?.perfil?.numero
-                ? <>Número: <span className="font-mono text-slate-300">+{detalhes.perfil.numero}</span>{detalhes.perfil.nome ? ` • ${detalhes.perfil.nome}` : ''}</>
+                ? (
+                  <>
+                    {conectado ? 'Número: ' : 'Último número pareado: '}
+                    <span className={`font-mono ${conectado ? 'text-slate-300' : 'text-slate-500'}`}>
+                      +{detalhes.perfil.numero}
+                    </span>
+                    {detalhes.perfil.nome ? ` • ${detalhes.perfil.nome}` : ''}
+                  </>
+                )
                 : 'Nenhum número pareado'}
               {conectado && <> • Online há {formatarDuracao(detalhes?.conectadoDesde)}</>}
             </p>
