@@ -28,6 +28,7 @@ import { useAuth } from '../../context/AuthContext';
 import { avisar, confirmar, pedirTexto } from '../../utils/dialogo';
 import Portal from '../Portal';
 import { FUSO_BR } from '../../utils/data';
+import { ehDaEquipeExterna } from '../../utils/equipeRanking';
 
 const STATUS_META = {
   rascunho:    { rotulo: 'Rascunho',    classe: 'bg-quieto/20 text-quieto-400 border-quieto/30' },
@@ -341,6 +342,37 @@ export default function Mapeamentos() {
   // supervisor. Isto é só a dica de interface: o servidor confere o cargo NO
   // BANCO a cada chamada, então esconder o botão nunca foi a proteção.
   const ehSupervisor = usuario?.cargo === 'Administrador';
+  // Quem lança relatório aqui é a equipe que VISITA cliente. O Administrador
+  // entra porque valida os relatórios dos outros -- ele não lança, mas precisa
+  // ver todos.
+  const podeUsar = ehDaEquipeExterna(usuario) || ehSupervisor;
+
+  /**
+   * A tela não some para quem não é da equipe externa -- ela EXPLICA.
+   *
+   * O item já não aparece no menu, então quem chega aqui veio por um link
+   * antigo, um favorito ou o botão de voltar. Uma página em branco (ou um
+   * redirecionamento silencioso) faria a pessoa achar que o sistema quebrou;
+   * um formulário completo seria pior, porque ela lançaria um relatório que
+   * não conta em ranking nenhum e ainda entraria na fila de validação como
+   * ruído.
+   */
+  if (!podeUsar) {
+    return (
+      <div className="p-4 sm:p-6 fade-in">
+        <div className="glass-panel border border-linha rounded-2xl p-8 text-center max-w-lg mx-auto">
+          <ClipboardList size={28} className="mx-auto text-texto-fraco mb-3" />
+          <p className="text-sm font-semibold text-texto">Esta tela é da equipe de fora da sede.</p>
+          <p className="text-[11px] text-texto-fraco mt-2 leading-relaxed">
+            Os relatórios de mapeamento são a entrega de quem faz visita técnica, e é deles
+            que sai a pontuação do ranking <strong className="text-texto-suave">Fora da Sede</strong>.
+            {' '}Se você passou a fazer visitas, peça a um administrador para incluir você nessa
+            equipe em Gestão da Equipe.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-6 space-y-4 fade-in">

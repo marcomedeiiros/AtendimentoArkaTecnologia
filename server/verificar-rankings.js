@@ -22,6 +22,8 @@ const painelService = require("./src/modules/dashboard/painel.service");
 const rankingService = require("./src/modules/rankings/ranking.service");
 const mapeamentoService = require("./src/modules/rankings/mapeamento.service");
 const { pontuarExterno, ITENS_MAPEAMENTO } = require("./src/modules/rankings/pontuacao.externa");
+const fs = require("fs");
+const path = require("path");
 
 const erros = [];
 const check = (cond, msg) => {
@@ -215,6 +217,50 @@ async function main() {
   check(
     soSede.sede.some((u) => u.id === ana.id) && !soSede.externo.some((u) => u.id === ana.id),
     "desmarcar uma tira a pessoa daquela lista e mantem a outra"
+  );
+
+  titulo("3c. A ABA 'RELATORIOS' SEGUE A EQUIPE DA PESSOA");
+
+  // Relatorio de mapeamento e a entrega de quem VISITA cliente. Para quem so
+  // atende no chat, o item de menu nunca seria clicado -- e menu cheio de item
+  // inutil e menu que ninguem le.
+  //
+  // A leitura mora num arquivo so (client/src/utils/equipeRanking.js) porque
+  // duas telas decidem a partir dela: a barra esconde o item, e a propria tela
+  // explica quando alguem chega por um link antigo. Duas copias dariam um menu
+  // que mostra uma tela que a tela recusa a abrir.
+  const vm = require("vm");
+  const fonte = fs.readFileSync(
+    path.join(__dirname, "..", "client", "src", "utils", "equipeRanking.js"),
+    "utf8"
+  ).replace(/^export\s+/gm, "");
+  const caixa = {};
+  vm.createContext(caixa);
+  vm.runInContext(`${fonte}; this.ehDaEquipeExterna = ehDaEquipeExterna;`, caixa);
+  const { ehDaEquipeExterna } = caixa;
+
+  check(ehDaEquipeExterna({ equipeRanking: "externo" }) === true, "quem e da equipe externa ve Relatorios");
+  check(ehDaEquipeExterna({ equipeRanking: "sede" }) === false, "quem so atende na sede NAO ve (o pedido)");
+  check(ehDaEquipeExterna({ equipeRanking: "sede,externo" }) === true, "quem faz as duas coisas ve");
+  check(ehDaEquipeExterna({ equipeRanking: "externo,sede" }) === true, "e a ordem no texto nao importa");
+  check(ehDaEquipeExterna({ equipeRanking: "sede, externo" }) === true, "espaco depois da virgula nao quebra");
+  // Ausencia nao pode virar acesso: sessao antiga, campo nao selecionado ou
+  // valor estragado no banco tem de cair no lado fechado.
+  for (const [rotulo, u] of [
+    ["nao concorre", { equipeRanking: null }],
+    ["campo ausente", {}],
+    ["usuario nulo", null],
+    ["valor invalido", { equipeRanking: "externa" }],
+  ]) {
+    check(ehDaEquipeExterna(u) === false, `${rotulo} -> nao ve`);
+  }
+
+  // E o campo precisa CHEGAR na sessao, senao a regra acima decide sobre nada e
+  // o item some para todo mundo.
+  const sessaoJoao = await usuarioRepository.findById(joao.id);
+  check(
+    ehDaEquipeExterna(sessaoJoao) === true,
+    "e a sessao real de um tecnico externo passa na regra (findById traz o campo)"
   );
 
   titulo("4. A PONTUACAO EXTERNA");

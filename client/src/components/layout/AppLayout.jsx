@@ -14,6 +14,7 @@ import {
   PanelLeftClose, PanelLeftOpen, Sun, Moon, UserCog, Trophy, ClipboardList
 } from 'lucide-react';
 import Portal from '../Portal';
+import { ehDaEquipeExterna } from '../../utils/equipeRanking';
 import { useAppContext } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import LimiteDeErro from '../LimiteDeErro';
@@ -44,7 +45,15 @@ const NAV_MONITORAMENTO = [
   // escolher um deles a cada vez. Aqui fica so o que NAO cabe numa aba dela --
   // a entrega dos relatorios, que e trabalho diario de quem visita cliente e
   // nao consulta de gestao.
-  { to: '/relatorios', label: 'Relatórios',           icon: ClipboardList, modulo: 'rankings' },
+  {
+    to: '/relatorios', label: 'Relatórios', icon: ClipboardList, modulo: 'rankings',
+    // SÓ PARA QUEM VISITA CLIENTE -- e para quem valida.
+    //
+    // Relatório de mapeamento é a entrega da equipe de FORA DA SEDE; quem
+    // atende no chat não tem o que lançar aqui. O Administrador vê sempre,
+    // porque é ele quem aprova e devolve os relatórios dos outros.
+    visivel: (u) => ehDaEquipeExterna(u) || u?.cargo === 'Administrador',
+  },
 ];
 
 const NAV_FERRAMENTAS = [
@@ -307,7 +316,17 @@ function Sidebar({ aberto, onClose }) {
   // que nao for permitido. Isto aqui e so o "esconder".
   const permissoes = usuario?.permissoes;
   const temLista = Array.isArray(permissoes);
-  const podeVer = (item) => !temLista || !item.modulo || permissoes.includes(item.modulo);
+  // Duas peneiras, e elas respondem perguntas diferentes:
+  //
+  //   `modulo`   o cargo tem acesso a esta area? (matriz de permissoes)
+  //   `visivel`  esta tela faz sentido para ESTA pessoa? (funcao dela)
+  //
+  // A segunda existe porque "Relatorios" e a entrega de quem visita cliente --
+  // para quem so atende no chat ela e um item que nunca vai ser clicado, e um
+  // menu cheio de itens inuteis e um menu que ninguem le.
+  const podeVer = (item) =>
+    (!temLista || !item.modulo || permissoes.includes(item.modulo)) &&
+    (!item.visivel || item.visivel(usuario));
   const principais = NAV_PRINCIPAL.filter(podeVer);
   const monitoramento = NAV_MONITORAMENTO.filter(podeVer);
   const ferramentas = NAV_FERRAMENTAS.filter(podeVer);
