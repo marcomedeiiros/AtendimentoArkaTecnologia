@@ -464,7 +464,7 @@ export default function Rankings() {
     <div className="space-y-4 fade-in">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <p className="text-xs text-texto-fraco min-w-0">
-          Duas competições separadas — as atividades e os indicadores são diferentes.
+          Duas competições separadas as atividades e os indicadores são diferentes.
         </p>
 
         {/* OS CONTROLES FICAM JUNTOS, no alto e à direita.
@@ -491,7 +491,7 @@ export default function Rankings() {
             <button
               onClick={limparPainelTv}
               disabled={limpando}
-              title="Zera o painel de parede (Modo TV) a partir de agora — esta tela não muda"
+              title="Zera o painel de parede (Modo TV) a partir de agora esta tela não muda"
               className="px-3 py-2 rounded-xl bg-falha/15 border border-falha/40 text-falha-400 hover:bg-falha/25 text-[11px] font-bold flex items-center gap-1.5 transition-colors disabled:opacity-50"
             >
               {limpando ? <Loader2 size={12} className="animate-spin" /> : <Eraser size={12} />}
