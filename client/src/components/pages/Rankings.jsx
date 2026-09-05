@@ -24,7 +24,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Trophy, Medal, Building2, Car, ChevronDown, ChevronRight, Loader2, AlertCircle,
   TrendingUp, TrendingDown, Minus, Sparkles, Gift, ClipboardList, Calendar, Eraser,
-  RotateCcw,
+  RotateCcw, SlidersHorizontal, Save,
 } from 'lucide-react';
 import { RankingsAPI, DashboardAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -490,6 +490,60 @@ export default function Rankings() {
     }
   };
 
+  /**
+   * CONFIGURAÇÃO DO ATENDIMENTO NA SEDE.
+   *
+   * Mesma forma da configuração dos relatórios (em Relatórios → Configuração):
+   * tetos que somam 100 e um mínimo de amostra. As duas telas pedem a mesma
+   * coisa, e dar formas diferentes para a mesma ideia seria duas telas para
+   * aprender em vez de uma.
+   *
+   * As FAIXAS (quantos atendimentos valem quanto, que tempo cai em qual degrau)
+   * não entram: elas escalam com o teto no servidor. Editar degrau a degrau
+   * numa tela é dar corda para uma escada que não soma -- e "por que 6
+   * atendimentos valem menos que 4?" é uma pergunta que ninguém quer responder.
+   */
+  const [config, setConfig] = useState(null);
+  const [rascunho, setRascunho] = useState(null);
+  const [salvandoCfg, setSalvandoCfg] = useState(false);
+  const [erroCfg, setErroCfg] = useState('');
+
+  const abrirConfig = async () => {
+    setErroCfg('');
+    try {
+      const d = await DashboardAPI.regrasSede();
+      setConfig(d);
+      setRascunho(d.regras);
+    } catch (e) {
+      avisar(e?.message || 'Não foi possível abrir a configuração.', { titulo: 'Configuração' });
+    }
+  };
+
+  const somaCfg = useMemo(
+    () => Object.values(rascunho?.pesos || {}).reduce((a, b) => a + Number(b || 0), 0),
+    [rascunho]
+  );
+
+  const salvarConfig = async () => {
+    setSalvandoCfg(true);
+    setErroCfg('');
+    try {
+      const salvo = await DashboardAPI.salvarRegrasSede(rascunho);
+      setRascunho(salvo);
+      setConfig((c) => ({ ...c, regras: salvo }));
+      // Recarrega a tabela: os pontos mudam AGORA, e mostrar o quadro antigo ao
+      // lado das regras novas faria a pessoa achar que não valeu.
+      await carregar();
+      avisar('As novas regras já valem, inclusive para os meses anteriores.', {
+        titulo: 'Configuração salva', tipo: 'info',
+      });
+    } catch (e) {
+      setErroCfg(e?.message || 'Não foi possível salvar.');
+    } finally {
+      setSalvandoCfg(false);
+    }
+  };
+
   const lista = dados?.classificacao || [];
   const rotuloAba = ABAS.find((a) => a.id === aba)?.rotulo || '';
   // Desde quando ESTE ranking está contando. Vem do servidor junto com a
@@ -546,6 +600,22 @@ export default function Rankings() {
             </button>
           )}
 
+          {/* CONFIGURAÇÃO -- só na aba da sede, e só para administrador.
+              A do Fora da Sede já existe, dentro de Relatórios: ela configura
+              prazo e leitura de PDF, que não têm equivalente aqui. */}
+          {ehAdmin && aba === 'sede' && (
+            <button
+              onClick={() => (config ? setConfig(null) : abrirConfig())}
+              className={`px-3 py-2 rounded-xl border text-[11px] font-bold flex items-center gap-1.5 transition-colors ${
+                config
+                  ? 'bg-espera/15 border-espera/40 text-espera-400'
+                  : 'bg-grafite-700 border-linha text-texto-suave hover:text-texto hover:border-linha-forte'
+              }`}
+            >
+              <SlidersHorizontal size={12} /> Configuração
+            </button>
+          )}
+
           {ehAdmin && zeradoEm && (
             <button
               onClick={restaurarRanking}
@@ -579,6 +649,76 @@ export default function Rankings() {
       {erro && (
         <div className="flex items-center gap-2 p-3 rounded-xl bg-falha/10 border border-falha/30 text-falha-400 text-xs">
           <AlertCircle size={14} className="shrink-0" /> {erro}
+        </div>
+      )}
+
+      {config && rascunho && aba === 'sede' && (
+        <div className="glass-panel border border-espera/30 rounded-2xl p-4 sm:p-5 space-y-4">
+          <p className="text-[11px] font-bold text-espera-400 flex items-center gap-1.5">
+            <SlidersHorizontal size={13} /> Pontuação do atendimento na sede
+          </p>
+
+          {erroCfg && (
+            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-falha/10 border border-falha/30 text-falha-400 text-[11px]">
+              <AlertCircle size={13} className="shrink-0" /> {erroCfg}
+            </div>
+          )}
+
+          {/* O AVISO QUE PRECISA ESTAR AQUI: o ranking é recalculado a cada
+              consulta, então mudar os pesos muda também os meses passados -- e a
+              premiação já registrada continua apontando para a posição antiga. */}
+          <p className="text-[10px] text-espera-400 leading-relaxed border border-espera/30 bg-espera/10 rounded-xl p-2.5">
+            O ranking é recalculado a cada consulta, então mudar os pesos muda também os
+            <strong> meses já passados</strong>. Premiações já registradas continuam como estão.
+            {' '}Esta é a mesma conta do <strong>Modo TV</strong>.
+          </p>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {Object.entries(rascunho.pesos).map(([chave, valor]) => (
+              <div key={chave}>
+                <label className="text-[11px] font-semibold text-texto-suave block mb-1">
+                  {{ atendimentos: 'Atendimentos', nota: 'Avaliação', agilidade: 'Agilidade' }[chave] || chave}
+                </label>
+                <input
+                  type="number" min={0} max={100} value={valor}
+                  onChange={(e) => {
+                    setErroCfg('');
+                    setRascunho((r) => ({ ...r, pesos: { ...r.pesos, [chave]: Math.max(0, Math.min(100, Number(e.target.value) || 0)) } }));
+                  }}
+                  className="w-full bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto focus:outline-none focus:border-acao/50"
+                />
+              </div>
+            ))}
+            <div className={`rounded-xl border p-2.5 text-center self-end ${somaCfg === 100 ? 'border-ativo/40 bg-ativo/10' : 'border-falha/40 bg-falha/10'}`}>
+              <p className="text-[10px] uppercase tracking-wider text-texto-fraco font-bold">Soma</p>
+              <p className={`font-display font-extrabold text-lg ${somaCfg === 100 ? 'text-ativo-400' : 'text-falha-400'}`}>{somaCfg}</p>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[11px] font-semibold text-texto-suave block mb-1">Mínimo de avaliações</label>
+            <input
+              type="number" min={1} max={20} value={rascunho.minimoAvaliacoes}
+              onChange={(e) => { setErroCfg(''); setRascunho((r) => ({ ...r, minimoAvaliacoes: Number(e.target.value) || 1 })); }}
+              className="w-full sm:w-48 bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto focus:outline-none focus:border-acao/50"
+            />
+            <p className="text-[10px] text-texto-fraco mt-1 leading-relaxed">
+              Abaixo disso a parcela da nota não conta e a tela escreve “1 de 3”. Impede que
+              uma única nota 5 lidere o mês inteiro.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button onClick={() => setRascunho(config.padrao)} disabled={salvandoCfg}
+              className="px-3 py-2 rounded-xl bg-grafite-700 border border-linha text-texto-suave text-[11px] font-bold hover:border-linha-forte disabled:opacity-50 flex items-center gap-1.5">
+              <RotateCcw size={12} /> Restaurar o padrão
+            </button>
+            <button onClick={salvarConfig} disabled={salvandoCfg || somaCfg !== 100}
+              title={somaCfg !== 100 ? 'Os pesos precisam somar 100' : undefined}
+              className="px-4 py-2 rounded-xl bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold disabled:opacity-50 flex items-center gap-1.5">
+              {salvandoCfg ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Salvar regras
+            </button>
+          </div>
         </div>
       )}
 

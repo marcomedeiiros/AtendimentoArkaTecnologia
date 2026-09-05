@@ -67,6 +67,12 @@ router.get("/ranking-equipe", (req, res, next) =>
 // SO ADMINISTRADOR. Muda o que a equipe INTEIRA ve na parede -- inclusive a
 // propria classificacao de quem clicou. Esconder o botao no front nao basta:
 // sem este guarda, qualquer conta autenticada chamaria a rota no curl.
+// CONFIGURACAO DA PONTUACAO DA SEDE. So ADMINISTRADOR, nos dois verbos --
+// inclusive na leitura: a tela expoe a regua exata, e quem e avaliado saber
+// dela antes de a empresa anunciar e outra coisa.
+router.get("/regras", adminMiddleware, (req, res, next) => dashboardController.obterRegras(req, res).catch(next));
+router.put("/regras", adminMiddleware, (req, res, next) => dashboardController.salvarRegras(req, res).catch(next));
+
 router.post("/painel/limpar", adminMiddleware, (req, res, next) =>
   dashboardController.limparPainel(req, res).catch(next)
 );

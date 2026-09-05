@@ -41,6 +41,23 @@ class DashboardController {
     return success(res, data);
   }
 
+  /**
+   * AS REGRAS DO ATENDIMENTO NA SEDE -- em vigor, mais o padrao.
+   *
+   * O padrao vai junto para a tela poder oferecer "restaurar" sem repetir os
+   * numeros do servidor num texto que envelhece sozinho.
+   */
+  async obterRegras(req, res) {
+    return success(res, {
+      regras: await painelService.regras(),
+      padrao: painelService.regrasPadrao(),
+    });
+  }
+
+  async salvarRegras(req, res) {
+    return success(res, await painelService.salvarRegras(req.body, req.user));
+  }
+
   // Zera o painel da equipe. NAO apaga atendimento nenhum: grava um instante e
   // as telas passam a contar dali (ver painel.service.marcoDeZeragem). O autor
   // vai junto para a autoria ficar no log -- "os numeros sumiram" sem rastro de

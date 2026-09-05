@@ -695,6 +695,10 @@ export const DashboardAPI = {
   // painel.service.marcoDeZeragem. Restrito a administrador no servidor.
   limparPainel: (ranking = 'sede') =>
     request('/dashboard/painel/limpar', { method: 'POST', body: JSON.stringify({ ranking }) }),
+  // CONFIGURACAO da pontuacao do atendimento na SEDE -- so administrador nos
+  // dois verbos, inclusive na leitura (a tela expoe a regua exata).
+  regrasSede: () => request('/dashboard/regras'),
+  salvarRegrasSede: (regras) => request('/dashboard/regras', { method: 'PUT', body: JSON.stringify(regras) }),
   restaurarPainel: (ranking = 'sede') =>
     request('/dashboard/painel/restaurar', { method: 'POST', body: JSON.stringify({ ranking }) }),
 };

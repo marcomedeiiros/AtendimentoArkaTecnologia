@@ -248,8 +248,16 @@ async function main() {
     nomesNaParede.every((n) => sedeAgora.classificacao.some((p) => p.nome === n)),
     `todo nome da parede esta no ranking da sede (${nomesNaParede.join(", ")})`
   );
-  // O PODIO, na ordem: nao basta serem as mesmas pessoas.
-  const topSede = sedeAgora.classificacao.filter((p) => p.pontos > 0).slice(0, 3).map((p) => p.nome);
+  /**
+   * O PODIO, NA ORDEM -- e agora com os zerados junto.
+   *
+   * A parede escondia quem tinha zero ponto, e este teste filtrava `pontos > 0`
+   * so do lado da Visao Geral para as duas listas baterem. A parede passou a
+   * mostrar a equipe inteira (o painel ficava dias dizendo "ninguem pontuou
+   * ainda", justamente no comeco do mes), entao o filtro saiu: as duas telas
+   * mostram as MESMAS pessoas, na mesma ordem, zerados inclusive.
+   */
+  const topSede = sedeAgora.classificacao.slice(0, 3).map((p) => p.nome);
   check(
     JSON.stringify(nomesNaParede) === JSON.stringify(topSede),
     `mesma ordem nas duas telas (parede: ${nomesNaParede.join(" > ")})`
@@ -260,6 +268,104 @@ async function main() {
     !!lider && lider.pontos === liderNaVisao?.pontos,
     `e o lider tem os mesmos pontos nas duas (${lider?.nome}: ${lider?.pontos})`
   );
+
+  /**
+   * 1c. O QUE O BOT FECHOU NAO E "RESOLVIDO".
+   *
+   * "Fechados hoje" e "tempo ate resolver" contavam TODO fechamento. Os do bot
+   * distorcem cada um de um jeito: o volume inflava com conversa que ninguem
+   * atendeu, e a media de tempo misturava o fluxo (encerra em segundos) com a
+   * inatividade (fecha horas depois) -- os dois extremos, puxando para lados
+   * opostos.
+   *
+   * O discriminador e o MOTIVO: quem fecha pela Central escolhe um da lista da
+   * empresa; o bot grava um rotulo de MOTIVOS_AUTOMATICOS.
+   */
+  titulo("1c. FECHAMENTO DO BOT NAO CONTA COMO RESOLVIDO");
+  {
+    const { MOTIVOS_AUTOMATICOS } = require("./src/modules/configuracoes/configuracao.service");
+    const cBot = await conversa("bot");
+    const agora = new Date();
+    const hAtras = (h) => new Date(agora.getTime() - h * 3600000);
+
+    /**
+     * O TESTE MEDE O DELTA, e nao valores absolutos.
+     *
+     * O banco ja tem os outros fixtures deste script fechando hoje, e cravar
+     * "fechados = 1" reprovaria por causa deles -- um teste que depende do que
+     * mais existe no arquivo quebra a cada fixture nova, sem nada de errado no
+     * codigo. O que a regra AFIRMA e exatamente um delta: acrescentar
+     * fechamentos do bot nao pode mexer nestes numeros.
+     */
+    const antesDoBot = await painelService.obter();
+
+    // Uma resolucao HUMANA: hoje, em 1 hora, com motivo escolhido na Central.
+    await os(cBot.id, ana.nome, {
+      status: "fechada", motivo: "Suporte técnico", avaliacao: 5,
+      abertoEm: hAtras(2), atendidoEm: hAtras(2), fechadoEm: hAtras(1),
+    });
+    const comHumano = await painelService.obter();
+    check(
+      comHumano.hoje.fechados === antesDoBot.hoje.fechados + 1,
+      `um fechamento humano SOMA em "fechados hoje" (${antesDoBot.hoje.fechados} -> ${comHumano.hoje.fechados})`
+    );
+    check(
+      comHumano.tempos.resolverAmostra === antesDoBot.tempos.resolverAmostra + 1,
+      `e entra no "tempo ate resolver" (amostra ${antesDoBot.tempos.resolverAmostra} -> ${comHumano.tempos.resolverAmostra})`
+    );
+
+    // O BOT fecha dois, nos DOIS EXTREMOS: o fluxo encerra em 20 segundos e a
+    // inatividade fecha 10 horas depois. Eram eles que puxavam a media para
+    // lados opostos.
+    await os(cBot.id, ana.nome, {
+      status: "fechada", motivo: MOTIVOS_AUTOMATICOS.FLUXO,
+      abertoEm: hAtras(3), atendidoEm: hAtras(3), fechadoEm: new Date(hAtras(3).getTime() + 20000),
+    });
+    await os(cBot.id, ana.nome, {
+      status: "fechada", motivo: MOTIVOS_AUTOMATICOS.INATIVIDADE,
+      abertoEm: hAtras(12), atendidoEm: hAtras(12), fechadoEm: hAtras(2),
+    });
+
+    const comBot = await painelService.obter();
+    check(
+      comBot.hoje.fechados === comHumano.hoje.fechados,
+      `os dois do BOT nao somam em "fechados hoje" (continua ${comBot.hoje.fechados})`
+    );
+    check(
+      comBot.tempos.resolverMedioSeg === comHumano.tempos.resolverMedioSeg &&
+        comBot.tempos.resolverAmostra === comHumano.tempos.resolverAmostra,
+      `e nao mexem no "tempo ate resolver" (${comBot.tempos.resolverMedioSeg}s, amostra ${comBot.tempos.resolverAmostra})`
+    );
+    // "Tempo ate assumir" continua contando TODOS: a fila esperou de verdade,
+    // independente de quem fechou a conversa depois.
+    check(
+      comBot.tempos.assumirAmostra === comHumano.tempos.assumirAmostra + 2,
+      `"tempo ate assumir" segue contando todos (${comHumano.tempos.assumirAmostra} -> ${comBot.tempos.assumirAmostra})`
+    );
+
+    await prisma.atendimento.deleteMany({ where: { conversaId: cBot.id } });
+    await prisma.conversa.update({ where: { id: cBot.id }, data: { atendimentoAtualId: null } });
+    await prisma.conversa.delete({ where: { id: cBot.id } });
+  }
+
+  /**
+   * 1d. A PAREDE MOSTRA QUEM ESTA ZERADO.
+   *
+   * Ela escondia zero ponto, e no comeco do mes a TV ficava dias com tres
+   * caixas "em aberto" e "Ninguem pontuou ainda" -- justamente quando a equipe
+   * olha mais. Agora o zero e um ponto de partida com nome.
+   */
+  titulo("1d. A PAREDE MOSTRA A EQUIPE, MESMO ZERADA");
+  {
+    const naParede = (await painelService.obter()).ranking.classificacao;
+    check(
+      naParede.some((p) => p.nome === bruno.nome && p.pontos === 0),
+      `quem esta na equipe e nao pontuou aparece zerado (${bruno.nome})`
+    );
+    check(naParede.length <= 3, `sem passar do top 3 na parede (${naParede.length})`);
+    // E continua sem mostrar quem NAO esta na equipe -- zerado nao e convite.
+    check(!naParede.some((p) => p.nome === davi.nome), "e quem nao concorre continua fora");
+  }
 
   titulo("2. QUEM SUPERVISIONA E O ADMINISTRADOR, PELO CARGO");
   // Nao ha mais marca de supervisor no cadastro: o administrador ja tem acesso

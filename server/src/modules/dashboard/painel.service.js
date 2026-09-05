@@ -28,6 +28,7 @@ const configuracaoService = require("../configuracoes/configuracao.service");
 const { podeAcessarSetor } = require("../../shared/helpers/setor.helper");
 const { ehAtendenteReal } = require("../../shared/helpers/atendimentoSintetico.helper");
 const { nomesDaEquipe } = require("../../shared/helpers/equipeRanking.helper");
+const sedeRegras = require("./sede.regras");
 const logger = require("../../config/logger");
 
 // Quantos tecnicos entram no ranking. Tres cabe na tela e ainda e disputavel:
@@ -145,6 +146,33 @@ const inicioDoMes = () => {
 const media = (lista) => (lista.length ? lista.reduce((a, b) => a + b, 0) / lista.length : 0);
 
 /**
+ * ESTE ATENDIMENTO FOI RESOLVIDO POR UMA PESSOA?
+ *
+ * ── COMO DA PARA SABER ─────────────────────────────────────────────────────
+ *
+ * Pelo MOTIVO. Quando quem fecha e uma pessoa, o motivo e obrigatorio e sai da
+ * lista configurada da empresa (ver conversa.service.alterarStatus). Quando quem
+ * fecha e o bot, ele grava um dos rotulos de `MOTIVOS_AUTOMATICOS`: encerrado
+ * por inatividade, pelo fluxo, ou fora do horario.
+ *
+ * Exige TAMBEM um atendente de verdade: um fechamento sem motivo gravado (ciclo
+ * antigo, ou caminho interno) nao pode passar por resolucao humana so porque o
+ * campo esta vazio.
+ *
+ * ── ONDE ISSO MUDA O NUMERO ────────────────────────────────────────────────
+ *
+ * "Fechados hoje" e "tempo ate resolver". Os dois contavam todo fechamento, e os
+ * do bot distorcem cada um de um jeito: o volume inflava com conversa que
+ * ninguem atendeu, e a media de tempo misturava o fluxo que encerra em segundos
+ * com a inatividade que fecha horas depois.
+ */
+const MOTIVOS_DO_BOT = new Set(Object.values(configuracaoService.MOTIVOS_AUTOMATICOS || {}));
+function resolvidoPorAtendente(a) {
+  if (!ehAtendenteReal(a?.atendenteNome)) return false;
+  return !MOTIVOS_DO_BOT.has(String(a?.motivo || "").trim());
+}
+
+/**
  * A MEDIANA -- usada no tempo ate assumir, e nao a media.
  *
  * Aqui a amostra e pequena de proposito: um mes tem 2 a 8 atendimentos por
@@ -260,7 +288,11 @@ class PainelService {
     const desdeMes = maisRecente(inicioDoMes(), zerado);
     const desdeHoje = maisRecente(inicioDoDia(), zerado);
 
-    const [daSede, doMes, fechadosHoje, fila, equipe, meta, carga] = await Promise.all([
+    const [regras, daSede, doMes, fechadosDeHoje, fila, equipe, meta, carga] = await Promise.all([
+      // Os pesos que o administrador definiu. Lidos UMA vez por chamada: sao os
+      // mesmos para todo mundo, e ler por pessoa faria a conta depender de
+      // quando cada linha foi calculada.
+      this.regras(),
       // QUEM CONCORRE NA SEDE. A parede mostra o ranking de atendimento da
       // sede: sem este recorte ela coroava como lider do mes quem nao esta
       // inscrito na competicao -- e discordava, na mesma sala, da tabela que a
@@ -278,9 +310,24 @@ class PainelService {
           abertoEm: true,
           atendidoEm: true,
           fechadoEm: true,
+          // `motivo` E OBRIGATORIO NESTE SELECT: e por ele que se sabe se quem
+          // fechou foi uma pessoa ou o bot (ver `resolvidoPorAtendente`). Sem a
+          // coluna o campo chega `undefined`, TODO fechamento passa por humano,
+          // e o "tempo ate resolver" volta a misturar o bot -- sem nada acusar.
+          motivo: true,
         },
       }),
-      prisma.atendimento.count({ where: { status: "fechada", fechadoEm: { gte: desdeHoje } } }),
+      // "FECHADOS HOJE" conta so o que uma PESSOA resolveu.
+      //
+      // Era um `count`, e virou leitura: a regra ("nao foi o bot") depende do
+      // motivo e do atendente, e nao ha `where` que a expresse sem repetir os
+      // rotulos automaticos dentro da consulta -- uma segunda copia da regra,
+      // que passaria a discordar da primeira no dia em que alguem acrescentar um
+      // motivo automatico novo. Sao os fechamentos de UM DIA: a lista e curta.
+      prisma.atendimento.findMany({
+        where: { status: "fechada", fechadoEm: { gte: desdeHoje } },
+        select: { atendenteNome: true, motivo: true },
+      }),
       prisma.conversa.findMany({
         where: { statusAtendimento: "pendente", arquivada: false, oculta: false },
         select: {
@@ -318,10 +365,17 @@ class PainelService {
         rotulo: zerado ? "desde a limpeza" : "mês corrente",
         zeradoEm: zerado ? zerado.toISOString() : null,
       },
-      ranking: this._ranking(doMes, { equipe: daSede }),
+      // A PAREDE MOSTRA QUEM ESTA ZERADO TAMBEM -- a pedido de quem usa a tela.
+      //
+      // Ela escondia zero ponto ("ha podio, e nao lanterna"), e o efeito no
+      // comeco do mes era um painel com tres caixas "em aberto" e "Ninguem
+      // pontuou ainda": a TV ficava dias sem dizer nada, justamente quando a
+      // equipe olha mais. Com os nomes na tela, o zero e ponto de partida
+      // visivel em vez de ausencia.
+      ranking: this._ranking(doMes, { equipe: daSede, incluirZerados: true, regras }),
       csat: this._csat(doMes),
       tempos: this._tempos(doMes),
-      hoje: { fechados: fechadosHoje, meta },
+      hoje: { fechados: fechadosDeHoje.filter(resolvidoPorAtendente).length, meta },
       equipe: this._equipe(equipe, carga),
       fila: this._fila(fila, acesso),
     };
@@ -362,7 +416,37 @@ class PainelService {
    * nao tem tres notas pontua ZERO ali, e a tela diz que esta faltando (ver
    * `aCaminho`), em vez de fingir que a pessoa e ruim de nota.
    */
-  _ranking(atendimentos, { limite = TOP, incluirZerados = false, equipe = null } = {}) {
+  /**
+   * Os tetos padrao das tres parcelas -- a FONTE do que a tela de configuracao
+   * oferece como "restaurar", sem repetir os numeros num segundo lugar.
+   */
+  regrasPadrao() {
+    return sedeRegras.padraoDe({ PESO_NOTA, MINIMO_AVALIACOES, FAIXAS_VOLUME, FAIXAS_AGILIDADE });
+  }
+
+  regras() {
+    return sedeRegras.obter(this.regrasPadrao());
+  }
+
+  salvarRegras(entrada, autor) {
+    return sedeRegras.salvar(entrada, this.regrasPadrao(), autor);
+  }
+
+  _ranking(atendimentos, { limite = TOP, incluirZerados = false, equipe = null, regras = null } = {}) {
+    /**
+     * AS FAIXAS ESCALAM COM O PESO CONFIGURADO.
+     *
+     * FAIXAS_VOLUME e FAIXAS_AGILIDADE foram escritas para os tetos padrao. Se
+     * ficassem cravadas, mexer no peso quase nao mudaria nada e a tela passaria
+     * a mentir sobre a propria regra -- "atendimentos vale 50" com o maximo real
+     * em 35. Reescalar mantem a FORMA da escada (os degraus, e onde ficam) e
+     * muda so o quanto ela vale no total, que e o que o peso significa.
+     */
+    const padrao = this.regrasPadrao();
+    const pesos = { ...padrao.pesos, ...(regras?.pesos || {}) };
+    const minimoNotas = regras?.minimoAvaliacoes ?? MINIMO_AVALIACOES;
+    const escalar = (pontos, tetoPadrao, tetoAtual) =>
+      tetoPadrao === tetoAtual ? pontos : Math.round((pontos / tetoPadrao) * tetoAtual);
     const porPessoa = new Map();
     for (const a of atendimentos) {
       // SO GENTE ENTRA NO RANKING DE GENTE.
@@ -406,20 +490,37 @@ class PainelService {
       if (a.atendidoEm) p.assumir.push((new Date(a.atendidoEm) - new Date(a.abertoEm)) / 1000);
     }
 
+    /**
+     * QUEM ESTA NA EQUIPE E NAO TEM LINHA NENHUMA ENTRA ZERADO.
+     *
+     * O agrupamento acima so conhece quem aparece em algum atendimento. No
+     * comeco do mes -- ou logo depois de uma limpeza -- isso e ninguem, e a
+     * parede ficava com tres caixas "em aberto" e "Ninguem pontuou ainda".
+     *
+     * Semeando a equipe, o zero passa a ser um ponto de partida com nome. So faz
+     * sentido com `incluirZerados`: no modo de podio, uma linha "0 pts" e
+     * exatamente o que nao se quer expor.
+     */
+    if (incluirZerados && equipe?.size) {
+      for (const nome of equipe) {
+        if (!porPessoa.has(nome)) porPessoa.set(nome, { nome, fechados: 0, notas: [], assumir: [] });
+      }
+    }
+
     const pessoas = [...porPessoa.values()];
 
     const pontuadas = pessoas.map((p) => {
       const notaMedia = p.notas.length ? media(p.notas) : null;
-      const notaConta = p.notas.length >= MINIMO_AVALIACOES;
+      const notaConta = p.notas.length >= minimoNotas;
       // MEDIANA, e nao media -- ver a nota em `mediana`. O campo continua se
       // chamando `medioSeg` porque e o nome que a parede e a Visao Geral leem;
       // trocar o nome do campo por causa da mudanca de calculo quebraria as
       // duas telas sem nenhum ganho para quem olha.
       const assumirTipico = p.assumir.length ? Math.round(mediana(p.assumir)) : null;
 
-      const ptsAtendimentos = pontosDeVolume(p.fechados);
-      const ptsNota = notaConta ? Math.round(notaMedia * PESO_NOTA) : 0;
-      const ptsAgilidade = pontosDeAgilidade(assumirTipico);
+      const ptsAtendimentos = escalar(pontosDeVolume(p.fechados), padrao.pesos.atendimentos, pesos.atendimentos);
+      const ptsNota = notaConta ? Math.round((notaMedia / 5) * pesos.nota) : 0;
+      const ptsAgilidade = escalar(pontosDeAgilidade(assumirTipico), padrao.pesos.agilidade, pesos.agilidade);
 
       return {
         nome: p.nome,
@@ -467,18 +568,18 @@ class PainelService {
     return {
       classificacao,
       aCaminho,
-      minimoAvaliacoes: MINIMO_AVALIACOES,
+      minimoAvaliacoes: minimoNotas,
       // Os TETOS de cada parcela, para a tela escrever a regra sem repetir os
       // numeros do servidor num texto que envelhece sozinho.
       pesos: {
         nota: PESO_NOTA,
         agilidade: FAIXAS_AGILIDADE,
         volume: FAIXAS_VOLUME,
-        tetos: {
-          atendimentos: FAIXAS_VOLUME[0].pontos,
-          nota: 5 * PESO_NOTA,
-          agilidade: FAIXAS_AGILIDADE[0].pontos,
-        },
+        // Os tetos EM VIGOR (o padrao, com o que o administrador configurou por
+        // cima) -- e nao as constantes. A tela escreve "volume de atendimentos
+        // (35)" a partir daqui; com o valor cravado, ela continuaria dizendo 35
+        // depois de alguem trocar para 50.
+        tetos: { ...pesos },
       },
     };
   }
@@ -532,6 +633,7 @@ class PainelService {
       // O mesmo recorte da parede, pelo mesmo motivo: e o ranking de
       // atendimento da SEDE, e nao "todo mundo que ja fechou uma OS".
       equipe: await nomesDaEquipe(prisma, "sede"),
+      regras: await this.regras(),
     });
 
     const comUltimo = await Promise.all(
@@ -611,7 +713,7 @@ class PainelService {
     // equipe de tres pessoas.
     return {
       periodo: { inicio: inicio.toISOString(), fim: fim.toISOString() },
-      ...this._ranking(doMes, { limite: Number.MAX_SAFE_INTEGER, incluirZerados: true }),
+      ...this._ranking(doMes, { limite: Number.MAX_SAFE_INTEGER, incluirZerados: true, regras: await this.regras() }),
     };
   }
 
@@ -727,7 +829,16 @@ class PainelService {
     const ateResolver = [];
     for (const a of atendimentos) {
       if (a.atendidoEm) ateAssumir.push((new Date(a.atendidoEm) - new Date(a.abertoEm)) / 1000);
-      if (a.fechadoEm) ateResolver.push((new Date(a.fechadoEm) - new Date(a.abertoEm)) / 1000);
+      // "TEMPO ATE RESOLVER" so conta o que ALGUEM resolveu.
+      //
+      // Contava todo fechamento, inclusive os do bot -- e os do bot sao os mais
+      // rapidos que existem (o fluxo encerra em segundos) e os mais lentos que
+      // existem (inatividade fecha horas depois). Os dois puxavam a media para
+      // lados opostos, e o numero na parede deixava de responder a pergunta que
+      // ele faz: quanto tempo a equipe leva para resolver um caso.
+      if (a.fechadoEm && resolvidoPorAtendente(a)) {
+        ateResolver.push((new Date(a.fechadoEm) - new Date(a.abertoEm)) / 1000);
+      }
     }
     return {
       assumirMedioSeg: Math.round(media(ateAssumir)),
