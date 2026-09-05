@@ -53,28 +53,80 @@ const MINIMO_AVALIACOES = 3;
 // conta visivel, e nao de um oraculo. Foi essa visibilidade que tornou o card
 // unico defensavel; sem ela, a recusa antiga continuaria certa.
 //
-// Cada atendimento fechado vale 1 ponto, entao a nota precisa de um peso para
-// nao virar ruido ao lado de dezenas de atendimentos: com 8, um mes impecavel
-// (5,0) vale 40 pontos -- o equivalente a 40 atendimentos. E deliberado que
-// atender bem pese tanto quanto atender muito.
-const PESO_NOTA = 8;
-
-// Agilidade em FAIXAS, e nao proporcional ao tempo.
+// ── OS PESOS, E POR QUE ELES MUDARAM ───────────────────────────────────────
 //
-// Proporcional premiaria cada segundo economizado, e numa parede isso vira
-// pressa: vale a pena assumir a conversa so para parar o relogio, mesmo sem
-// poder atender. Faixa larga premia o habito ("assumo rapido") e para de
-// premiar depois -- entre 30 s e 90 s nao ha vantagem a perseguir.
-const FAIXAS_AGILIDADE = [
-  { ateSeg: 120, pontos: 20 },
-  { ateSeg: 300, pontos: 15 },
-  { ateSeg: 600, pontos: 10 },
-  { ateSeg: 1200, pontos: 5 },
+// Ate aqui era: 1 ponto por atendimento, nota x 8 (ate 40) e agilidade em
+// faixas (ate 20). A justificativa escrita era que "40 pontos equivalem a 40
+// atendimentos", e ela dependia de uma premissa que a operacao nao confirmou:
+// que as pessoas fechassem dezenas de atendimentos por mes. Fecham de 2 a 8.
+//
+// Com esse volume real, o peso virava outra coisa: qualidade valia ~87% da
+// nota final e volume ~13%. Um mes de 8 atendimentos com nota 5,0 perdia para
+// um de 3 atendimentos com nota 5,0 -- porque os 5 atendimentos a mais valiam 5
+// pontos, e um degrau de agilidade valia 20. O ranking premiava atender POUCO e
+// bem, que nao e o que a equipe faz nem o que a empresa quer.
+//
+// Agora as tres parcelas sao COMPARAVEIS entre si e somam 100:
+//
+//   atendimentos   ate 35    (FAIXAS_VOLUME)
+//   nota media     ate 35    (5,0 x PESO_NOTA)
+//   agilidade      ate 30    (FAIXAS_AGILIDADE)
+//
+// A conta continua VISIVEL parcela a parcela na tela -- que sempre foi a
+// condicao para um numero unico ser defensavel. Quem discorda do peso discorda
+// de uma conta a vista.
+const PESO_NOTA = 7;
+
+/**
+ * Volume em FAIXAS, e nao pontos por unidade.
+ *
+ * Ponto por unidade transforma o ultimo dia do mes em corrida: fechar mais uma
+ * OS vale exatamente X, sempre, e ha como perseguir isso fechando conversa que
+ * ainda nao acabou. A faixa premia a ORDEM DE GRANDEZA do mes e para de premiar
+ * dentro dela -- entre 6 e 7 atendimentos nao ha vantagem a caçar.
+ *
+ * O teto existe porque a soma precisa fechar em 100. Ele so morde a partir de
+ * 10 atendimentos no mes, acima do que a equipe faz hoje; se a operacao crescer,
+ * e aqui que se mexe.
+ */
+const FAIXAS_VOLUME = [
+  { aPartirDe: 10, pontos: 35 },
+  { aPartirDe: 8, pontos: 30 },
+  { aPartirDe: 6, pontos: 24 },
+  { aPartirDe: 4, pontos: 17 },
+  { aPartirDe: 2, pontos: 9 },
+  { aPartirDe: 1, pontos: 4 },
 ];
 
-function pontosDeAgilidade(medioSeg) {
-  if (medioSeg == null) return 0;
-  return FAIXAS_AGILIDADE.find((f) => medioSeg <= f.ateSeg)?.pontos || 0;
+function pontosDeVolume(fechados) {
+  return FAIXAS_VOLUME.find((f) => fechados >= f.aPartirDe)?.pontos || 0;
+}
+
+/**
+ * Agilidade em FAIXAS, e nao proporcional ao tempo.
+ *
+ * Proporcional premiaria cada segundo economizado, e numa parede isso vira
+ * pressa: vale a pena assumir a conversa so para parar o relogio, mesmo sem
+ * poder atender. Faixa larga premia o habito ("assumo rapido") e para de
+ * premiar depois -- entre 30 s e 90 s nao ha vantagem a perseguir.
+ *
+ * AS FAIXAS DE CIMA SAO NOVAS. Antes a escada terminava em 20 minutos e tudo
+ * acima dava zero: 21 minutos valia o mesmo que dois dias. Como quem assume
+ * MAIS conversa acumula mais fila, o zerao caia justamente sobre quem mais
+ * atende -- a parcela punia o volume que a parcela de cima premiava.
+ */
+const FAIXAS_AGILIDADE = [
+  { ateSeg: 120, pontos: 30 },
+  { ateSeg: 300, pontos: 25 },
+  { ateSeg: 600, pontos: 20 },
+  { ateSeg: 1200, pontos: 14 },
+  { ateSeg: 2700, pontos: 8 },
+  { ateSeg: 7200, pontos: 4 },
+];
+
+function pontosDeAgilidade(segundos) {
+  if (segundos == null) return 0;
+  return FAIXAS_AGILIDADE.find((f) => segundos <= f.ateSeg)?.pontos || 0;
 }
 
 const inicioDoDia = () => {
@@ -91,6 +143,29 @@ const inicioDoMes = () => {
 };
 
 const media = (lista) => (lista.length ? lista.reduce((a, b) => a + b, 0) / lista.length : 0);
+
+/**
+ * A MEDIANA -- usada no tempo ate assumir, e nao a media.
+ *
+ * Aqui a amostra e pequena de proposito: um mes tem 2 a 8 atendimentos por
+ * pessoa. Nessa escala UMA conversa esquecida uma tarde inteira arrasta a media
+ * do mes inteiro -- sete atendimentos de 5 minutos e um de seis horas dao media
+ * de 50 minutos, e a pessoa perde a parcela como se demorasse sempre.
+ *
+ * A mediana responde a pergunta que o ranking quer fazer ("essa pessoa costuma
+ * assumir rapido?") e nao a que a media responde ("quanto tempo somado o
+ * cliente esperou?"). A segunda tem valor, e por isso continua sendo a media no
+ * indicador de operacao la embaixo do painel -- ali a conversa esquecida DEVE
+ * aparecer.
+ */
+const mediana = (lista) => {
+  if (!lista.length) return 0;
+  const ordenada = [...lista].sort((a, b) => a - b);
+  const meio = Math.floor(ordenada.length / 2);
+  // Par: a media dos dois centrais, senao a mediana pularia entre dois valores
+  // conforme entra ou sai um atendimento.
+  return ordenada.length % 2 ? ordenada[meio] : (ordenada[meio - 1] + ordenada[meio]) / 2;
+};
 
 /**
  * O MARCO DE ZERAMENTO DO PAINEL -- "Limpar dados do painel da equipe".
@@ -262,15 +337,30 @@ class PainelService {
    *
    * O que cada pessoa junta no mes:
    *
-   *   atendimentos fechados      1 ponto cada
-   *   nota media x PESO_NOTA     so a partir de MINIMO_AVALIACOES notas
-   *   agilidade (ate assumir)    faixa fixa, ver FAIXAS_AGILIDADE
+   *   atendimentos AVALIADOS     faixa, ate 35   (FAIXAS_VOLUME)
+   *   nota media x PESO_NOTA     ate 35, a partir de MINIMO_AVALIACOES notas
+   *   agilidade (ate assumir)    faixa, ate 30   (FAIXAS_AGILIDADE)
    *
-   * O MINIMO DE AVALIACOES SOBREVIVEU A UNIFICACAO, e isso importa: sem ele,
-   * uma unica nota 5 valeria 40 pontos -- mais do que um mes inteiro de
-   * atendimento de muita gente -- e o ranking voltaria a ser sorteio. Quem
-   * ainda nao tem tres notas pontua ZERO nessa parcela, e a tela diz que esta
-   * faltando (ver `aCaminho`), em vez de fingir que a pessoa e ruim de nota.
+   * ── SO PONTUA ATENDIMENTO QUE O CLIENTE AVALIOU ────────────────────────────
+   *
+   * As tres parcelas saem do MESMO conjunto: os atendimentos fechados que
+   * receberam nota. Fechar sem avaliacao nao vale ponto nenhum -- nem de
+   * volume, nem de agilidade.
+   *
+   * E uma decisao com consequencia, e ela e o ponto: antes o volume contava
+   * atendimento que ninguem confirmou que deu certo, e a nota so podia falar do
+   * pedaco avaliado. Eram duas bases diferentes na mesma soma. Agora o ranking
+   * mede uma coisa so -- atendimento com desfecho conhecido -- e "pedir a
+   * avaliacao" passa a fazer parte de fechar bem.
+   *
+   * O preco esta assumido: um mes cheio de atendimentos sem nota pontua pouco.
+   * A tela mostra a parcela separada, entao da para ver que o que faltou foi
+   * avaliacao, e nao trabalho.
+   *
+   * O MINIMO DE AVALIACOES continua valendo para a parcela da NOTA: sem ele,
+   * uma unica nota 5 valeria 35 pontos e o ranking viraria sorteio. Quem ainda
+   * nao tem tres notas pontua ZERO ali, e a tela diz que esta faltando (ver
+   * `aCaminho`), em vez de fingir que a pessoa e ruim de nota.
    */
   _ranking(atendimentos, { limite = TOP, incluirZerados = false, equipe = null } = {}) {
     const porPessoa = new Map();
@@ -297,10 +387,17 @@ class PainelService {
       // Conjunto VAZIO nao filtra nada -- e antes de alguem marcar a equipe em
       // Gestao da Equipe, um filtro vazio apagaria a parede inteira.
       if (equipe && equipe.size && !equipe.has(nome)) continue;
+      // SO PONTUA O QUE O CLIENTE AVALIOU (ver o cabecalho deste metodo).
+      //
+      // O corte tambem e na ENTRADA, e nao em cada parcela, para que as tres
+      // saiam da MESMA base. Contar volume de um conjunto e nota de outro faria
+      // a soma juntar duas medidas de coisas diferentes -- que era exatamente o
+      // que acontecia antes.
+      if (a.status !== "fechada" || typeof a.avaliacao !== "number") continue;
       if (!porPessoa.has(nome)) porPessoa.set(nome, { nome, fechados: 0, notas: [], assumir: [] });
       const p = porPessoa.get(nome);
-      if (a.status === "fechada") p.fechados += 1;
-      if (typeof a.avaliacao === "number") p.notas.push(a.avaliacao);
+      p.fechados += 1;
+      p.notas.push(a.avaliacao);
       // O MESMO "tempo ate assumir" do indicador da faixa de baixo, so que por
       // pessoa. E ate o CLIQUE em atender (`atendidoEm`), e nao ate a primeira
       // mensagem: medir a primeira mensagem exige abrir todas as mensagens de
@@ -314,11 +411,15 @@ class PainelService {
     const pontuadas = pessoas.map((p) => {
       const notaMedia = p.notas.length ? media(p.notas) : null;
       const notaConta = p.notas.length >= MINIMO_AVALIACOES;
-      const assumirMedio = p.assumir.length ? Math.round(media(p.assumir)) : null;
+      // MEDIANA, e nao media -- ver a nota em `mediana`. O campo continua se
+      // chamando `medioSeg` porque e o nome que a parede e a Visao Geral leem;
+      // trocar o nome do campo por causa da mudanca de calculo quebraria as
+      // duas telas sem nenhum ganho para quem olha.
+      const assumirTipico = p.assumir.length ? Math.round(mediana(p.assumir)) : null;
 
-      const ptsAtendimentos = p.fechados;
+      const ptsAtendimentos = pontosDeVolume(p.fechados);
       const ptsNota = notaConta ? Math.round(notaMedia * PESO_NOTA) : 0;
-      const ptsAgilidade = pontosDeAgilidade(assumirMedio);
+      const ptsAgilidade = pontosDeAgilidade(assumirTipico);
 
       return {
         nome: p.nome,
@@ -326,7 +427,7 @@ class PainelService {
         atendimentos: { valor: p.fechados, pontos: ptsAtendimentos },
         // `conta` e o que a tela usa para escrever "1 de 3" em vez de "0,0".
         nota: { valor: notaMedia, amostra: p.notas.length, conta: notaConta, pontos: ptsNota },
-        agilidade: { medioSeg: assumirMedio, amostra: p.assumir.length, pontos: ptsAgilidade },
+        agilidade: { medioSeg: assumirTipico, amostra: p.assumir.length, pontos: ptsAgilidade },
       };
     });
 
@@ -367,7 +468,18 @@ class PainelService {
       classificacao,
       aCaminho,
       minimoAvaliacoes: MINIMO_AVALIACOES,
-      pesos: { nota: PESO_NOTA, agilidade: FAIXAS_AGILIDADE },
+      // Os TETOS de cada parcela, para a tela escrever a regra sem repetir os
+      // numeros do servidor num texto que envelhece sozinho.
+      pesos: {
+        nota: PESO_NOTA,
+        agilidade: FAIXAS_AGILIDADE,
+        volume: FAIXAS_VOLUME,
+        tetos: {
+          atendimentos: FAIXAS_VOLUME[0].pontos,
+          nota: 5 * PESO_NOTA,
+          agilidade: FAIXAS_AGILIDADE[0].pontos,
+        },
+      },
     };
   }
 

@@ -15,12 +15,19 @@
  *
  * ── POR QUE OS DOIS NUNCA SE MISTURAM ──────────────────────────────────────
  *
- * Nao e so uma separacao de tela: os totais nem sao comparaveis. Na sede o teto
- * cresce com o volume (cada atendimento vale 1 ponto, sem limite); no externo o
- * teto e 100, fechado. Um mes forte na sede passa de 100 com facilidade, e uma
- * tabela unica faria a equipe externa parecer sempre pior por causa da escala,
- * nao do trabalho. Por isso nao existe endpoint que devolva os dois juntos
- * numa lista so.
+ * Os dois vao de 0 a 100 -- e a coincidencia de escala e justamente a armadilha
+ * a evitar. Numeros do mesmo tamanho parecem comparaveis, e nao sao: 80 na sede
+ * quer dizer "fechou bastante, com nota alta e assumindo rapido"; 80 no externo
+ * quer dizer "entregou relatorio completo, no prazo, com foto e sem voltar para
+ * correcao". Sao trabalhos diferentes medidos por criterios diferentes; somar,
+ * ordenar junto ou dizer que um esta "a frente" do outro nao significa nada.
+ *
+ * (Ate a mudanca de peso a sede nao tinha teto -- cada atendimento valia 1
+ * ponto, sem limite -- e o argumento contra misturar era a escala. O argumento
+ * agora e mais forte, e nao mais fraco: era possivel achar que os dois eram
+ * comparaveis se so a regua fosse ajustada, e nao sao.)
+ *
+ * Por isso nao existe endpoint que devolva os dois juntos numa lista so.
  *
  * ── NADA DE RANKING E GUARDADO ─────────────────────────────────────────────
  *
@@ -159,7 +166,11 @@ class RankingService {
         // As MESMAS parcelas que o painel ja devolve. Renomear aqui criaria um
         // vocabulario paralelo para a mesma conta.
         criterios: [
-          { chave: "atendimentos", rotulo: "Atendimentos", valor: p?.atendimentos.valor ?? 0, pontos: p?.atendimentos.pontos ?? 0 },
+          // "avaliados" no rotulo porque o numero mudou de significado: so
+          // entra atendimento fechado que o cliente avaliou. Um rotulo que
+          // continuasse dizendo "Atendimentos" faria a pessoa procurar defeito
+          // ao ver 3 onde ela fechou 8.
+          { chave: "atendimentos", rotulo: "Atendimentos avaliados", valor: p?.atendimentos.valor ?? 0, pontos: p?.atendimentos.pontos ?? 0 },
           {
             chave: "nota",
             rotulo: "Avaliação média",

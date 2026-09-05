@@ -286,7 +286,7 @@ function DestaqueDoMes({ item, minimo, periodo }) {
 
           <div className="shrink-0">
             <LinhaIndicador
-              rotulo="Atendimentos"
+              rotulo="Atend. avaliados"
               valor={item.atendimentos.valor}
               pontos={item.atendimentos.pontos}
             />
@@ -413,7 +413,7 @@ function LinhaPosicao({ posicao, item, minimo }) {
               {nomeCurto(item.nome)}
             </span>
             <span className="block truncate text-slate-400 tabular-nums" style={T.apoio}>
-              {item.atendimentos.valor} atend. ·{' '}
+              {item.atendimentos.valor} aval. ·{' '}
               {item.nota.conta ? `${nota1(item.nota.valor)} ★` : `${item.nota.amostra} de ${minimo} ★`} ·{' '}
               {duracao(item.agilidade.medioSeg)}
             </span>
@@ -442,7 +442,7 @@ function Classificacao({ itens, aCaminho, minimo }) {
       <div className="flex items-center justify-between gap-3 shrink-0">
         <Rotulo icon={Medal}>Classificação do mês</Rotulo>
         <span className="shrink-0 text-slate-500 truncate" style={T.apoio}>
-          atend. + nota×8 + agilidade
+          avaliados + nota + agilidade
         </span>
       </div>
 

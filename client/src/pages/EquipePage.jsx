@@ -215,9 +215,9 @@ export default function EquipePage() {
    *
    * As duas marcacoes CONVIVEM: ha quem atenda no chat e tambem visite cliente,
    * e cada funcao precisa ser medida pelo criterio dela. Isso nao mistura os
-   * rankings -- as listas seguem separadas, e as pontuacoes usam reguas
-   * diferentes (a da sede nao tem teto; a externa para em 100), entao elas
-   * nunca se somam.
+   * rankings -- as listas seguem separadas, e as duas pontuacoes vao de 0 a 100
+   * medindo coisas diferentes (atendimento avaliado de um lado, relatorio de
+   * visita do outro), entao elas nunca se somam.
    *
    * Vai a LISTA FINAL, e nao "adicione esta". Mesma escolha do `alternarSetor`
    * acima: com "adicione/remova", duas abas abertas na mesma pessoa poderiam

@@ -647,7 +647,7 @@ export default function Rankings() {
                     <th className="text-left py-2 px-3 font-bold text-texto-suave">Funcionário</th>
                     <th className="text-right py-2 px-3 font-bold text-texto-suave w-20">Pontos</th>
                     <th className="text-right py-2 px-3 font-bold text-texto-suave w-24 hidden lg:table-cell">
-                      {aba === 'sede' ? 'Atend.' : 'Relatórios'}
+                      {aba === 'sede' ? 'Avaliados' : 'Relatórios'}
                     </th>
                     <th className="text-left py-2 px-3 font-bold text-texto-suave hidden lg:table-cell">Último atendimento</th>
                     <th className="text-left py-2 px-3 font-bold text-texto-suave w-24 hidden sm:table-cell">Evolução</th>
@@ -670,9 +670,17 @@ export default function Rankings() {
             <p className="text-[10px] text-texto-fraco mt-3 leading-relaxed">
               {aba === 'sede' ? (
                 <>
-                  Pontuação: 1 ponto por atendimento fechado, nota média × {dados?.pesos?.nota ?? 8} (a partir
-                  de {dados?.minimoAvaliacoes ?? 3} notas) e uma faixa fixa por agilidade até assumir.
-                  {' '}É exatamente a mesma conta do painel de parede e da Visão Geral.
+                  {/* Os tetos vêm do SERVIDOR, e não escritos aqui: um texto
+                      com os números copiados envelhece calado no dia em que
+                      alguém mexe no peso, e passa a explicar outra conta. */}
+                  Pontuação de 0 a 100: volume de atendimentos ({dados?.pesos?.tetos?.atendimentos ?? 35}),
+                  nota média × {dados?.pesos?.nota ?? 7} ({dados?.pesos?.tetos?.nota ?? 35}, a partir
+                  de {dados?.minimoAvaliacoes ?? 3} notas) e agilidade até
+                  assumir ({dados?.pesos?.tetos?.agilidade ?? 30}).
+                  {' '}<strong className="text-texto-suave">Só pontua atendimento fechado que o cliente
+                  avaliou</strong> as três parcelas saem da mesma base.
+                  {' '}A agilidade usa a mediana, para que uma conversa esquecida não derrube o mês inteiro.
+                  {' '}É exatamente a mesma conta do painel de parede.
                 </>
               ) : (
                 <>

@@ -9,9 +9,9 @@
 //
 //   o supervisor competindo    quem valida o mapeamento e corrige pontuacao nao
 //                              pode disputar o premio com quem ele avalia;
-//   os dois rankings juntos    escalas diferentes (sede nao tem teto, externo
-//                              para em 100) -- misturar faz a equipe externa
-//                              parecer pior por causa da regua, nao do trabalho;
+//   os dois rankings juntos    os dois vao de 0 a 100, mas medem trabalhos
+//                              diferentes -- misturar faz a equipe externa
+//                              parecer pior por causa do criterio, nao do trabalho;
 //   amostra de um              uma unica visita perfeita nao pode valer o mes;
 //   premiar quem nao ganhou    o vencedor sai do ranking calculado, nunca do
 //                              corpo da requisicao.
@@ -116,10 +116,14 @@ async function main() {
   const sede = await rankingService.obter("sede", COMP);
 
   for (const p of sede.classificacao) {
+    // AUSENTE VALE ZERO, e nao "erro": desde que so pontua atendimento
+    // avaliado, quem fechou o mes inteiro sem receber nota nenhuma nao vira
+    // linha no painel. Nas duas telas ele soma zero -- que e a igualdade que
+    // esta secao existe para provar.
     const noPainel = doPainel.classificacao.find((x) => x.nome === p.nome);
     check(
-      !!noPainel && noPainel.pontos === p.pontos,
-      `${p.nome}: ${p.pontos} pts aqui e ${noPainel?.pontos} no painel`
+      (noPainel?.pontos ?? 0) === p.pontos,
+      `${p.nome}: ${p.pontos} pts aqui e ${noPainel?.pontos ?? 0} no painel`
     );
   }
   // As PARCELAS tambem, e nao so o total: o pedido era mostrar por que a pessoa
@@ -137,6 +141,72 @@ async function main() {
   );
 
   /**
+   * 1a. AS TRES PARCELAS, E A BASE DE ONDE ELAS SAEM.
+   *
+   * A pontuacao foi reequilibrada porque a antiga premiava atender POUCO e bem:
+   * volume valia 1 ponto por atendimento (13% do total) contra 40 da nota e 20
+   * da agilidade. Agora e 35 / 35 / 30, e as tres saem da MESMA base -- os
+   * atendimentos fechados que o cliente avaliou.
+   *
+   * Estes numeros sao a regra escrita em teste. Mudar um peso sem passar por
+   * aqui e mudar quem leva a premiacao sem ninguem perceber.
+   */
+  titulo("1a. AS TRES PARCELAS SOMAM ATE 100, DA MESMA BASE");
+
+  const anaCrit = Object.fromEntries(
+    sede.classificacao.find((p) => p.nome === ana.nome).criterios.map((c) => [c.chave, c])
+  );
+  // Ana: 3 fechados AVALIADOS com nota 5, assumidos na hora.
+  check(anaCrit.atendimentos.valor === 3, `volume conta os avaliados (${anaCrit.atendimentos.valor})`);
+  check(anaCrit.atendimentos.pontos === 9, `3 avaliados = 9 pts de volume (${anaCrit.atendimentos.pontos})`);
+  check(anaCrit.nota.pontos === 35, `nota 5,0 x 7 = 35 pts, o teto da parcela (${anaCrit.nota.pontos})`);
+  check(anaCrit.agilidade.pontos === 30, `assumir na hora = 30 pts, o teto (${anaCrit.agilidade.pontos})`);
+  check(
+    anaCrit.atendimentos.pontos + anaCrit.nota.pontos + anaCrit.agilidade.pontos === 74,
+    "as parcelas somam o total (9 + 35 + 30 = 74)"
+  );
+  // O TETO existe e e 100: sem ele a soma nao teria significado nenhum.
+  check(
+    doPainel.pesos.tetos.atendimentos + doPainel.pesos.tetos.nota + doPainel.pesos.tetos.agilidade === 100,
+    `os tres tetos somam 100 (${doPainel.pesos.tetos.atendimentos} + ${doPainel.pesos.tetos.nota} + ${doPainel.pesos.tetos.agilidade})`
+  );
+
+  // FECHAR SEM AVALIACAO NAO PONTUA -- o pedido, e o que mais muda na pratica.
+  const brunoSede = sede.classificacao.find((p) => p.nome === bruno.nome);
+  const brunoCrit = Object.fromEntries(brunoSede.criterios.map((c) => [c.chave, c]));
+  check(brunoSede.pontos === 0, `1 atendimento fechado SEM avaliacao vale 0 (${brunoSede.pontos} pts)`);
+  check(brunoCrit.atendimentos.valor === 0, "e nem conta como volume: o nao avaliado nao entra na base");
+  check(
+    !doPainel.classificacao.some((p) => p.nome === bruno.nome),
+    "e ele nao vira linha no painel de parede"
+  );
+  // Ainda aparece na tabela da Visao Geral, com zero: sumir da lista faria
+  // parecer que a pessoa nao existe, quando o que faltou foi avaliacao.
+  check(!!brunoSede, "mas continua na tabela da Visao Geral, com zero");
+
+  // A MEDIANA no lugar da media: uma conversa esquecida nao derruba o mes.
+  // Sete atendimentos assumidos em 60 s e um em 6 h dao media de ~45 min
+  // (8 pts) e mediana de 60 s (30 pts).
+  const cMediana = await conversa("mediana");
+  const zoe = await criarUsuario("Zoe", { equipeRanking: "sede" });
+  for (let i = 0; i < 7; i += 1) {
+    await os(cMediana.id, zoe.nome, {
+      status: "fechada", avaliacao: 5,
+      abertoEm: noMes(5, 9), atendidoEm: new Date(noMes(5, 9).getTime() + 60_000), fechadoEm: noMes(5, 11),
+    });
+  }
+  await os(cMediana.id, zoe.nome, {
+    status: "fechada", avaliacao: 5,
+    abertoEm: noMes(5, 9), atendidoEm: new Date(noMes(5, 9).getTime() + 6 * 3600_000), fechadoEm: noMes(5, 16),
+  });
+  const comOutlier = await painelService.rankingDoMes(hoje.getFullYear(), hoje.getMonth() + 1);
+  const zoeP = comOutlier.classificacao.find((p) => p.nome === zoe.nome);
+  check(
+    zoeP?.agilidade.pontos === 30,
+    `uma conversa esquecida nao derruba o mes: ${zoeP?.agilidade.medioSeg}s tipicos, ${zoeP?.agilidade.pontos} pts`
+  );
+
+  /**
    * 1b. A PAREDE MOSTRA O MESMO RANKING QUE A VISAO GERAL.
    *
    * O defeito que isto tranca: a TV coroava "Davi" como lider do mes -- 9
@@ -150,6 +220,9 @@ async function main() {
    */
   titulo("1b. A PAREDE E A VISAO GERAL MOSTRAM O MESMO PODIO");
 
+  // Releitura: a secao 1a criou mais gente depois que `sede` foi calculado, e
+  // comparar as duas telas com retratos de instantes diferentes provaria nada.
+  const sedeAgora = await rankingService.obter("sede", COMP);
   const parede = await painelService.obter();
   const nomesNaParede = parede.ranking.classificacao.map((p) => p.nome);
   check(
@@ -161,17 +234,17 @@ async function main() {
     "e tambem fora do 'a caminho da nota', que sai do mesmo agrupamento"
   );
   check(
-    nomesNaParede.every((n) => sede.classificacao.some((p) => p.nome === n)),
+    nomesNaParede.every((n) => sedeAgora.classificacao.some((p) => p.nome === n)),
     `todo nome da parede esta no ranking da sede (${nomesNaParede.join(", ")})`
   );
   // O PODIO, na ordem: nao basta serem as mesmas pessoas.
-  const topSede = sede.classificacao.filter((p) => p.pontos > 0).slice(0, 3).map((p) => p.nome);
+  const topSede = sedeAgora.classificacao.filter((p) => p.pontos > 0).slice(0, 3).map((p) => p.nome);
   check(
     JSON.stringify(nomesNaParede) === JSON.stringify(topSede),
     `mesma ordem nas duas telas (parede: ${nomesNaParede.join(" > ")})`
   );
   const lider = parede.ranking.classificacao[0];
-  const liderNaVisao = sede.classificacao.find((p) => p.nome === lider?.nome);
+  const liderNaVisao = sedeAgora.classificacao.find((p) => p.nome === lider?.nome);
   check(
     !!lider && lider.pontos === liderNaVisao?.pontos,
     `e o lider tem os mesmos pontos nas duas (${lider?.nome}: ${lider?.pontos})`
@@ -364,11 +437,15 @@ async function main() {
   const soRascunho = pontuarExterno([{ status: "rascunho", resumo: "x".repeat(50), itens: itensCheios, evidencias: [1, 2, 3] }]);
   check(soRascunho.pontos === 0, "rascunho nao pontua nada");
 
-  titulo("6. AS DUAS ESCALAS SAO MESMO DIFERENTES (por que nao se misturam)");
+  titulo("6. OS DOIS RANKINGS NAO SE MISTURAM");
+  // Os dois tem o MESMO teto agora, e por isso a checagem mudou de alvo: o que
+  // separa os rankings nao e mais a escala, e sim o criterio. O risco real
+  // passou a ser um endpoint devolver os dois na mesma lista -- e e isso que se
+  // confere aqui e logo abaixo.
   const maiorSede = Math.max(...sede.classificacao.map((p) => p.pontos));
   check(
-    typeof maiorSede === "number",
-    `sede sem teto (maior aqui: ${maiorSede}) x externo com teto de 100 -- reguas diferentes`
+    maiorSede <= 100,
+    `a sede tambem para em 100 (maior aqui: ${maiorSede}) -- tetos iguais, criterios diferentes`
   );
   check(
     sede.ranking === "sede" && externo.ranking === "externo",
