@@ -936,7 +936,11 @@ class WhatsAppService {
       // A tela precisa distinguir "nao pedi codigo" de "pedi e nao veio" --
       // sao duas mensagens diferentes para o operador.
       codigoPedido: !!numero,
-      state: result.raw?.instance?.state || null,
+      // O estado vem do `obterStatus` acima, NAO do corpo do /instance/connect.
+      // Em `connecting` a Evolution devolve so o objeto de qrcode, sem dizer o
+      // estado -- e e justamente nesse caso que a tela precisa saber onde
+      // esta, para explicar por que nao veio QR nem codigo.
+      state: status.state || null,
     };
   }
 }

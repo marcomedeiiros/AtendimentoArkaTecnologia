@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   MessageCircle, Power, QrCode, Loader2, RefreshCw, RotateCcw,
-  Trash2, Copy, Check, ShieldCheck, KeyRound
+  Trash2, Copy, Check, ShieldCheck, KeyRound, PowerOff
 } from 'lucide-react';
 import { EmojiIcon } from '../components/pages/EmojiIcon';
 import { useAppContext } from '../context/AppContext';
@@ -160,11 +160,25 @@ export default function WhatsAppPage() {
         setAviso(
           'A Evolution não devolveu o código de pareamento agora' +
           (r?.state ? ` (instância em "${r.state}")` : '') +
-          '. Ela só emite o código com a instância em "close" — espere o ciclo ' +
+          '. Ela só emite o código com a instância em "close" espere o ciclo ' +
           'atual terminar (até ~1 min) e peça de novo. O QR ao lado continua válido.'
         );
       } else if (!b64 && !r?.pairingCode) {
-        setAviso('A Evolution não retornou QR Code. Se a instância já estiver conectada, desconecte antes de gerar um novo.');
+        // "SE JÁ ESTIVER CONECTADA, DESCONECTE" era um palpite, e quase sempre o
+        // errado: a causa real é a instância presa em `connecting`. Nesse estado
+        // a Evolution devolve o QR que tem em memória -- vazio -- e ignora o
+        // pedido (instance.controller.ts:330). Dizer o estado e o que fazer com
+        // ele vale mais que oferecer a hipótese menos provável.
+        setAviso(
+          r?.state === 'connecting'
+            ? 'A instância está presa em "connecting", e nesse estado a Evolution não ' +
+              'emite QR nem código novos ela devolve o que tem em memória, que está vazio.\n\n' +
+              'Clique em "Encerrar sessão" para derrubar o socket. Assim que o status virar ' +
+              '"Desconectado", peça o QR ou o código de novo.'
+            : 'A Evolution não retornou QR Code' +
+              (r?.state ? ` (instância em "${r.state}")` : '') +
+              '. Se ela já estiver conectada, use "Encerrar sessão" antes de gerar um novo.'
+        );
       }
     } catch (e) {
       // Recusa do próprio servidor: a sessão está viva. Isso não é falha de
@@ -288,11 +302,59 @@ export default function WhatsAppPage() {
   }
 
   /**
+   * ENCERRA A SESSÃO NA EVOLUTION -- o jeito de sair de um `connecting` travado.
+   *
+   * Não é o mesmo que "Excluir instância": a instância continua existindo, com
+   * webhook e token. O que cai é o socket, e a instância vai para `close`.
+   *
+   * Precisa de confirmação porque, se a sessão FOSSE válida, isto a destruiria
+   * -- é literalmente o `logout` do WhatsApp. O texto muda conforme o servidor
+   * já ter concluído que o pareamento se perdeu (`podeMostrarQr`), porque nesses
+   * dois casos o que está em jogo é bem diferente.
+   */
+  async function encerrarSessao() {
+    const ok = await confirmar(
+      podeMostrarQr
+        ? 'Isso derruba a conexão da instância e a leva para o estado "close" ' +
+          'que é o único em que a Evolution emite QR Code e código de pareamento novos.\n\n' +
+          'O pareamento atual já está perdido, então não há nada a perder aqui. ' +
+          'A instância, o webhook e o token continuam como estão.'
+        : 'ATENÇÃO: o servidor considera a sessão VÁLIDA e está reconectando sozinho.\n\n' +
+          'Encerrar a sessão é o logout do WhatsApp: o pareamento é desfeito e ' +
+          'alguém precisará escanear o QR Code (ou digitar o código) de novo.\n\n' +
+          'Se você só quer destravar a conexão, cancele e use "Reconectar".',
+      {
+        titulo: 'Encerrar a sessão do WhatsApp?',
+        rotuloConfirmar: 'Encerrar sessão',
+        perigo: true,
+      }
+    );
+    if (!ok) return;
+
+    setOcupado(true); setAviso('');
+    try {
+      await WhatsAppAPI.desconectar(instancia);
+      setWhatsAppConectado(false);
+      setQrcode(null);
+      setPairingCode(null);
+      setAviso(
+        'Sessão encerrada. Aguarde alguns segundos até o status virar ' +
+        '"Desconectado" e então clique em "Gerar QR" ou "Código por telefone".'
+      );
+      await carregarDetalhes();
+    } catch (e) {
+      erroEvolution(e);
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  /**
    * Pede o código de pareamento para o número informado.
    *
    * O número tem de ser o DO APARELHO que vai parear, com DDI e DDD. Ele não
    * vem de `detalhes.perfil.numero` porque, sem pareamento, esse campo está
-   * vazio — que é exatamente a situação em que este botão existe.
+   * vazio que é exatamente a situação em que este botão existe.
    */
   async function pedirCodigo() {
     const resposta = await pedirTexto(
@@ -310,7 +372,7 @@ export default function WhatsAppPage() {
     if (resposta === null) return;
     const digitos = String(resposta).replace(/\D/g, '');
     if (digitos.length < 12) {
-      avisar('Número incompleto. Use DDI + DDD + número, só dígitos — ex.: 5527210300070.');
+      avisar('Número incompleto. Use DDI + DDD + número, só dígitos ex.: 5527210300070.');
       return;
     }
     await gerarQr({ numero: digitos });
@@ -390,6 +452,19 @@ export default function WhatsAppPage() {
           <button onClick={reconectar} disabled={ocupado} className={botaoSec} title="Recuperar a sessão existente -- não apaga nada e não pede QR">
             <RotateCcw size={14} /> Reconectar
           </button>
+          {/* ENCERRAR SESSÃO -- a saída do `connecting` eterno.
+              Só aparece DESCONECTADO, porque conectado o botão verde à direita
+              já vira "Desconectar". A instância presa em `connecting` é um beco
+              sem saída: nesse estado a Evolution devolve o QR que tem em memória
+              (vazio) e ignora o pedido de código, então nem QR nem pareamento
+              saem. Derrubar o socket a leva para `close`, que é o único estado
+              em que ela emite QR e código novos. */}
+          {!conectado && (
+            <button onClick={encerrarSessao} disabled={ocupado} className={botaoSec}
+              title="Derruba o socket e leva a instância para `close`, liberando QR e código novos">
+              <PowerOff size={14} /> Encerrar sessão
+            </button>
+          )}
           <button onClick={excluirInstancia} disabled={ocupado}
             className="px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all disabled:opacity-60 bg-falha/15 border border-falha/30 text-falha-400 hover:bg-falha/25"
             title="Excluir instância na Evolution">
@@ -465,7 +540,7 @@ export default function WhatsAppPage() {
           </div>
 
           {/* O código é para ser LIDO EM VOZ ALTA por telefone, então ele é o
-              elemento mais legível do cartão — grande, monoespaçado e espaçado.
+              elemento mais legível do cartão grande, monoespaçado e espaçado.
               O passo a passo vem junto porque quem digita do outro lado quase
               nunca sabe onde fica "Conectar com número de telefone". */}
           {pairingCode && (
