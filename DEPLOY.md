@@ -182,8 +182,35 @@ crontab -e
 0 2 * * * cd ~/arka-chat && bash deploy/backup.sh >> ~/arka-backup.log 2>&1
 ```
 
-Como os backups ficam na propria VM, copie a pasta `backups/` para fora
-periodicamente um disco perdido leva o backup junto.
+### Tirar o backup da VM
+
+Backup no mesmo disco do original protege contra o banco corromper. **Nao**
+protege contra o disco falhar, a VM ser apagada ou o provedor suspender a conta
+-- nesses casos o backup vai junto.
+
+O `backup.sh` ja chama `deploy/enviar-backup.sh` sozinho, passando o arquivo
+recem-conferido. Basta o arquivo existir:
+
+```bash
+cp deploy/enviar-backup.exemplo.sh deploy/enviar-backup.sh && nano deploy/enviar-backup.sh
+```
+
+Descomente **uma** das tres opcoes (SSH, S3/B2/Wasabi ou rclone) e preencha o
+destino. Ele nao entra no git de proposito: costuma carregar endereco de
+servidor e caminho de credencial.
+
+Teste antes de confiar nele:
+
+```bash
+bash deploy/backup.sh
+```
+
+A saida tem de trazer `==> Enviando para fora da VM` seguido de `enviado: ...`.
+Enquanto ele nao existir, cada execucao avisa que a copia esta so na maquina.
+
+> Na opcao S3, use credencial que so possa **escrever** no bucket. Se ela puder
+> apagar e alguem tomar a VM, apagam os backups tambem -- que e exatamente o
+> cenario do qual isto deveria proteger.
 
 <details>
 <summary>Restaurar um backup</summary>

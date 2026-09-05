@@ -9,6 +9,30 @@
 # vai para o git.
 name: arka-chat
 
+# ── TETO PARA O LOG, PORQUE SEM ELE NAO HA NENHUM ───────────────────────────
+#
+# O driver padrao do Docker (`json-file`) escreve sem limite: o arquivo de log
+# de cada container so cresce, para sempre. Num disco de 48 GB que ja carrega
+# backups e cache de build, isso e um cronometro -- e quando o disco enche, o
+# Postgres para de escrever e a API para de responder. A stack inteira cai por
+# causa de texto.
+#
+# O risco nao e teorico aqui: em 05/09/2026 a reconexao girou em falso por 6h30
+# escrevendo 4 linhas de log a cada ~60s, e `LOG_BAILEYS=warn` na Evolution
+# soma o trafego do socket. Um incidente longo e justamente quando o log cresce
+# mais depressa -- ou seja, o pior momento possivel para o disco encher.
+#
+# 20 MB x 5 arquivos = teto de 100 MB por container, 400 MB na stack. Suficiente
+# para investigar dias de historico, e um numero que nao surpreende ninguem.
+#
+# YAML anchor para nao repetir quatro vezes: o `<<: *log` em cada servico e a
+# mesma configuracao, e mudar aqui muda em todos.
+x-log: &log
+  driver: "json-file"
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 services:
   # ------------------------------------------------------------------------
   # Painel React ja buildado, servido pelo nginx. E a unica porta publicada
@@ -17,6 +41,7 @@ services:
   web:
     build: ./client
     container_name: arka-web
+    logging: *log
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-80}:80"
@@ -31,6 +56,7 @@ services:
   api:
     build: ./server
     container_name: arka-api
+    logging: *log
     restart: unless-stopped
     env_file:
       - .env
@@ -98,6 +124,7 @@ services:
   evolution-api:
     image: evoapicloud/evolution-api:2.4.0-rc2
     container_name: arka-evolution
+    logging: *log
     restart: unless-stopped
     depends_on:
       evolution-db:
@@ -199,6 +226,7 @@ services:
   evolution-db:
     image: postgres:16-alpine
     container_name: arka-evolution-db
+    logging: *log
     restart: unless-stopped
     environment:
       POSTGRES_USER: evolution
