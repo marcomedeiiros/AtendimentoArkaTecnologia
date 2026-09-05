@@ -132,7 +132,12 @@ function ModalMapeamento({ itensRegra, inicial, onFechar, onSalvo }) {
           <div className="p-4 space-y-3 flex-1 overflow-y-auto min-h-0">
             {/* O PLACAR AO VIVO. É o que transforma o formulário em algo que a
                 pessoa entende antes de entregar, e não depois do fechamento. */}
-            <div className="grid grid-cols-3 gap-2">
+            {/* `flex flex-wrap` e não grade de 3: numa tela estreita os três
+                mostradores ficam com ~100px cada e o rótulo quebra no meio.
+                Assim eles ficam lado a lado quando há espaço e passam para a
+                linha de baixo quando não há -- sem precisar escolher um ponto
+                de quebra fixo. */}
+            <div className="flex flex-wrap gap-2 [&>*]:flex-1 [&>*]:min-w-[7rem]">
               <div className="rounded-xl border border-linha bg-grafite-700 p-2.5 text-center">
                 <p className="text-[10px] uppercase tracking-wider text-texto-fraco font-bold">Completo</p>
                 <p className={`font-display font-extrabold text-lg ${completude >= 80 ? 'text-ativo-400' : completude >= 50 ? 'text-espera-400' : 'text-falha-400'}`}>

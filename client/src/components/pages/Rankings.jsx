@@ -202,30 +202,56 @@ function LinhaTabela({ p, aberta, onAlternar }) {
               }}>
               {iniciais(p.nome)}
             </span>
-            <span className="font-semibold text-xs text-texto truncate">{p.nome}</span>
+            <div className="min-w-0">
+              <span className="font-semibold text-xs text-texto truncate block">{p.nome}</span>
+              {/* NO CELULAR A INFORMAÇÃO DESCE PARA CÁ.
+                  As colunas de registros, último atendimento e evolução somam
+                  quase 400px e obrigavam a rolar a tabela de lado para chegar
+                  aos pontos -- justamente o número pelo qual a tabela existe.
+                  Elas somem nas telas estreitas e o essencial delas aparece
+                  aqui embaixo, numa linha só. */}
+              {/* `max-w` explícito: numa tabela de layout automático o
+                  `truncate` sozinho não segura -- a coluna cresce até caber o
+                  texto inteiro, e uma razão social longa voltaria a empurrar a
+                  largura mínima da tabela para cima. (Sem escrever a tag aqui:
+                  o verificador de responsividade procura a marcação no texto e
+                  acusaria esta linha como uma tabela sem container rolável.) */}
+              <span className="lg:hidden text-[10px] text-texto-fraco truncate block max-w-[11rem]">
+                {p.registros} {p.registros === 1 ? 'registro' : 'registros'}
+                {p.ultimo?.empresa || p.ultimo?.cliente
+                  ? ` · ${p.ultimo.empresa || p.ultimo.cliente}`
+                  : ''}
+              </span>
+            </div>
           </div>
         </td>
         <td className="py-2.5 px-3 text-right font-display font-extrabold tabular-nums text-texto">{p.pontos}</td>
-        <td className="py-2.5 px-3 text-right tabular-nums text-texto-suave text-xs">{p.registros}</td>
+        <td className="py-2.5 px-3 text-right tabular-nums text-texto-suave text-xs hidden lg:table-cell">{p.registros}</td>
         {/* ÚLTIMO ATENDIMENTO -- de qualquer data, e não do mês selecionado.
             São perguntas diferentes: os pontos dizem "como foi o mês", esta
             coluna diz "quando essa pessoa atendeu pela última vez" -- e ela só
             é útil justamente quando a resposta é antiga. */}
-        <td className="py-2.5 px-3 text-[11px] text-texto-suave whitespace-nowrap">
+        {/* Teto de largura + truncate: uma razão social de 50 caracteres
+            ("SALVADOR ASSESSORIA E RECUPERACAO DE CREDITO LTDA") sozinha
+            empurrava a tabela para 817px de largura mínima. O nome inteiro fica
+            no `title`. */}
+        <td className="py-2.5 px-3 text-[11px] text-texto-suave hidden lg:table-cell">
           {p.ultimo ? (
-            <>
-              <span className="text-texto">{p.ultimo.empresa || p.ultimo.cliente || '—'}</span>
-              <span className="text-texto-fraco ml-1.5">
+            <div className="flex items-baseline gap-1.5 min-w-0">
+              <span className="text-texto truncate max-w-[16rem]" title={p.ultimo.empresa || p.ultimo.cliente || ''}>
+                {p.ultimo.empresa || p.ultimo.cliente || '—'}
+              </span>
+              <span className="text-texto-fraco shrink-0">
                 {p.ultimo.quando
                   ? new Date(p.ultimo.quando).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: FUSO_BR })
                   : ''}
               </span>
-            </>
+            </div>
           ) : (
             <span className="text-texto-fraco">—</span>
           )}
         </td>
-        <td className="py-2.5 px-3"><Evolucao estado={p.evolucao} anterior={p.anterior} /></td>
+        <td className="py-2.5 px-3 hidden sm:table-cell"><Evolucao estado={p.evolucao} anterior={p.anterior} /></td>
         <td className="py-2.5 px-3 text-right text-texto-fraco">
           {aberta ? <ChevronDown size={14} className="inline" /> : <ChevronRight size={14} className="inline" />}
         </td>
@@ -437,40 +463,45 @@ export default function Rankings() {
     // da tela faria a aba parecer outra página dentro da página.
     <div className="space-y-4 fade-in">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <p className="text-xs text-texto-fraco">
-          Duas competições separadas as atividades e os indicadores são diferentes.
+        <p className="text-xs text-texto-fraco min-w-0">
+          Duas competições separadas — as atividades e os indicadores são diferentes.
         </p>
-        <div className="flex items-center gap-2">
-          <label className="text-[11px] font-semibold text-texto-suave">Mês</label>
-          <select
-            value={competencia}
-            onChange={(e) => setCompetencia(e.target.value)}
-            className="bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto focus:outline-none focus:border-acao/50"
-          >
-            {meses.map((m) => (
-              <option key={m} value={m}>{rotuloCompetencia(m)}</option>
-            ))}
-          </select>
-        </div>
-      </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        {/* LIMPAR O PAINEL DA EQUIPE.
-            Veio da aba anterior e continua aqui porque é o mesmo assunto --
-            desempenho da equipe. O que ele zera é o MODO TV; esta tela é
-            mensal e não pode ser zerada, senão um mês já premiado sumiria
-            junto. A confirmação diz isso com todas as letras. */}
-        {ehAdmin && aba === 'sede' && (
-          <button
-            onClick={limparPainelTv}
-            disabled={limpando}
-            title="Zera o painel de parede (Modo TV) a partir de agora"
-            className="ml-auto px-3 py-1.5 rounded-xl bg-falha/15 border border-falha/40 text-falha-400 hover:bg-falha/25 text-[11px] font-bold flex items-center gap-1.5 transition-colors disabled:opacity-50"
-          >
-            {limpando ? <Loader2 size={12} className="animate-spin" /> : <Eraser size={12} />}
-            Limpar dados do painel da equipe
-          </button>
-        )}
+        {/* OS CONTROLES FICAM JUNTOS, no alto e à direita.
+            O botão de limpar estava numa faixa própria abaixo, e ali ele lia
+            como se pertencesse às abas -- que é justamente o que ele NÃO faz
+            (zera o Modo TV, não esta tela). Ao lado do seletor de mês fica
+            claro que os dois são controles do quadro, e não da lista. */}
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          <div className="flex items-center gap-2">
+            <label htmlFor="ranking-mes" className="text-[11px] font-semibold text-texto-suave shrink-0">Mês</label>
+            <select
+              id="ranking-mes"
+              value={competencia}
+              onChange={(e) => setCompetencia(e.target.value)}
+              className="bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto focus:outline-none focus:border-acao/50"
+            >
+              {meses.map((m) => (
+                <option key={m} value={m}>{rotuloCompetencia(m)}</option>
+              ))}
+            </select>
+          </div>
+
+          {ehAdmin && aba === 'sede' && (
+            <button
+              onClick={limparPainelTv}
+              disabled={limpando}
+              title="Zera o painel de parede (Modo TV) a partir de agora — esta tela não muda"
+              className="px-3 py-2 rounded-xl bg-falha/15 border border-falha/40 text-falha-400 hover:bg-falha/25 text-[11px] font-bold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+            >
+              {limpando ? <Loader2 size={12} className="animate-spin" /> : <Eraser size={12} />}
+              {/* No celular só o essencial: "do painel da equipe" é o que estoura
+                  a linha, e o `title` guarda a frase inteira. */}
+              <span className="sm:hidden">Limpar painel</span>
+              <span className="hidden sm:inline">Limpar dados do painel da equipe</span>
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -500,12 +531,19 @@ export default function Rankings() {
           <h3 className="text-sm font-bold text-texto">
             {dados?.rotulo || ''}  {rotuloCompetencia(competencia)}
           </h3>
-          {/* Quem supervisiona fica escrito na tela, e não escondido numa regra:
-              a equipe precisa saber que a pessoa que valida os relatórios é a
-              mesma que não aparece na lista. */}
-          {dados?.supervisores?.length > 0 && (
-            <span className="text-[11px] text-texto-fraco">
-              Supervisão: {dados.supervisores.map((s) => s.nome).join(', ')} · não concorre
+          {/* QUEM VALIDA -- e a frase parou de dizer "não concorre".
+              Ela era verdade enquanto havia uma marca de supervisor que excluía
+              a pessoa da lista. Com a supervisão passando a ser do cargo de
+              Administrador, quem valida TAMBÉM concorre se estiver marcado numa
+              equipe -- e o nome dele aparece na tabela logo abaixo. A frase
+              antiga se contradizia na mesma tela.
+
+              Só na aba externa: é lá que existe algo a validar (o relatório de
+              visita). Na sede não há validação nenhuma, e anunciar validador
+              faria pensar que alguém aprova atendimento. */}
+          {aba === 'externo' && dados?.supervisores?.length > 0 && (
+            <span className="text-[11px] text-texto-fraco min-w-0 truncate" title={dados.supervisores.map((s) => s.nome).join(', ')}>
+              Valida os relatórios: {dados.supervisores.map((s) => s.nome).join(', ')}
             </span>
           )}
         </div>
@@ -533,11 +571,11 @@ export default function Rankings() {
                     <th className="text-left py-2 px-3 font-bold text-texto-suave w-14">Pos.</th>
                     <th className="text-left py-2 px-3 font-bold text-texto-suave">Funcionário</th>
                     <th className="text-right py-2 px-3 font-bold text-texto-suave w-20">Pontos</th>
-                    <th className="text-right py-2 px-3 font-bold text-texto-suave w-24">
+                    <th className="text-right py-2 px-3 font-bold text-texto-suave w-24 hidden lg:table-cell">
                       {aba === 'sede' ? 'Atend.' : 'Relatórios'}
                     </th>
-                    <th className="text-left py-2 px-3 font-bold text-texto-suave">Último atendimento</th>
-                    <th className="text-left py-2 px-3 font-bold text-texto-suave w-24">Evolução</th>
+                    <th className="text-left py-2 px-3 font-bold text-texto-suave hidden lg:table-cell">Último atendimento</th>
+                    <th className="text-left py-2 px-3 font-bold text-texto-suave w-24 hidden sm:table-cell">Evolução</th>
                     <th className="w-8" />
                   </tr>
                 </thead>

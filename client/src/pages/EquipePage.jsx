@@ -468,7 +468,7 @@ export default function EquipePage() {
                 )}
                 {m.cargo === 'Administrador' && (
                   <p className="text-[10px] text-texto-fraco mt-1.5">
-                    Como Administrador, valida os relatórios e registra as premiações — e ainda
+                    Como Administrador, valida os relatórios e registra as premiações e ainda
                     concorre nos rankings marcados acima.
                   </p>
                 )}
