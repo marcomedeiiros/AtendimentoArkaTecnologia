@@ -11,7 +11,7 @@ import { aplicarTema } from '../../utils/tema';
 import {
   LayoutGrid, Users, Zap, MessageSquare, ShieldCheck,
   GitFork, MessageCircle, CalendarDays, Send, Loader2, Menu, X, WifiOff, Settings, LogOut, Bug,
-  PanelLeftClose, PanelLeftOpen, Sun, Moon, UserCog
+  PanelLeftClose, PanelLeftOpen, Sun, Moon, UserCog, Trophy, ClipboardList
 } from 'lucide-react';
 import Portal from '../Portal';
 import { useAppContext } from '../../context/AppContext';

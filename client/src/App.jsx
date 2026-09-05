@@ -31,6 +31,8 @@ import MassaPage        from './pages/MassaPage';
 import ConfiguracoesPage from './pages/ConfiguracoesPage';
 import BugsPage         from './pages/BugsPage';
 import PerfilPage       from './pages/PerfilPage';
+import RankingsPage     from './pages/RankingsPage';
+import MapeamentosPage  from './pages/MapeamentosPage';
 
 export default function App() {
   return (
