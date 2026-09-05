@@ -566,8 +566,8 @@ export const EquipeAPI = {
   alterarSetores: (id, setores) => request(`/equipe/${id}/setores`, { method: 'PATCH', body: JSON.stringify({ setores }) }),
   // Sem recuperacao por e-mail: um Administrador define a nova senha do membro.
   redefinirSenha: (id, senha) => request(`/equipe/${id}/senha`, { method: 'PATCH', body: JSON.stringify({ senha }) }),
-  // Em qual ranking a pessoa concorre ("sede" | "externo" | null) e se ela
-  // supervisiona sem concorrer. Cadastro, e nao lista de nomes no codigo.
+  // Em QUAIS rankings a pessoa concorre: { equipes: ["sede","externo"] }. Vai a
+  // lista final, e nao "adicione esta".
   alterarRanking: (id, dados) => request(`/equipe/${id}/ranking`, { method: 'PATCH', body: JSON.stringify(dados) }),
   excluir: (id) => request(`/equipe/${id}`, { method: 'DELETE' }),
 };

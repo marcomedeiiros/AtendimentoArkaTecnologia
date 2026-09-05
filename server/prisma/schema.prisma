@@ -82,23 +82,30 @@ model Usuario {
   // Gestao da Equipe: com o painel aberto, o front consulta o servidor a cada
   // poucos segundos, entao presenca recente aqui significa aba aberta agora.
   ultimoAcessoEm DateTime? @map("ultimo_acesso_em")
-  /// EM QUAL RANKING DE DESEMPENHO ESTA PESSOA CONCORRE.
+  /// EM QUAIS RANKINGS DE DESEMPENHO ESTA PESSOA CONCORRE, separados por virgula.
   ///
-  ///   "sede"    -> atendimento no WhatsApp (pontuacao ja existente do painel)
-  ///   "externo" -> visitas com mapeamento tecnico (pontuacao propria)
-  ///   null      -> nao concorre. E o PADRAO, e vale para o supervisor e para
-  ///                quem faz outra funcao.
+  ///   "sede"          atendimento no WhatsApp (pontuacao ja existente do painel)
+  ///   "externo"       visitas com mapeamento tecnico (pontuacao propria)
+  ///   "sede,externo"  as duas coisas -- ha quem atenda no chat e tambem visite
+  ///   null            nao concorre. E o PADRAO.
+  ///
+  /// LISTA, e nao escolha unica: quem faz as duas funcoes precisa ser medido
+  /// nas duas, cada uma pelo criterio dela. Isso NAO mistura os rankings -- as
+  /// listas seguem separadas; o que muda e o mesmo nome poder aparecer em cada
+  /// uma, com pontuacoes que nunca se somam.
+  ///
+  /// Mesma forma do `setoresExtras` acima (texto com virgulas), pelo mesmo
+  /// motivo: conjunto pequeno e fechado, em que uma tabela de ligacao custaria
+  /// mais consulta do que resolve.
   ///
   /// Coluna, e nao lista de nomes no codigo: uma pessoa entra, sai ou troca de
   /// funcao sem deploy, e o ranking nunca fica com nome de quem ja saiu.
-  equipeRanking     String?  @map("equipe_ranking")
-  /// Supervisiona os DOIS rankings: ve tudo, valida mapeamento e corrige
-  /// pontuacao -- e NAO concorre a premio.
   ///
-  /// Separado de `equipeRanking` de proposito: sao perguntas diferentes ("onde
-  /// concorre" x "quem fiscaliza"), e junta-las num campo so faria o supervisor
-  /// precisar entrar num dos dois rankings para poder validar o outro.
-  supervisorRanking Boolean  @default(false) @map("supervisor_ranking")
+  /// NAO HA MAIS MARCA DE SUPERVISOR. Quem supervisiona e o ADMINISTRADOR, que
+  /// ja tem acesso a tudo -- uma segunda marca dizendo a mesma coisa so criava
+  /// um jeito de as duas discordarem. E administrador marcado numa equipe
+  /// CONCORRE nela: administrar nao impede atender.
+  equipeRanking     String?  @map("equipe_ranking")
   criadoEm       DateTime  @default(now()) @map("criado_em")
   atualizadoEm   DateTime  @updatedAt @map("atualizado_em")
 

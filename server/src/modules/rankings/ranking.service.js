@@ -41,6 +41,24 @@ const logger = require("../../config/logger");
 const EQUIPES = ["sede", "externo"];
 const ROTULOS = { sede: "Atendimento na Sede", externo: "Atendimento Fora da Sede" };
 
+/**
+ * "sede,externo" -> ["sede", "externo"].
+ *
+ * Uma pessoa pode concorrer nos dois -- ha quem atenda no chat e tambem visite
+ * cliente. Os rankings continuam separados; o que muda e o mesmo nome poder
+ * aparecer nas duas listas, com pontuacoes de reguas diferentes que nunca se
+ * somam.
+ *
+ * Filtra pelo que EXISTE: um valor antigo ou digitado errado no banco nao pode
+ * criar uma terceira equipe fantasma na tela.
+ */
+function equipesDe(valor) {
+  return String(valor || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => EQUIPES.includes(s));
+}
+
 // "2026-09" -> { ano: 2026, mes: 9 }. Recusa o que nao for mes de verdade em vez
 // de cair no mes atual: um filtro digitado errado que devolve dados do mes
 // corrente e pior do que um erro, porque parece resposta.
@@ -80,17 +98,32 @@ function classificar(pessoas, volumeDe) {
 }
 
 class RankingService {
-  /** Quem concorre em cada ranking, mais quem supervisiona. */
+  /**
+   * Quem concorre em cada ranking, mais quem valida.
+   *
+   * O filtro e "tem alguma coisa gravada", e o recorte por equipe acontece em
+   * memoria: com a lista em texto ("sede,externo"), um `where` por valor exato
+   * deixaria de fora justamente quem esta nos dois. A tabela de usuarios tem
+   * dezenas de linhas -- ler todas as marcadas custa menos que a consulta.
+   */
   async equipes() {
     const usuarios = await prisma.usuario.findMany({
-      where: { OR: [{ equipeRanking: { in: EQUIPES } }, { supervisorRanking: true }] },
-      select: { id: true, nome: true, email: true, cargo: true, equipeRanking: true, supervisorRanking: true },
+      where: { NOT: [{ equipeRanking: null }, { equipeRanking: "" }] },
+      select: { id: true, nome: true, email: true, cargo: true, equipeRanking: true },
+      orderBy: { nome: "asc" },
+    });
+    // Quem valida mapeamento e registra premio e o ADMINISTRADOR -- nao ha mais
+    // marca separada. Ele NAO e excluido do ranking: se estiver numa equipe,
+    // concorre nela, porque administrar o sistema nao impede atender cliente.
+    const validadores = await prisma.usuario.findMany({
+      where: { cargo: "Administrador", ativo: true },
+      select: { id: true, nome: true },
       orderBy: { nome: "asc" },
     });
     return {
-      sede: usuarios.filter((u) => u.equipeRanking === "sede" && !u.supervisorRanking),
-      externo: usuarios.filter((u) => u.equipeRanking === "externo" && !u.supervisorRanking),
-      supervisores: usuarios.filter((u) => u.supervisorRanking),
+      sede: usuarios.filter((u) => equipesDe(u.equipeRanking).includes("sede")),
+      externo: usuarios.filter((u) => equipesDe(u.equipeRanking).includes("externo")),
+      supervisores: validadores,
     };
   }
 

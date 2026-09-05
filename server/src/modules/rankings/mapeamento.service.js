@@ -3,11 +3,10 @@
  *
  * ── QUEM PODE O QUE, E POR QUE A REGRA VIVE AQUI ───────────────────────────
  *
- *   tecnico      cria, edita e entrega o PROPRIO mapeamento; nunca ve nem
- *                mexe no de outro.
- *   supervisor   ve todos, aprova e devolve para correcao.
- *   admin        o mesmo que o supervisor (quem administra nao fica de fora
- *                de uma tela por nao ter uma marca no cadastro).
+ *   tecnico          cria, edita e entrega o PROPRIO mapeamento; nunca ve nem
+ *                    mexe no de outro.
+ *   administrador    ve todos, aprova e devolve para correcao. E o unico papel
+ *                    de supervisao -- nao ha marca separada no cadastro.
  *
  * A checagem e no SERVIDOR, a cada chamada, e nao no que a tela mostra: o
  * mapeamento vira PONTO no ranking, e um endpoint aberto seria um jeito de a
@@ -39,13 +38,22 @@ const STATUS = ["rascunho", "entregue", "em_correcao", "aprovado"];
 const MAX_EVIDENCIAS = 12;
 const MAX_BYTES_EVIDENCIA = 6 * 1024 * 1024;
 
+// QUEM SUPERVISIONA E O ADMINISTRADOR, e so ele.
+//
+// Havia uma marca separada no cadastro (`supervisorRanking`) e ela saiu: o
+// administrador ja tem acesso a tudo no sistema, e uma segunda marca dizendo a
+// mesma coisa so criava um jeito de as duas discordarem -- alguem com a marca e
+// sem o cargo, ou o contrario.
+//
+// Le o CARGO NO BANCO a cada chamada, e nao do token: rebaixar alguem vale na
+// hora, sem esperar a sessao dela expirar.
 async function ehSupervisor(usuarioId) {
   if (!usuarioId) return false;
   const u = await prisma.usuario.findUnique({
     where: { id: usuarioId },
-    select: { cargo: true, supervisorRanking: true },
+    select: { cargo: true },
   });
-  return !!u && (u.supervisorRanking || u.cargo === "Administrador");
+  return u?.cargo === "Administrador";
 }
 
 function saneiaItens(itens) {

@@ -15,6 +15,18 @@ const logger = require("../../config/logger");
 // online alguem que ja fechou a aba ha tempo.
 const JANELA_ONLINE_MS = 2 * 60 * 1000;
 
+// Rankings em que se pode concorrer. Casa com `EQUIPES` no ranking.service, que
+// e quem realmente monta as listas -- aqui e so o que a gravacao aceita.
+const EQUIPES_RANKING = ["sede", "externo"];
+
+// "sede,externo" -> ["sede", "externo"]. Descarta o que nao existe: um valor
+// antigo no banco nao pode virar uma terceira equipe na tela.
+const listaDeEquipes = (v) =>
+  String(v || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => EQUIPES_RANKING.includes(s));
+
 class EquipeService {
   // A equipe nao e mais uma lista digitada a mao: e quem tem conta. Criar
   // membro virou criar conta, em /cadastrar, e o status deixou de ser um botao
@@ -38,10 +50,14 @@ class EquipeService {
         // do que acabou de marcar.
         setoresExtras: listaDeSetores(u.setoresExtras),
         setoresVisiveis: setoresVisiveis(u),
-        // Ranking: a tela de Gestao da Equipe e onde se define quem concorre
-        // em qual, e quem supervisiona sem concorrer.
-        equipeRanking: u.equipeRanking || null,
-        supervisorRanking: !!u.supervisorRanking,
+        // Ranking: em quais competicoes esta pessoa concorre. LISTA, porque ha
+        // quem atenda no chat e tambem visite cliente -- e cada funcao e medida
+        // pelo criterio dela, sem os pontos se somarem.
+        //
+        // Quem SUPERVISIONA nao vem daqui: e o Administrador, pelo cargo. Nao
+        // ha marca separada -- ele ja tem acesso a tudo, e duas fontes para a
+        // mesma coisa sao duas fontes para discordar.
+        equipesRanking: listaDeEquipes(u.equipeRanking),
         // Mantem o vocabulario que o resto do painel ja usa (o Dashboard conta
         // `status === "online"`), agora alimentado por presenca real.
         status: u.ativo && agora - visto < JANELA_ONLINE_MS ? "online" : "offline",
@@ -145,26 +161,25 @@ class EquipeService {
    * porque aqui e so cadastro -- deixar alguem marcado nos dois campos e util
    * para o dia em que a supervisao mudar de mao.
    */
-  async alterarRanking(id, { equipeRanking, supervisorRanking }, solicitanteId) {
+  async alterarRanking(id, { equipes }, solicitanteId) {
     await this._exigirAdmin(solicitanteId);
 
     const alvo = await usuarioRepository.findById(id);
     if (!alvo) throw new AppError("Conta nao encontrada", 404, "CONTA_INEXISTENTE");
 
-    const equipe = equipeRanking === "sede" || equipeRanking === "externo" ? equipeRanking : null;
-    const atualizado = await prisma.usuario.update({
-      where: { id },
-      data: {
-        ...(equipeRanking !== undefined ? { equipeRanking: equipe } : {}),
-        ...(supervisorRanking !== undefined ? { supervisorRanking: !!supervisorRanking } : {}),
-      },
-    });
+    // A LISTA INTEIRA, e nao "adicione esta". Mesma escolha do `alterarSetores`
+    // logo acima, pelo mesmo motivo: duas abas abertas na mesma pessoa
+    // poderiam, com "adicione/remova", gravar uma soma que ninguem pediu. Com a
+    // lista final, a ultima gravacao vence e e exatamente o que estava na tela
+    // de quem clicou.
+    const limpas = [...new Set((Array.isArray(equipes) ? equipes : []).filter((e) => EQUIPES_RANKING.includes(e)))];
+    // Vazio grava NULL, e nao string vazia: "nao concorre" e ausencia, e uma
+    // string vazia no banco entraria nas consultas que procuram quem tem algo.
+    const valor = limpas.length ? limpas.join(",") : null;
+
+    const atualizado = await prisma.usuario.update({ where: { id }, data: { equipeRanking: valor } });
     bus.emitRecurso("equipe");
-    logger.info("Equipe de ranking alterada", {
-      usuario: alvo.nome,
-      equipeRanking: atualizado.equipeRanking,
-      supervisor: atualizado.supervisorRanking,
-    });
+    logger.info("Equipes de ranking alteradas", { usuario: alvo.nome, equipes: valor });
     return atualizado;
   }
 

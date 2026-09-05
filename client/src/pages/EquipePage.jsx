@@ -211,19 +211,24 @@ export default function EquipePage() {
   }
 
   /**
-   * EM QUAL RANKING A PESSOA CONCORRE.
+   * EM QUAIS RANKINGS A PESSOA CONCORRE.
    *
-   * Tres estados num controle so (Sede / Fora da sede / Nao concorre) porque
-   * eles sao exclusivos: ninguem disputa os dois -- as atividades e os
-   * indicadores sao diferentes, e e essa separacao que torna a competicao
-   * justa. Duas caixas independentes permitiriam marcar as duas.
+   * As duas marcacoes CONVIVEM: ha quem atenda no chat e tambem visite cliente,
+   * e cada funcao precisa ser medida pelo criterio dela. Isso nao mistura os
+   * rankings -- as listas seguem separadas, e as pontuacoes usam reguas
+   * diferentes (a da sede nao tem teto; a externa para em 100), entao elas
+   * nunca se somam.
+   *
+   * Vai a LISTA FINAL, e nao "adicione esta". Mesma escolha do `alternarSetor`
+   * acima: com "adicione/remova", duas abas abertas na mesma pessoa poderiam
+   * gravar uma soma que ninguem pediu.
    */
-  async function definirRanking(membro, equipeRanking) {
+  async function definirEquipesRanking(membro, equipes) {
     setLoadingId(membro.id);
     setErro("");
     setOkMsg("");
     try {
-      await EquipeAPI.alterarRanking(membro.id, { equipeRanking });
+      await EquipeAPI.alterarRanking(membro.id, { equipes });
       if (recarregarEquipe) await recarregarEquipe();
     } catch (e) {
       setErro(e.message);
@@ -232,19 +237,12 @@ export default function EquipePage() {
     }
   }
 
-  // Supervisor ve os dois rankings e valida mapeamento -- e NAO concorre a
-   // premio, mesmo marcado numa equipe. A regra e aplicada no servidor.
-  async function alternarSupervisor(membro) {
-    setLoadingId(membro.id);
-    setErro("");
-    try {
-      await EquipeAPI.alterarRanking(membro.id, { supervisorRanking: !membro.supervisorRanking });
-      if (recarregarEquipe) await recarregarEquipe();
-    } catch (e) {
-      setErro(e.message);
-    } finally {
-      setLoadingId(null);
-    }
+  function alternarEquipeRanking(membro, equipe) {
+    const atuais = membro.equipesRanking || [];
+    const novas = atuais.includes(equipe)
+      ? atuais.filter((e) => e !== equipe)
+      : [...atuais, equipe];
+    return definirEquipesRanking(membro, novas);
   }
 
   async function excluirConta(membro) {
@@ -419,19 +417,24 @@ export default function EquipePage() {
                   <Trophy size={13} className="text-espera-400" />
                   <span className="font-semibold">Ranking de desempenho</span>
                 </div>
+                {/* AS DUAS MARCAÇÕES CONVIVEM.
+                    Há quem atenda no chat e também visite cliente, e cada
+                    função precisa ser medida pelo critério dela. Isso não
+                    mistura os rankings: as listas seguem separadas, e as
+                    pontuações -- réguas diferentes -- nunca se somam. */}
                 <div className="flex flex-wrap gap-1.5">
                   {[
                     { valor: 'sede', rotulo: 'Atendimento na Sede' },
                     { valor: 'externo', rotulo: 'Fora da Sede' },
-                    { valor: null, rotulo: 'Não concorre' },
                   ].map((op) => {
-                    const marcado = (m.equipeRanking || null) === op.valor;
+                    const marcado = (m.equipesRanking || []).includes(op.valor);
                     return (
                       <button
-                        key={op.rotulo}
+                        key={op.valor}
                         type="button"
                         disabled={!ehAdmin || loadingId === m.id}
-                        onClick={() => definirRanking(m, op.valor)}
+                        onClick={() => alternarEquipeRanking(m, op.valor)}
+                        title={marcado ? `Tirar de ${op.rotulo}` : `Incluir em ${op.rotulo}`}
                         className={`rounded-lg border px-2 py-1 text-[11px] font-semibold transition-colors ${
                           marcado
                             ? 'border-espera/40 bg-espera/15 text-espera-400'
@@ -442,23 +445,31 @@ export default function EquipePage() {
                       </button>
                     );
                   })}
+                  {/* "Não concorre" é o estado de nenhuma marcada; este botão é
+                      o atalho para chegar lá. Fica aceso quando é o caso, para
+                      o estado não ser lido como "esqueceram de marcar". */}
                   <button
                     type="button"
                     disabled={!ehAdmin || loadingId === m.id}
-                    onClick={() => alternarSupervisor(m)}
-                    title="Vê os dois rankings e valida os mapeamentos e não concorre ao prêmio"
+                    onClick={() => definirEquipesRanking(m, [])}
                     className={`rounded-lg border px-2 py-1 text-[11px] font-semibold transition-colors ${
-                      m.supervisorRanking
-                        ? 'border-acao/40 bg-acao/15 text-acao-200'
+                      (m.equipesRanking || []).length === 0
+                        ? 'border-linha-forte bg-grafite-600 text-texto-suave'
                         : 'border-linha bg-grafite-700 text-texto-fraco hover:border-linha-forte'
                     } ${!ehAdmin ? 'cursor-default opacity-80' : 'cursor-pointer'}`}
                   >
-                    Supervisor
+                    Não concorre
                   </button>
                 </div>
-                {m.supervisorRanking && (
+                {(m.equipesRanking || []).length === 2 && (
                   <p className="text-[10px] text-texto-fraco mt-1.5">
-                    Supervisiona os dois rankings e não disputa o prêmio.
+                    Concorre nos dois, com pontuações separadas.
+                  </p>
+                )}
+                {m.cargo === 'Administrador' && (
+                  <p className="text-[10px] text-texto-fraco mt-1.5">
+                    Como Administrador, valida os relatórios e registra as premiações — e ainda
+                    concorre nos rankings marcados acima.
                   </p>
                 )}
               </div>

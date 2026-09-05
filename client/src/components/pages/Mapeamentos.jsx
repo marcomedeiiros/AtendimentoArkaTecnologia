@@ -332,7 +332,10 @@ export default function Mapeamentos() {
     catch (e) { avisar(e?.message || 'Não foi possível excluir.'); }
   };
 
-  const ehSupervisor = usuario?.cargo === 'Administrador' || usuario?.supervisorRanking;
+  // Quem aprova e devolve é o Administrador -- não há marca separada de
+  // supervisor. Isto é só a dica de interface: o servidor confere o cargo NO
+  // BANCO a cada chamada, então esconder o botão nunca foi a proteção.
+  const ehSupervisor = usuario?.cargo === 'Administrador';
 
   return (
     <div className="p-4 sm:p-6 space-y-4 fade-in">

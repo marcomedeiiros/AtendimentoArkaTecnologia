@@ -23,7 +23,7 @@ class EquipeController {
   alterarRanking(req, res) {
     return equipeService
       .alterarRanking(req.params.id, req.body, req.user?.sub)
-      .then((data) => success(res, { id: data.id, equipeRanking: data.equipeRanking, supervisorRanking: data.supervisorRanking }));
+      .then((data) => success(res, { id: data.id, equipeRanking: data.equipeRanking }));
   }
 
   alterarSetores(req, res) {

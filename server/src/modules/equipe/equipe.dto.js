@@ -35,12 +35,12 @@ const redefinirSenhaSchema = z.object({
 
 // Em qual ranking a pessoa concorre. Nulo = nenhum, que e o padrao e o caso
 // do supervisor. `nullable` explicito para poder TIRAR alguem do ranking.
-const alterarRankingSchema = z
-  .object({
-    equipeRanking: z.enum(["sede", "externo"]).nullable().optional(),
-    supervisorRanking: z.boolean().optional(),
-  })
-  .refine((d) => Object.keys(d).length > 0, { message: "Nada para atualizar" });
+// A LISTA FINAL de rankings em que a pessoa concorre. Array vazio = nao
+// concorre em nenhum, que e um valor legitimo (e como se tira alguem) -- por
+// isso nao ha `min(1)`.
+const alterarRankingSchema = z.object({
+  equipes: z.array(z.enum(["sede", "externo"])).max(2),
+});
 
 module.exports = {
   alterarRankingSchema,

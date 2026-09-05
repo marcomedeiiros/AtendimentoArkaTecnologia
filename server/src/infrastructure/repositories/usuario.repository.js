@@ -22,7 +22,7 @@ class UsuarioRepository {
         // `mapeamentoService.ehSupervisor`, que le o banco a cada chamada --
         // assim tirar a marca de supervisor vale na hora, sem esperar o token
         // da pessoa expirar.
-        equipeRanking: true, supervisorRanking: true,
+        equipeRanking: true,
       },
     });
   }
@@ -42,7 +42,7 @@ class UsuarioRepository {
         // `undefined`, o DTO manda `null`, e a tela desenha "Nao concorre" para
         // todo mundo. Era isso que fazia os botoes de ranking parecerem que nao
         // salvavam: o servidor gravava certo e a listagem nunca contava.
-        equipeRanking: true, supervisorRanking: true,
+        equipeRanking: true,
       },
     });
   }

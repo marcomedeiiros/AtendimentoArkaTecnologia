@@ -609,7 +609,7 @@ export default function Rankings() {
         <p className="text-[11px] text-texto-fraco flex items-center gap-1.5">
           <ClipboardList size={12} className="shrink-0" />
           Os pontos saem dos mapeamentos técnicos entregues veja e valide em{' '}
-          <strong className="text-texto-suave">Mapeamentos</strong>.
+          <strong className="text-texto-suave">Mapeamentos</strong>
         </p>
       )}
     </div>

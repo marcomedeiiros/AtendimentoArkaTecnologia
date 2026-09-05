@@ -58,12 +58,12 @@ async function main() {
       },
     });
 
-  // SEDE: dois concorrentes + o supervisor, que tambem esta marcado na sede de
-  // proposito -- e o caso que prova que a exclusao dele nao depende de o
-  // administrador lembrar de tirar a marca.
+  // SEDE: dois concorrentes. O Davi entra como ADMINISTRADOR e sem equipe: ele
+  // supervisiona pelo cargo, e nao por marca no cadastro -- e por isso nao
+  // aparece na classificacao mesmo atendendo muito (ver o bloco 2).
   const ana = await criarUsuario("Ana", { equipeRanking: "sede" });
   const bruno = await criarUsuario("Bruno", { equipeRanking: "sede" });
-  const davi = await criarUsuario("Davi", { equipeRanking: "sede", supervisorRanking: true });
+  const davi = await criarUsuario("Davi", { cargo: "Administrador" });
   // EXTERNO
   const joao = await criarUsuario("Joao", { equipeRanking: "externo" });
   const lucas = await criarUsuario("Lucas", { equipeRanking: "externo" });
@@ -134,18 +134,25 @@ async function main() {
     `as parcelas somam o total exibido (${anaAqui.pontos})`
   );
 
-  titulo("2. O SUPERVISOR NAO CONCORRE");
+  titulo("2. QUEM SUPERVISIONA E O ADMINISTRADOR, PELO CARGO");
+  // Nao ha mais marca de supervisor no cadastro: o administrador ja tem acesso
+  // a tudo, e uma segunda marca dizendo a mesma coisa so criava um jeito de as
+  // duas discordarem. Concorrer segue sendo consequencia de estar numa EQUIPE.
   check(
     !sede.classificacao.some((p) => p.nome === davi.nome),
-    "Davi nao aparece na classificacao, mesmo marcado na equipe da sede"
+    "Davi nao aparece na classificacao -- ele nao esta em equipe nenhuma"
   );
   check(
     doPainel.classificacao.some((p) => p.nome === davi.nome),
-    "e ele continua no painel geral -- a exclusao e do RANKING, nao do sistema"
+    "e continua no painel geral: o recorte e do RANKING, nao do sistema"
   );
   check(
     sede.supervisores.some((s) => s.nome === davi.nome),
-    "a tela recebe quem supervisiona, para poder dizer isso na cara"
+    "a tela recebe quem VALIDA, lido do cargo Administrador"
+  );
+  check(
+    await mapeamentoService.ehSupervisor(davi.id),
+    "e e o cargo que autoriza validar mapeamento, sem marca extra"
   );
 
   titulo("3. QUEM NAO FOI MARCADO NAO ENTRA");
@@ -170,19 +177,45 @@ async function main() {
   const equipeService = require("./src/modules/equipe/equipe.service");
   const listados = await equipeService.listar();
   const listAna = listados.find((u) => u.id === ana.id);
-  const listDavi = listados.find((u) => u.id === davi.id);
-  check(listAna?.equipeRanking === "sede", `a listagem devolve a equipe gravada ("${listAna?.equipeRanking}")`);
-  check(listDavi?.supervisorRanking === true, "e a marca de supervisor");
   check(
-    listados.find((u) => u.id === zeca.id)?.equipeRanking === null,
-    "quem nao concorre volta como null, e nao como undefined"
+    (listAna?.equipesRanking || []).includes("sede"),
+    `a listagem devolve a equipe gravada (${JSON.stringify(listAna?.equipesRanking)})`
+  );
+  check(Array.isArray(listAna?.equipesRanking), "e vem como LISTA, porque da para concorrer nos dois");
+  check(
+    (listados.find((u) => u.id === zeca.id)?.equipesRanking || []).length === 0,
+    "quem nao concorre volta com lista vazia"
   );
 
-  // A SESSAO tambem: e por ela que a tela de Relatorios decide mostrar os
-  // botoes de aprovar/devolver.
   const usuarioRepository = require("./src/infrastructure/repositories/usuario.repository");
-  const daSessao = await usuarioRepository.findById(davi.id);
-  check(daSessao?.supervisorRanking === true, "e a sessao carrega o supervisor (findById)");
+  const daSessao = await usuarioRepository.findById(ana.id);
+  check(daSessao?.equipeRanking === "sede", "e a sessao carrega a equipe (findById)");
+
+  // CONCORRER NOS DOIS. Quem atende no chat e tambem visita cliente aparece nas
+  // duas listas -- com pontuacoes separadas, que nunca se somam. Era escolha
+  // unica antes, e isso obrigava a escolher em qual funcao a pessoa seria
+  // medida, ignorando a outra.
+  await equipeService.alterarRanking(ana.id, { equipes: ["sede", "externo"] }, davi.id);
+  const nosDois = await rankingService.equipes();
+  check(
+    nosDois.sede.some((u) => u.id === ana.id) && nosDois.externo.some((u) => u.id === ana.id),
+    "quem esta nos dois aparece nas DUAS listas"
+  );
+  const sedeDupla = await rankingService.obter("sede", COMP);
+  const externoDupla = await rankingService.obter("externo", COMP);
+  const anaSede = sedeDupla.classificacao.find((p) => p.usuarioId === ana.id);
+  const anaExterno = externoDupla.classificacao.find((p) => p.usuarioId === ana.id);
+  check(
+    anaSede.pontos !== anaExterno.pontos,
+    `com pontuacoes independentes (${anaSede.pontos} na sede, ${anaExterno.pontos} no externo)`
+  );
+  // E voltar a UMA so tem de funcionar tambem -- desmarcar e o caminho de volta.
+  await equipeService.alterarRanking(ana.id, { equipes: ["sede"] }, davi.id);
+  const soSede = await rankingService.equipes();
+  check(
+    soSede.sede.some((u) => u.id === ana.id) && !soSede.externo.some((u) => u.id === ana.id),
+    "desmarcar uma tira a pessoa daquela lista e mantem a outra"
+  );
 
   titulo("4. A PONTUACAO EXTERNA");
 
