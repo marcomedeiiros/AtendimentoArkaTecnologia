@@ -534,6 +534,90 @@ function liberarBackoff(vigia) {
     "salvar() recusa gravar credencial nao pareada sobre a copia boa"
   );
 
+  // ── 17. O COFRE SOBRESCREVE O CASCO ───────────────────────────────────────
+  //
+  // O furo que fazia a rede de seguranca falhar justamente no caso para o qual
+  // existe: quando a Evolution apaga a `Session` num 408, ela recria o casco em
+  // ~2 SEGUNDOS -- e o vigia so olha a cada 15s. Quando o cofre chegava para
+  // restaurar, a linha ja existia, e o `INSERT ... ON CONFLICT DO NOTHING` nao
+  // escrevia nada. O cofre so funcionava na janela estreita entre o DELETE da
+  // Evolution e o INSERT dela mesma.
+  console.log("\n=== 17. o cofre sobrescreve o casco, mas nunca um pareamento ===");
+
+  const dirCofre2 = fsMod.mkdtempSync(pathMod.join(osMod.tmpdir(), "arka-cofre2-"));
+  process.env.WHATSAPP_COFRE_DIR = dirCofre2;
+  delete require.cache[require.resolve(CAMINHO_COFRE)];
+  const cofre17 = require(CAMINHO_COFRE);
+
+  const pasta17 = pathMod.join(dirCofre2, INSTANCIA.replace(/[^\w.-]/g, "_"));
+  fsMod.mkdirSync(pasta17, { recursive: true });
+  fsMod.writeFileSync(pathMod.join(pasta17, "creds.json"), PAREADA);
+
+  // Postgres de mentira: guarda o que ha na "linha" e registra o SQL emitido.
+  let linha = null; // null = sem linha; string = conteudo de `creds`
+  let sqlEmitido = [];
+  cofre17.disponivel = () => true;
+  cofre17._consultarTeste = null;
+  const responder = async (sql, valores) => {
+    sqlEmitido.push(sql.trim().split(/\s+/).slice(0, 2).join(" "));
+    if (/FROM "Instance"/.test(sql)) return { rowCount: 1, rows: [{ id: "inst-1" }] };
+    if (/SELECT s\.creds FROM "Session"/.test(sql)) {
+      return linha === null ? { rowCount: 0, rows: [] } : { rowCount: 1, rows: [{ creds: linha }] };
+    }
+    if (/^UPDATE "Session"/.test(sql.trim())) {
+      // Reproduz o bloqueio otimista: so escreve se `creds` ainda for o lido.
+      if (linha !== valores[2]) return { rowCount: 0 };
+      linha = valores[0];
+      return { rowCount: 1 };
+    }
+    if (/^INSERT INTO "Session"/.test(sql.trim())) {
+      if (linha !== null) return { rowCount: 0 }; // ON CONFLICT DO NOTHING
+      linha = valores[2];
+      return { rowCount: 1 };
+    }
+    return { rowCount: 0, rows: [] };
+  };
+  // `_consultar` nao e exportado; trocamos o pool por um dublê que o alimenta.
+  cofre17.__testePool = { query: responder };
+  const modulo17 = require.cache[require.resolve(CAMINHO_COFRE)];
+  modulo17.exports.disponivel = () => true;
+
+  // Injeta o dublê no lugar do pool real, que e uma variavel de modulo.
+  // Sem acesso a ela, exercitamos pela unica porta que aceita substituicao: o
+  // proprio `pg`, que o modulo carrega sob demanda.
+  const pgFalso = { Pool: function () { return { query: responder, on: () => {} }; } };
+  require.cache[require.resolve("pg")] = { id: "pg", filename: "pg", loaded: true, exports: pgFalso };
+  process.env.EVOLUTION_DB_URL = "postgresql://teste@localhost:5432/teste";
+  delete require.cache[require.resolve(CAMINHO_COFRE)];
+  const cofre17b = require(CAMINHO_COFRE);
+
+  // CASCO NO BANCO -> tem de ser sobrescrito.
+  linha = CASCO;
+  sqlEmitido = [];
+  const rCasco = await cofre17b.restaurar(INSTANCIA, 408);
+  check(rCasco.restaurado === true, "casco no banco: o cofre SOBRESCREVE em vez de desistir");
+  check(sqlEmitido.some((s) => s === "UPDATE \"Session\""), "e usa UPDATE, nao um INSERT que nao escreve nada");
+  check(linha === PAREADA, "a linha passa a conter a credencial pareada do cofre");
+
+  // PAREAMENTO NO BANCO -> intocavel, mesmo com cofre cheio.
+  linha = PAREADA.replace("552721030070", "999999999999"); // outro pareamento
+  const antes = linha;
+  const rPareada = await cofre17b.restaurar(INSTANCIA, 408);
+  check(rPareada.restaurado === false && rPareada.motivo === "ja_existe",
+    "pareamento real no banco: o cofre NAO toca em nada");
+  check(linha === antes, "e a credencial do banco continua byte a byte a mesma");
+
+  // SEM LINHA -> INSERT, o caminho de sempre.
+  linha = null;
+  sqlEmitido = [];
+  const rVazio = await cofre17b.restaurar(INSTANCIA, 408);
+  check(rVazio.restaurado === true, "linha ausente: restaura por INSERT, como antes");
+  check(sqlEmitido.some((s) => s === "INSERT INTO"), "e usa INSERT nesse caso");
+
+  fsMod.rmSync(dirCofre2, { recursive: true, force: true });
+  delete require.cache[require.resolve("pg")];
+  delete process.env.EVOLUTION_DB_URL;
+
   // ── RESUMO ────────────────────────────────────────────────────────────────
   console.log("\n" + "=".repeat(70));
   if (erros.length) {

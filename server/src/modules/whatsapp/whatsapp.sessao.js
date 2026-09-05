@@ -364,26 +364,68 @@ async function restaurar(nomeInstancia, motivoCodigo) {
   const instanceId = await _instanceId(nomeInstancia);
   if (!instanceId) return { restaurado: false, motivo: "instancia_inexistente" };
 
-  const presente = await credencialPresente(nomeInstancia);
-  if (presente !== false) {
-    // `true` = ha credencial, nada a fazer. `null` = nao consegui ler; escrever
-    // as cegas poderia sobrescrever uma credencial mais nova que a do cofre.
-    return { restaurado: false, motivo: presente === null ? "estado_desconhecido" : "ja_existe" };
-  }
+  // ── A LINHA PODE EXISTIR E MESMO ASSIM NAO PRESTAR ────────────────────────
+  //
+  // Era aqui que o cofre falhava justamente no caso para o qual foi feito.
+  //
+  // Quando a Evolution apaga a `Session` num 408, o `/instance/connect`
+  // seguinte cria o casco e o grava em ~2 SEGUNDOS. O vigia so olha a cada 15s
+  // -- entao, quando o cofre chega para restaurar, a linha JA existe. O
+  // `INSERT ... ON CONFLICT DO NOTHING` nao escrevia nada, devolvia
+  // "corrida_ja_existe" e desistia. Resultado: a rede de seguranca so
+  // funcionava na janela estreita em que a Evolution ainda nao tinha recriado
+  // nada.
+  //
+  // A regra "nunca sobrescrever" existe para proteger uma credencial VALIDA.
+  // Um casco nao e uma. Entao: linha ausente -> INSERT; linha com casco ->
+  // sobrescreve; linha pareada -> aborta, como sempre.
+  const atual = await _consultar(
+    `SELECT s.creds FROM "Session" s WHERE s."sessionId" = $1`,
+    [instanceId]
+  );
+  if (!atual) return { restaurado: false, motivo: "estado_desconhecido" };
 
   const creds = credsCofre;
-  const r = await _consultar(
-    `INSERT INTO "Session" ("id", "sessionId", "creds", "createdAt")
-     VALUES ($1, $2, $3, NOW())
-     ON CONFLICT ("sessionId") DO NOTHING`,
-    // `Session.id` e um varchar com default cuid() do lado da Evolution; como
-    // inserimos por SQL cru, o default nao roda e precisamos gerar um. O
-    // conteudo nao importa, so a unicidade -- quem identifica a sessao e o
-    // `sessionId`, que tem o UNIQUE de verdade.
-    [`arka-${crypto.randomUUID()}`, instanceId, creds]
-  );
-  if (!r) return { restaurado: false, motivo: "erro_insert" };
-  if (r.rowCount === 0) return { restaurado: false, motivo: "corrida_ja_existe" };
+  let r;
+
+  if (atual.rowCount > 0) {
+    const credsAtual = atual.rows[0].creds;
+    if (_pareada(credsAtual)) {
+      // Ha pareamento de verdade no banco -- ele vale mais que a copia.
+      return { restaurado: false, motivo: "ja_existe" };
+    }
+
+    // `AND creds = $3` e um bloqueio otimista: se entre a leitura acima e este
+    // UPDATE alguem gravar uma credencial nova (um QR escaneado nesse exato
+    // instante, por exemplo), o WHERE nao casa, `rowCount` volta 0 e nos
+    // saimos sem destruir nada. Sem essa condicao a restauracao poderia
+    // atropelar um pareamento recem-feito.
+    r = await _consultar(
+      `UPDATE "Session" SET creds = $1 WHERE "sessionId" = $2 AND creds = $3`,
+      [creds, instanceId, credsAtual]
+    );
+    if (!r) return { restaurado: false, motivo: "erro_update" };
+    if (r.rowCount === 0) return { restaurado: false, motivo: "corrida_credencial_mudou" };
+
+    logger.warn("[Cofre] Casco SOBRESCRITO pela credencial guardada", {
+      instance: nomeInstancia,
+      bytesCasco: credsAtual?.length ?? null,
+      bytesCofre: creds.length,
+    });
+  } else {
+    r = await _consultar(
+      `INSERT INTO "Session" ("id", "sessionId", "creds", "createdAt")
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT ("sessionId") DO NOTHING`,
+      // `Session.id` e um varchar com default cuid() do lado da Evolution; como
+      // inserimos por SQL cru, o default nao roda e precisamos gerar um. O
+      // conteudo nao importa, so a unicidade -- quem identifica a sessao e o
+      // `sessionId`, que tem o UNIQUE de verdade.
+      [`arka-${crypto.randomUUID()}`, instanceId, creds]
+    );
+    if (!r) return { restaurado: false, motivo: "erro_insert" };
+    if (r.rowCount === 0) return { restaurado: false, motivo: "corrida_ja_existe" };
+  }
 
   // Chaves do Signal de volta ao lugar, quando temos o volume montado.
   let chaves = 0;
