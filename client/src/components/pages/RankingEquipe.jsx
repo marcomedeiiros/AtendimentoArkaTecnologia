@@ -260,7 +260,7 @@ export default function RankingEquipe() {
   const limpar = useCallback(async () => {
     const ok = await confirmar(
       'Classificação, destaque do mês, satisfação, tempos e "fechados hoje" voltam a zero ' +
-      'e passam a contar a partir de agora — na Visão Geral e no Modo TV.\n\n' +
+      'e passam a contar a partir de agora na Visão Geral e no Modo TV.\n\n' +
       'Nenhum atendimento é apagado: Relatórios Clientes (CNPJ), Avaliações, Registro e o ' +
       'histórico das conversas continuam completos. Dá para desfazer depois.',
       {
@@ -363,8 +363,8 @@ export default function RankingEquipe() {
           <AlertCircle size={14} className="shrink-0 mt-0.5" />
           <span>
             O painel está contando <strong>a partir de {textoZeramento(zeradoEm)}</strong>.
-            Nenhum atendimento foi apagado — Relatórios, Avaliações e Registro seguem
-            com o histórico completo. Use <strong>Restaurar dados</strong> para voltar ao mês inteiro.
+            Nenhum atendimento foi apagado relatórios, avaliações e registro seguem
+            com o histórico completo use <strong>Restaurar dados</strong> para voltar ao mês inteiro.
           </span>
         </div>
       )}
@@ -392,7 +392,7 @@ export default function RankingEquipe() {
                 A contagem recomeçou em {textoZeramento(zeradoEm)}.
               </p>
               <p className="text-[11px] text-texto-fraco mt-1">
-                Os atendimentos anteriores continuam no sistema — a lista volta a
+                Os atendimentos anteriores continuam no sistema a lista volta a
                 se preencher com os próximos.
               </p>
             </>
