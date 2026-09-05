@@ -22,7 +22,11 @@ const painelService = require("./src/modules/dashboard/painel.service");
 const rankingService = require("./src/modules/rankings/ranking.service");
 const mapeamentoService = require("./src/modules/rankings/mapeamento.service");
 const midiaStorage = require("./src/infrastructure/storage/midia.storage");
-const { pontuarExterno, ITENS_MAPEAMENTO } = require("./src/modules/rankings/pontuacao.externa");
+const {
+  pontuarExterno,
+  ITENS_MAPEAMENTO,
+  quantidadeEvidencias: quantidadeEvidenciasDe,
+} = require("./src/modules/rankings/pontuacao.externa");
 const fs = require("fs");
 const path = require("path");
 
@@ -771,26 +775,52 @@ async function main() {
         "a leitura previa nao guarda o arquivo"
       );
 
-      const mentira = Object.fromEntries(ITENS_MAPEAMENTO.map((i) => [i.chave, "texto inventado"]));
+      /**
+       * O QUE A PESSOA ESCREVE SOMA AO QUE O PDF COBRE.
+       *
+       * ── ESTE TESTE AFIRMAVA O CONTRARIO, E O CONTRARIO ERA O DEFEITO ───────
+       *
+       * A versao anterior conferia que `itens` do cliente eram IGNORADOS quando
+       * havia PDF. A intencao era impedir que alguem mandasse oito textos
+       * quaisquer e cravasse completude cheia -- mas o efeito real foi apagar
+       * trabalho: quem anexava o relatorio e depois preenchia os itens a mao via
+       * a completude travada no numero do PDF, digitava, salvava, e continuava
+       * igual.
+       *
+       * E a protecao era ilusoria: o formulario manual SEMPRE foi o unico
+       * caminho antes de o PDF existir. Quem julga o que esta escrito e o
+       * supervisor, que devolve -- e cada devolucao desconta em retrabalho.
+       *
+       * O que NAO afrouxou: a contagem de FOTOS segue vindo so do servidor, e a
+       * checagem disso continua logo abaixo.
+       */
+      const backupEscrito = "Backup diario para nuvem, retencao de 30 dias.";
       const criado = await mapeamentoService.criar(
         {
           empresa: "PERSPECTIVA", dataVisita: previa.dataVisita, prazoEm: previa.dataVisita,
-          itens: mentira, resumo: "resumo inventado que passa dos vinte caracteres",
+          // "backup" e justamente um dos itens que ESTE PDF nao cobre (ele fala
+          // de energia e rack, nao de rotina de copia). E o caso que importa: o
+          // texto tem de ACRESCENTAR, e nao repetir o que a leitura ja achou.
+          itens: { backup: backupEscrito },
+          resumo: "resumo escrito a mao que passa dos vinte caracteres",
           arquivo: { conteudo: pdf, nome: "Relatorio.pdf" }, entregar: true,
         },
         { sub: joao.id, nome: joao.nome }
       );
       const linha = await prisma.mapeamentoTecnico.findUnique({ where: { id: criado.id } });
 
-      const gravados = Object.values(linha.itens || {});
       check(
-        gravados.length > 0 && !gravados.some((v) => String(v).includes("inventado")),
-        `os \`itens\` do cliente sao IGNORADOS quando ha PDF (${gravados.length} vindos do arquivo)`
+        linha.itens?.backup === backupEscrito,
+        "o texto digitado a mao e gravado, e nao apagado pela leitura"
+      );
+      check(
+        Object.keys(linha.itens || {}).length === previa.itensCobertos + 1,
+        `e SOMA ao que o PDF cobriu (${previa.itensCobertos} + 1 = ${Object.keys(linha.itens || {}).length})`
       );
       check(linha.fotosRelatorio === 2, `as fotos sao contadas pelo servidor (${linha.fotosRelatorio})`);
       check(
-        criado.completude === Math.round(((previa.itensCobertos + 1) / (previa.totalItens + 1)) * 100),
-        `a completude sai do PDF (${criado.completude}%)`
+        criado.completude === Math.round(((previa.itensCobertos + 2) / (previa.totalItens + 1)) * 100),
+        `a completude sobe com o que foi digitado (${criado.completude}%)`
       );
 
       /**
@@ -830,6 +860,23 @@ async function main() {
         { sub: joao.id, nome: joao.nome }
       );
       check(comFoto.evidencias === 1, `a foto avulsa fica anexada (${comFoto.evidencias})`);
+
+      /**
+       * A FOTO AVULSA SOMA COM AS DO PDF -- e nao "a maior das duas".
+       *
+       * Era `Math.max`, para evitar ponto dobrado em quem anexasse a mesma foto
+       * nos dois lugares. O efeito real foi outro: com um PDF de 2 fotos,
+       * anexar 1 ou 2 evidencias nao mexia em nada -- a pessoa mandava a foto e
+       * o numero nao subia.
+       *
+       * Os conjuntos sao diferentes na pratica (o PDF traz o que entrou no
+       * documento; a avulsa e o que ficou de fora), e a duplicata continua
+       * barrada pelo teto: a parcela e em FAIXA, 3 ja valem cheio.
+       */
+      const somam = quantidadeEvidenciasDe({ evidencias: [1, 2], fotosRelatorio: 2 });
+      check(somam === 4, `avulsas + fotos do PDF SOMAM (2 + 2 = ${somam})`);
+      const soAvulsas = quantidadeEvidenciasDe({ evidencias: [1], fotosRelatorio: null });
+      check(soAvulsas === 1, `relatorio antigo (sem leitura) nao perde nada (${soAvulsas})`);
       const aberta = await mapeamentoService.evidenciaDe(comFoto.id, 0, { sub: joao.id });
       check(!!aberta && aberta.mimetype === "image/png", `o dono abre a foto (${aberta?.mimetype})`);
       check(!!(await mapeamentoService.evidenciaDe(comFoto.id, 0, { sub: davi.id })), "o administrador tambem");

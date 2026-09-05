@@ -115,15 +115,26 @@ function completudeDe(m) {
 /**
  * Quantas evidencias este relatorio tem.
  *
- * O MAIOR entre as fotos anexadas a parte e as fotos que estao DENTRO do PDF.
- * Nao a soma: as duas contam a mesma coisa por caminhos diferentes, e somar
- * daria ponto dobrado para quem anexasse a mesma foto nos dois lugares.
+ * A SOMA das fotos anexadas a parte com as que estao dentro do PDF.
+ *
+ * ── ERA O MAIOR DAS DUAS, E ESTAVA ERRADO ──────────────────────────────────
+ *
+ * O raciocinio era evitar ponto dobrado para quem anexasse a MESMA foto nos
+ * dois lugares. So que o efeito pratico foi outro: com um PDF de 2 fotos,
+ * anexar 1 ou 2 evidencias nao mexia em nada -- a pessoa mandava a foto, o
+ * numero na tela nao subia, e a leitura possivel era "nao esta contando".
+ *
+ * E os dois conjuntos sao DIFERENTES na pratica: o PDF traz o que entrou no
+ * documento do cliente, e a evidencia avulsa e justamente o que ficou de fora.
+ * Somar conta o que existe. A duplicata continua sendo possivel, e continua
+ * barrada pelo mesmo teto de sempre: a parcela e em FAIXA (3 ja valem cheio),
+ * entao repetir foto nao leva mais longe do que ser honesto.
  *
  * `fotosRelatorio` nulo (relatorio anterior a leitura automatica) nao tira nada
  * de ninguem -- so nao acrescenta.
  */
 const quantidadeEvidencias = (m) =>
-  Math.max(Array.isArray(m.evidencias) ? m.evidencias.length : 0, m.fotosRelatorio || 0);
+  (Array.isArray(m.evidencias) ? m.evidencias.length : 0) + (m.fotosRelatorio || 0);
 
 // No prazo = entregue ate o fim do dia do prazo. Comparar por instante puniria
 // quem entregou as 18h de um prazo gravado as 9h da manha.
@@ -243,6 +254,8 @@ function pontuarExterno(lista, regras = null) {
 module.exports = {
   pontuarExterno,
   completudeDe,
+  // Publicado para a verificacao exercitar a regra sem montar um mes inteiro.
+  quantidadeEvidencias,
   noPrazo,
   ITENS_MAPEAMENTO,
   MINIMO_MAPEAMENTOS,

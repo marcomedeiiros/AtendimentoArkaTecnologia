@@ -292,23 +292,34 @@ function ModalMapeamento({ itensRegra, inicial, onFechar, onSalvo }) {
   // A MESMA conta do servidor: itens preenchidos + resumo com pelo menos 20
   // caracteres, sobre o total. Espelhada aqui para o número aparecer enquanto
   // se digita -- se as duas divergirem, a do servidor é a que vale.
+  /**
+   * A COMPLETUDE SOMA AS DUAS FONTES: o que o PDF cobre e o que foi digitado.
+   *
+   * ── O DEFEITO QUE ISTO CORRIGE ─────────────────────────────────────────────
+   *
+   * Com PDF lido, este número usava SÓ a leitura. Quem anexava o relatório e
+   * depois completava os itens à mão via o número travado -- digitava, e
+   * continuava 67%. Não era só o mostrador: o servidor também sobrescrevia o
+   * checklist, então o trabalho sumia de verdade.
+   *
+   * Agora conta o item que o PDF cobriu OU que a pessoa escreveu -- a mesma
+   * soma que o servidor grava, para os dois números nunca discordarem.
+   */
   const completude = useMemo(() => {
-    // COM PDF LIDO, a conta é a do PDF -- porque é ela que o servidor vai
-    // gravar. Continuar somando os campos manuais mostraria 0% logo depois de
-    // uma leitura bem-sucedida, e a pessoa preencheria tudo de novo achando que
-    // a leitura não valeu de nada.
-    if (analise?.lido) {
-      const comResumo = 1; // o servidor escreve um resumo a partir do que leu
-      return Math.round(((analise.itensCobertos + comResumo) / (analise.totalItens + 1)) * 100);
-    }
-    const preenchidos = itensRegra.filter((i) => String(itens[i.chave] || '').trim()).length;
-    const comResumo = resumo.trim().length >= 20 ? 1 : 0;
-    return Math.round(((preenchidos + comResumo) / (itensRegra.length + 1)) * 100);
+    const cobertos = itensRegra.filter(
+      (i) => analise?.cobertura?.[i.chave]?.coberto || String(itens[i.chave] || '').trim()
+    ).length;
+    // Com PDF lido o resumo é escrito pelo servidor quando a pessoa não escreve
+    // um -- então ele conta de qualquer jeito.
+    const comResumo = analise?.lido || resumo.trim().length >= 20 ? 1 : 0;
+    return Math.round(((cobertos + comResumo) / (itensRegra.length + 1)) * 100);
   }, [itens, resumo, itensRegra, analise]);
 
-  // As fotos DE DENTRO do PDF contam na mesma parcela das evidências anexadas,
-  // pelo maior valor entre as duas (ver pontuacao.externa.quantidadeEvidencias).
-  const evidenciasContadas = Math.max(evidencias.length, analise?.fotos || 0);
+  // As fotos DE DENTRO do PDF somam com as evidências anexadas (ver
+  // pontuacao.externa.quantidadeEvidencias). Era o MAIOR das duas, e com um PDF
+  // de 2 fotos anexar 1 ou 2 não mexia em nada -- a pessoa mandava a foto e o
+  // número não subia.
+  const evidenciasContadas = evidencias.length + (analise?.fotos || 0);
 
   const dentroDoPrazo = useMemo(() => hojeISO() <= prazoEm, [prazoEm]);
 
@@ -614,7 +625,7 @@ function ModalMapeamento({ itensRegra, inicial, onFechar, onSalvo }) {
             >
               {manual ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
               Preencher resumo e checklist à mão
-              {analise?.lido && <span className="font-normal">(o PDF já preencheu)</span>}
+              {analise?.lido && <span className="font-normal">(soma ao que o PDF já cobriu)</span>}
             </button>
 
             <div hidden={!manual} className="space-y-3">
@@ -631,10 +642,17 @@ function ModalMapeamento({ itensRegra, inicial, onFechar, onSalvo }) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {itensRegra.map((i) => {
                   const preenchido = String(itens[i.chave] || '').trim().length > 0;
+                  // O QUE O PDF JÁ COBRIU fica dito no próprio item. Sem isso a
+                  // pessoa não tem como saber onde digitar ACRESCENTA e onde só
+                  // repete o que o relatório já diz -- e a completude parece
+                  // teimar num número sem explicação.
+                  const noPdf = !!analise?.cobertura?.[i.chave]?.coberto;
+                  const conta = preenchido || noPdf;
                   return (
                     <div key={i.chave}>
-                      <label className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 mb-1 ${preenchido ? 'text-ativo-400' : 'text-texto-fraco'}`}>
-                        {preenchido && <CheckCircle2 size={10} />} {i.rotulo}
+                      <label className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 mb-1 ${conta ? 'text-ativo-400' : 'text-texto-fraco'}`}>
+                        {conta && <CheckCircle2 size={10} />} {i.rotulo}
+                        {noPdf && !preenchido && <span className="font-normal normal-case tracking-normal">no PDF</span>}
                       </label>
                       <textarea
                         value={itens[i.chave] || ''}
@@ -1265,7 +1283,7 @@ export default function Mapeamentos() {
                         anexadas escreveria "0" num relatório com duas fotos,
                         e a pessoa iria anexar de novo o que já entregou. */}
                     <span className="flex items-center gap-1" title="Fotos que contam na pontuação">
-                      <Camera size={10} /> {Math.max(m.evidencias || 0, m.arquivo?.fotos || 0)}
+                      <Camera size={10} /> {(m.evidencias || 0) + (m.arquivo?.fotos || 0)}
                     </span>
                   </div>
                   {m.observacaoValidacao && (

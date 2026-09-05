@@ -223,7 +223,7 @@ class MapeamentoService {
    * Sem PDF, nada disto roda e o caminho manual antigo continua valendo --
    * relatorio de antes, ou PDF que a leitura nao entendeu.
    */
-  async _lerDoRelatorio(caminhoRelativo, { resumoAtual = "" } = {}) {
+  async _lerDoRelatorio(caminhoRelativo, { resumoAtual = "", itensAtuais = null } = {}) {
     const regras = await regrasRelatorio.obter();
     const analise = await analisarRelatorio(caminhoRelativo, { palavras: regras.palavras });
     if (!analise?.lido) {
@@ -240,10 +240,43 @@ class MapeamentoService {
       if (achado?.coberto) itens[chave] = `No relatório: ${achado.palavras.join(", ")}`;
     }
 
+    /**
+     * O QUE A PESSOA ESCREVEU GANHA DA LEITURA.
+     *
+     * ── O DEFEITO QUE ISTO CORRIGE ──────────────────────────────────────────
+     *
+     * A leitura SOBRESCREVIA o checklist inteiro. Quem anexava o PDF e depois
+     * completava os itens a mao via a completude travada no numero que o PDF
+     * deu -- digitava, salvava, e continuava 67%. O trabalho sumia sem aviso, e
+     * a unica leitura possivel era "o campo nao funciona".
+     *
+     * Agora e SOMA: o PDF preenche o que achou, e o texto digitado prevalece no
+     * item em que existe. Um relatorio que fala de backup e uma anotacao sobre
+     * seguranca somam sete de oito, que e a verdade sobre aquele relatorio.
+     *
+     * ── E A PREOCUPACAO QUE ISTO REABRE ─────────────────────────────────────
+     *
+     * Aceitar `itens` do cliente permite mandar oito textos quaisquer e cravar
+     * completude cheia. Era o motivo de sobrescrever -- e vale reconhecer que a
+     * protecao era ilusoria: o formulario manual SEMPRE foi o unico caminho
+     * antes do PDF existir, e ninguem nunca precisou de PDF para digitar. Exigir
+     * o PDF como fonte unica e mais restrito do que o sistema jamais foi, e o
+     * preco era apagar trabalho de verdade.
+     *
+     * Quem julga o que esta escrito continua sendo o supervisor, que devolve --
+     * e cada devolucao desconta na parcela de retrabalho.
+     *
+     * O que NAO se afrouxa: a contagem de FOTOS segue vindo so do servidor
+     * (`fotosRelatorio`), porque ali nao ha nada para uma pessoa escrever -- e
+     * um numero mandado pelo cliente seria ponto de graca, sem contrapartida.
+     */
+    const daPessoa = saneiaItens(itensAtuais) || {};
+    const somados = { ...itens, ...daPessoa };
+
     return {
       analise,
       campos: {
-        itens: Object.keys(itens).length ? itens : null,
+        itens: Object.keys(somados).length ? somados : null,
         fotosRelatorio: analise.fotos,
         // O resumo so e escrito quando a pessoa nao escreveu um: o texto dela
         // vale mais que o meu, e sobrescrever apagaria o que ela digitou.
@@ -397,7 +430,10 @@ class MapeamentoService {
     }
     // Havendo PDF, e ele quem preenche o que pontua (ver `_lerDoRelatorio`).
     const lido = arquivo.arquivoPath
-      ? await this._lerDoRelatorio(arquivo.arquivoPath, { resumoAtual: dados.resumo })
+      ? await this._lerDoRelatorio(arquivo.arquivoPath, {
+          resumoAtual: dados.resumo,
+          itensAtuais: dados.itens,
+        })
       : { campos: {} };
     const criado = await prisma.mapeamentoTecnico.create({
       data: {
@@ -447,7 +483,13 @@ class MapeamentoService {
     // chegar ao mesmo resultado, e sobrescreveria o resumo que a pessoa pode
     // ter corrigido a mao depois.
     const lido = arquivo?.arquivoPath
-      ? await this._lerDoRelatorio(arquivo.arquivoPath, { resumoAtual: dados.resumo ?? atual.resumo })
+      ? await this._lerDoRelatorio(arquivo.arquivoPath, {
+          resumoAtual: dados.resumo ?? atual.resumo,
+          // Na edicao vale o que veio no corpo; sem ele, o que ja estava
+          // gravado. Ignorar os dois apagaria o texto na primeira vez que
+          // alguem trocasse o PDF de um relatorio ja preenchido.
+          itensAtuais: dados.itens ?? atual.itens,
+        })
       : { campos: {} };
     const entregando = !!dados.entregar;
 
