@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   MessageCircle, Power, QrCode, Loader2, RefreshCw, RotateCcw,
-  Trash2, Copy, Check
+  Trash2, Copy, Check, ShieldCheck
 } from 'lucide-react';
 import { EmojiIcon } from '../components/pages/EmojiIcon';
 import { useAppContext } from '../context/AppContext';
 import { WhatsAppAPI } from '../services/api';
 import { FUSO_BR } from '../utils/data';
-import { avisar, pedirTexto } from '../utils/dialogo';
+import { avisar, confirmar, pedirTexto } from '../utils/dialogo';
 
 // Enquanto a instancia nao pareia, o QR da Evolution expira em ~30s.
 const QR_REFRESH_MS = 25000;
@@ -18,6 +18,12 @@ const STATUS_POLL_MS = 20000;
 const STATUS_UI = {
   Online:        { badge: 'bg-ativo/20 text-ativo-400', box: 'bg-ativo/15 text-ativo-400 border border-ativo/30' },
   Conectando:    { badge: 'bg-espera/20 text-espera-400',     box: 'bg-espera/15 text-espera-400 border border-espera/30' },
+  // Caiu e o servidor está religando com a MESMA sessão. Cor de espera, não de
+  // falha: não há nada para o operador fazer, e nada foi perdido.
+  Reconectando:  { badge: 'bg-espera/20 text-espera-400',     box: 'bg-espera/15 text-espera-400 border border-espera/30' },
+  // A Evolution não respondeu. Isso não é o WhatsApp caído e NÃO se resolve com
+  // QR -- se resolve olhando o container. Cor de falha, porque exige alguém.
+  'Evolution indisponível': { badge: 'bg-falha/20 text-falha-400', box: 'bg-falha/15 text-falha-400 border border-falha/30' },
   // O servidor desistiu de religar sozinho: o pareamento caiu e so o celular
   // resolve. Cor de falha, nao de espera -- "Conectando" em amarelo passava a
   // ideia de que estava quase la, e ninguem ia buscar o telefone.
@@ -59,12 +65,53 @@ export default function WhatsAppPage() {
   const conectado = status === 'Online';
   const ui = STATUS_UI[status] || STATUS_UI.Offline;
 
+  // QUEM AUTORIZA O QR É O SERVIDOR. A tela só obedece.
+  //
+  // O padrão quando ainda não sabemos (`detalhes` nulo, primeira carga, back-end
+  // sem resposta) é `false`: na dúvida NÃO se oferece QR. Era o inverso disso --
+  // "não conectado, então mostre o QR" -- que fazia uma indisponibilidade da
+  // Evolution virar um pedido de reescanear com a sessão intacta no banco.
+  const podeMostrarQr = detalhes?.podeMostrarQr === true;
+  const evolutionOnline = detalhes ? detalhes.evolutionOnline !== false : null;
+  const reconectando =
+    detalhes?.situacao === 'DISCONNECTED_TEMPORARY' ||
+    detalhes?.situacao === 'RECONNECTING';
+
+  /**
+   * O ERRO COMO ELE É -- endpoint, HTTP e a frase da própria Evolution.
+   *
+   * A versão anterior imprimia só `e.message` e, quando a Evolution respondia
+   * `response.message` como lista de objetos, isso chegava aqui já degradado
+   * para "[object Object]": um erro sem conteúdo nenhum, que ainda por cima
+   * culpava sempre EVOLUTION_API_URL/KEY -- inclusive quando a URL e a chave
+   * estavam certas e o problema era outro.
+   *
+   * Agora o servidor manda `diagnostico` junto (endpoint, httpStatus, corpo) e
+   * a tela mostra. E a frase de rodapé varia: só faz sentido mandar conferir
+   * URL/KEY quando a API de fato não respondeu.
+   */
   const erroEvolution = useCallback((e) => {
-    const detalhe = String(e?.message || '').replace(/\.\s*$/, '');
-    setAviso(
-      `Não foi possível falar com a Evolution API${detalhe ? `: ${detalhe}` : ''} ` +
-      'verifique se ela está no ar e se EVOLUTION_API_URL/KEY estão configurados no servidor.'
-    );
+    const d = e?.diagnostico || {};
+    const linhas = [];
+
+    const detalhe = String(e?.message || '').trim();
+    linhas.push(detalhe || 'A Evolution API recusou a operação.');
+
+    if (d.endpoint) linhas.push(`Endpoint: ${d.metodo || 'GET'} ${d.endpoint}`);
+    if (d.httpStatus) linhas.push(`HTTP: ${d.httpStatus}`);
+    else if (e?.status) linhas.push(`HTTP: ${e.status}`);
+    if (d.causa) linhas.push(`Causa: ${d.causa}`);
+    if (d.resposta) linhas.push(`Resposta: ${d.resposta}`);
+
+    if (e?.codigo === 'EVOLUTION_API_UNAVAILABLE') {
+      linhas.push(
+        'A Evolution não respondeu. Verifique se o container está no ar e se ' +
+        'EVOLUTION_API_URL/KEY estão corretos. Isso NÃO significa que o ' +
+        'pareamento do WhatsApp se perdeu.'
+      );
+    }
+
+    setAviso(linhas.join('\n'));
   }, []);
 
   const carregarDetalhes = useCallback(async () => {
@@ -76,49 +123,71 @@ export default function WhatsAppPage() {
       if (d?.conectado) { setQrcode(null); setPairingCode(null); }
       return d;
     } catch (e) {
-      setDetalhes(null);
+      // ANTES ISTO ERA MUDO, e o silêncio mentia: com `detalhes` nulo a tela
+      // caía para "Offline" e oferecia o QR, como se o pareamento tivesse ido
+      // embora -- quando o que houve foi o painel não conseguir falar com o
+      // próprio back-end. Guardamos o que já sabíamos e dizemos o que houve.
+      erroEvolution(e);
       return null;
     }
-  }, [setWhatsAppConectado]);
+  }, [setWhatsAppConectado, erroEvolution]);
 
   // Normaliza o base64 que a Evolution devolve com ou sem o prefixo data:.
   const comoImagem = (b64) =>
     b64 ? (String(b64).startsWith('data:') ? b64 : `data:image/png;base64,${b64}`) : null;
 
-  // `jaRecriou` corta a recursao: uma instancia recem-criada que ainda responda
-  // 404 nao pode virar um ciclo de criar/tentar/criar sem fim.
-  const gerarQr = useCallback(async (jaRecriou = false) => {
+  /**
+   * PEDIR O QR. O servidor pode recusar, e a recusa é uma proteção, não um bug.
+   *
+   * `forcar` só vem de um clique consciente ("Gerar QR mesmo assim"). Sem ele o
+   * back-end devolve QR_DESNECESSARIO enquanto a sessão estiver válida -- e com
+   * razão: `QRCODE_LIMIT=3` na Evolution faz um QR renovado à toa terminar em
+   * `client.logout()`, que remove o aparelho do lado do WhatsApp. Pedir QR sem
+   * precisar é a maneira mais rápida de perder o pareamento que estava de pé.
+   */
+  const gerarQr = useCallback(async ({ forcar = false } = {}) => {
     setCarregandoQr(true); setAviso('');
     try {
-      const r = await WhatsAppAPI.qrcode(instanciaRef.current);
+      const r = await WhatsAppAPI.qrcode(instanciaRef.current, forcar);
       const b64 = r?.qrcode || null;
       setQrcode(comoImagem(b64));
       setPairingCode(r?.pairingCode || null);
       if (!b64 && !r?.pairingCode) setAviso('A Evolution não retornou QR Code. Se a instância já estiver conectada, desconecte antes de gerar um novo.');
     } catch (e) {
-      // A INSTANCIA NAO EXISTE MAIS: cria e ja devolve o QR, em vez de exibir
-      // um erro que a tela nao ensina a resolver.
-      //
-      // `/instance/connect` PRESSUPOE a instancia. Depois de um "excluir" --
-      // ou de qualquer sumico do lado da Evolution -- este era o ponto onde o
-      // painel travava: erro na tela, e nenhum botao capaz de sair dali.
-      if (e?.codigo === 'INSTANCIA_INEXISTENTE' && !jaRecriou) {
+      // Recusa do próprio servidor: a sessão está viva. Isso não é falha de
+      // comunicação e não deve aparecer com a cara de uma.
+      if (e?.codigo === 'QR_DESNECESSARIO' || e?.codigo === 'QR_DESNECESSARIO_CONECTADO') {
+        setAviso(e.message);
+        return;
+      }
+      // A INSTÂNCIA NÃO EXISTE MAIS. Recriar é destrutivo -- nasce uma instância
+      // sem pareamento nenhum -- então NÃO é mais automático. O que fazia isso
+      // sozinho podia, diante de um 404 passageiro, trocar uma sessão válida por
+      // uma instância virgem. Agora quem decide é quem está olhando a tela.
+      if (e?.codigo === 'INSTANCIA_INEXISTENTE') {
+        const ok = await confirmar(
+          `A instância "${instanciaRef.current}" não existe mais na Evolution.\n\n` +
+          'Criar de novo começa do zero: será preciso escanear o QR Code para parear o ' +
+          'WhatsApp outra vez. Se isso pode ser um erro passageiro da Evolution, cancele ' +
+          'e tente "Reconectar" antes.',
+          { titulo: 'Criar a instância de novo?', rotuloConfirmar: 'Criar instância', perigo: true }
+        );
+        if (!ok) { erroEvolution(e); return; }
         try {
           const nova = await WhatsAppAPI.criar(instanciaRef.current);
           setQrcode(comoImagem(nova?.qrcode));
           setPairingCode(null);
           setAviso(
             nova?.qrcode
-              ? 'A instância não existia mais e foi recriada. Escaneie o QR Code abaixo para parear o WhatsApp.'
-              : 'Instância recriada. Gerando o QR Code...'
+              ? 'Instância recriada. Escaneie o QR Code abaixo para parear o WhatsApp.'
+              : 'Instância recriada. Clique em "Gerar QR" para obter o código.'
           );
-          if (!nova?.qrcode) await gerarQr(true);
         } catch (erroCriar) {
           erroEvolution(erroCriar);
         }
-      } else {
-        erroEvolution(e);
+        return;
       }
+      erroEvolution(e);
     } finally {
       setCarregandoQr(false);
     }
@@ -131,11 +200,25 @@ export default function WhatsAppPage() {
     return () => clearInterval(id);
   }, [carregarDetalhes]);
 
+  // RENOVAÇÃO AUTOMÁTICA DO QR -- só enquanto o QR for legítimo.
+  //
+  // `podeMostrarQr` na dependência não é detalhe: sem ele, uma tela deixada
+  // aberta continuava pedindo QR a cada 25s DEPOIS de a sessão voltar a ser
+  // válida. Com `QRCODE_LIMIT=3`, três renovações à toa fazem a Evolution
+  // chamar `client.logout()` -- a tela derrubaria o pareamento que o servidor
+  // acabou de recuperar.
   useEffect(() => {
-    if (conectado || !qrcode) return;
-    const id = setInterval(gerarQr, QR_REFRESH_MS);
+    if (conectado || !qrcode || !podeMostrarQr) return;
+    const id = setInterval(() => gerarQr(), QR_REFRESH_MS);
     return () => clearInterval(id);
-  }, [conectado, qrcode, gerarQr]);
+  }, [conectado, qrcode, podeMostrarQr, gerarQr]);
+
+  // Some com o QR na tela assim que ele deixa de ser legítimo (a sessão voltou,
+  // ou o vigia religou sozinho). Um QR esquecido na tela convida a escanear sem
+  // necessidade, e escanear sem necessidade troca a sessão boa por outra.
+  useEffect(() => {
+    if (!podeMostrarQr && qrcode) { setQrcode(null); setPairingCode(null); }
+  }, [podeMostrarQr, qrcode]);
 
   async function alternarConexao() {
     setOcupado(true); setAviso('');
@@ -144,8 +227,13 @@ export default function WhatsAppPage() {
         await WhatsAppAPI.desconectar(instancia);
         setWhatsAppConectado(false);
         setQrcode(null);
-      } else {
+      } else if (podeMostrarQr) {
         await gerarQr();
+      } else {
+        // "Conectar" com a sessão ainda válida é RECONECTAR, não reparear. Este
+        // botão pedia QR em qualquer caso, e era um dos caminhos pelos quais um
+        // pareamento vivo virava um pedido de reescanear.
+        await reconectar();
       }
       await carregarDetalhes();
     } catch (e) {
@@ -155,21 +243,34 @@ export default function WhatsAppPage() {
     }
   }
 
+  /**
+   * RECONECTAR = RECUPERAR A SESSÃO EXISTENTE. Nunca apagar, nunca recriar.
+   *
+   * A rota por trás deste botão mudou de comportamento: ela não manda mais um
+   * `/instance/restart` cru (que a Evolution RECUSA quando a instância está em
+   * `close`, devolvendo a recusa como HTTP 200 e virando erro na tela). Agora
+   * ela entra no vigia, que escolhe `connect` ou `restart` pelo estado real,
+   * restaura a credencial do cofre se a Evolution a tiver apagado numa queda
+   * boba, e devolve o status. Se a sessão estiver mesmo invalidada, o status
+   * volta como LOGGED_OUT e é aí -- e só aí -- que o QR aparece.
+   */
   async function reconectar() {
     setOcupado(true); setAviso('');
     try {
-      await WhatsAppAPI.reiniciar(instancia);
-      await carregarDetalhes();
-    } catch (e) {
-      // "Reiniciar" nao existe para uma instancia que sumiu -- e este foi o
-      // botao apertado 26 vezes seguidas em 01/09/2026, sempre com erro. Cair
-      // para o caminho que RESOLVE (criar + QR) e o que o usuario quis dizer.
-      if (e?.codigo === 'INSTANCIA_INEXISTENTE') {
-        await gerarQr();
-        await carregarDetalhes();
-      } else {
-        erroEvolution(e);
+      const r = await WhatsAppAPI.reiniciar(instancia);
+      setDetalhes((d) => (d ? { ...d, ...r } : d));
+      const atual = await carregarDetalhes();
+      if (atual && !atual.conectado && !atual.podeMostrarQr) {
+        setAviso(
+          'Reconexão disparada com a MESMA sessão -- nenhum QR é necessário. ' +
+          `Situação: ${atual.situacao || '-'}${atual.tentativaReconexao ? ` (tentativa ${atual.tentativaReconexao})` : ''}.`
+        );
       }
+    } catch (e) {
+      // Sem atalho para "criar + QR" aqui. Recriar a instância destrói o
+      // pareamento, e este botão existe justamente para preservá-lo -- quem
+      // quiser recriar faz isso conscientemente pelo caminho do QR.
+      erroEvolution(e);
     } finally { setOcupado(false); }
   }
 
@@ -244,7 +345,7 @@ export default function WhatsAppPage() {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={reconectar} disabled={ocupado} className={botaoSec} title="Reiniciar a instância na Evolution">
+          <button onClick={reconectar} disabled={ocupado} className={botaoSec} title="Recuperar a sessão existente -- não apaga nada e não pede QR">
             <RotateCcw size={14} /> Reconectar
           </button>
           <button onClick={excluirInstancia} disabled={ocupado}
@@ -280,8 +381,10 @@ export default function WhatsAppPage() {
         </div>
       )}
 
+      {/* `whitespace-pre-line` porque o aviso agora é um relatório de várias
+          linhas (endpoint, HTTP, resposta da Evolution) e não uma frase só. */}
       {aviso && (
-        <div className="p-3 rounded-xl bg-espera/10 border border-espera/30 text-xs text-espera-400">
+        <div className="p-3 rounded-xl bg-espera/10 border border-espera/30 text-xs text-espera-400 whitespace-pre-line font-mono leading-relaxed">
           {aviso}
         </div>
       )}
@@ -307,6 +410,13 @@ export default function WhatsAppPage() {
               </div>
             ) : qrcode ? (
               <img src={qrcode} alt="QR Code de autenticação" className="w-40 h-40 object-contain" />
+            ) : !conectado && !podeMostrarQr ? (
+              // O desenho de QR aqui CONVIDAVA a escanear mesmo quando não havia
+              // nada para parear. Com a sessão viva, o que a tela precisa mostrar
+              // é que ela está guardada -- não um QR Code de enfeite.
+              <div className="w-40 h-40 flex items-center justify-center">
+                <ShieldCheck size={96} />
+              </div>
             ) : (
               <QrCode size={160} />
             )}
@@ -318,21 +428,68 @@ export default function WhatsAppPage() {
             </div>
           )}
 
+          {/* O QR SÓ APARECE COM AUTORIZAÇÃO DO SERVIDOR.
+              Três telas diferentes para três situações que antes eram uma só:
+                conectado                 -> nada a fazer
+                pode mostrar QR           -> logout real, ou nunca pareou
+                nem uma coisa nem outra   -> a sessão está viva; o servidor cuida
+              Era o último caso que aparecia como "escaneie o QR Code" e fazia
+              alguém reparear um número que não precisava ser repareado. */}
           {conectado ? (
             <EmojiIcon name="check" label="WhatsApp Pareado & Sincronizado" size="sm" />
-          ) : (
+          ) : podeMostrarQr ? (
             <div className="flex items-center gap-2 flex-wrap justify-center">
-              <button onClick={gerarQr} disabled={carregandoQr}
+              <button onClick={() => gerarQr()} disabled={carregandoQr}
                 className="px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-2 bg-ativo hover:bg-ativo-400 text-slate-950 transition-all disabled:opacity-60">
                 <QrCode size={14} /> Gerar QR
               </button>
-              <button onClick={gerarQr} disabled={carregandoQr} className={botaoSec} title="Renovar o QR Code">
+              <button onClick={() => gerarQr()} disabled={carregandoQr} className={botaoSec} title="Renovar o QR Code">
                 <RefreshCw size={14} className={carregandoQr ? 'animate-spin' : ''} /> Atualizar QR
+              </button>
+            </div>
+          ) : evolutionOnline === false ? (
+            <div className="text-xs text-falha-400 max-w-xs">
+              <p className="font-bold mb-1">Evolution API indisponível</p>
+              <p className="text-slate-400">
+                O painel não conseguiu falar com a Evolution. Isso <strong>não</strong> é
+                perda de pareamento e não se resolve com QR Code &mdash; verifique o
+                container e a rede. A sessão do WhatsApp continua guardada.
+              </p>
+            </div>
+          ) : (
+            <div className="text-xs text-slate-400 max-w-xs">
+              <p className="font-bold text-espera-400 mb-1">
+                {reconectando ? 'Reconectando automaticamente' : 'Sessão preservada'}
+              </p>
+              <p>
+                A sessão do WhatsApp continua válida &mdash; o servidor religa
+                sozinho, sem QR Code.
+                {detalhes?.tentativaReconexao ? ` Tentativa ${detalhes.tentativaReconexao}.` : ''}
+              </p>
+              {/* A SAÍDA CONSCIENTE. Fica discreta e avisa o custo: com
+                  QRCODE_LIMIT=3 um QR pedido à toa pode terminar em logout de
+                  verdade. Existe para o operador que sabe que precisa reparear
+                  e não pode ficar refém do diagnóstico automático. */}
+              <button
+                onClick={async () => {
+                  const ok = await confirmar(
+                    'O servidor considera a sessão VÁLIDA e está reconectando sozinho.\n\n' +
+                    'Gerar um QR Code agora pode fazer a Evolution derrubar o pareamento atual ' +
+                    '(ela desconecta o aparelho ao estourar o limite de QRs).\n\n' +
+                    'Só continue se você realmente pretende parear o número de novo.',
+                    { titulo: 'Gerar QR mesmo assim?', rotuloConfirmar: 'Gerar QR mesmo assim', perigo: true }
+                  );
+                  if (ok) await gerarQr({ forcar: true });
+                }}
+                disabled={carregandoQr}
+                className="mt-3 text-[10px] text-slate-500 underline hover:text-slate-300 disabled:opacity-60"
+              >
+                Preciso parear de novo mesmo assim
               </button>
             </div>
           )}
 
-          {!conectado && qrcode && (
+          {!conectado && qrcode && podeMostrarQr && (
             <p className="text-[10px] text-slate-500 mt-3">O QR renova automaticamente a cada 25s.</p>
           )}
         </div>
@@ -344,7 +501,12 @@ export default function WhatsAppPage() {
             <input
               value={detalhes?.webhook?.url || ''}
               readOnly
-              placeholder="Nenhum webhook configurado na instância"
+              /* Vazio aqui NÃO significa "sem webhook". Nesta topologia quem
+                 entrega os eventos é o webhook GLOBAL da Evolution
+                 (WEBHOOK_GLOBAL_URL), que não aparece em /webhook/find da
+                 instância. O texto antigo dizia o contrário e mandava investigar
+                 um problema que não existe. */
+              placeholder="Usando o webhook global da Evolution (WEBHOOK_GLOBAL_URL)"
               className="w-full bg-grafite-700 border border-linha rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-acao/50"
             />
           </div>
@@ -373,6 +535,48 @@ export default function WhatsAppPage() {
             <div className="p-3 rounded-xl bg-grafite-600 border border-linha">
               <div className="text-slate-500 text-[10px] uppercase mb-0.5">Última Sincronização</div>
               <div className="text-slate-200 font-semibold">{formatarHora(detalhes?.ultimaSincronizacao)}</div>
+            </div>
+          </div>
+
+          {/* SAÚDE DA CONEXÃO -- o que o vigia sabe, na tela.
+              O back-end já devolvia tudo isto e nada aparecia; sem esses quatro
+              campos, "Conectando" era indistinguível de "caiu e estou religando"
+              e de "perdi o pareamento". São três situações com três respostas
+              diferentes, e quem olha o painel precisa saber qual é. */}
+          <div className="p-3 rounded-xl bg-grafite-600 border border-linha space-y-2">
+            <div className="text-slate-500 text-[10px] uppercase">Saúde da conexão</div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px]">
+              <div className="text-slate-500">Situação</div>
+              <div className="text-slate-200 font-mono">{detalhes?.situacao || '-'}</div>
+
+              <div className="text-slate-500">Tentativa de reconexão</div>
+              <div className="text-slate-200 font-mono">
+                {detalhes?.tentativaReconexao ? `#${detalhes.tentativaReconexao}` : '-'}
+              </div>
+
+              <div className="text-slate-500" title="statusCode do Baileys que fechou o socket. 401/403 = logout real; o resto é queda temporária.">
+                Motivo da desconexão
+              </div>
+              <div className="text-slate-200 font-mono">
+                {detalhes?.motivoDesconexao != null
+                  ? `${detalhes.motivoDesconexao}${[401, 403].includes(detalhes.motivoDesconexao) ? ' (logout real)' : ' (temporário)'}`
+                  : '-'}
+              </div>
+
+              <div className="text-slate-500" title="Cópia da credencial do pareamento, usada quando a Evolution a apaga numa queda temporária.">
+                Cofre da sessão
+              </div>
+              <div className="font-mono">
+                {detalhes?.cofreSessao?.disponivel
+                  ? detalhes.cofreSessao.temCofre
+                    ? <span className="text-ativo-400">
+                        guardada{detalhes.cofreSessao.salvoEm ? ` • ${formatarHora(detalhes.cofreSessao.salvoEm)}` : ''}
+                      </span>
+                    : <span className="text-espera-400">ativo, sem cópia ainda</span>
+                  : <span className="text-falha-400">
+                      inativo{detalhes?.cofreSessao?.motivoIndisponivel ? ` (${detalhes.cofreSessao.motivoIndisponivel})` : ''}
+                    </span>}
+              </div>
             </div>
           </div>
 

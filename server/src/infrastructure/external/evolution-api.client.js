@@ -9,12 +9,75 @@ const AppError = require("../../shared/errors/AppError");
  * aninhada. O codigo lia `data.message` e nao achava nada, entao toda falha
  * chegava ao painel como "Falha na comunicacao com Evolution API", escondendo
  * justamente a frase que dizia o que houve ("The X instance does not exist").
+ *
+ * A SEGUNDA ARMADILHA, e a que produziu o "[object Object]" na tela: essa lista
+ * nem sempre e de strings. Quando a Evolution valida o corpo com class-validator
+ * ela devolve `message: [{property, constraints:{...}}]`, e o `join` de antes
+ * transformava cada objeto em "[object Object]" -- literalmente. Objeto simples
+ * (sem `message`/`error`) era pior ainda: caia no `return ""` e a frase da
+ * Evolution sumia inteira.
+ *
+ * Agora a extracao DESCE na estrutura e, quando nao reconhece a forma, entrega
+ * o JSON em vez de descartar. Regra: e melhor um JSON feio na tela do que um
+ * erro sem conteudo -- o feio se investiga, o vazio nao.
  */
-function mensagemDaEvolution(data) {
-  const bruto = data?.response?.message ?? data?.message ?? data?.error;
-  if (Array.isArray(bruto)) return bruto.filter(Boolean).join("; ");
-  if (typeof bruto === "string") return bruto;
+function textoDeErro(bruto, profundidade = 0) {
+  if (bruto == null || profundidade > 5) return "";
+  if (typeof bruto === "string") return bruto.trim();
+  if (typeof bruto === "number" || typeof bruto === "boolean") return String(bruto);
+
+  if (Array.isArray(bruto)) {
+    return bruto
+      .map((item) => textoDeErro(item, profundidade + 1))
+      .filter(Boolean)
+      .join("; ");
+  }
+
+  if (typeof bruto === "object") {
+    // Os campos que a Evolution (e o Nest por baixo dela) usam para o texto.
+    for (const campo of ["message", "error", "description", "detail", "reason"]) {
+      const achado = textoDeErro(bruto[campo], profundidade + 1);
+      if (achado) return achado;
+    }
+    // `constraints` do class-validator: { isString: "name must be a string" }.
+    if (bruto.constraints && typeof bruto.constraints === "object") {
+      const regras = Object.values(bruto.constraints)
+        .map((v) => textoDeErro(v, profundidade + 1))
+        .filter(Boolean)
+        .join("; ");
+      if (regras) return regras;
+    }
+    try {
+      const json = JSON.stringify(bruto);
+      if (json && json !== "{}") {
+        return json.length > 400 ? `${json.slice(0, 400)}...` : json;
+      }
+    } catch {
+      /* referencia circular -- devolve vazio, quem chama tem texto de reserva */
+    }
+  }
   return "";
+}
+
+function mensagemDaEvolution(data) {
+  return (
+    textoDeErro(data?.response?.message) ||
+    textoDeErro(data?.message) ||
+    textoDeErro(data?.error) ||
+    textoDeErro(data)
+  );
+}
+
+// O corpo da resposta guardado no diagnostico, com teto. Sem teto, um
+// `fetchInstances` que devolve o historico inteiro entupiria o log e a tela.
+function recorte(valor, limite = 800) {
+  try {
+    const texto = typeof valor === "string" ? valor : JSON.stringify(valor);
+    if (!texto) return null;
+    return texto.length > limite ? `${texto.slice(0, limite)}...` : texto;
+  } catch {
+    return null;
+  }
 }
 
 class EvolutionApiClient {
@@ -64,11 +127,36 @@ class EvolutionApiClient {
       });
 
       const text = await response.text();
-      const data = text ? JSON.parse(text) : null;
+      // CORPO QUE NAO E JSON TAMBEM E INFORMACAO. Um 502 do nginx ou um HTML de
+      // erro faziam o `JSON.parse` estourar aqui dentro, o catch la embaixo
+      // engolia tudo e o painel dizia "Evolution API indisponivel" -- quando na
+      // verdade ela RESPONDEU, e a resposta explicava o problema.
+      let data = null;
+      let corpoNaoJson = null;
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch {
+          corpoNaoJson = text;
+        }
+      }
+
+      // O contexto que transforma "deu erro" em "deu erro AQUI". Vai junto do
+      // AppError ate a tela e ate o log -- ver error.middleware.
+      const diagnostico = {
+        endpoint: path,
+        metodo: method,
+        httpStatus: response.status,
+        resposta: recorte(data ?? corpoNaoJson),
+      };
 
       if (!response.ok) {
-        logger.warn("Evolution API erro", { status: response.status, data });
-        const detalhe = mensagemDaEvolution(data);
+        logger.warn("Evolution API erro", {
+          ...diagnostico,
+          // O objeto cru no log, alem do recorte: aqui nao ha limite de tela.
+          corpo: data ?? corpoNaoJson,
+        });
+        const detalhe = mensagemDaEvolution(data) || textoDeErro(corpoNaoJson);
 
         // INSTANCIA QUE NAO EXISTE E UM CASO A PARTE, e nao "falha de
         // comunicacao". Sem distingui-lo, o painel recebia 502 com texto
@@ -81,14 +169,16 @@ class EvolutionApiClient {
           throw new AppError(
             `A instancia nao existe mais na Evolution${detalhe ? ` (${detalhe})` : ""}.`,
             404,
-            "INSTANCIA_INEXISTENTE"
+            "INSTANCIA_INEXISTENTE",
+            diagnostico
           );
         }
 
         throw new AppError(
-          detalhe || "Falha na comunicacao com Evolution API",
+          detalhe || `A Evolution respondeu HTTP ${response.status} sem descrever o motivo`,
           502,
-          "EVOLUTION_API_ERROR"
+          "EVOLUTION_API_ERROR",
+          diagnostico
         );
       }
 
@@ -101,23 +191,45 @@ class EvolutionApiClient {
       // anotava "reiniciada" e ia dormir enquanto NADA tinha acontecido: uma
       // reconexao que falha em silencio e pior que uma que estoura.
       if (data && data.error === true) {
-        const detalhe = mensagemDaEvolution(data) || data.message || "";
-        logger.warn("Evolution API respondeu 200 com erro no corpo", { path, detalhe });
+        const detalhe = mensagemDaEvolution(data);
+        logger.warn("Evolution API respondeu 200 com erro no corpo", {
+          ...diagnostico,
+          detalhe,
+          corpo: data,
+        });
         throw new AppError(
           detalhe || "A Evolution recusou a operacao",
           502,
-          "EVOLUTION_API_ERROR"
+          "EVOLUTION_API_ERROR",
+          { ...diagnostico, erroNoCorpoCom200: true }
         );
       }
 
       return data;
     } catch (error) {
       if (error instanceof AppError) throw error;
-      logger.error("Evolution API indisponivel", { message: error.message });
+      // AQUI a Evolution nao respondeu NADA: DNS, recusa de conexao, timeout.
+      // E uma falha diferente de "ela respondeu um erro", e a tela precisa
+      // saber a diferenca -- uma pede olhar o container, a outra pede olhar a
+      // requisicao. Nenhuma das duas significa que o pareamento se perdeu.
+      logger.error("Evolution API indisponivel", {
+        endpoint: path,
+        metodo: method,
+        url,
+        message: error.message,
+        causa: error.cause?.code || error.code || null,
+      });
       throw new AppError(
-        "Evolution API indisponivel. Verifique EVOLUTION_API_URL.",
+        `Evolution API indisponivel (${error.cause?.code || error.code || error.message}).`,
         503,
-        "EVOLUTION_API_UNAVAILABLE"
+        "EVOLUTION_API_UNAVAILABLE",
+        {
+          endpoint: path,
+          metodo: method,
+          url,
+          causa: error.cause?.code || error.code || null,
+          message: error.message,
+        }
       );
     }
   }

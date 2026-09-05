@@ -73,12 +73,33 @@ const ESTADOS = {
   DESCONHECIDO: "UNKNOWN", // a Evolution nao respondeu -- nao e queda do WhatsApp
 };
 
+// A INSTANCIA VIGIADA VEM DA CONFIGURACAO EFETIVA (banco > .env), nao do .env
+// direto. Trocar o nome da instancia na tela de Configuracoes deixava o vigia
+// olhando para um nome que nao existe mais: ele reportava "close" para sempre,
+// o painel mostrava outra instancia, e as duas telas discordavam sem que nada
+// no log dissesse por que. Guardamos o ultimo valor resolvido porque `estado()`
+// e sincrono (o /status o chama a cada poll).
+let instanciaVigiada = env.evolutionApi.instance;
+
+async function _resolverInstancia() {
+  try {
+    const nome = await evolutionApi.instanciaPadrao();
+    if (nome) instanciaVigiada = nome;
+  } catch {
+    /* configuracao ilegivel: segue com o ultimo nome conhecido */
+  }
+  return instanciaVigiada;
+}
+
 let timer = null;
 // UMA verificacao por vez. Guardamos a PROMESSA, nao um booleano: assim uma
 // chamada manual (`/reconectar` no painel) espera a que ja esta rodando em vez
 // de comecar uma segunda em paralelo. Booleano so protegia contra o proprio
 // timer -- duas vias ainda podiam abrir sockets concorrentes.
 let emVoo = null;
+// Armado por `reconectarAgora` (o botao do painel) e consumido na proxima
+// passada de `_verificar`.
+let forcarAgora = false;
 
 // DUAS COISAS DIFERENTES, e confundi-las custa a leitura do problema:
 //
@@ -132,13 +153,13 @@ function marcarPrecisaParear(motivo, extra = {}) {
   situacao = ESTADOS.DESLOGADO;
   classificacao = ESTADOS.DESLOGADO;
   logger.error("[WhatsApp] LOGOUT REAL DETECTADO", {
-    instance: env.evolutionApi.instance,
+    instance: instanciaVigiada,
     situacao,
     motivo,
     ...extra,
   });
   logger.error("[WhatsApp] Sessao invalidada -- e preciso reescanear o QR no painel", {
-    instance: env.evolutionApi.instance,
+    instance: instanciaVigiada,
   });
 }
 
@@ -149,7 +170,7 @@ function notificarQueda(state) {
   if (precisaParear) return;
   proximaTentativaEm = 0;
   logger.warn("[WhatsApp] Queda sinalizada pela Evolution", {
-    instance: env.evolutionApi.instance,
+    instance: instanciaVigiada,
     state,
   });
 }
@@ -216,8 +237,15 @@ async function verificar() {
 }
 
 async function _verificar() {
-  const instancia = env.evolutionApi.instance;
+  const instancia = await _resolverInstancia();
   if (!instancia) return { ignorado: "sem_instancia" };
+
+  // Consumido UMA vez: um clique humano em "Reconectar" atravessa a carencia do
+  // handshake e o backoff. O operador que clica ja esperou -- mas isso nao lhe
+  // da o direito de abrir um segundo socket, e por isso o `emVoo` continua
+  // valendo acima: no maximo UMA verificacao por vez, manual ou nao.
+  const manual = forcarAgora;
+  forcarAgora = false;
 
   let state;
   try {
@@ -254,7 +282,7 @@ async function _verificar() {
   if (state === "connecting") {
     if (connectingDesde === null) connectingDesde = Date.now();
     const parado = Date.now() - connectingDesde;
-    if (parado < LIMITE_CONNECTING_MS) {
+    if (parado < LIMITE_CONNECTING_MS && !manual) {
       situacao = ESTADOS.RECONNECTING;
       return { situacao, state, acao: "aguardando_handshake", haMs: parado };
     }
@@ -298,7 +326,7 @@ async function _verificar() {
   classificacao = ESTADOS.TEMPORARIO;
 
   const agora = Date.now();
-  if (agora < proximaTentativaEm) {
+  if (agora < proximaTentativaEm && !manual) {
     return { situacao, classificacao, state, acao: "aguardando_backoff", emMs: proximaTentativaEm - agora };
   }
 
@@ -354,11 +382,46 @@ async function _verificar() {
 }
 
 /**
+ * O BOTAO "RECONECTAR" DO PAINEL -- e a UNICA coisa que ele faz.
+ *
+ * Antes o botao chamava `/instance/restart` cru. Isso e errado por dois
+ * motivos, e os dois apareciam na tela como erro:
+ *
+ *   1. `restart` RECUSA instancia em `close` (o estado mais comum de quem
+ *      precisa reconectar) e devolve a recusa como HTTP 200 `{error:true}` --
+ *      que o nosso cliente traduz para 502. Ou seja: o botao de recuperar a
+ *      conexao falhava exatamente quando era necessario.
+ *   2. Ele pulava o vigia. Duas vias mandando reconectar e a receita para dois
+ *      sockets com a mesma credencial e um `conflict: replaced` do WhatsApp.
+ *
+ * Agora o botao ENTRA NO MESMO CAMINHO do vigia: ele zera o backoff, atravessa
+ * a carencia do handshake e roda UMA verificacao -- que escolhe `connect` ou
+ * `restart` conforme o estado, restaura do cofre se preciso e nunca apaga
+ * credencial nem pede QR. Se a sessao estiver mesmo invalidada, a verificacao
+ * devolve LOGGED_OUT e ai a tela oferece o QR -- com evidencia, nao por palpite.
+ */
+async function reconectarAgora() {
+  if (emVoo) {
+    // Ja ha uma verificacao rodando: esperamos ELA em vez de abrir outra, e so
+    // depois forcamos a nossa. Assim o clique nunca cria um socket paralelo.
+    await emVoo.catch(() => {});
+  }
+  forcarAgora = true;
+  tentativa = 0;
+  proximaTentativaEm = 0;
+  try {
+    return await verificar();
+  } finally {
+    forcarAgora = false;
+  }
+}
+
+/**
  * QR CHEGOU PELO WEBHOOK. Sozinho, isso nao prova nada (ver armadilha 3 no topo
  * do arquivo). Confirmamos contra o banco antes de condenar o pareamento.
  */
 async function avaliarQrRecebido() {
-  const instancia = env.evolutionApi.instance;
+  const instancia = instanciaVigiada;
   if (Date.now() - qrPedidoEm < JANELA_QR_PEDIDO_MS) {
     return { conclusao: "qr_pedido", precisaParear };
   }
@@ -384,7 +447,7 @@ async function avaliarQrRecebido() {
 
 /** O que o /status precisa para a tela parar de mentir "Conectando". */
 function estado() {
-  const instancia = env.evolutionApi.instance;
+  const instancia = instanciaVigiada;
   return {
     situacao,
     classificacao,
@@ -432,6 +495,7 @@ module.exports = {
   iniciar,
   parar,
   verificar,
+  reconectarAgora,
   estado,
   notificarQueda,
   marcarPrecisaParear,

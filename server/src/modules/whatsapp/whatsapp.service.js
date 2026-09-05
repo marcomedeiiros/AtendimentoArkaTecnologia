@@ -611,11 +611,33 @@ class WhatsAppService {
     const vigia = reconexao.estado();
     const { precisaParear, perdeuPareamento, tentativa } = vigia;
 
+    // A EVOLUTION RESPONDEU? E uma pergunta diferente de "o WhatsApp esta
+    // conectado?", e confundir as duas foi o que fez a tela oferecer QR quando
+    // o problema era a API fora do ar. `unavailable` e nosso rotulo para "nao
+    // consegui falar com ela" -- nunca vem da Evolution.
+    const evolutionOnline = state !== "unavailable";
+
+    // O UNICO LUGAR QUE AUTORIZA O QR. A tela nao decide isso sozinha.
+    //
+    // Duas situacoes legitimas, as duas com evidencia:
+    //   - LOGOUT REAL confirmado pelo vigia (401/403 do Baileys, ou credencial
+    //     ausente no banco da Evolution sem copia no cofre);
+    //   - NUNCA PAREOU: instalacao nova, o QR e o caminho normal.
+    //
+    // Fora disso -- caiu, esta subindo, esta em backoff, a Evolution nao
+    // respondeu -- o QR e proibido: a sessao esta viva e o vigia esta cuidando.
+    const nuncaPareou = !vigia.cofre?.temCofre;
+    const podeMostrarQr =
+      evolutionOnline && !conectado && (precisaParear || nuncaPareou);
+
     return {
       instancia: nome,
       conectado,
       state,
-      statusLabel: this._rotuloStatus(state, perdeuPareamento),
+      statusLabel: this._rotuloStatus(state, perdeuPareamento, vigia.situacao),
+      evolutionOnline,
+      podeMostrarQr,
+      nuncaPareou,
       precisaParear,
       perdeuPareamento,
       tentativaReconexao: tentativa,
@@ -637,13 +659,29 @@ class WhatsAppService {
     };
   }
 
-  _rotuloStatus(state, perdeuPareamento) {
+  /**
+   * O QUE O BADGE DIZ -- e ele nao pode dizer menos do que sabemos.
+   *
+   * "Conectando" era a resposta para tres coisas incompativeis: o handshake
+   * normal, uma queda em backoff e a Evolution fora do ar. Quem lia a tela nao
+   * tinha como saber se devia esperar, olhar o servidor ou pegar o celular. Sao
+   * tres acoes diferentes, entao sao tres rotulos diferentes.
+   */
+  _rotuloStatus(state, perdeuPareamento, situacao) {
     if (state === "open") return "Online";
+    // A Evolution nao respondeu. Isso NAO e o WhatsApp caido, e nao se resolve
+    // com QR nenhum -- se resolve olhando o container.
+    if (state === "unavailable") return "Evolution indisponível";
     // So quem JA esteve online muda de rotulo: numa instalacao nova pedir QR e
     // o caminho normal, e "Reescaneie" ali soaria como defeito.
     if (perdeuPareamento) return "Reescaneie o QR";
+    if (
+      situacao === reconexao.ESTADOS.TEMPORARIO ||
+      situacao === reconexao.ESTADOS.RECONNECTING
+    ) {
+      return "Reconectando";
+    }
     if (state === "connecting") return "Conectando";
-    if (state === "unavailable") return "Offline";
     return "Desconectado";
   }
 
@@ -766,11 +804,29 @@ class WhatsAppService {
     return { instancia: nome, webhookUrl: url };
   }
 
+  /**
+   * O "Reconectar" do painel. RECUPERA A SESSAO -- nao reinicia nada as cegas.
+   *
+   * O nome da rota continua `/reiniciar` por compatibilidade, mas o que ela faz
+   * mudou de raiz. Antes: `POST /instance/restart` cru na Evolution. Isso
+   * FALHAVA justamente no caso comum -- `restart` recusa instancia em `close` e
+   * devolve a recusa como HTTP 200 `{error:true}`, que vira 502 aqui e erro na
+   * tela. E, pior, pulava o vigia: duas vias mandando reconectar podem abrir
+   * dois sockets com a mesma credencial.
+   *
+   * Agora delega ao vigia, que escolhe `connect` ou `restart` pelo estado real,
+   * restaura do cofre quando a Evolution apagou a credencial numa queda boba, e
+   * NUNCA apaga instancia, credencial ou pede QR.
+   *
+   * Nao propaga erro de proposito: o vigia ja engole a Evolution fora do ar
+   * (isso nao e queda do WhatsApp). O que volta e o status, e o status conta o
+   * que aconteceu.
+   */
   async reiniciar(instanceName) {
-    const nome = instanceName || env.evolutionApi.instance;
-    await evolutionApi.restartInstance(nome);
-    delete this._conectadoDesde[nome];
-    return this.obterStatus(nome);
+    const nome = instanceName || (await evolutionApi.instanciaPadrao());
+    const resultado = await reconexao.reconectarAgora();
+    const status = await this.obterStatus(nome);
+    return { ...status, reconexao: resultado };
   }
 
   async excluir(instanceName) {
@@ -809,8 +865,56 @@ class WhatsAppService {
     return { instancia: nome, conectado: false };
   }
 
-  async obterQrcode(instanceName) {
-    const result = await this.conectar(instanceName);
+  /**
+   * QR CODE -- e o servidor que decide se pode, nao a tela.
+   *
+   * Emitir QR nao e uma acao inofensiva nesta instalacao. `QRCODE_LIMIT=3` na
+   * Evolution significa que, ao estourar o limite, ela chama `client.logout()`
+   * e o aparelho e REMOVIDO do lado do WhatsApp (monitor.service.ts:435). Ou
+   * seja: pedir QR com a sessao viva pode DESTRUIR a sessao viva. Uma tela de
+   * QR renovando sozinha e uma bomba-relogio, e foi por isso que o limite ja
+   * tinha sido baixado de 30 para 3.
+   *
+   * Entao a regra vale nos dois lados: sem `podeMostrarQr` (logout real
+   * confirmado, ou instalacao que nunca pareou), a rota recusa. Existe a saida
+   * `forcar` para o operador que precisa reparear de propria vontade -- ela e
+   * explicita, vem de um clique consciente, e fica registrada no log.
+   */
+  async obterQrcode(instanceName, { forcar = false } = {}) {
+    const nome = instanceName || (await evolutionApi.instanciaPadrao());
+    const status = await this.obterStatus(nome);
+
+    if (!status.podeMostrarQr && !forcar) {
+      if (status.conectado) {
+        throw new AppError(
+          "A instancia ja esta conectada. Desconecte antes de gerar um QR novo.",
+          409,
+          "QR_DESNECESSARIO_CONECTADO"
+        );
+      }
+      if (!status.evolutionOnline) {
+        throw new AppError(
+          "A Evolution API nao respondeu. Sem falar com ela nao ha QR para gerar -- e isto nao significa que o pareamento se perdeu.",
+          503,
+          "EVOLUTION_API_UNAVAILABLE"
+        );
+      }
+      throw new AppError(
+        "A sessao do WhatsApp continua valida e o servidor esta reconectando sozinho. Gerar QR agora pode derrubar o pareamento.",
+        409,
+        "QR_DESNECESSARIO"
+      );
+    }
+
+    if (forcar && !status.podeMostrarQr) {
+      logger.warn("[WhatsApp] QR FORCADO pelo operador com a sessao aparentemente valida", {
+        instance: nome,
+        situacao: status.situacao,
+        state: status.state,
+      });
+    }
+
+    const result = await this.conectar(nome);
     return {
       instancia: result.instancia,
       qrcode: result.qrcode,

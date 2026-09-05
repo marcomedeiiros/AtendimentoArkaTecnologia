@@ -181,11 +181,26 @@ async function lerErro(response) {
   try { corpo = await response.json(); } catch { /* resposta sem JSON */ }
   // Sem JSON no corpo (erro do proxy/nginx, 500 seco, timeout) a mensagem
   // generica nao dizia nada -- incluir o status ajuda a diagnosticar.
-  const erro = new Error(
-    corpo?.error?.message || `Não foi possível concluir a operação. (HTTP ${response.status})`
-  );
+  // A MENSAGEM PODE NÃO SER STRING. `new Error(objeto)` chama ToString e grava
+  // literalmente "[object Object]" -- foi assim que a tela de Integração
+  // WhatsApp passou a exibir "Não foi possível falar com a Evolution API:
+  // [object Object]". O servidor já foi corrigido para nunca mandar objeto
+  // aqui; esta guarda é a segunda linha, para qualquer outra rota que ainda
+  // possa mandar.
+  const bruto = corpo?.error?.message;
+  const texto =
+    typeof bruto === 'string' && bruto.trim()
+      ? bruto
+      : bruto != null
+        ? (() => { try { return JSON.stringify(bruto); } catch { return ''; } })()
+        : '';
+
+  const erro = new Error(texto || `Não foi possível concluir a operação. (HTTP ${response.status})`);
   erro.codigo = corpo?.error?.code || null;
   erro.status = response.status;
+  // Contexto técnico da integração que falhou (endpoint, HTTP da origem, corpo
+  // da resposta). Quem quiser mostrar "erro AQUI" em vez de "erro" usa isto.
+  erro.diagnostico = corpo?.error?.diagnostico || null;
   erro.campos = {};
   for (const d of corpo?.error?.details || []) {
     if (d?.field) erro.campos[d.field] = d.message;
@@ -559,7 +574,12 @@ const qs = (instance) => (instance ? `?instance=${encodeURIComponent(instance)}`
 export const WhatsAppAPI = {
   status: (instance) => request(`/whatsapp/status${qs(instance)}`),
   detalhes: (instance) => request(`/whatsapp/detalhes${qs(instance)}`),
-  qrcode: (instance) => request(`/whatsapp/qrcode${qs(instance)}`),
+  // `forcar` é a saída consciente do operador: o servidor RECUSA gerar QR
+  // enquanto a sessão estiver válida e o vigia conseguindo religar sozinho,
+  // porque com `QRCODE_LIMIT=3` uma tela de QR renovando sozinha faz a Evolution
+  // chamar `client.logout()` e destruir o pareamento de verdade.
+  qrcode: (instance, forcar = false) =>
+    request(`/whatsapp/qrcode${qs(instance)}${forcar ? (qs(instance) ? '&' : '?') + 'forcar=1' : ''}`),
   conectar: (instance) => request('/whatsapp/conectar', { method: 'POST', body: JSON.stringify({ instance }) }),
   desconectar: (instance) => request('/whatsapp/desconectar', { method: 'POST', body: JSON.stringify({ instance }) }),
   reiniciar: (instance) => request('/whatsapp/reiniciar', { method: 'POST', body: JSON.stringify({ instance }) }),

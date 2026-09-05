@@ -31,9 +31,14 @@ class WhatsAppController {
       .then((data) => success(res, data));
   }
 
+  // `?forcar=1` e a saida consciente do operador que quer reparear mesmo com a
+  // sessao aparentemente valida. Sem ela, o servidor recusa gerar QR enquanto o
+  // vigia estiver conseguindo recuperar a conexao sozinho -- ver obterQrcode.
   qrcode(req, res) {
     return whatsappService
-      .obterQrcode(req.query.instance)
+      .obterQrcode(req.query.instance, {
+        forcar: req.query.forcar === "1" || req.query.forcar === "true",
+      })
       .then((data) => success(res, data));
   }
 

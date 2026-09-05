@@ -290,6 +290,169 @@ function liberarBackoff(vigia) {
     "trata HTTP 200 com `{error:true}` como falha, nao como sucesso"
   );
 
+  // ── 13. O ERRO CHEGA LEGIVEL NA TELA ──────────────────────────────────────
+  //
+  // "[object Object]" no painel nao era cosmetico: era a mensagem da Evolution
+  // sendo DESTRUIDA no caminho, e sem ela nao havia diagnostico possivel. A
+  // v2 responde `response.message` como LISTA, as vezes de objetos; o `join`
+  // antigo transformava cada objeto na string "[object Object]".
+  console.log("\n=== 13. o erro da Evolution chega legivel ===");
+  const AppError = require("./src/shared/errors/AppError");
+
+  check(
+    !/\[object Object\]/.test(new AppError([{ property: "x" }, { property: "y" }]).message),
+    "AppError com lista de objetos nao vira '[object Object]'"
+  );
+  check(
+    new AppError({ response: { message: ["numero invalido"] } }).message.includes("numero invalido"),
+    "AppError preserva o texto aninhado em vez de descartar"
+  );
+  check(
+    new AppError("texto normal").message === "texto normal",
+    "AppError nao mexe em mensagem que ja e string"
+  );
+
+  // O caminho real: uma resposta de erro da Evolution atravessando o cliente.
+  // `request` cru, e nao `getConnectionState`: os dubles do bloco anterior
+  // substituiram os metodos de alto nivel deste MESMO singleton, e chamar um
+  // deles aqui testaria o duble em vez do cliente de verdade.
+  const clienteReal = require("./src/infrastructure/external/evolution-api.client");
+  const fetchOriginal = global.fetch;
+  const respostaFalsa = (corpo, status) => async () => ({
+    ok: status < 400,
+    status,
+    text: async () => JSON.stringify(corpo),
+  });
+
+  // class-validator: `message` e lista de OBJETOS. Era este o caso da tela.
+  global.fetch = respostaFalsa(
+    { status: 400, error: "Bad Request", response: { message: [{ constraints: { isString: "instanceName deve ser texto" } }] } },
+    400
+  );
+  let capturado = null;
+  try { await clienteReal.request("GET", `/instance/connectionState/${INSTANCIA}`); } catch (e) { capturado = e; }
+  check(
+    capturado && !/\[object Object\]/.test(capturado.message),
+    "erro 400 da Evolution nao chega como '[object Object]'"
+  );
+  check(
+    capturado && capturado.message.includes("instanceName deve ser texto"),
+    "a frase real da Evolution sobrevive ate a mensagem de erro"
+  );
+  check(
+    capturado?.diagnostico?.httpStatus === 400 &&
+      String(capturado?.diagnostico?.endpoint || "").includes("/instance/connectionState/"),
+    "o diagnostico carrega endpoint e HTTP da chamada que falhou"
+  );
+
+  // Corpo que nem e JSON (502 do nginx, HTML de erro): antes o JSON.parse
+  // estourava e virava "Evolution indisponivel" -- escondendo que ela
+  // RESPONDEU, e o que respondeu.
+  global.fetch = async () => ({ ok: false, status: 502, text: async () => "<html>502 Bad Gateway</html>" });
+  capturado = null;
+  try { await clienteReal.request("GET", `/instance/connectionState/${INSTANCIA}`); } catch (e) { capturado = e; }
+  check(
+    capturado?.codigo !== "EVOLUTION_API_UNAVAILABLE" || capturado?.code !== "EVOLUTION_API_UNAVAILABLE",
+    "resposta nao-JSON nao e confundida com 'API fora do ar'"
+  );
+  check(
+    String(capturado?.diagnostico?.resposta || "").includes("502"),
+    "o corpo nao-JSON e preservado no diagnostico"
+  );
+
+  global.fetch = fetchOriginal;
+
+  // ── 14. QR SO COM AUTORIZACAO DO SERVIDOR ─────────────────────────────────
+  //
+  // A regra central do pedido, e ela precisa valer no BACK-END: a tela nao pode
+  // ser a unica barreira. Com QRCODE_LIMIT=3, um QR pedido a toa termina em
+  // `client.logout()` na Evolution -- ou seja, pedir QR sem precisar DESTROI o
+  // pareamento que estava de pe.
+  console.log("\n=== 14. o QR depende de evidencia, nao da tela ===");
+  const servico = require("./src/modules/whatsapp/whatsapp.service");
+  const rotulo = (state, perdeu, situacao) => servico._rotuloStatus(state, perdeu, situacao);
+
+  check(
+    rotulo("unavailable", false, "UNKNOWN") === "Evolution indisponível",
+    "Evolution sem resposta nao aparece como 'Offline' nem 'Conectando'"
+  );
+  check(
+    rotulo("close", false, "DISCONNECTED_TEMPORARY") === "Reconectando",
+    "queda temporaria aparece como 'Reconectando', nao 'Conectando'"
+  );
+  check(
+    rotulo("close", true, "LOGGED_OUT") === "Reescaneie o QR",
+    "logout real continua sendo o unico que manda reescanear"
+  );
+
+  // O gate propriamente dito, com o status forjado pelos tres cenarios.
+  const statusOriginal = servico.obterStatus.bind(servico);
+  const comStatus = async (falso, opcoes) => {
+    servico.obterStatus = async () => falso;
+    try {
+      await servico.obterQrcode(INSTANCIA, opcoes);
+      return null;
+    } catch (e) {
+      return e;
+    } finally {
+      servico.obterStatus = statusOriginal;
+    }
+  };
+
+  let recusa = await comStatus({
+    conectado: false, evolutionOnline: true, podeMostrarQr: false,
+    situacao: "DISCONNECTED_TEMPORARY", state: "close",
+  });
+  check(recusa?.code === "QR_DESNECESSARIO", "sessao valida: o servidor RECUSA gerar QR");
+
+  recusa = await comStatus({
+    conectado: false, evolutionOnline: false, podeMostrarQr: false,
+    situacao: "UNKNOWN", state: "unavailable",
+  });
+  check(
+    recusa?.code === "EVOLUTION_API_UNAVAILABLE",
+    "Evolution fora do ar: recusa dizendo isso, e nao pedindo QR"
+  );
+
+  recusa = await comStatus({
+    conectado: true, evolutionOnline: true, podeMostrarQr: false,
+    situacao: "CONNECTED", state: "open",
+  });
+  check(recusa?.code === "QR_DESNECESSARIO_CONECTADO", "ja conectado: recusa em vez de derrubar a sessao");
+
+  // ── 15. O BOTAO "RECONECTAR" NAO DESTROI NADA ─────────────────────────────
+  console.log("\n=== 15. o botao Reconectar recupera, nao recria ===");
+  const fonteServico = require("fs").readFileSync(
+    "./src/modules/whatsapp/whatsapp.service.js",
+    "utf8"
+  );
+  const corpoReiniciar = fonteServico.slice(
+    fonteServico.indexOf("async reiniciar("),
+    fonteServico.indexOf("async excluir(")
+  );
+  check(
+    /reconexao\.reconectarAgora\(\)/.test(corpoReiniciar),
+    "Reconectar entra no vigia (que escolhe connect/restart pelo estado)"
+  );
+  check(
+    !/deleteInstance|createInstance|logout/.test(corpoReiniciar),
+    "Reconectar nao apaga, nao recria e nao desloga a instancia"
+  );
+
+  const fonteTela = require("fs").readFileSync(
+    "../client/src/pages/WhatsAppPage.jsx",
+    "utf8"
+  );
+  check(
+    /podeMostrarQr/.test(fonteTela),
+    "a tela obedece ao `podeMostrarQr` do servidor em vez de decidir sozinha"
+  );
+  check(
+    /!conectado \|\| !qrcode \|\| !podeMostrarQr/.test(fonteTela) ||
+      /if \(conectado \|\| !qrcode \|\| !podeMostrarQr\) return/.test(fonteTela),
+    "a renovacao automatica do QR para quando o QR deixa de ser legitimo"
+  );
+
   // ── RESUMO ────────────────────────────────────────────────────────────────
   console.log("\n" + "=".repeat(70));
   if (erros.length) {
