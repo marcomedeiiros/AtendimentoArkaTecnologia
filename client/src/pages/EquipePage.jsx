@@ -303,7 +303,7 @@ export default function EquipePage() {
       // vazio embaixo. Quem segura isso agora e o `items-start` do grid.
       <div
         key={m.id}
-        className={`glass-panel flex flex-col gap-3 rounded-2xl p-3.5 sm:p-4 border ${
+        className={`glass-panel rounded-2xl p-3.5 sm:p-4 border flex flex-col gap-3 xl:flex-row xl:items-center xl:gap-5 ${
           estaInativo
             ? 'border-espera/50 bg-espera/5'
             : m.status === 'online'
@@ -311,26 +311,34 @@ export default function EquipePage() {
             : 'border-linha'
         }`}
       >
-        <div className="space-y-3">
-          <div className="flex items-center gap-3">
-            <Avatar nome={m.nome} size="md" online={m.status === 'online' && !estaInativo} />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <span className="truncate text-xs font-bold text-white">{m.nome}</span>
-                {ehVoce && (
-                  <span className="shrink-0 rounded-md bg-acao/15 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-acao-200">
-                    você
-                  </span>
-                )}
-              </div>
-              <div className="truncate font-mono text-[11px] text-texto-suave">{m.email}</div>
-            </div>
-          </div>
+        {/* UMA FAIXA POR PESSOA, e não quatro cartões por linha.
+            Em quatro colunas cada cartão recebia ~330px e empilhava seis blocos
+            um sobre o outro -- nome, cargo, filas, ranking, explicações e
+            botões. A tela virava um mural: muita repetição na horizontal e
+            nada alinhado na vertical, então comparar duas pessoas exigia ler
+            dois cartões inteiros.
 
-          {/* `flex-wrap`: em cartao estreito (celular, ou 4 colunas no monitor
-              grande) o cargo e o status descem em duas linhas em vez de se
-              esmagarem um contra o outro. */}
-          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 border-t border-linha pt-3">
+            Em faixa, cada assunto ocupa a MESMA coluna em todas as linhas: dá
+            para varrer só a coluna de ranking, ou só a de filas, de cima a
+            baixo. Abaixo do `xl` ela volta a empilhar, que é o que cabe. */}
+        <div className="flex min-w-0 items-center gap-3 xl:w-64 xl:shrink-0">
+          <Avatar nome={m.nome} size="md" online={m.status === 'online' && !estaInativo} />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <span className="truncate text-xs font-bold text-white">{m.nome}</span>
+              {ehVoce && (
+                <span className="shrink-0 rounded-md bg-acao/15 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-acao-200">
+                  você
+                </span>
+              )}
+            </div>
+            <div className="truncate font-mono text-[11px] text-texto-suave">{m.email}</div>
+          </div>
+        </div>
+
+        {/* Na faixa o filete horizontal viraria um risco no meio da linha: ele
+            existe só enquanto os blocos estão empilhados. */}
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 border-t border-linha pt-3 xl:w-44 xl:shrink-0 xl:justify-start xl:gap-2 xl:border-t-0 xl:pt-0">
             <div className="flex min-w-0 items-center gap-1.5 text-[11px]">
               <ShieldCheck size={13} className={estaInativo ? 'text-texto-fraco' : 'text-acao-200'} />
               {estaInativo ? (
@@ -371,7 +379,7 @@ export default function EquipePage() {
               o Financeiro de quem é do Financeiro -- o servidor ignoraria, e a
               tela teria mentido. O que se marca aqui é o EXTRA. */}
           {!estaInativo && (
-            <div className="border-t border-linha pt-3">
+            <div className="border-t border-linha pt-3 xl:flex-1 xl:min-w-0 xl:border-t-0 xl:pt-0">
               <div className="mb-2 flex items-center gap-1.5 text-[11px] text-texto-suave">
                 <Inbox size={13} className="text-acao-200" />
                 <span className="font-semibold">Filas que enxerga</span>
@@ -407,16 +415,39 @@ export default function EquipePage() {
                   );
                 })}
               </div>
+            </div>
+          )}
 
-              {/* RANKING DE DESEMPENHO.
-                  Fica aqui, no cadastro, e não numa lista de nomes dentro do
-                  código: uma entrada, saída ou troca de função viraria deploy,
-                  e o ranking passaria dias mostrando quem já saiu. */}
-              <div className="mt-3 pt-3 border-t border-linha/60">
-                <div className="mb-2 flex items-center gap-1.5 text-[11px] text-texto-suave">
-                  <Trophy size={13} className="text-espera-400" />
-                  <span className="font-semibold">Ranking de desempenho</span>
-                </div>
+          {/* RANKING DE DESEMPENHO -- coluna própria, e não aninhada nas filas.
+              Empilhado ele era o sexto bloco de um cartão estreito; em faixa
+              ele é a coluna que se compara de cima a baixo, que é a pergunta
+              que a tela responde ("quem concorre em quê?").
+
+              Fica no cadastro, e não numa lista de nomes dentro do código: uma
+              entrada, saída ou troca de função viraria deploy, e o ranking
+              passaria dias mostrando quem já saiu. */}
+          {!estaInativo && (
+            <div className="border-t border-linha pt-3 xl:flex-1 xl:min-w-0 xl:border-t-0 xl:pt-0">
+              <div className="mb-2 flex items-center gap-1.5 text-[11px] text-texto-suave">
+                <Trophy size={13} className="text-espera-400" />
+                <span
+                  className="font-semibold"
+                  /* A EXPLICAÇÃO VIROU TOOLTIP.
+                     Ela era um parágrafo em cada cartão -- e como quase todo
+                     mundo aqui é Administrador, a mesma frase aparecia três,
+                     quatro vezes na tela. Texto repetido não é lido: vira
+                     textura. No `title` ela continua a um segundo de distância
+                     de quem tiver a dúvida. */
+                  title={
+                    'Marque as duas quando a pessoa atende no chat e também visita cliente — ' +
+                    'cada função é medida pelo critério dela, e as pontuações não se somam. ' +
+                    'Administrador valida os relatórios e registra as premiações, e ainda ' +
+                    'concorre nos rankings marcados.'
+                  }
+                >
+                  Ranking de desempenho
+                </span>
+              </div>
                 {/* AS DUAS MARCAÇÕES CONVIVEM.
                     Há quem atenda no chat e também visite cliente, e cada
                     função precisa ser medida pelo critério dela. Isso não
@@ -460,25 +491,12 @@ export default function EquipePage() {
                   >
                     Não concorre
                   </button>
-                </div>
-                {(m.equipesRanking || []).length === 2 && (
-                  <p className="text-[10px] text-texto-fraco mt-1.5">
-                    Concorre nos dois, com pontuações separadas.
-                  </p>
-                )}
-                {m.cargo === 'Administrador' && (
-                  <p className="text-[10px] text-texto-fraco mt-1.5">
-                    Como Administrador, valida os relatórios e registra as premiações e ainda
-                    concorre nos rankings marcados acima.
-                  </p>
-                )}
               </div>
             </div>
           )}
-        </div>
 
         {ehAdmin && !ehVoce && (
-          <div className="pt-3 border-t border-linha flex flex-wrap items-center justify-end gap-2">
+          <div className="pt-3 border-t border-linha flex flex-wrap items-center justify-end gap-2 xl:shrink-0 xl:border-t-0 xl:pt-0">
             {estaInativo ? (
               <>
                 <button
@@ -697,13 +715,13 @@ export default function EquipePage() {
           <p className="text-[11px] text-texto-suave">
             Estas pessoas se cadastraram e aguardam liberação para entrar na plataforma.
           </p>
-          <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-1 items-start gap-3">
             {pendentesLista.map((m) => renderCard(m))}
           </div>
         </section>
       )}
 
-      <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid grid-cols-1 items-start gap-3">
         {ativos.map((m) => renderCard(m))}
 
         {equipe.length === 0 && (
