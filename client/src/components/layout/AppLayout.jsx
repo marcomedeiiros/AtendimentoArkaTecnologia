@@ -231,7 +231,7 @@ function MenuUsuario({ usuario, recolhida, onIrParaPerfil, onSair }) {
         onClick={() => (pos ? fechar() : abrir())}
         aria-haspopup="menu"
         aria-expanded={!!pos}
-        title={usuario?.nome ? `${usuario.nome} — perfil e sair` : 'Perfil e sair'}
+        title={usuario?.nome ? `${usuario.nome} perfil e sair` : 'Perfil e sair'}
         className={`flex w-full min-w-0 items-center gap-2.5 -mx-1 rounded-lg px-1 py-1 text-left transition-colors hover:bg-slate-800/40 ${
           pos ? 'bg-slate-800/40' : ''
         } ${recolhida ? 'lg:mx-0 lg:justify-center' : ''}`}

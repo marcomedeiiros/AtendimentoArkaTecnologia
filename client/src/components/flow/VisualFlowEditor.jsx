@@ -416,11 +416,50 @@ function SequencePanel({ nodes, onReorder, onSelectNode, selectedNodeIds }) {
 }
 
 
+// A FAIXA DE ZOOM, num lugar so. Os mesmos 0.25 e 2.5 que os botoes de mais e
+// menos ja usavam -- repetidos em tres pontos, bastava mexer num deles para o
+// valor guardado sair da faixa que a tela aceita.
+const ZOOM_MIN = 0.25;
+const ZOOM_MAX = 2.5;
+function limitarZoom(v) {
+  const z = Number(v);
+  // `Number.isFinite` cobre null, undefined, "" e NaN de uma vez: todos viram
+  // 100%, que e o unico palpite seguro quando o valor guardado nao presta.
+  if (!Number.isFinite(z) || z <= 0) return 1;
+  return Math.min(Math.max(z, ZOOM_MIN), ZOOM_MAX);
+}
+
 export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
   const [selectedFlowId, setSelectedFlowId] = useState(fluxos[0]?.id || null);
   const flow = fluxos.find(f => f.id === selectedFlowId) || fluxos[0];
 
-  const [zoom, setZoom] = useState(1);
+  /**
+   * O ZOOM DO CANVAS -- guardado por operador, no servidor.
+   *
+   * Antes ele nascia em 100% a cada abertura da tela. Quem trabalha com fluxo
+   * grande passava o dia refazendo o mesmo ajuste: entra na aba, afasta para
+   * ver o desenho inteiro, sai para responder uma conversa, volta, afasta de
+   * novo. Nao e preferencia de sessao -- e de pessoa e de monitor, entao mora
+   * junto das outras (`usePreferencia`, mesma coisa que o `fluxos.simulacaoAtiva`
+   * logo abaixo): sobrevive ao F5, ao logout e acompanha quem trocar de maquina.
+   *
+   * O PAN (posicao do canvas) continua nascendo em 100,100 de proposito. Ele
+   * aponta para um LUGAR do desenho, e cada fluxo tem o seu; guardar um so
+   * valor faria abrir o fluxo B olhando para o vazio onde ficam os blocos do
+   * fluxo A. Como os blocos comecam perto da origem, 100,100 mostra o inicio
+   * de qualquer fluxo -- em qualquer zoom.
+   *
+   * `limitarZoom` na leitura E na escrita: o valor vem do servidor e pode
+   * chegar velho, corrompido ou fora da faixa (um `null`, um `0`). Zoom zero
+   * multiplica as coordenadas por zero e a tela vira um ponto -- sem jeito de
+   * voltar, porque os botoes tambem multiplicam.
+   */
+  const [zoomSalvo, setZoomSalvo] = usePreferencia('fluxos.zoom', 1);
+  const zoom = limitarZoom(zoomSalvo);
+  const setZoom = useCallback(
+    (v) => setZoomSalvo((antes) => limitarZoom(typeof v === 'function' ? v(limitarZoom(antes)) : v)),
+    [setZoomSalvo]
+  );
   const [canvasOffset, setCanvasOffset] = useState({ x: 100, y: 100 });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
@@ -924,7 +963,7 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
     e.preventDefault();
     const factor = 1.08;
     let nz = e.deltaY < 0 ? zoom * factor : zoom / factor;
-    nz = Math.min(Math.max(nz, 0.25), 2.5);
+    nz = limitarZoom(nz);
     const rect = containerRef.current.getBoundingClientRect();
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
@@ -1523,9 +1562,9 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
 
         <div className="flex flex-wrap items-center gap-1">
           <div className="flex items-center bg-grafite-700 border border-linha rounded-lg p-0.5 text-xs text-slate-300 shrink-0">
-            <button onClick={() => setZoom(z => Math.max(z / 1.15, 0.25))} className="p-1 hover:text-white" title="Diminuir zoom"><ZoomOut size={13} /></button>
+            <button onClick={() => setZoom(z => limitarZoom(z / 1.15))} className="p-1 hover:text-white" title="Diminuir zoom"><ZoomOut size={13} /></button>
             <span className="px-1 font-mono text-[10px] text-slate-400 hidden sm:inline">{Math.round(zoom * 100)}%</span>
-            <button onClick={() => setZoom(z => Math.min(z * 1.15, 2.5))} className="p-1 hover:text-white" title="Aumentar zoom"><ZoomIn size={13} /></button>
+            <button onClick={() => setZoom(z => limitarZoom(z * 1.15))} className="p-1 hover:text-white" title="Aumentar zoom"><ZoomIn size={13} /></button>
             <button onClick={() => { setZoom(1); setCanvasOffset({ x: 100, y: 100 }); }} className="p-1 hover:text-white border-l border-linha ml-0.5" title="Resetar"><Maximize2 size={12} /></button>
           </div>
           <div className="flex items-center bg-grafite-700 border border-linha rounded-lg p-0.5 shrink-0">

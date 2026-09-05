@@ -249,8 +249,8 @@ export default function PerfilPage() {
           </h2>
           <p className="text-xs leading-relaxed text-texto-suave">
             Encerra o acesso em <strong className="text-texto">todos os aparelhos</strong>, inclusive
-            neste. Use se desconfiar que alguém entrou na sua conta, ou depois de usar um computador
-            que não é seu. Você vai precisar entrar de novo.
+            neste use se desconfiar que alguém entrou na sua conta, ou depois de usar um computador
+            que não é seu. Você vai precisar entrar de novo
           </p>
           <Aviso msg={msgSessoes} />
           <div className="flex justify-end">

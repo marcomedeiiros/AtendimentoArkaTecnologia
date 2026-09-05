@@ -244,8 +244,8 @@ export default function RelatoriosClientes() {
         <FileText size={13} className="shrink-0 mt-0.5" />
         <span>
           O relatório considera os chamados <strong className="text-slate-400">encerrados</strong> dentro
-          do período, com o motivo escolhido no fechamento. Um chamado aberto em um mês e encerrado no
-          seguinte entra no relatório do mês em que foi encerrado.
+          do período, com o motivo escolhido no fechamento um chamado aberto em um mês e encerrado no
+          seguinte entra no relatório do mês em que foi encerrado
         </span>
       </p>
     </div>

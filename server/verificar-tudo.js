@@ -109,6 +109,14 @@ const VERIFICACOES = [
     resumo: "mesma pontuacao da parede, time inteiro sem corte, e o ultimo atendimento de cada um",
   },
   {
+    // Zoom guardado e zoom que volta para uma multiplicacao de coordenadas. Um
+    // `0` salvo encolhe o canvas a um ponto -- e nao ha como sair de la, porque
+    // os botoes tambem multiplicam. Nem o F5 ajuda: o valor esta no servidor.
+    arquivo: "verificar-zoom-fluxos.js",
+    titulo: "Zoom do editor de fluxos",
+    resumo: "o zoom sobrevive ao F5, e valor invalido/fora da faixa nunca trava o canvas",
+  },
+  {
     // A foto mora em dois lugares com prazos de validade diferentes (conversa,
     // renovada por varredura; agenda, parada desde a ultima sincronizacao).
     // Inverter a prioridade mostra links vencidos para quem tem foto boa

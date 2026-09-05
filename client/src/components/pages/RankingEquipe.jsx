@@ -288,7 +288,7 @@ export default function RankingEquipe() {
         <p className="text-[10px] text-texto-fraco mt-4 leading-relaxed">
           Pontuação: 1 ponto por atendimento fechado, nota média × {dados?.pesos?.nota ?? 8}
           {' '}(a partir de {dados?.minimoAvaliacoes ?? 3} notas) e uma faixa fixa por agilidade até
-          assumir. É a mesma conta do painel de parede.
+          assumir é a mesma conta do painel de parede
         </p>
       )}
     </div>

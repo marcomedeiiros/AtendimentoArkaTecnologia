@@ -2026,7 +2026,7 @@ function PainelPerfilContato({
                       Desfazer atendimento avulso
                     </button>
                     <p className="text-[10px] text-slate-500 mt-1">
-                      Desfazer não devolve o CNPJ que estava vinculado — vincule de novo acima.
+                      Desfazer não devolve o CNPJ que estava vinculado vincule de novo acima.
                     </p>
                   </>
                 ) : (
@@ -2064,7 +2064,7 @@ function PainelPerfilContato({
                       Marcar como atendimento avulso
                     </button>
                     <p className="text-[10px] text-slate-500 mt-1">
-                      Para quem é atendido fora de contrato. {empresa ? 'Desvincula a empresa desta conversa.' : ''}
+                      Para quem é atendido fora de contrato {empresa ? 'desvincula a empresa desta conversa' : ''}
                     </p>
                   </>
                 )}

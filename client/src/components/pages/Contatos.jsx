@@ -388,7 +388,7 @@ export default function Contatos({ setAba }) {
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight font-display">Contatos (WhatsApp)</h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-1">
-            {contatos.length} contato{contatos.length !== 1 ? 's' : ''} sincronizados com a base de dados.
+            {contatos.length} contato{contatos.length !== 1 ? 's' : ''} sincronizados com a base de dados
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
