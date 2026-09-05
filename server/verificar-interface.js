@@ -101,6 +101,46 @@ for (const f of arquivos) {
 check("toda tela que anuncia Ctrl+V tem onPaste", prometeSemFazer);
 
 // ---------------------------------------------------------------------------
+/**
+ * O ALERTA "AUTOMACAO DESATIVADA" -- as tres condicoes que ele precisa.
+ *
+ * Ele ja acusou o bot de estar desligado com os fluxos rodando, e para a equipe
+ * inteira. Duas causas, e as duas faceis de reintroduzir sem perceber:
+ *
+ *   LISTA VAZIA POR FALHA    `resolver` transforma chamada recusada em `[]`, e
+ *                            "nao ha fluxo" ficava igual a "nao consegui
+ *                            perguntar";
+ *   PUBLICO ERRADO           a mensagem manda ativar um fluxo numa tela que so
+ *                            o administrador abre.
+ *
+ * Isto e conferido por LEITURA do arquivo porque a regra vive num efeito de
+ * React, e exercita-la de verdade exigiria montar o contexto inteiro -- caro
+ * demais para o que se quer travar, que e a condicao nao voltar a ser so
+ * `fluxosAtivos === 0`.
+ */
+titulo("2b. O alerta de automacao so acusa quando SABE, e so para quem resolve");
+{
+  const ctx = arquivos.find((f) => f.endsWith("AppContext.jsx"));
+  const s = ctx ? fs.readFileSync(ctx, "utf8") : "";
+  const condicao = /if \(([^)]*fluxosAtivos === 0[^)]*)\)/.exec(s)?.[1] || "";
+  check("o alerta existe e tem condicao legivel", condicao ? [] : ["nao achei a condicao do alerta em AppContext.jsx"]);
+  check(
+    "so acusa quando a leitura dos fluxos deu certo",
+    /fluxosCarregados/.test(condicao) ? [] : [`condicao sem \`fluxosCarregados\`: ${condicao}`]
+  );
+  check(
+    "e so para administrador",
+    /ehAdmin|Administrador/.test(condicao) ? [] : [`condicao sem recorte de cargo: ${condicao}`]
+  );
+  // O estado tem de ser DESLIGADO quando a leitura falha -- senao ele fica
+  // `true` de uma leitura anterior e a protecao nao vale nada.
+  check(
+    "e `fluxosCarregados` volta a falso quando a leitura falha",
+    /setFluxosCarregados\(false\)/.test(s) ? [] : ["nao ha reset de `fluxosCarregados` no catch"]
+  );
+}
+
+// ---------------------------------------------------------------------------
 titulo("3. O colar de ARQUIVO nao pode engolir o colar de TEXTO");
 
 // Interceptar todo `paste` quebraria o Ctrl+V normal dentro da descricao -- o

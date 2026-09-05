@@ -36,10 +36,14 @@ export function AppProvider({ children }) {
   // Só para reaplicar a sessão quando a matriz de permissões muda (ver
   // `recarregarSessao`). O AppProvider vive DENTRO do AuthProvider (ver
   // RotaProtegida), então o hook está sempre disponível aqui.
-  const { atualizarUsuario } = useAuth();
+  const { usuario, atualizarUsuario } = useAuth();
   const [carregando,        setCarregando]        = useState(true);
   const [equipe,            setEquipe]            = useState([]);
   const [fluxos,            setFluxos]            = useState([]);
+  // A leitura dos fluxos DEU CERTO? Sem isto, lista vazia por falha e lista
+  // vazia de verdade sao a mesma coisa -- e o alerta acusava o bot de desligado
+  // quando o problema era so nao ter conseguido perguntar.
+  const [fluxosCarregados,  setFluxosCarregados]  = useState(false);
   const [parceiros,         setParceiros]         = useState([]);
   const [conversas,         setConversas]         = useState([]);
   const [whatsAppConectado, setWhatsAppConectado] = useState(false);
@@ -82,6 +86,14 @@ export function AppProvider({ children }) {
 
       setEquipe(resolver(eq));
       setFluxos(resolver(fl));
+      // SE A LISTA DE FLUXOS FOI MESMO LIDA -- e não apenas "veio vazia".
+      //
+      // `resolver` transforma uma chamada RECUSADA em `[]`, que é o certo para
+      // renderizar mas apaga a diferença entre "não há fluxo" e "não consegui
+      // perguntar". O alerta "Automação desativada" lia esse `[]` e acusava o
+      // bot de estar desligado sempre que a chamada falhava -- permissão, erro
+      // no servidor, rede -- com os fluxos rodando normalmente do outro lado.
+      setFluxosCarregados(fl.status === 'fulfilled' && Array.isArray(fl.value));
       setParceiros(resolver(pa));
       setConversas(ordenarConversas(resolver(co)));
 
@@ -89,6 +101,7 @@ export function AppProvider({ children }) {
     } catch {
       setEquipe([]);
       setFluxos([]);
+      setFluxosCarregados(false);
       setParceiros([]);
       setConversas([]);
       setApiOffline(true);
@@ -527,11 +540,33 @@ export function AppProvider({ children }) {
   }, [conversas, carregando, removerNotificacao, registrarNoHistorico]);
 
   const fluxosAtivos = fluxos.filter(f => f.ativo).length;
+  /**
+   * "AUTOMAÇÃO DESATIVADA" -- e as duas condições que faltavam.
+   *
+   * ── SÓ QUANDO SE SABE ─────────────────────────────────────────────────────
+   *
+   * O alerta lia uma lista vazia e concluía "não há fluxo". Só que a lista
+   * também fica vazia quando a leitura FALHA: `resolver` transforma uma chamada
+   * recusada em `[]`, e a diferença entre "não há fluxo" e "não consegui
+   * perguntar" desaparecia ali. Resultado: o painel acusava o bot de desligado
+   * com os fluxos rodando normalmente.
+   *
+   * Agora só acusa quando a leitura deu certo E o resultado foi zero.
+   *
+   * ── SÓ PARA QUEM PODE RESOLVER ────────────────────────────────────────────
+   *
+   * A mensagem manda "criar ou ativar um fluxo em Fluxo de Automações" -- uma
+   * tela que só o administrador abre. Para o resto da equipe era um aviso
+   * insistente sobre algo que eles não têm como consertar, no meio das
+   * notificações de mensagem de cliente, que é o que aquele sino existe para
+   * mostrar.
+   */
+  const ehAdmin = usuario?.cargo === 'Administrador';
   useEffect(() => {
     if (carregando) return;
     setHistorico(prev => {
       const semFluxo = prev.find(n => n.id === ALERTA_SEM_FLUXO);
-      if (fluxosAtivos === 0) {
+      if (fluxosCarregados && ehAdmin && fluxosAtivos === 0) {
         if (semFluxo) return prev;
         return [{
           id: ALERTA_SEM_FLUXO,
@@ -542,9 +577,13 @@ export function AppProvider({ children }) {
           lida: false
         }, ...prev].slice(0, 30);
       }
+      // Some assim que a condição deixa de valer -- inclusive quando ela deixou
+      // de valer porque a leitura falhou, ou porque quem está olhando não é mais
+      // administrador. Um alerta que fica depois de o motivo passar vira ruído
+      // que ninguém sabe como calar.
       return semFluxo ? prev.filter(n => n.id !== ALERTA_SEM_FLUXO) : prev;
     });
-  }, [fluxosAtivos, carregando]);
+  }, [fluxosAtivos, fluxosCarregados, ehAdmin, carregando]);
 
   useEffect(() => {
     let ativo = true;
