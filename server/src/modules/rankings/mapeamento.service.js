@@ -37,6 +37,27 @@ const STATUS = ["rascunho", "entregue", "em_correcao", "aprovado"];
 // de etiqueta -- 12 cobre isso e ainda barra o album inteiro do celular.
 const MAX_EVIDENCIAS = 12;
 const MAX_BYTES_EVIDENCIA = 6 * 1024 * 1024;
+// O PDF do relatorio. 15 MB cobre com folga um relatorio com fotos embutidas --
+// o exemplo real de dois nobreaks e duas fotos tem 33 KB.
+const MAX_BYTES_ARQUIVO = 15 * 1024 * 1024;
+
+/**
+ * E PDF DE VERDADE? -- confere os BYTES, e nao o que o cliente disse.
+ *
+ * O mimetype vem da data URL, que vem do navegador, que vem do que o usuario
+ * escolheu: renomear "coisa.exe" para "relatorio.pdf" ja bastaria. O arquivo
+ * fica guardado e depois e servido de volta para outras pessoas da empresa
+ * baixarem -- entao o que ele E importa mais do que como ele se chama.
+ *
+ * "%PDF-" nos primeiros bytes e a assinatura do formato.
+ */
+async function ehPdf(caminhoRelativo) {
+  const aberto = await midiaStorage.abrirParaLeitura(caminhoRelativo, { inicio: 0, fim: 4 });
+  if (!aberto) return false;
+  const pedacos = [];
+  for await (const p of aberto.stream) pedacos.push(p);
+  return Buffer.concat(pedacos).toString("latin1").startsWith("%PDF-");
+}
 
 // QUEM SUPERVISIONA E O ADMINISTRADOR, e so ele.
 //
@@ -100,6 +121,87 @@ class MapeamentoService {
     return guardadas;
   }
 
+  /**
+   * O PDF DO RELATORIO -- a entrega, e nao mais uma evidencia.
+   *
+   * Fica em campo proprio porque as duas coisas tem regras diferentes: a
+   * contagem de evidencias PONTUA (3 fotos ja valem a faixa cheia), entao um
+   * PDF entrando naquela lista daria ponto de "evidencia" para o documento que
+   * a pessoa tinha que entregar de qualquer jeito.
+   *
+   * So PDF. Nao e frescura de formato: e o arquivo que vai para o cliente, e
+   * aceitar qualquer coisa transformaria o historico numa pasta de downloads
+   * onde ninguem sabe o que abre. O tipo e conferido pelos BYTES, e nao pelo
+   * que o cliente diz -- ver `ehPdf`.
+   *
+   * Devolve `undefined` quando nao veio nada no corpo, para o `update` do
+   * Prisma nao apagar um PDF ja enviado a cada salvamento do formulario.
+   */
+  async _guardarArquivo(entrada, atual = null) {
+    if (entrada === undefined) return undefined;
+    // `null` explicito = "remover o que estava la". O arquivo sai do DISCO
+    // junto: limpar so a coluna deixaria o PDF orfao em `dados/midia`, sem
+    // ninguem apontando para ele e sem ninguem sabendo que existe -- ocupando
+    // espaco para sempre, e ainda por cima com dado de cliente dentro.
+    if (entrada === null) {
+      if (atual?.arquivoPath) await midiaStorage.remover(atual.arquivoPath).catch(() => {});
+      return { arquivoPath: null, arquivoNome: null, arquivoBytes: null, arquivoEnviadoEm: null };
+    }
+    // Ja gravado: veio de volta na edicao, nao regrava.
+    if (typeof entrada === "object" && entrada.arquivo) return undefined;
+
+    const dataUrl = typeof entrada === "object" ? entrada.conteudo : entrada;
+    const nome = (typeof entrada === "object" && entrada.nome) || "relatorio.pdf";
+    if (typeof dataUrl !== "string" || !dataUrl) return undefined;
+
+    const salvo = await midiaStorage.salvarDataUrl(dataUrl, "application/pdf", {
+      maxBytes: MAX_BYTES_ARQUIVO,
+    });
+    if (!salvo) {
+      throw new AppError(
+        `Não foi possível guardar o relatório. Confira se é um PDF de até ${Math.round(MAX_BYTES_ARQUIVO / 1024 / 1024)} MB.`,
+        400,
+        "ARQUIVO_INVALIDO"
+      );
+    }
+    if (!(await ehPdf(salvo.arquivo))) {
+      // Apaga o que acabou de gravar: um arquivo recusado nao pode ficar
+      // ocupando disco sem nenhuma linha no banco apontando para ele.
+      await midiaStorage.remover(salvo.arquivo).catch(() => {});
+      throw new AppError("O relatório precisa ser um arquivo PDF.", 400, "ARQUIVO_NAO_PDF");
+    }
+    // Descarta o PDF anterior: guardar todas as versoes seria outro recurso
+    // (historico de versoes), e ninguem pediu -- ficariam so ocupando disco.
+    if (atual?.arquivoPath) await midiaStorage.remover(atual.arquivoPath).catch(() => {});
+
+    return {
+      arquivoPath: salvo.arquivo,
+      arquivoNome: String(nome).slice(0, 180),
+      arquivoBytes: salvo.bytes,
+      arquivoEnviadoEm: new Date(),
+    };
+  }
+
+  /**
+   * O PDF PARA DOWNLOAD -- e a mesma regra de quem pode ver.
+   *
+   * A checagem e refeita AQUI, e nao herdada da listagem: a listagem esconde a
+   * linha, mas o link do arquivo e um endereco proprio, e quem tivesse um id de
+   * outro tecnico baixaria o relatorio dele direto. E o tipo de buraco que so
+   * aparece quando alguem procura.
+   */
+  async arquivoDe(id, usuario) {
+    const m = await prisma.mapeamentoTecnico.findUnique({ where: { id } });
+    if (!m) throw new AppError("Mapeamento não encontrado", 404, "NOT_FOUND");
+    if (m.tecnicoId !== usuario?.sub && !(await ehSupervisor(usuario?.sub))) {
+      throw new AppError("Sem acesso a este relatório", 403, "SEM_PERMISSAO");
+    }
+    if (!m.arquivoPath) throw new AppError("Este mapeamento não tem relatório anexado", 404, "SEM_ARQUIVO");
+    const aberto = await midiaStorage.abrirParaLeitura(m.arquivoPath);
+    if (!aberto) throw new AppError("Arquivo do relatório não encontrado no servidor", 404, "ARQUIVO_SUMIU");
+    return { ...aberto, nome: m.arquivoNome || "relatorio.pdf" };
+  }
+
   async listar(filtros, usuario) {
     const supervisor = await ehSupervisor(usuario?.sub);
     const where = {};
@@ -133,6 +235,7 @@ class MapeamentoService {
   async criar(dados, usuario) {
     const nome = await this._nomeDe(usuario);
     const evidencias = await this._guardarEvidencias(dados.evidencias);
+    const arquivo = (await this._guardarArquivo(dados.arquivo)) || {};
     const criado = await prisma.mapeamentoTecnico.create({
       data: {
         // O TECNICO E SEMPRE QUEM ESTA LOGADO. Aceitar do corpo deixaria
@@ -147,6 +250,7 @@ class MapeamentoService {
         itens: saneiaItens(dados.itens),
         pendencias: dados.pendencias ? String(dados.pendencias).trim() : null,
         evidencias,
+        ...arquivo,
         status: dados.entregar ? "entregue" : "rascunho",
         entregueEm: dados.entregar ? new Date() : null,
       },
@@ -168,6 +272,7 @@ class MapeamentoService {
     }
 
     const evidencias = await this._guardarEvidencias(dados.evidencias, atual.evidencias || []);
+    const arquivo = await this._guardarArquivo(dados.arquivo, atual);
     const entregando = !!dados.entregar;
 
     const salvo = await prisma.mapeamentoTecnico.update({
@@ -181,6 +286,11 @@ class MapeamentoService {
         itens: dados.itens !== undefined ? saneiaItens(dados.itens) : undefined,
         pendencias: dados.pendencias !== undefined ? (dados.pendencias ? String(dados.pendencias).trim() : null) : undefined,
         evidencias,
+        // Espalhado so quando ha o que gravar: `_guardarArquivo` devolve
+        // `undefined` para "nao mexeram no PDF", e um spread de undefined nao
+        // adiciona campo nenhum -- entao salvar o formulario nao apaga o
+        // relatorio que ja estava anexado.
+        ...(arquivo || {}),
         status: entregando ? "entregue" : undefined,
         // A PRIMEIRA entrega e a que vale para o prazo. Uma correcao devolvida e
         // reenviada duas semanas depois nao pode reescrever o carimbo e
@@ -239,6 +349,9 @@ class MapeamentoService {
     if (atual.status !== "rascunho" && !supervisor) {
       throw new AppError("Mapeamento já entregue só pode ser removido pelo supervisor.", 403, "JA_ENTREGUE");
     }
+    // O PDF sai do disco junto com o registro -- mesma razao do `arquivo: null`
+    // acima: sem isto o arquivo fica orfao, com dado de cliente dentro.
+    if (atual.arquivoPath) await midiaStorage.remover(atual.arquivoPath).catch(() => {});
     await prisma.mapeamentoTecnico.delete({ where: { id } });
     bus.emitRecurso("mapeamentos");
     return { removido: true };
@@ -270,6 +383,11 @@ class MapeamentoService {
       completude: Math.round(completudeDe(m) * 100),
       noPrazo: noPrazo(m),
       evidencias: Array.isArray(m.evidencias) ? m.evidencias.length : 0,
+      // O PDF: nome, tamanho e quando foi enviado. O CAMINHO em disco nunca sai
+      // daqui -- quem quer o arquivo pede pela rota, que reconfere a permissao.
+      arquivo: m.arquivoPath
+        ? { nome: m.arquivoNome || "relatorio.pdf", bytes: m.arquivoBytes || 0, enviadoEm: m.arquivoEnviadoEm }
+        : null,
       validadoPorNome: m.validadoPorNome,
       validadoEm: m.validadoEm,
       observacaoValidacao: m.observacaoValidacao,

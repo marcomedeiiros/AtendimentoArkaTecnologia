@@ -673,14 +673,14 @@ export default function Rankings() {
                   {/* Os tetos vêm do SERVIDOR, e não escritos aqui: um texto
                       com os números copiados envelhece calado no dia em que
                       alguém mexe no peso, e passa a explicar outra conta. */}
-                  Pontuação de 0 a 100: volume de atendimentos ({dados?.pesos?.tetos?.atendimentos ?? 35}),
+                  Pontuação de 0 a 100 volume de atendimentos ({dados?.pesos?.tetos?.atendimentos ?? 35}),
                   nota média × {dados?.pesos?.nota ?? 7} ({dados?.pesos?.tetos?.nota ?? 35}, a partir
                   de {dados?.minimoAvaliacoes ?? 3} notas) e agilidade até
-                  assumir ({dados?.pesos?.tetos?.agilidade ?? 30}).
-                  {' '}<strong className="text-texto-suave">Só pontua atendimento fechado que o cliente
-                  avaliou</strong> as três parcelas saem da mesma base.
-                  {' '}A agilidade usa a mediana, para que uma conversa esquecida não derrube o mês inteiro.
-                  {' '}É exatamente a mesma conta do painel de parede.
+                  assumir ({dados?.pesos?.tetos?.agilidade ?? 30})
+                  {' '}<strong className="text-texto-suave">só pontua atendimento fechado que o cliente
+                  avaliou</strong> as três parcelas saem da mesma base
+                  {' '}a agilidade usa a mediana, para que uma conversa esquecida não derrube o mês inteiro
+                  {' '}é exatamente a mesma conta do painel de parede.
                 </>
               ) : (
                 <>

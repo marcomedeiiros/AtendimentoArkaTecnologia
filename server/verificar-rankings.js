@@ -21,6 +21,7 @@ const prisma = require("./src/infrastructure/database/prisma.client");
 const painelService = require("./src/modules/dashboard/painel.service");
 const rankingService = require("./src/modules/rankings/ranking.service");
 const mapeamentoService = require("./src/modules/rankings/mapeamento.service");
+const midiaStorage = require("./src/infrastructure/storage/midia.storage");
 const { pontuarExterno, ITENS_MAPEAMENTO } = require("./src/modules/rankings/pontuacao.externa");
 const fs = require("fs");
 const path = require("path");
@@ -39,6 +40,16 @@ const noMes = (dia, hora = 10) => new Date(hoje.getFullYear(), hoje.getMonth(), 
 
 async function limpar() {
   await prisma.premiacaoRanking.deleteMany({ where: { usuarioNome: { startsWith: MARCA } } });
+  // O PDF DE TESTE SAI DO DISCO TAMBEM, e nao so a linha do banco.
+  //
+  // Apagar so a linha deixa o arquivo orfao em `dados/midia`: ninguem aponta
+  // para ele, ninguem sabe que existe, e ele fica ocupando espaco para sempre.
+  // Aconteceu de verdade -- seis PDFs de teste chegaram a entrar num commit.
+  const comArquivo = await prisma.mapeamentoTecnico.findMany({
+    where: { tecnicoNome: { startsWith: MARCA }, NOT: { arquivoPath: null } },
+    select: { arquivoPath: true },
+  });
+  for (const m of comArquivo) await midiaStorage.remover(m.arquivoPath).catch(() => {});
   await prisma.mapeamentoTecnico.deleteMany({ where: { tecnicoNome: { startsWith: MARCA } } });
   await prisma.atendimento.deleteMany({ where: { conversa: { cliente: { startsWith: MARCA } } } });
   await prisma.conversa.updateMany({ where: { cliente: { startsWith: MARCA } }, data: { atendimentoAtualId: null } });
@@ -496,6 +507,93 @@ async function main() {
   );
   const doSupervisor = await mapeamentoService.listar({}, { sub: davi.id });
   check(doSupervisor.length > soDoJoao.length, `supervisor ve os de todo mundo (${doSupervisor.length})`);
+
+  /**
+   * 8b. O PDF DO RELATORIO -- e o buraco que ele poderia abrir.
+   *
+   * A listagem esconde o relatorio dos outros, mas o ARQUIVO tem endereco
+   * proprio: `/mapeamentos/<id>/arquivo`. Se a permissao fosse so da listagem,
+   * bastaria ter um id para baixar o relatorio de qualquer tecnico -- e id
+   * aparece em log, em URL e no corpo de outras respostas.
+   *
+   * Por isso a checagem e refeita no `arquivoDe`, e por isso ela e testada aqui
+   * com um tecnico pedindo o arquivo do outro.
+   */
+  {
+    titulo("8b. O PDF DO RELATORIO: quem baixa o que");
+
+    // Um PDF minimo, de verdade -- comeca com "%PDF-", que e o que o servidor
+    // confere. O teste tem de passar pela mesma porta que o arquivo real.
+    const pdfDeVerdade =
+      "data:application/pdf;base64," +
+      Buffer.from("%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF").toString("base64");
+
+    const doJoao = await mapeamentoService.criar(
+      {
+        empresa: `${MARCA} Empresa PDF`, dataVisita: noMes(6).toISOString(), prazoEm: noMes(9).toISOString(),
+        resumo: "x".repeat(60), itens: {}, evidencias: [],
+        arquivo: { conteudo: pdfDeVerdade, nome: "Relatorio_Mapeamento.pdf" },
+      },
+      { sub: joao.id, nome: joao.nome }
+    );
+    check(!!doJoao.arquivo, `o PDF fica anexado ao relatorio (${doJoao.arquivo?.nome})`);
+    check(doJoao.arquivo?.bytes > 0, `com o tamanho gravado (${doJoao.arquivo?.bytes} bytes)`);
+    // O CAMINHO em disco nao pode vazar no DTO: com ele, quem tem a listagem
+    // montaria o endereco do arquivo por fora da rota que confere permissao.
+    check(!JSON.stringify(doJoao).includes("arquivoPath"), "e o caminho em disco nao sai na resposta");
+
+    check(!!(await mapeamentoService.arquivoDe(doJoao.id, { sub: joao.id })), "o dono baixa o proprio PDF");
+    check(!!(await mapeamentoService.arquivoDe(doJoao.id, { sub: davi.id })), "o administrador baixa o de qualquer um");
+
+    let negouOutro = false;
+    try {
+      await mapeamentoService.arquivoDe(doJoao.id, { sub: lucas.id });
+    } catch (e) {
+      negouOutro = e.statusCode === 403;
+    }
+    check(negouOutro, "OUTRO TECNICO NAO baixa o PDF, mesmo tendo o id (403)");
+
+    // Nao e PDF: recusado pelos BYTES, e nao pela extensao. Um executavel
+    // renomeado para .pdf ficaria guardado e seria servido de volta para a
+    // empresa inteira.
+    let recusouFalso = false;
+    try {
+      await mapeamentoService.criar(
+        {
+          empresa: `${MARCA} Empresa Falsa`, dataVisita: noMes(6).toISOString(), prazoEm: noMes(9).toISOString(),
+          resumo: "x".repeat(60), itens: {}, evidencias: [],
+          arquivo: {
+            conteudo: "data:application/pdf;base64," + Buffer.from("MZ isto nao e pdf").toString("base64"),
+            nome: "virus.pdf",
+          },
+        },
+        { sub: joao.id, nome: joao.nome }
+      );
+    } catch (e) {
+      recusouFalso = e.code === "ARQUIVO_NAO_PDF";
+    }
+    check(recusouFalso, "arquivo que so tem nome de PDF e recusado pelos bytes");
+
+    // Salvar o formulario de novo NAO pode apagar o PDF: `arquivo` ausente quer
+    // dizer "nao mexi nisso".
+    const depois = await mapeamentoService.atualizar(doJoao.id, { resumo: "y".repeat(60) }, { sub: joao.id });
+    check(!!depois.arquivo, "salvar o relatorio de novo nao apaga o PDF ja enviado");
+    // ARQUIVO ORFAO: o defeito que este bloco encontrou de verdade.
+    //
+    // Remover o PDF limpava a coluna e deixava o arquivo no disco -- sem nada
+    // apontando para ele, sem ninguem saber que existe, e com dado de cliente
+    // dentro. A checagem olha o DISCO, e nao o banco: e no disco que o lixo
+    // fica.
+    const noDisco = () =>
+      fs.existsSync(path.join(midiaStorage.BASE_DIR, ...caminhoDoPdf.split("/")));
+    const linhaAntes = await prisma.mapeamentoTecnico.findUnique({ where: { id: doJoao.id } });
+    const caminhoDoPdf = linhaAntes.arquivoPath;
+    check(noDisco(), "o PDF esta em disco enquanto o relatorio o referencia");
+
+    const semPdf = await mapeamentoService.atualizar(doJoao.id, { arquivo: null }, { sub: joao.id });
+    check(!semPdf.arquivo, "e mandar `arquivo: null` remove de proposito");
+    check(!noDisco(), "removendo o PDF, o arquivo sai do DISCO tambem (nada de orfao)");
+  }
 
   titulo("9. HISTORICO");
   const hist = await rankingService.historico("externo", COMP, 3);

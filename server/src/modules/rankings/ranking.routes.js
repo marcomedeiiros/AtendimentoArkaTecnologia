@@ -42,6 +42,12 @@ router.get("/regras", (req, res, next) => controller.regras(req, res).catch(next
 // ── MAPEAMENTOS -- antes de /:equipe, senao "mapeamentos" cairia na rota do
 // ranking e viraria um "ranking chamado mapeamentos" com erro 400.
 router.get("/mapeamentos", (req, res, next) => controller.listarMapeamentos(req, res).catch(next));
+// O PDF. Antes de "/mapeamentos/:id" nao precisa (o caminho e mais longo), mas
+// fica junto para quem le a lista ver que o arquivo tem endereco proprio -- e
+// que por isso o service reconfere a permissao em vez de confiar na listagem.
+router.get("/mapeamentos/:id/arquivo", (req, res, next) =>
+  controller.baixarMapeamento(req, res).catch(next)
+);
 router.get("/mapeamentos/:id", (req, res, next) => controller.obterMapeamento(req, res).catch(next));
 router.post("/mapeamentos", validate(criarMapeamentoSchema), (req, res, next) =>
   controller.criarMapeamento(req, res).catch(next)

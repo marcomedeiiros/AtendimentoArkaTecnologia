@@ -69,6 +69,32 @@ class RankingController {
     return success(res, await mapeamentoService.obter(req.params.id, req.user));
   }
 
+  /**
+   * BAIXAR O PDF DO RELATORIO.
+   *
+   * Escreve na resposta direto, sem passar pelo `success()`: o corpo aqui sao
+   * os bytes do arquivo, e nao um envelope JSON.
+   *
+   * `inline` e nao `attachment`: o navegador abre o PDF numa aba, que e o que
+   * quem confere um relatorio quer -- e o botao de baixar continua ali dentro
+   * do visualizador para quem precisa do arquivo.
+   */
+  async baixarMapeamento(req, res) {
+    const { stream, tamanho, nome } = await mapeamentoService.arquivoDe(req.params.id, req.user);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Length", tamanho);
+    // O nome vai codificado (RFC 5987): empresa com acento e o caso normal
+    // aqui, e um byte fora do ASCII num cabecalho quebra a resposta inteira.
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="relatorio.pdf"; filename*=UTF-8''${encodeURIComponent(nome)}`
+    );
+    // Sem cache compartilhado: e documento de cliente, servido a partir de uma
+    // permissao que muda de pessoa para pessoa.
+    res.setHeader("Cache-Control", "private, no-store");
+    return stream.pipe(res);
+  }
+
   async criarMapeamento(req, res) {
     return success(res, await mapeamentoService.criar(req.body, req.user), 201);
   }

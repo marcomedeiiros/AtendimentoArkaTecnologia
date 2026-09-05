@@ -604,6 +604,18 @@ export const RankingsAPI = {
   atualizarMapeamento: (id, dados) => request(`/rankings/mapeamentos/${id}`, { method: 'PATCH', body: JSON.stringify(dados) }),
   validarMapeamento: (id, dados) => request(`/rankings/mapeamentos/${id}/validar`, { method: 'POST', body: JSON.stringify(dados) }),
   removerMapeamento: (id) => request(`/rankings/mapeamentos/${id}`, { method: 'DELETE' }),
+  /**
+   * O ENDERECO do PDF do relatorio -- e nao o arquivo.
+   *
+   * Devolve URL porque o destino dela e um `<a href>`/`window.open`: puxar os
+   * bytes por fetch so para montar um blob gastaria memoria a toa e tiraria do
+   * navegador o visualizador de PDF que ele ja tem.
+   *
+   * GET com cookie de sessao (o navegador manda sozinho) e sem CSRF, que so
+   * vale para escrita. Quem confere se ESTA pessoa pode ver ESTE relatorio e o
+   * servidor, na rota.
+   */
+  urlArquivoMapeamento: (id) => `/api/rankings/mapeamentos/${id}/arquivo`,
 };
 
 // ── WhatsApp API ──

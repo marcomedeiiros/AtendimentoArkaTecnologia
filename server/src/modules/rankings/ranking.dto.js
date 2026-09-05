@@ -27,6 +27,26 @@ const evidenciaSchema = z.union([
   z.object({ arquivo: z.string().min(1), mimetype: z.string().optional().nullable(), nome: z.string().optional().nullable() }),
 ]);
 
+/**
+ * O PDF do relatorio. Tres formas, e cada uma quer dizer uma coisa:
+ *
+ *   { conteudo, nome }   PDF novo, em data URL;
+ *   { arquivo: "..." }   o que ja estava la, devolvido pela edicao (nao regrava);
+ *   null                 remover o anexo.
+ *
+ * Campo AUSENTE e diferente de `null`: ausente significa "nao mexi nisso", e e
+ * o que impede salvar o formulario de apagar um relatorio ja enviado.
+ *
+ * Aqui so se confere formato. Que os bytes sejam mesmo um PDF e conferido no
+ * service, depois de gravar -- nome de arquivo nao e prova de nada.
+ */
+const arquivoSchema = z
+  .union([
+    z.object({ conteudo: z.string().min(16), nome: z.string().max(180).optional() }),
+    z.object({ arquivo: z.string().min(1), nome: z.string().max(180).optional().nullable() }),
+  ])
+  .nullable();
+
 const criarMapeamentoSchema = z.object({
   empresa: z.string().trim().min(2, "Informe a empresa visitada").max(160),
   cnpj: z.string().optional().nullable(),
@@ -36,6 +56,7 @@ const criarMapeamentoSchema = z.object({
   itens: itensSchema,
   pendencias: z.string().max(4000).optional().nullable(),
   evidencias: z.array(evidenciaSchema).max(12).optional(),
+  arquivo: arquivoSchema.optional(),
   entregar: z.boolean().optional(),
 });
 

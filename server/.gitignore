@@ -17,3 +17,14 @@ logs/
 
 # Bancos descartaveis dos testes
 .test-dbs/
+
+# MIDIA GRAVADA EM DISCO -- foto, audio, documento e o PDF dos relatorios.
+#
+# Sao dados de CLIENTE: conversa do WhatsApp e relatorio tecnico com nome de
+# empresa, numero de serie de equipamento e foto do rack. Nada disso pode
+# entrar num repositorio -- e, uma vez versionado, fica no historico para
+# sempre mesmo depois de apagado.
+#
+# Entrou aqui porque a verificacao dos rankings passou a gravar PDF de teste, e
+# seis deles foram parar num commit.
+dados/midia/

@@ -152,6 +152,20 @@ model MapeamentoTecnico {
   /// banco: visita rende dezenas de fotos e base64 em linha e o que inchou o
   /// banco das mensagens.
   evidencias   Json?
+  /// O RELATORIO EM PDF -- o documento que o tecnico manda para o cliente.
+  ///
+  /// Separado das `evidencias` de proposito: evidencia e foto de campo, prova
+  /// do que foi visto; isto e a ENTREGA, o arquivo unico e final. Misturar os
+  /// dois faria a contagem de evidencias (que pontua) subir por causa do PDF.
+  ///
+  /// Caminho relativo, como toda midia do sistema -- nunca base64 no banco.
+  arquivoPath     String?   @map("arquivo_path")
+  /// Nome ORIGINAL, do jeito que o tecnico salvou. E o que a tela mostra e o
+  /// que o download devolve: um UUID no lugar faria o cliente receber
+  /// "a3f2....pdf" sem saber de que visita e.
+  arquivoNome     String?   @map("arquivo_nome")
+  arquivoBytes    Int?      @map("arquivo_bytes")
+  arquivoEnviadoEm DateTime? @map("arquivo_enviado_em")
   /// Quantas vezes o supervisor devolveu para correcao. E o indicador de
   /// retrabalho da pontuacao -- por isso e contador, e nao booleano.
   devolucoes   Int       @default(0)

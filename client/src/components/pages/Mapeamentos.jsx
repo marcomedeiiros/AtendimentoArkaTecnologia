@@ -45,6 +45,14 @@ function prazoSugerido(dataVisita) {
   return d.toISOString().slice(0, 10);
 }
 
+// "1,2 MB" -- o tamanho do PDF, para a pessoa saber o que está mandando.
+function tamanho(bytes) {
+  if (!bytes) return '—';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
+}
+
 const data = (iso) =>
   iso ? new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: FUSO_BR }) : '—';
 
@@ -68,6 +76,11 @@ function ModalMapeamento({ itensRegra, inicial, onFechar, onSalvo }) {
   const [itens, setItens] = useState(() => ({ ...(inicial?.itens || {}) }));
   const [pendencias, setPendencias] = useState(inicial?.pendencias || '');
   const [evidencias, setEvidencias] = useState(() => inicial?.arquivos || []);
+  // O PDF do relatório. `pdf` é o arquivo novo escolhido agora; `pdfSalvo` é o
+  // que já estava no servidor. Os dois separados porque "não mexi no PDF" e
+  // "quero remover o PDF" precisam ser distinguíveis na hora de salvar.
+  const [pdf, setPdf] = useState(null);
+  const [pdfSalvo, setPdfSalvo] = useState(() => inicial?.arquivo || null);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
 
@@ -93,6 +106,28 @@ function ModalMapeamento({ itensRegra, inicial, onFechar, onSalvo }) {
     }
   };
 
+  /**
+   * O PDF do relatório -- barrado aqui por tamanho e extensão.
+   *
+   * O servidor confere os BYTES (nome de arquivo não prova nada), mas a
+   * checagem daqui existe para a pessoa saber na hora, e não depois de esperar
+   * 15 MB subirem só para receber um erro.
+   */
+  const anexarPdf = (e) => {
+    const f = (e.target.files || [])[0];
+    e.target.value = '';
+    if (!f) return;
+    if (f.type !== 'application/pdf' && !f.name.toLowerCase().endsWith('.pdf')) {
+      setErro('O relatório precisa ser um arquivo PDF.');
+      return;
+    }
+    if (f.size > 15 * 1024 * 1024) { setErro(`"${f.name}" passa de 15 MB.`); return; }
+    setErro('');
+    const r = new FileReader();
+    r.onload = () => setPdf({ conteudo: r.result, nome: f.name, bytes: f.size });
+    r.readAsDataURL(f);
+  };
+
   const salvar = async (entregar) => {
     if (!empresa.trim()) { setErro('Informe a empresa visitada.'); return; }
     if (entregar) {
@@ -107,6 +142,11 @@ function ModalMapeamento({ itensRegra, inicial, onFechar, onSalvo }) {
     setSalvando(true);
     setErro('');
     const corpo = { empresa: empresa.trim(), cnpj: cnpj.replace(/\D/g, '') || null, dataVisita, prazoEm, resumo, itens, pendencias, evidencias, entregar };
+    // `arquivo` só entra no corpo quando houve mudança. Campo AUSENTE quer
+    // dizer "não mexi nisso" -- é o que impede um salvamento comum de apagar o
+    // relatório que já tinha sido enviado.
+    if (pdf) corpo.arquivo = { conteudo: pdf.conteudo, nome: pdf.nome };
+    else if (!pdfSalvo && inicial?.arquivo) corpo.arquivo = null;
     try {
       if (edicao) await RankingsAPI.atualizarMapeamento(inicial.id, corpo);
       else await RankingsAPI.criarMapeamento(corpo);
@@ -226,6 +266,44 @@ function ModalMapeamento({ itensRegra, inicial, onFechar, onSalvo }) {
                 className="w-full bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto resize-none focus:outline-none focus:border-acao/50" />
             </div>
 
+            {/* O RELATÓRIO EM PDF, separado das evidências de propósito.
+                Evidência é foto de campo e PONTUA pela quantidade; isto é a
+                entrega, um arquivo só. Juntos, o PDF inflaria a contagem que
+                dá ponto. */}
+            <div>
+              <p className="text-[11px] font-semibold text-texto-suave mb-1.5">
+                Relatório em PDF <span className="text-texto-fraco font-normal">(o arquivo que vai para o cliente · até 15 MB)</span>
+              </p>
+              {pdf || pdfSalvo ? (
+                <div className="flex items-center gap-2 p-2.5 rounded-xl border border-acao/30 bg-acao/10">
+                  <FileText size={16} className="text-acao-200 shrink-0" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-xs font-semibold text-texto truncate">
+                      {pdf?.nome || pdfSalvo?.nome}
+                    </span>
+                    <span className="block text-[10px] text-texto-fraco">
+                      {tamanho(pdf?.bytes ?? pdfSalvo?.bytes)}{pdf ? ' · será enviado ao salvar' : ' · já enviado'}
+                    </span>
+                  </span>
+                  {/* Sem PDF novo escolhido, remover significa apagar o que está
+                      no servidor -- e isso só acontece ao salvar. */}
+                  <button
+                    onClick={() => { if (pdf) setPdf(null); else setPdfSalvo(null); }}
+                    className="shrink-0 p-1.5 rounded-lg text-falha-400 hover:bg-falha/15"
+                    title={pdf ? 'Descartar o arquivo escolhido' : 'Remover o relatório ao salvar'}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex items-center gap-2 p-2.5 rounded-xl border border-dashed border-linha-forte cursor-pointer text-texto-fraco hover:text-acao-200 hover:border-acao/50 transition-colors">
+                  <FileText size={16} className="shrink-0" />
+                  <span className="text-xs font-semibold">Anexar o relatório em PDF</span>
+                  <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={anexarPdf} />
+                </label>
+              )}
+            </div>
+
             <div>
               <p className="text-[11px] font-semibold text-texto-suave mb-1.5">
                 Evidências <span className="text-texto-fraco font-normal">({evidencias.length}/12 · 3 já valem a faixa cheia)</span>
@@ -277,6 +355,132 @@ function ModalMapeamento({ itensRegra, inicial, onFechar, onSalvo }) {
   );
 }
 
+/**
+ * HISTÓRICO DE RELATÓRIOS -- o que já saiu da mão, com o PDF para baixar.
+ *
+ * ── POR QUE ELE NÃO FAZ UMA CONSULTA PRÓPRIA ───────────────────────────────
+ *
+ * Ele reaproveita a MESMA lista da outra aba. Não é economia de request: é o
+ * que garante que as duas abas enxerguem exatamente o mesmo recorte. O
+ * servidor já devolve só o que esta pessoa pode ver (técnico vê o próprio,
+ * administrador vê todos), e uma segunda consulta seria um segundo lugar onde
+ * esse recorte poderia sair diferente.
+ *
+ * ── O QUE ENTRA ────────────────────────────────────────────────────────────
+ *
+ * Só o que foi ENTREGUE. Rascunho é trabalho em andamento, não histórico --
+ * misturado aqui, a pessoa não saberia dizer o que o cliente já recebeu.
+ */
+function Historico({ lista, mostrarTecnico }) {
+  const [busca, setBusca] = useState('');
+  const [mes, setMes] = useState('');
+
+  const entregues = useMemo(
+    () => lista.filter((m) => m.status !== 'rascunho'),
+    [lista]
+  );
+
+  const meses = useMemo(() => {
+    const s = new Set(entregues.map((m) => String(m.dataVisita || '').slice(0, 7)).filter(Boolean));
+    return [...s].sort().reverse();
+  }, [entregues]);
+
+  const filtrados = useMemo(() => {
+    const t = busca.trim().toLowerCase();
+    return entregues
+      .filter((m) => !mes || String(m.dataVisita || '').startsWith(mes))
+      .filter((m) => !t || m.empresa?.toLowerCase().includes(t) || m.tecnicoNome?.toLowerCase().includes(t))
+      // Pelo que foi entregue por último: a pergunta do histórico é "o que saiu
+      // agora há pouco", e não "que visita é a mais recente".
+      .sort((a, b) => new Date(b.entregueEm || b.dataVisita) - new Date(a.entregueEm || a.dataVisita));
+  }, [entregues, busca, mes]);
+
+  const comPdf = filtrados.filter((m) => m.arquivo).length;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder={mostrarTecnico ? 'Buscar por empresa ou técnico' : 'Buscar por empresa'}
+          className="flex-1 min-w-[180px] bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto placeholder:text-texto-fraco focus:outline-none focus:border-acao/50"
+        />
+        <select
+          value={mes}
+          onChange={(e) => setMes(e.target.value)}
+          className="bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto focus:outline-none focus:border-acao/50"
+        >
+          <option value="">Todos os meses</option>
+          {meses.map((m) => <option key={m} value={m}>{m.split('-').reverse().join('/')}</option>)}
+        </select>
+        <span className="text-[11px] text-texto-fraco shrink-0">
+          {filtrados.length} relatório{filtrados.length === 1 ? '' : 's'} · {comPdf} com PDF
+        </span>
+      </div>
+
+      <div className="glass-panel border border-linha rounded-2xl overflow-hidden">
+        {filtrados.length === 0 ? (
+          <div className="py-12 text-center">
+            <p className="text-sm font-semibold text-texto-suave">
+              {entregues.length === 0 ? 'Nenhum relatório entregue ainda.' : 'Nada com esse filtro.'}
+            </p>
+            <p className="text-[11px] text-texto-fraco mt-1">
+              {entregues.length === 0
+                ? 'O histórico mostra os relatórios depois que você entrega rascunho não aparece aqui.'
+                : 'Tente outro mês ou limpe a busca.'}
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-linha">
+            {filtrados.map((m) => (
+              <div key={m.id} className="p-3.5 flex flex-col sm:flex-row sm:items-center gap-3 hover:bg-grafite-700/40">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Building2 size={13} className="text-texto-fraco shrink-0" />
+                    <span className="font-bold text-xs text-texto truncate">{m.empresa}</span>
+                    <Selo status={m.status} />
+                  </div>
+                  <p className="text-[11px] text-texto-fraco mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                    {/* O nome do técnico só para quem vê os relatórios de mais
+                        de uma pessoa -- para o técnico, todos são dele. */}
+                    {mostrarTecnico && <span className="font-semibold text-texto-suave">{m.tecnicoNome}</span>}
+                    <span>Visita {data(m.dataVisita)}</span>
+                    <span>Entregue {data(m.entregueEm)}</span>
+                    {m.arquivo && <span>{tamanho(m.arquivo.bytes)}</span>}
+                  </p>
+                </div>
+
+                {m.arquivo ? (
+                  <a
+                    href={RankingsAPI.urlArquivoMapeamento(m.id)}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={m.arquivo.nome}
+                    className="shrink-0 px-3 py-2 rounded-xl bg-acao/15 border border-acao/40 text-acao-200 hover:bg-acao/25 text-[11px] font-bold flex items-center gap-1.5 transition-colors"
+                  >
+                    <FileText size={13} /> Abrir PDF
+                  </a>
+                ) : (
+                  // Dizer que NÃO TEM é mais útil que esconder: quem procura o
+                  // relatório de uma visita precisa saber se ele não foi
+                  // anexado, e não ficar achando que a tela está com defeito.
+                  <span className="shrink-0 text-[11px] text-texto-fraco px-3 py-2">Sem PDF anexado</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const ABAS = [
+  { id: 'mapeamentos', rotulo: 'Mapeamentos', Icon: ClipboardList },
+  { id: 'historico', rotulo: 'Histórico de relatórios', Icon: FileText },
+];
+
 export default function Mapeamentos() {
   const { usuario } = useAuth();
   const [lista, setLista] = useState([]);
@@ -284,6 +488,7 @@ export default function Mapeamentos() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
   const [editando, setEditando] = useState(null);
+  const [aba, setAba] = useState('mapeamentos');
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -379,16 +584,39 @@ export default function Mapeamentos() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-xl sm:text-2xl font-bold text-texto flex items-center gap-2">
-            <ClipboardList size={20} className="text-acao-200" /> Mapeamentos técnicos
+            <ClipboardList size={20} className="text-acao-200" /> Relatórios
           </h2>
           <p className="text-xs text-texto-fraco mt-0.5">
-            Relatório das visitas fora da sede é daqui que sai a pontuação do ranking externo.
+            {/* A frase muda com o perfil porque a REGRA muda com o perfil, e é
+                melhor a tela dizer isso do que a pessoa descobrir estranhando
+                a lista curta (ou a lista com nome dos outros). */}
+            {ehSupervisor
+              ? 'Visitas fora da sede daqui sai a pontuação do ranking externo. Como administrador, você vê os relatórios de toda a equipe.'
+              : 'Visitas fora da sede daqui sai a pontuação do ranking externo. Você vê apenas os relatórios que enviou.'}
           </p>
         </div>
-        <button onClick={abrirNovo}
+        {/* O botão só na aba de lançamento: no histórico ele leria como "novo
+            item do histórico", que não é o que ele faz. */}
+        <button onClick={abrirNovo} hidden={aba !== 'mapeamentos'}
           className="px-4 py-2 rounded-xl bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold flex items-center gap-1.5">
           <Plus size={14} /> Novo mapeamento
         </button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {ABAS.map(({ id, rotulo, Icon }) => (
+          <button
+            key={id}
+            onClick={() => setAba(id)}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${
+              aba === id
+                ? 'bg-acao/15 border-acao/40 text-acao-200'
+                : 'bg-grafite-700 border-linha text-texto-suave hover:text-texto hover:border-linha-forte'
+            }`}
+          >
+            <Icon size={13} /> {rotulo}
+          </button>
+        ))}
       </div>
 
       {erro && (
@@ -397,6 +625,18 @@ export default function Mapeamentos() {
         </div>
       )}
 
+      {aba === 'historico' ? (
+        carregando ? (
+          <div className="glass-panel border border-linha rounded-2xl py-14 grid place-items-center">
+            <Loader2 size={22} className="animate-spin text-acao" />
+          </div>
+        ) : (
+          // A MESMA lista da outra aba: o recorte por perfil já veio pronto do
+          // servidor, e uma segunda consulta seria um segundo lugar onde ele
+          // poderia sair diferente.
+          <Historico lista={lista} mostrarTecnico={ehSupervisor} />
+        )
+      ) : (
       <div className="glass-panel border border-linha rounded-2xl overflow-hidden">
         {carregando ? (
           <div className="py-14 grid place-items-center"><Loader2 size={22} className="animate-spin text-acao" /></div>
@@ -471,6 +711,7 @@ export default function Mapeamentos() {
           </div>
         )}
       </div>
+      )}
 
       {editando && regras && (
         <ModalMapeamento
