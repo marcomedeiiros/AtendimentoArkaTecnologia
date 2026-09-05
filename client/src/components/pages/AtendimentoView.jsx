@@ -422,10 +422,36 @@ function horaAgora() {
 // Sem aba "Todas": a fila e lida por estado (Abertas / Pendentes / Fechadas).
 // Uma aba que mostrava tudo junto misturava conversa em andamento com conversa
 // ja encerrada, e o operador tinha que reler o chip de status de cada linha.
+/**
+ * As tres abas da lista -- e a cor de cada uma quando esta selecionada.
+ *
+ * Semaforo: verde para o que esta em andamento, ambar para o que espera,
+ * vermelho para o que ja encerrou. Enquanto as tres acendiam no mesmo verde da
+ * marca, a aba ativa dizia "voce esta aqui" e mais nada -- a cor nao carregava
+ * informacao nenhuma, e ela e a primeira coisa que se ve na tela.
+ *
+ * O VERMELHO EM "FECHADAS" e uma excecao consciente a regra da casa, que
+ * reserva o vermelho para falha de verdade (ver STATUS_META, onde a badge de
+ * conversa fechada e NEUTRA, e continua neutra). Aqui ele nao classifica o
+ * trabalho: e a terceira lampada do semaforo, num controle de filtro. A badge
+ * dentro do cartao segue sendo o lugar que diz se algo deu errado.
+ */
 const ABAS = [
-  { id: 'abertas',   label: 'Abertas',   icon: Inbox,        statusMatch: c => c.statusAtendimento === 'aberta' },
-  { id: 'pendentes', label: 'Pendentes', icon: Clock,        statusMatch: c => c.statusAtendimento === 'pendente' },
-  { id: 'fechadas',  label: 'Fechadas',  icon: CheckCircle2, statusMatch: c => c.statusAtendimento === 'fechada' },
+  {
+    id: 'abertas', label: 'Abertas', icon: Inbox,
+    statusMatch: c => c.statusAtendimento === 'aberta',
+    ativa: 'border-acao text-acao-200',
+  },
+  {
+    id: 'pendentes', label: 'Pendentes', icon: Clock,
+    statusMatch: c => c.statusAtendimento === 'pendente',
+    ativa: 'border-espera text-espera-400',
+  },
+  {
+    id: 'fechadas', label: 'Fechadas', icon: CheckCircle2,
+    statusMatch: c => c.statusAtendimento === 'fechada',
+    ativa: 'border-falha text-falha-400',
+  },
 ];
 
 function PainelMensagensRapidas({ onSelecionar, onFechar }) {
@@ -4577,13 +4603,16 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                   title={`${aba.label} (${count})`}
                   className={`py-2 px-2 text-[11px] font-bold transition-all border-b-2 flex items-center justify-center gap-1 ${
                     ativo
-                      ? 'border-acao text-acao-200 bg-grafite-700'
+                      ? `${aba.ativa} bg-grafite-700`
                       : 'border-transparent text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   <Icon size={12} className="shrink-0" />
                   <span className="truncate">{aba.label}</span>
-                  <span className={`text-[10px] font-semibold shrink-0 ${ativo ? 'text-acao-200' : 'text-slate-500'}`}>
+                  {/* O contador herda a cor da aba (`currentColor`) em vez de
+                      repetir a classe: com a cor escrita duas vezes, bastava
+                      trocar uma para o numero ficar verde numa aba vermelha. */}
+                  <span className={`text-[10px] font-semibold shrink-0 ${ativo ? '' : 'text-slate-500'}`}>
                     ({count})
                   </span>
                 </button>
