@@ -38,6 +38,10 @@ class WhatsAppController {
     return whatsappService
       .obterQrcode(req.query.instance, {
         forcar: req.query.forcar === "1" || req.query.forcar === "true",
+        // `?numero=5527...` pede CODIGO DE PAREAMENTO em vez de so QR: quem
+        // esta longe do celular le os 8 caracteres por telefone para quem esta
+        // perto, sem precisar apontar camera para tela nenhuma.
+        numero: req.query.numero || null,
       })
       .then((data) => success(res, data));
   }

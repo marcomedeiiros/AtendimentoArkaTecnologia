@@ -838,17 +838,31 @@ class WhatsAppService {
     return { instancia: nome, excluida: true };
   }
 
-  async conectar(instanceName) {
+  async conectar(instanceName, numero = null) {
     const nome = instanceName || env.evolutionApi.instance;
     // Este e o unico caminho que ainda emite QR, e ele so roda por acao humana
     // no painel. Avisar o vigia antes evita que o QUE FOI PEDIDO volte pelo
     // webhook como se fosse sintoma de pareamento perdido.
     reconexao.registrarPedidoDeQr();
-    const data = await evolutionApi.connect(nome);
+    const data = await evolutionApi.connect(nome, numero);
+    const pairingCode =
+      data?.pairingCode || data?.qrcode?.pairingCode || null;
+
+    // PEDIU CODIGO E NAO VEIO. Quase sempre e o estado: a Evolution so repassa
+    // o numero quando a instancia esta em `close`; em `connecting` ela devolve
+    // o QR de memoria e ignora o pedido. Dizer isso e melhor que entregar um
+    // campo vazio e deixar o operador achando que o recurso nao existe.
+    if (numero && !pairingCode) {
+      logger.warn("[WhatsApp] Codigo de pareamento pedido, mas a Evolution nao devolveu", {
+        instance: nome,
+        state: data?.instance?.state || data?.status || null,
+      });
+    }
+
     return {
       instancia: nome,
       qrcode: data?.base64 || data?.qrcode?.base64 || data?.code || null,
-      pairingCode: data?.pairingCode || null,
+      pairingCode,
       raw: data,
     };
   }
@@ -880,7 +894,7 @@ class WhatsAppService {
    * `forcar` para o operador que precisa reparear de propria vontade -- ela e
    * explicita, vem de um clique consciente, e fica registrada no log.
    */
-  async obterQrcode(instanceName, { forcar = false } = {}) {
+  async obterQrcode(instanceName, { forcar = false, numero = null } = {}) {
     const nome = instanceName || (await evolutionApi.instanciaPadrao());
     const status = await this.obterStatus(nome);
 
@@ -914,11 +928,15 @@ class WhatsAppService {
       });
     }
 
-    const result = await this.conectar(nome);
+    const result = await this.conectar(nome, numero);
     return {
       instancia: result.instancia,
       qrcode: result.qrcode,
       pairingCode: result.pairingCode,
+      // A tela precisa distinguir "nao pedi codigo" de "pedi e nao veio" --
+      // sao duas mensagens diferentes para o operador.
+      codigoPedido: !!numero,
+      state: result.raw?.instance?.state || null,
     };
   }
 }

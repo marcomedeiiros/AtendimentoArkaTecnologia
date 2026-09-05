@@ -238,8 +238,31 @@ class EvolutionApiClient {
     return this.request("GET", `/instance/connectionState/${instance}`);
   }
 
-  async connect(instance = this.defaultInstance) {
-    return this.request("GET", `/instance/connect/${instance}`);
+  /**
+   * PAREAR SEM ESTAR NA FRENTE DO CELULAR.
+   *
+   * Com `numero`, a Evolution devolve um CODIGO DE PAREAMENTO de 8 caracteres
+   * em vez de so o QR. Quem esta com o aparelho digita esse codigo em
+   * WhatsApp > Aparelhos conectados > "Conectar com numero de telefone" -- nao
+   * precisa apontar a camera para tela nenhuma. Na pratica: quem esta longe le
+   * o codigo por telefone para quem esta perto.
+   *
+   * Como funciona do lado da Evolution: `?number=` entra no DTO
+   * (`Object.assign(instance, request.query)` no abstract.router) e chega em
+   * `connectToWhatsapp(number)`, que chama `requestPairingCode` do Baileys.
+   *
+   * A RESSALVA QUE IMPORTA: o `number` so e repassado quando a instancia esta
+   * em `close` (instance.controller.ts:337). Em `connecting` a Evolution
+   * devolve o QR que ja tem em memoria e IGNORA o numero -- entao pedir codigo
+   * no meio de um handshake nao traz codigo nenhum. Quem chama precisa dizer
+   * isso ao operador em vez de mostrar um campo vazio.
+   *
+   * O numero vai so com digitos, com DDI (ex.: 5527210300070).
+   */
+  async connect(instance = this.defaultInstance, numero = null) {
+    const digitos = String(numero || "").replace(/\D/g, "");
+    const query = digitos ? `?number=${encodeURIComponent(digitos)}` : "";
+    return this.request("GET", `/instance/connect/${instance}${query}`);
   }
 
   async logout(instance = this.defaultInstance) {

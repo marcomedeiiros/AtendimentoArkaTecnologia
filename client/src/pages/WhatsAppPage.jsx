@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   MessageCircle, Power, QrCode, Loader2, RefreshCw, RotateCcw,
-  Trash2, Copy, Check, ShieldCheck
+  Trash2, Copy, Check, ShieldCheck, KeyRound
 } from 'lucide-react';
 import { EmojiIcon } from '../components/pages/EmojiIcon';
 import { useAppContext } from '../context/AppContext';
@@ -145,14 +145,27 @@ export default function WhatsAppPage() {
    * `client.logout()`, que remove o aparelho do lado do WhatsApp. Pedir QR sem
    * precisar é a maneira mais rápida de perder o pareamento que estava de pé.
    */
-  const gerarQr = useCallback(async ({ forcar = false } = {}) => {
+  const gerarQr = useCallback(async ({ forcar = false, numero = null } = {}) => {
     setCarregandoQr(true); setAviso('');
     try {
-      const r = await WhatsAppAPI.qrcode(instanciaRef.current, forcar);
+      const r = await WhatsAppAPI.qrcode(instanciaRef.current, forcar, numero);
       const b64 = r?.qrcode || null;
       setQrcode(comoImagem(b64));
       setPairingCode(r?.pairingCode || null);
-      if (!b64 && !r?.pairingCode) setAviso('A Evolution não retornou QR Code. Se a instância já estiver conectada, desconecte antes de gerar um novo.');
+      // PEDIU CÓDIGO E VEIO SÓ QR. Quase sempre é o estado: a Evolution só
+      // atende o pedido de código quando a instância está em `close`; em
+      // `connecting` ela devolve o QR de memória e ignora o número. Sem este
+      // recado, quem está longe do celular conclui que o recurso não existe.
+      if (r?.codigoPedido && !r?.pairingCode) {
+        setAviso(
+          'A Evolution não devolveu o código de pareamento agora' +
+          (r?.state ? ` (instância em "${r.state}")` : '') +
+          '. Ela só emite o código com a instância em "close" — espere o ciclo ' +
+          'atual terminar (até ~1 min) e peça de novo. O QR ao lado continua válido.'
+        );
+      } else if (!b64 && !r?.pairingCode) {
+        setAviso('A Evolution não retornou QR Code. Se a instância já estiver conectada, desconecte antes de gerar um novo.');
+      }
     } catch (e) {
       // Recusa do próprio servidor: a sessão está viva. Isso não é falha de
       // comunicação e não deve aparecer com a cara de uma.
@@ -272,6 +285,35 @@ export default function WhatsAppPage() {
       // quiser recriar faz isso conscientemente pelo caminho do QR.
       erroEvolution(e);
     } finally { setOcupado(false); }
+  }
+
+  /**
+   * Pede o código de pareamento para o número informado.
+   *
+   * O número tem de ser o DO APARELHO que vai parear, com DDI e DDD. Ele não
+   * vem de `detalhes.perfil.numero` porque, sem pareamento, esse campo está
+   * vazio — que é exatamente a situação em que este botão existe.
+   */
+  async function pedirCodigo() {
+    const resposta = await pedirTexto(
+      'Informe o número do WhatsApp que vai parear, com DDI e DDD.\n\n' +
+      'A Evolution devolve um código de 8 caracteres. Quem estiver com o celular ' +
+      'abre WhatsApp › Aparelhos conectados › Conectar um aparelho › ' +
+      '"Conectar com número de telefone" e digita o código.',
+      {
+        titulo: 'Código de pareamento',
+        valorInicial: detalhes?.perfil?.numero || '55',
+        placeholder: '5527210300070',
+        rotuloConfirmar: 'Gerar código',
+      }
+    );
+    if (resposta === null) return;
+    const digitos = String(resposta).replace(/\D/g, '');
+    if (digitos.length < 12) {
+      avisar('Número incompleto. Use DDI + DDD + número, só dígitos — ex.: 5527210300070.');
+      return;
+    }
+    await gerarQr({ numero: digitos });
   }
 
   async function excluirInstancia() {
@@ -422,9 +464,21 @@ export default function WhatsAppPage() {
             )}
           </div>
 
+          {/* O código é para ser LIDO EM VOZ ALTA por telefone, então ele é o
+              elemento mais legível do cartão — grande, monoespaçado e espaçado.
+              O passo a passo vem junto porque quem digita do outro lado quase
+              nunca sabe onde fica "Conectar com número de telefone". */}
           {pairingCode && (
-            <div className="mb-3 text-xs text-slate-300">
-              Código de pareamento: <span className="font-mono font-bold text-acao-200 tracking-widest">{pairingCode}</span>
+            <div className="mb-4 w-full max-w-xs p-3 rounded-xl bg-acao/10 border border-acao/30">
+              <div className="text-[10px] uppercase text-slate-400 mb-1">Código de pareamento</div>
+              <div className="font-mono font-bold text-xl text-acao-200 tracking-[0.25em] select-all">
+                {pairingCode}
+              </div>
+              <p className="text-[10px] text-slate-400 mt-2 leading-relaxed text-left">
+                No celular: <strong>WhatsApp › Aparelhos conectados › Conectar um aparelho ›
+                Conectar com número de telefone</strong> e digite o código. Ele expira em
+                poucos minutos — se vencer, peça outro.
+              </p>
             </div>
           )}
 
@@ -445,6 +499,15 @@ export default function WhatsAppPage() {
               </button>
               <button onClick={() => gerarQr()} disabled={carregandoQr} className={botaoSec} title="Renovar o QR Code">
                 <RefreshCw size={14} className={carregandoQr ? 'animate-spin' : ''} /> Atualizar QR
+              </button>
+              {/* PAREAR SEM ESTAR NA FRENTE DO CELULAR.
+                  O WhatsApp aceita 8 caracteres digitados no aparelho no lugar
+                  da câmera. Quem está fora da empresa dita o código por
+                  telefone para quem está lá — era esta a saída que faltava
+                  quando o pareamento caiu e o telefone ficou longe. */}
+              <button onClick={pedirCodigo} disabled={carregandoQr} className={botaoSec}
+                title="Receber um código de 8 caracteres para ditar a quem está com o celular">
+                <KeyRound size={14} /> Código por telefone
               </button>
             </div>
           ) : evolutionOnline === false ? (

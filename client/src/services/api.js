@@ -578,8 +578,17 @@ export const WhatsAppAPI = {
   // enquanto a sessão estiver válida e o vigia conseguindo religar sozinho,
   // porque com `QRCODE_LIMIT=3` uma tela de QR renovando sozinha faz a Evolution
   // chamar `client.logout()` e destruir o pareamento de verdade.
-  qrcode: (instance, forcar = false) =>
-    request(`/whatsapp/qrcode${qs(instance)}${forcar ? (qs(instance) ? '&' : '?') + 'forcar=1' : ''}`),
+  // `numero` pede CÓDIGO DE PAREAMENTO (8 caracteres) em vez de só o QR. Serve
+  // a quem está longe do aparelho: dita o código por telefone para quem está
+  // perto, que digita em Aparelhos conectados › Conectar com número.
+  qrcode: (instance, forcar = false, numero = null) => {
+    const p = new URLSearchParams();
+    if (instance) p.set('instance', instance);
+    if (forcar) p.set('forcar', '1');
+    if (numero) p.set('numero', numero);
+    const q = p.toString();
+    return request(`/whatsapp/qrcode${q ? `?${q}` : ''}`);
+  },
   conectar: (instance) => request('/whatsapp/conectar', { method: 'POST', body: JSON.stringify({ instance }) }),
   desconectar: (instance) => request('/whatsapp/desconectar', { method: 'POST', body: JSON.stringify({ instance }) }),
   reiniciar: (instance) => request('/whatsapp/reiniciar', { method: 'POST', body: JSON.stringify({ instance }) }),
