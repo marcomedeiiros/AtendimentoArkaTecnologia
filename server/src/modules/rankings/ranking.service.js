@@ -193,12 +193,16 @@ class RankingService {
   async _rankingExterno(ano, mes, equipe) {
     const inicio = new Date(ano, mes - 1, 1, 0, 0, 0, 0);
     const fim = new Date(ano, mes, 1, 0, 0, 0, 0);
+    // "Limpar dados de atendimento fora da sede" recomeca a contagem daqui. O
+    // piso e por MES (ver painelService.pisoDoMes): a limpeza nao apaga meses
+    // ja fechados, senao uma premiacao antiga apontaria para um ranking vazio.
+    const desde = painelService.pisoDoMes(inicio, fim, await painelService.marcoDe("externo"));
 
     // Recortado pela DATA DA VISITA, e nao pela entrega: o mes em que o
     // trabalho foi feito e o mes que ele conta. Ancorar na entrega deixaria uma
     // visita do dia 30 cair no mes seguinte por causa do prazo do relatorio.
     const mapeamentos = await prisma.mapeamentoTecnico.findMany({
-      where: { dataVisita: { gte: inicio, lt: fim }, tecnicoId: { in: equipe.map((u) => u.id) } },
+      where: { dataVisita: { gte: desde, lt: fim }, tecnicoId: { in: equipe.map((u) => u.id) } },
       select: {
         tecnicoId: true, status: true, resumo: true, itens: true,
         evidencias: true, devolucoes: true, prazoEm: true, entregueEm: true,
@@ -269,6 +273,10 @@ class RankingService {
       return { ...p, anterior: { posicao: antesPos, pontos: pontosAntes.get(p.usuarioId) ?? null }, evolucao };
     });
 
+    const marco = await painelService.marcoDe(equipeChave);
+    const inicioMes = new Date(ano, mes - 1, 1);
+    const fimMes = new Date(ano, mes, 1);
+
     const premiacoes = await prisma.premiacaoRanking.findMany({
       where: { ranking: equipeChave, competencia: comp },
       orderBy: { posicao: "asc" },
@@ -282,6 +290,16 @@ class RankingService {
       pesos: atual.pesos || null,
       minimoAvaliacoes: atual.minimoAvaliacoes ?? null,
       participantes: equipe.length,
+      // Desde quando este ranking esta contando. `zeradoEm` e o marco (existe ou
+      // nao, e o que decide se a tela mostra "Limpar" ou "Restaurar");
+      // `zeradoNoMes` diz se ele realmente corta o mes que esta na tela.
+      //
+      // Sao coisas diferentes: em setembro, com uma limpeza feita em setembro,
+      // julho aparece INTEIRO -- e um aviso "contando a partir de 3/set" em
+      // cima da tabela de julho seria mentira. Quem sabe a regra e o servidor
+      // (`pisoDoMes`); a tela so exibe a resposta, em vez de reimplementa-la.
+      zeradoEm: marco ? marco.toISOString() : null,
+      zeradoNoMes: !!marco && painelService.pisoDoMes(inicioMes, fimMes, marco) > inicioMes,
       supervisores: equipes.supervisores.map((u) => ({ id: u.id, nome: u.nome })),
       classificacao,
       premiacoes,

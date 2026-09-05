@@ -24,6 +24,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Trophy, Medal, Building2, Car, ChevronDown, ChevronRight, Loader2, AlertCircle,
   TrendingUp, TrendingDown, Minus, Sparkles, Gift, ClipboardList, Calendar, Eraser,
+  RotateCcw,
 } from 'lucide-react';
 import { RankingsAPI, DashboardAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -407,23 +408,27 @@ export default function Rankings() {
   };
 
   /**
-   * "Limpar dados do painel da equipe" -- herdado da aba anterior.
+   * UM BOTÃO DE LIMPAR POR RANKING -- o da aba que está aberta.
    *
-   * Zera o MODO TV (classificação, destaque, satisfação, tempos e fechados
-   * hoje) a partir de agora. NÃO mexe nesta tela: o ranking aqui é mensal e
-   * serve de base para a premiação -- zerá-lo apagaria da vista um mês que já
-   * pode ter sido premiado, e o registro do prêmio apontaria para um ranking
-   * que a tela não conseguiria mais mostrar.
+   * Antes havia um só, e ele zerava a sede: quem estivesse na aba "Fora da
+   * Sede" clicava e via a OUTRA equipe zerar. Agora o botão pertence à aba e o
+   * texto diz o nome da equipe -- não dá para limpar a sede sem estar olhando
+   * para ela.
+   *
+   * Limpar NÃO APAGA NADA: grava um instante, e a contagem daquele ranking
+   * recomeça dali. Meses já encerrados antes do instante continuam inteiros (é
+   * o `pisoDoMes` no servidor), então uma premiação de julho não some porque
+   * alguém limpou em setembro.
    */
-  const limparPainelTv = async () => {
+  const limparRanking = async () => {
     const ok = await confirmar(
-      'No Modo TV, a classificação, o destaque do mês, a satisfação, os tempos e "fechados hoje" ' +
-      'voltam a zero e passam a contar a partir de agora.\n\n' +
-      'Esta tela NÃO muda: o ranking mensal, o histórico e a premiação continuam completos. ' +
-      'Nenhum atendimento é apagado, e dá para desfazer depois.',
+      `A pontuação de "${rotuloAba}" volta a zero e passa a contar a partir de agora` +
+      (aba === 'sede' ? ', aqui e no Modo TV.' : '.') + '\n\n' +
+      'Nenhum atendimento, avaliação ou relatório é apagado, os meses já ' +
+      'encerrados continuam como estão, e dá para desfazer no botão "Restaurar".',
       {
-        titulo: 'Limpar os dados do painel da equipe?',
-        rotuloConfirmar: 'Limpar o painel da TV',
+        titulo: `Limpar os dados de ${rotuloAba.toLowerCase()}?`,
+        rotuloConfirmar: 'Limpar',
         rotuloCancelar: 'Deixar como está',
         perigo: true,
       }
@@ -431,12 +436,42 @@ export default function Rankings() {
     if (!ok) return;
     setLimpando(true);
     try {
-      await DashboardAPI.limparPainel();
-      avisar('Painel do Modo TV zerado. Esta tela continua com o histórico completo.', {
-        titulo: 'Painel limpo', tipo: 'info',
+      await DashboardAPI.limparPainel(aba);
+      // Recarrega: o `zeradoEm` que vem junto é o que troca este botão pelo de
+      // restaurar e acende o aviso. Sem isto a tela só diria que está limpa no
+      // próximo F5.
+      await carregar();
+      avisar('A contagem recomeça a partir de agora. Nada foi apagado.', {
+        titulo: 'Dados limpos', tipo: 'info',
       });
     } catch (e) {
-      avisar(e?.message || 'Não foi possível limpar o painel.', { titulo: 'Limpeza não concluída' });
+      avisar(e?.message || 'Não foi possível limpar.', { titulo: 'Limpeza não concluída' });
+    } finally {
+      setLimpando(false);
+    }
+  };
+
+  /**
+   * Desfaz a limpeza -- o botão que faltava.
+   *
+   * Ele existia na tela anterior e não veio junto na mudança para cá; sem ele,
+   * quem clicasse em limpar ficava com o painel vazio e nenhum caminho de
+   * volta. Só aparece quando há o que desfazer.
+   */
+  const restaurarRanking = async () => {
+    const ok = await confirmar(
+      `Os dados anteriores de "${rotuloAba}" voltam a aparecer. Eles nunca foram apagados: ` +
+      'a limpeza só tinha marcado a partir de quando contar.',
+      { titulo: 'Restaurar os dados?', rotuloConfirmar: 'Restaurar' }
+    );
+    if (!ok) return;
+    setLimpando(true);
+    try {
+      await DashboardAPI.restaurarPainel(aba);
+      await carregar();
+      avisar('Os dados voltaram.', { titulo: 'Dados restaurados', tipo: 'info' });
+    } catch (e) {
+      avisar(e?.message || 'Não foi possível restaurar.', { titulo: 'Restauração não concluída' });
     } finally {
       setLimpando(false);
     }
@@ -456,6 +491,11 @@ export default function Rankings() {
   };
 
   const lista = dados?.classificacao || [];
+  const rotuloAba = ABAS.find((a) => a.id === aba)?.rotulo || '';
+  // Desde quando ESTE ranking está contando. Vem do servidor junto com a
+  // classificação, e não de um estado local: quem limpou pode ter sido outro
+  // administrador, em outra máquina.
+  const zeradoEm = dados?.zeradoEm ? new Date(dados.zeradoEm) : null;
 
   return (
     // Sem padding nem título próprios: isto é o CONTEÚDO de uma aba da Visão
@@ -487,18 +527,34 @@ export default function Rankings() {
             </select>
           </div>
 
-          {ehAdmin && aba === 'sede' && (
+          {/* O botão é o da ABA ABERTA, e some quando não há o que fazer: com o
+              ranking zerado, o que cabe ali é restaurar, não limpar de novo. */}
+          {ehAdmin && !zeradoEm && (
             <button
-              onClick={limparPainelTv}
+              onClick={limparRanking}
               disabled={limpando}
-              title="Zera o painel de parede (Modo TV) a partir de agora esta tela não muda"
+              title={`Zera a contagem de ${rotuloAba} a partir de agora nada é apagado, e dá para desfazer`}
               className="px-3 py-2 rounded-xl bg-falha/15 border border-falha/40 text-falha-400 hover:bg-falha/25 text-[11px] font-bold flex items-center gap-1.5 transition-colors disabled:opacity-50"
             >
               {limpando ? <Loader2 size={12} className="animate-spin" /> : <Eraser size={12} />}
-              {/* No celular só o essencial: "do painel da equipe" é o que estoura
-                  a linha, e o `title` guarda a frase inteira. */}
-              <span className="sm:hidden">Limpar painel</span>
-              <span className="hidden sm:inline">Limpar dados do painel da equipe</span>
+              {/* No celular só o essencial: o nome inteiro da equipe é o que
+                  estoura a linha, e o `title` guarda a frase completa. */}
+              <span className="sm:hidden">Limpar</span>
+              <span className="hidden sm:inline">
+                {aba === 'sede' ? 'Limpar dados de atendimento na sede' : 'Limpar atendimento fora da sede'}
+              </span>
+            </button>
+          )}
+
+          {ehAdmin && zeradoEm && (
+            <button
+              onClick={restaurarRanking}
+              disabled={limpando}
+              title={`Faz os dados de ${rotuloAba} anteriores à limpeza voltarem a aparecer`}
+              className="px-3 py-2 rounded-xl bg-acao/15 border border-acao/40 text-acao-400 hover:bg-acao/25 text-[11px] font-bold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+            >
+              {limpando ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
+              Restaurar dados
             </button>
           )}
         </div>
@@ -523,6 +579,25 @@ export default function Rankings() {
       {erro && (
         <div className="flex items-center gap-2 p-3 rounded-xl bg-falha/10 border border-falha/30 text-falha-400 text-xs">
           <AlertCircle size={14} className="shrink-0" /> {erro}
+        </div>
+      )}
+
+      {/* POR QUE A TABELA ESTÁ VAZIA.
+          Um ranking zerado é indistinguível de uma equipe que não atendeu --
+          e foi exatamente essa confusão que fez alguém procurar defeito onde
+          houve um clique. O aviso diz desde quando está contando e lembra que
+          nada foi apagado. */}
+      {zeradoEm && dados?.zeradoNoMes && (
+        <div className="flex items-start gap-2 p-3 rounded-xl bg-espera/10 border border-espera/30 text-espera-400 text-xs">
+          <AlertCircle size={14} className="shrink-0 mt-0.5" />
+          <span>
+            Contando a partir de{' '}
+            <strong>
+              {zeradoEm.toLocaleString('pt-BR', { timeZone: FUSO_BR, dateStyle: 'short', timeStyle: 'short' })}
+            </strong>
+            {' '}o que veio antes não foi apagado, só deixou de ser somado.
+            {ehAdmin && ' Use "Restaurar dados" para voltar tudo.'}
+          </span>
         </div>
       )}
 
@@ -647,7 +722,10 @@ export default function Rankings() {
         <p className="text-[11px] text-texto-fraco flex items-center gap-1.5">
           <ClipboardList size={12} className="shrink-0" />
           Os pontos saem dos mapeamentos técnicos entregues veja e valide em{' '}
-          <strong className="text-texto-suave">Mapeamentos</strong>
+          {/* O nome do MENU, e não o do arquivo: a tela foi renomeada para
+              "Relatórios" e esta frase ficou mandando o técnico procurar um
+              item que não existe mais na barra lateral. */}
+          <strong className="text-texto-suave">Relatórios</strong>
         </p>
       )}
     </div>
