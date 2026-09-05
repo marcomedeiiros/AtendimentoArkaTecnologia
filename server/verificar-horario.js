@@ -15,6 +15,10 @@
 //   - a mensagem usa os horarios da configuracao, nunca texto fixo;
 //   - o aviso de fora de horario nao se repete a cada mensagem.
 const h = require("./src/modules/chatbot/chatbot.horario");
+// Para conferir que o CAMPO existe no formulario -- ver o bloco do prazo de
+// encerramento no fim do arquivo.
+const fs = require("fs");
+const path = require("path");
 
 const erros = [];
 const check = (cond, msg) => {
@@ -261,6 +265,70 @@ check(
   h.deveAvisar(comAlmoco, "data-invalida", agora) === true,
   "marca ilegivel na sessao: avisa (nao engole o aviso)"
 );
+
+/**
+ * O PRAZO DE ENCERRAMENTO, DA TELA ATE A MENSAGEM.
+ *
+ * `encerrarAposMin` sempre existiu no servidor, e era ele que preenchia o
+ * `{{minutos}}` do aviso -- mas NAO havia campo na tela. Mudar de 5 para outro
+ * numero exigia editar o banco, e quem olhasse a mensagem continuaria lendo a
+ * promessa antiga.
+ *
+ * O que se trava aqui e o caminho inteiro: o numero configurado tem de aparecer
+ * no texto, o zero tem de DESLIGAR o encerramento (e tirar o paragrafo, em vez
+ * de prometer "0 minutos"), e o campo tem de existir no formulario -- sem ele o
+ * resto e teoria.
+ */
+{
+  const base = {
+    ativo: true,
+    timezone: "America/Sao_Paulo",
+    dias: { 1: { ativo: true, periodos: [{ de: "08:00", ate: "18:00" }] } },
+    excecoes: [],
+  };
+  // Segunda-feira, 22h: fora do expediente.
+  const noite = new Date(2026, 8, 7, 22, 0, 0);
+  const textoCom = (min) => h.mensagemFora(h.normalizarHorario({ ...base, encerrarAposMin: min }), noite);
+
+  check(/encerrado em 5 minutos/.test(textoCom(5)), "o padrao de 5 minutos aparece na mensagem");
+  check(/encerrado em 30 minutos/.test(textoCom(30)), "e o valor configurado substitui o padrao (30)");
+  check(!/\{\{/.test(textoCom(30)), "sem deixar marcador cru no texto");
+  check(
+    !/encerrado em/.test(textoCom(0)),
+    "com 0 o paragrafo SAI -- em vez de prometer 'encerrado em 0 minutos'"
+  );
+  /**
+   * VALOR FORA DA FAIXA CAI NO PADRAO -- e nao no teto.
+   *
+   * Escrevi este teste esperando um clamp em 1440 e ele reprovou: quem estava
+   * errado era a expectativa. `inteiro()` devolve o padrao para qualquer coisa
+   * fora de [min, max], e e a mesma regra de todo o modulo -- valor ilegivel
+   * vira "o que sabemos que funciona", em vez de um numero que ninguem pediu.
+   *
+   * Fica registrado porque as duas escolhas sao defensaveis, e a proxima pessoa
+   * a olhar isto vai ter a mesma duvida.
+   */
+  check(
+    h.normalizarHorario({ ...base, encerrarAposMin: 99999 }).encerrarAposMin === 5,
+    "valor fora da faixa cai no padrao (5), e nao num numero inventado"
+  );
+  check(
+    h.normalizarHorario({ ...base, encerrarAposMin: 1440 }).encerrarAposMin === 1440,
+    "e o teto de 24h e aceito"
+  );
+
+  // O CAMPO NA TELA. Sem ele, tudo acima e configuravel so por quem mexe no
+  // banco -- que foi exatamente a situacao que este bloco veio consertar.
+  const form = fs.readFileSync(
+    path.join(__dirname, "..", "client", "src", "components", "HorarioAtendimento.jsx"),
+    "utf8"
+  );
+  check(/encerrarAposMin/.test(form), "o formulario tem o campo de encerramento");
+  check(
+    /encerrarAposMin:\s*Number\([^)]*\)\s*\|\|\s*0/.test(form),
+    "e campo vazio vira 0 (desliga), em vez de cair no padrao"
+  );
+}
 
 console.log(
   "\n" + (erros.length ? `FALHAS (${erros.length}):\n  ` + erros.join("\n  ") : "HORARIO: TODAS AS VERIFICACOES PASSARAM")

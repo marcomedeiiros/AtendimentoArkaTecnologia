@@ -90,6 +90,12 @@ export default function HorarioAtendimento({ horario, resumo, mensagemPrevia, se
   const [reavisar, setReavisar] = useState(
     Number.isFinite(horario?.reavisarAposMin) ? horario.reavisarAposMin : 120
   );
+  // Minutos entre o aviso de fora do horário e o encerramento automático.
+  // O servidor já aceitava este campo -- é ele que preenche o `{{minutos}}` da
+  // mensagem -- mas não havia onde mexer: só dava para mudar editando o banco.
+  const [encerrar, setEncerrar] = useState(
+    Number.isFinite(horario?.encerrarAposMin) ? horario.encerrarAposMin : 5
+  );
   // O campo da mensagem, para o atalho da prévia levar o foco até ele.
   const campoMensagemRef = useRef(null);
 
@@ -101,6 +107,7 @@ export default function HorarioAtendimento({ horario, resumo, mensagemPrevia, se
       timezone,
       mensagem,
       reavisarAposMin: reavisar,
+      encerrarAposMin: encerrar,
       dias,
       excecoes,
       ...patch,
@@ -120,6 +127,9 @@ export default function HorarioAtendimento({ horario, resumo, mensagemPrevia, se
       excecoes: atual.excecoes.filter((e) => /^\d{4}-\d{2}-\d{2}$/.test(String(e.data || ''))),
       mensagem: atual.mensagem || '',
       reavisarAposMin: Number(atual.reavisarAposMin) || 0,
+      // `|| 0` e nao `?? 5`: campo vazio quer dizer DESLIGAR o encerramento
+      // automatico, e o servidor le zero exatamente assim.
+      encerrarAposMin: Number(atual.encerrarAposMin) || 0,
     };
     onChange('chatbot.horario', JSON.stringify(payload));
   }
@@ -216,6 +226,27 @@ export default function HorarioAtendimento({ horario, resumo, mensagemPrevia, se
           <span className="text-[10px] text-slate-500 leading-relaxed">
             O cliente que manda três mensagens seguidas às 22h recebe UM aviso.
             0 = avisa em toda mensagem.
+          </span>
+        </label>
+        {/* ENCERRAR APÓS -- o número que aparece dentro da própria mensagem.
+            O servidor já aceitava este campo e é ele que preenche o
+            `{{minutos}}` do texto; faltava onde mexer. Sem ele, mudar o prazo
+            exigia editar o banco -- e o texto continuaria prometendo 5. */}
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs text-slate-400 font-medium">
+            Encerrar a conversa após (minutos)
+          </span>
+          <input
+            type="number"
+            min="0"
+            max="1440"
+            value={encerrar}
+            onChange={(e) => { setEncerrar(e.target.value); publicar({ encerrarAposMin: e.target.value }); }}
+            className="bg-grafite-700 border border-linha rounded-xl px-3 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-acao/50"
+          />
+          <span className="text-[10px] text-slate-500 leading-relaxed">
+            É este número que a mensagem escreve em “será encerrado em N minutos”.
+            0 = não encerra sozinho, e a frase some do texto.
           </span>
         </label>
       </div>
