@@ -133,15 +133,58 @@ async function _consultar(sql, valores) {
  * `false` nao tem: ou nunca pareou, ou algo apagou -- so o cofre ou o QR salvam.
  * `null` nao sei: Postgres fora do alcance. Trate como `true` (lado seguro).
  */
+/**
+ * A CREDENCIAL ESTA PAREADA? -- e nao apenas "tem bytes".
+ *
+ * O QUE ESTA CHECAGEM CUSTOU, medido em producao em 05/09/2026: o WhatsApp
+ * ficou 6h30 fora do ar (02:56 -> 09:33) com o vigia jurando "credencial
+ * intacta" em 396 tentativas seguidas.
+ *
+ * O que houve: a Evolution apagou a `Session` num 408, e o `/instance/connect`
+ * seguinte fez o Baileys criar uma credencial NOVA E NAO PAREADA
+ * (`initAuthCreds()`) -- 1249 bytes de chaves criptograficas com
+ * `"registered": false`, sem `me`, sem `account`. Um casco. Ele tem bytes, e a
+ * checagem antiga era `length(creds) > 0`, entao passava como sessao valida.
+ *
+ * O resultado e o pior dos dois mundos: o vigia se recusa a pedir QR (nao ha
+ * 401, e "ha credencial") enquanto o Baileys emite um QR a cada ciclo que
+ * ninguem escaneia, ate o timeout de 408 fechar o socket. Para sempre.
+ *
+ * `registered` e o campo que o Baileys vira para `true` quando o pareamento
+ * conclui. E a unica pergunta que importa aqui.
+ *
+ * `true` pareada e recuperavel -- reconectar resolve, QR e desnecessario.
+ * `false` sem pareamento utilizavel (ausente OU casco) -- so o QR resolve.
+ * `null` nao sei: Postgres fora do alcance. Trate como `true` (lado seguro).
+ */
 async function credencialPresente(nomeInstancia) {
   const r = await _consultar(
-    `SELECT s."sessionId", length(s.creds) AS bytes
+    `SELECT s."sessionId", s.creds, length(s.creds) AS bytes
        FROM "Session" s JOIN "Instance" i ON i.id = s."sessionId"
       WHERE i.name = $1`,
     [nomeInstancia]
   );
   if (!r) return null;
-  return r.rowCount > 0 && Number(r.rows[0].bytes) > 0;
+  if (r.rowCount === 0 || !(Number(r.rows[0].bytes) > 0)) return false;
+  return _pareada(r.rows[0].creds);
+}
+
+/**
+ * O texto da credencial descreve um pareamento CONCLUIDO?
+ *
+ * A `creds` chega como JSON dentro de string JSON (dupla codificacao), entao as
+ * aspas podem vir escapadas (`\"registered\":true`). A regex tolera as duas
+ * formas de proposito -- normalizar antes daria a mesma resposta com mais
+ * chance de erro no caminho.
+ */
+function _pareada(creds) {
+  const texto = typeof creds === "string" ? creds : JSON.stringify(creds || "");
+  if (!texto) return false;
+  // `registered: true` e o carimbo do Baileys quando o pareamento fecha.
+  if (/\\?"registered\\?"\s*:\s*true/.test(texto)) return true;
+  // Cinto e suspensorio: uma credencial pareada sempre tem o proprio jid em
+  // `me`. Se um dia o campo `registered` mudar de nome, isto ainda pega.
+  return /\\?"me\\?"\s*:\s*\{[^}]*\\?"id\\?"\s*:\s*\\?"\d/.test(texto);
 }
 
 async function _instanceId(nomeInstancia) {
@@ -164,7 +207,13 @@ function _pasta(nomeInstancia) {
  */
 function jaFoiPareado(nomeInstancia) {
   try {
-    return fs.existsSync(path.join(_pasta(nomeInstancia), "creds.json"));
+    const arquivo = path.join(_pasta(nomeInstancia), "creds.json");
+    if (!fs.existsSync(arquivo)) return false;
+    // Nao basta o arquivo existir: um cofre envenenado (copia de uma credencial
+    // nao pareada) responderia "ja pareou" e faria o vigia tratar uma
+    // instalacao sem sessao como uma sessao caida -- que e justamente o estado
+    // em que ele se recusa a pedir QR.
+    return _pareada(fs.readFileSync(arquivo, "utf8"));
   } catch {
     return false;
   }
@@ -201,6 +250,22 @@ async function salvar(nomeInstancia) {
 
   const { instanceId, creds } = r.rows[0];
   if (!creds) return { salvo: false, motivo: "credencial_vazia" };
+
+  // NUNCA GUARDAR UM CASCO. Uma credencial nao pareada escrita por cima da
+  // copia boa destroi a unica coisa que o cofre existe para proteger -- e foi
+  // exatamente o que aconteceu em 05/09/2026: o cofre passou o dia
+  // restaurando, fielmente, uma credencial que nunca esteve pareada.
+  //
+  // O cofre so guarda o que serve para logar sem QR. Se nao serve, a copia
+  // antiga (se houver) continua valendo -- ela e melhor que esta.
+  if (!_pareada(creds)) {
+    logger.warn("[Cofre] Credencial NAO PAREADA no banco -- copia recusada", {
+      instance: nomeInstancia,
+      bytes: creds.length,
+      copiaAnteriorPreservada: jaFoiPareado(nomeInstancia),
+    });
+    return { salvo: false, motivo: "credencial_nao_pareada" };
+  }
 
   const hash = _hash(creds);
   const meta = _metaSalva(nomeInstancia);
@@ -280,6 +345,22 @@ async function restaurar(nomeInstancia, motivoCodigo) {
     return { restaurado: false, motivo: "cofre_vazio" };
   }
 
+  // COFRE ENVENENADO: a copia existe mas nao e um pareamento. Devolve-la ao
+  // banco nao reconecta nada -- so faz o vigia acreditar que ha sessao e adiar
+  // para sempre o QR que resolveria.
+  //
+  // Esta checagem vem ANTES de qualquer ida ao Postgres de proposito: julgar a
+  // nossa propria copia nao depende do banco da Evolution, e deixar o banco na
+  // frente escondia este veredito atras de um "instancia_inexistente".
+  const credsCofre = fs.readFileSync(arquivoCreds, "utf8");
+  if (!_pareada(credsCofre)) {
+    logger.warn("[Cofre] A copia guardada NAO esta pareada -- restauracao recusada", {
+      instance: nomeInstancia,
+      bytes: credsCofre.length,
+    });
+    return { restaurado: false, motivo: "cofre_nao_pareado" };
+  }
+
   const instanceId = await _instanceId(nomeInstancia);
   if (!instanceId) return { restaurado: false, motivo: "instancia_inexistente" };
 
@@ -290,7 +371,7 @@ async function restaurar(nomeInstancia, motivoCodigo) {
     return { restaurado: false, motivo: presente === null ? "estado_desconhecido" : "ja_existe" };
   }
 
-  const creds = fs.readFileSync(arquivoCreds, "utf8");
+  const creds = credsCofre;
   const r = await _consultar(
     `INSERT INTO "Session" ("id", "sessionId", "creds", "createdAt")
      VALUES ($1, $2, $3, NOW())

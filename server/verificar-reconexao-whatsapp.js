@@ -34,7 +34,7 @@ const INSTANCIA = env.evolutionApi.instance;
 let chamadas = [];
 let cenario = {};
 
-function montarDubles() {
+function montarDubles(alvoCofre = cofre) {
   cliente.getConnectionState = async () => {
     chamadas.push("getConnectionState");
     if (cenario.evolutionForaDoAr) throw new Error("ECONNREFUSED");
@@ -55,16 +55,16 @@ function montarDubles() {
     return { instance: { status: "connecting" } };
   };
 
-  cofre.credencialPresente = async () => {
+  alvoCofre.credencialPresente = async () => {
     chamadas.push("credencialPresente");
     return cenario.credencial; // true | false | null
   };
-  cofre.jaFoiPareado = () => cenario.jaPareou !== false;
-  cofre.salvar = async () => {
+  alvoCofre.jaFoiPareado = () => cenario.jaPareou !== false;
+  alvoCofre.salvar = async () => {
     chamadas.push("salvar");
     return { salvo: true };
   };
-  cofre.restaurar = async (_i, motivoCodigo) => {
+  alvoCofre.restaurar = async (_i, motivoCodigo) => {
     chamadas.push("restaurar");
     // Reproduz a guarda real do cofre: 401/403 nunca restauram.
     if (cofre.CODIGOS_LOGOUT_REAL.includes(Number(motivoCodigo))) {
@@ -74,9 +74,9 @@ function montarDubles() {
     cenario.credencial = true;
     return { restaurado: true };
   };
-  cofre.estado = () => ({ disponivel: true, temCofre: !!cenario.temCofre });
-  cofre.disponivel = () => true;
-  cofre.porqueIndisponivel = () => null;
+  alvoCofre.estado = () => ({ disponivel: true, temCofre: !!cenario.temCofre });
+  alvoCofre.disponivel = () => true;
+  alvoCofre.porqueIndisponivel = () => null;
 }
 montarDubles();
 
@@ -451,6 +451,87 @@ function liberarBackoff(vigia) {
     /!conectado \|\| !qrcode \|\| !podeMostrarQr/.test(fonteTela) ||
       /if \(conectado \|\| !qrcode \|\| !podeMostrarQr\) return/.test(fonteTela),
     "a renovacao automatica do QR para quando o QR deixa de ser legitimo"
+  );
+
+  // ── 16. CREDENCIAL COM BYTES MAS SEM PAREAMENTO ───────────────────────────
+  //
+  // O incidente de 05/09/2026, que custou 6h30 de WhatsApp fora do ar.
+  //
+  // A Evolution apagou a `Session` num 408; o `/instance/connect` seguinte fez
+  // o Baileys criar uma credencial NOVA E NAO PAREADA (`initAuthCreds()`):
+  // 1249 bytes de chaves com `"registered": false`, sem `me`. A checagem de
+  // entao era `length(creds) > 0`, entao esse casco passou como "credencial
+  // intacta" -- e o vigia se recusou a pedir QR por 396 tentativas seguidas
+  // enquanto o Baileys emitia um QR por ciclo que ninguem escaneava.
+  //
+  // Um casco NAO e sessao. Tem de valer como logout.
+  console.log("\n=== 16. casco de credencial nao vale como sessao ===");
+  const fsMod = require("fs");
+  const osMod = require("os");
+  const pathMod = require("path");
+
+  // O texto real colhido da VM (abreviado), com a dupla codificacao que o
+  // Postgres da Evolution entrega: JSON dentro de string JSON.
+  const CASCO = '"{\\"noiseKey\\":{},\\"registrationId\\":97,\\"registered\\":false}"';
+  const PAREADA =
+    '"{\\"noiseKey\\":{},\\"me\\":{\\"id\\":\\"552721030070:12@s.whatsapp.net\\"},\\"registered\\":true}"';
+
+  const dirCofre = fsMod.mkdtempSync(pathMod.join(osMod.tmpdir(), "arka-cofre-"));
+  process.env.WHATSAPP_COFRE_DIR = dirCofre;
+  const CAMINHO_COFRE = pathMod.join(__dirname, "src/modules/whatsapp/whatsapp.sessao.js");
+  delete require.cache[require.resolve(CAMINHO_COFRE)];
+  const cofreReal = require(CAMINHO_COFRE);
+
+  const pastaCofre = pathMod.join(dirCofre, INSTANCIA.replace(/[^\w.-]/g, "_"));
+  fsMod.mkdirSync(pastaCofre, { recursive: true });
+  const arquivoCofre = pathMod.join(pastaCofre, "creds.json");
+
+  fsMod.writeFileSync(arquivoCofre, CASCO);
+  check(
+    cofreReal.jaFoiPareado(INSTANCIA) === false,
+    "cofre com casco NAO conta como pareamento anterior"
+  );
+  const recusaCofre = await cofreReal.restaurar(INSTANCIA, 408);
+  check(
+    recusaCofre.restaurado === false && recusaCofre.motivo === "cofre_nao_pareado",
+    "restauracao recusada quando a copia do cofre e um casco"
+  );
+
+  fsMod.writeFileSync(arquivoCofre, PAREADA);
+  check(
+    cofreReal.jaFoiPareado(INSTANCIA) === true,
+    "cofre com credencial pareada continua contando como pareamento"
+  );
+  fsMod.rmSync(dirCofre, { recursive: true, force: true });
+
+  // Medido o arquivo real, o vigia volta a rodar sobre dubles -- mas agora
+  // sobre ESTA instancia do modulo, que e a que ele vai receber.
+  montarDubles(cofreReal);
+
+  // E o veredito do vigia: casco no banco = LOGGED_OUT, com QR liberado.
+  const v16 = novoVigia({
+    state: "close",
+    motivoCodigo: 408,
+    credencial: false, // o casco agora responde `false` -- e o ponto do fix
+    temCofre: false, // e o cofre nao tem copia boa para devolver
+    jaPareou: true,
+  });
+  const r16 = await v16.verificar();
+  check(
+    v16.estado().precisaParear === true,
+    "casco no banco sem cofre bom -> LOGGED_OUT (o QR passa a ser legitimo)"
+  );
+  check(
+    r16.acao !== "connect" && r16.acao !== "restart",
+    "e o vigia PARA de tentar reconectar em vez de repetir 396 vezes"
+  );
+
+  // A defesa em profundidade: o cofre nunca guarda um casco por cima da copia
+  // boa. Foi assim que a unica copia valida se perdeu.
+  const fonteCofre = fsMod.readFileSync(CAMINHO_COFRE, "utf8");
+  check(
+    /if \(!_pareada\(creds\)\) \{[\s\S]{0,400}?credencial_nao_pareada/.test(fonteCofre),
+    "salvar() recusa gravar credencial nao pareada sobre a copia boa"
   );
 
   // ── RESUMO ────────────────────────────────────────────────────────────────
