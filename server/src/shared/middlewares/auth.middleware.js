@@ -92,6 +92,10 @@ async function authMiddleware(req, res, next) {
       // vencer. Vai junto do cargo porque `podeAcessarSetor` decide com os
       // dois -- separa-los criaria o caminho em que um chega e o outro nao.
       setoresExtras: usuario.setoresExtras || null,
+      // Equipe de ranking, tambem do BANCO e pela mesma razao dos setores: ela
+      // decide quem enxerga a tela de Relatorios, e tirar alguem de "Fora da
+      // Sede" tem de valer na requisicao seguinte -- nao quando o token vencer.
+      equipeRanking: usuario.equipeRanking || null,
       // Sessao desta requisicao. Serve para poupar a propria sessao quando a
       // acao derruba as outras (troca de senha).
       sid: payload.sid || null,

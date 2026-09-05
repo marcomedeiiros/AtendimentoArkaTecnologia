@@ -595,6 +595,80 @@ async function main() {
     check(!noDisco(), "removendo o PDF, o arquivo sai do DISCO tambem (nada de orfao)");
   }
 
+  /**
+   * 8c. QUEM ENXERGA A TELA DE RELATORIOS.
+   *
+   * O pedido: quem esta marcado em "Atendimento Fora da Sede" ve Relatorios --
+   * ponto. Antes dependia de DUAS chaves: a marca de equipe (por pessoa) e o
+   * modulo "rankings" na matriz de permissoes (por CARGO). A marca ja estava
+   * ligada e a tela continuava invisivel ate alguem lembrar da segunda -- e
+   * ligar a segunda liberaria a tela para o cargo Tecnico inteiro, inclusive
+   * para quem nunca sai da sede.
+   *
+   * A regra so ADICIONA: quem tinha o modulo pelo cargo continua com ele.
+   */
+  titulo("8c. RELATORIOS APARECE PARA QUEM ESTA 'FORA DA SEDE'");
+  {
+    const { podeVerRelatoriosDeVisita } = require("./src/shared/helpers/equipeRanking.helper");
+    const usuarioRepository = require("./src/infrastructure/repositories/usuario.repository");
+
+    check(
+      podeVerRelatoriosDeVisita({ cargo: "Técnico", equipeRanking: "externo" }),
+      "quem esta em 'Fora da Sede' entra na tela de Relatorios"
+    );
+    check(
+      podeVerRelatoriosDeVisita({ cargo: "Técnico", equipeRanking: "sede,externo" }),
+      "e quem faz as duas coisas tambem"
+    );
+    check(
+      podeVerRelatoriosDeVisita({ cargo: "Administrador", equipeRanking: null }),
+      "o Administrador entra sempre -- e ele quem valida e ve os da equipe toda"
+    );
+    check(
+      !podeVerRelatoriosDeVisita({ cargo: "Técnico", equipeRanking: "sede" }),
+      "quem so atende na SEDE nao entra (era o pedido)"
+    );
+    check(
+      !podeVerRelatoriosDeVisita({ cargo: "Técnico", equipeRanking: null }),
+      "e quem nao concorre em ranking nenhum tambem nao"
+    );
+    check(!podeVerRelatoriosDeVisita(null), "sem usuario, nao entra");
+
+    /**
+     * A PORTA E ESTREITA: abre Relatorios, e nao o modulo de rankings.
+     *
+     * Se ela concedesse o modulo, junto com a tela viriam as tabelas de
+     * classificacao das duas equipes -- nome e pontuacao de todo mundo -- para
+     * quem so precisa mandar o proprio relatorio. Estar "Fora da Sede" nao pode
+     * virar chave-mestra.
+     */
+    const permissaoService = require("./src/modules/permissoes/permissao.service");
+    const daMatriz = await permissaoService.moduloPermitido("Técnico", "rankings");
+    check(!daMatriz, "cenario valido: o cargo Tecnico NAO tem 'rankings' pela matriz");
+    check(
+      !(await permissaoService.modulosDe("Técnico")).includes("rankings"),
+      "e a equipe NAO concede o modulo inteiro -- so as rotas de relatorio"
+    );
+
+    /**
+     * O CAMINHO SILENCIOSO: `equipeRanking` decide o menu, e ele e remontado
+     * quando a pessoa edita o proprio perfil. Se o `select` daquela consulta
+     * esquecer a coluna, o campo chega `undefined`, `ehDaEquipeExterna` responde
+     * falso e Relatorios SOME do menu de quem so trocou o proprio nome -- sem
+     * erro em lugar nenhum. Foi assim que o item ficou invisivel da primeira vez.
+     */
+    const comEquipe = await usuarioRepository.atualizarNome(joao.id, joao.nome);
+    check(
+      comEquipe.equipeRanking === "externo",
+      `editar o perfil devolve a equipe junto (${comEquipe.equipeRanking})`
+    );
+    const doLogin = await usuarioRepository.findByEmail(joao.email);
+    check(
+      doLogin?.equipeRanking === "externo",
+      "e a consulta do login tambem -- e dela que sai o usuario mandado para a tela"
+    );
+  }
+
   titulo("9. HISTORICO");
   const hist = await rankingService.historico("externo", COMP, 3);
   check(hist.competencias.length === 3, `tres meses (${hist.competencias.join(", ")})`);

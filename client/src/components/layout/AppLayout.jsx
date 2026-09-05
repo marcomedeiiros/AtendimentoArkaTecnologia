@@ -46,12 +46,21 @@ const NAV_MONITORAMENTO = [
   // a entrega dos relatorios, que e trabalho diario de quem visita cliente e
   // nao consulta de gestao.
   {
-    to: '/relatorios', label: 'Relatórios', icon: ClipboardList, modulo: 'rankings',
-    // SÓ PARA QUEM VISITA CLIENTE -- e para quem valida.
+    to: '/relatorios', label: 'Relatórios', icon: ClipboardList,
+    // SEM `modulo`, e isso é a correção -- não um esquecimento.
     //
-    // Relatório de mapeamento é a entrega da equipe de FORA DA SEDE; quem
-    // atende no chat não tem o que lançar aqui. O Administrador vê sempre,
-    // porque é ele quem aprova e devolve os relatórios dos outros.
+    // O item é decidido por uma marca de PESSOA ("Atendimento Fora da Sede"),
+    // e não pela matriz de permissões, que é por CARGO. Enquanto ele pedia o
+    // módulo "rankings", a marca podia estar ligada em Gestão da Equipe e o
+    // item continuava invisível até alguém lembrar de mexer em Configurações
+    // → Permissões; e ligar lá liberaria a tela para o cargo Técnico inteiro,
+    // inclusive para quem nunca sai da sede.
+    //
+    // Quem manda continua sendo o servidor (`exigirRelatorioDeVisita`): isto
+    // aqui só decide o que DESENHAR.
+    //
+    // O Administrador vê sempre, porque é ele quem aprova e devolve os
+    // relatórios dos outros -- e o único que enxerga os da equipe inteira.
     visivel: (u) => ehDaEquipeExterna(u) || u?.cargo === 'Administrador',
   },
 ];

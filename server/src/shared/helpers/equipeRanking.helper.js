@@ -52,4 +52,24 @@ async function nomesDaEquipe(prisma, equipe) {
   );
 }
 
-module.exports = { EQUIPES, equipesDe, nomesDaEquipe };
+/**
+ * QUEM PODE ABRIR A TELA DE RELATORIOS DE VISITA.
+ *
+ * Duas respostas, e so duas: quem esta marcado em "Atendimento Fora da Sede"
+ * (e quem lanca relatorio) e o Administrador (e quem valida e ve os da equipe
+ * inteira). Quem so atende na sede nao tem relatorio de visita para lancar.
+ *
+ * Mora aqui, e nao dentro do middleware, para poder ser exercitada em teste sem
+ * subir servidor -- e para haver UM lugar onde essa frase esta escrita.
+ *
+ * ATENCAO ao que ela NAO responde: entrar na tela nao e ver tudo. O recorte por
+ * dono e do `mapeamento.service`, em todas as leituras -- cada tecnico enxerga
+ * so os relatorios que ele mesmo enviou.
+ */
+function podeVerRelatoriosDeVisita(usuario) {
+  if (!usuario) return false;
+  if (usuario.cargo === "Administrador") return true;
+  return equipesDe(usuario.equipeRanking).includes("externo");
+}
+
+module.exports = { EQUIPES, equipesDe, nomesDaEquipe, podeVerRelatoriosDeVisita };

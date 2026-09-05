@@ -15,10 +15,13 @@ const ROTA_MODULO = {
   '/massa': 'massa',
   '/bugs': 'bugs',
   '/configuracoes': 'configuracoes',
-  // Entrega dos relatorios de visita. Mesmo modulo do ranking: um e a fonte da
-  // pontuacao do outro, e liberar so um deixaria a nota visivel sem o que a
-  // gerou (ou o contrario).
-  '/relatorios': 'rankings',
+  // '/relatorios' NAO entra neste mapa de proposito.
+  //
+  // Ele nao e decidido por modulo: quem entra e quem esta marcado em
+  // "Atendimento Fora da Sede" (uma marca por PESSOA) ou o Administrador. Ver
+  // AppLayout.visivel e, no servidor, exigirRelatorioDeVisita -- que e quem
+  // manda. Deixa-lo aqui apontando para "rankings" barrava justamente quem o
+  // menu tinha acabado de mostrar.
 };
 
 // Ordem de preferencia para onde mandar quem cai numa tela sem permissao.

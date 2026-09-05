@@ -117,7 +117,12 @@ class UsuarioRepository {
     return prisma.usuario.update({
       where: { id },
       data: { nome },
-      select: { id: true, nome: true, email: true, cargo: true, ativo: true },
+      // `equipeRanking` PRECISA estar aqui, pela mesma razao do `setoresExtras`
+      // no findById: a resposta desta funcao vira a lista de modulos do menu
+      // (auth.service.atualizarPerfil). Sem a coluna, o campo chega `undefined`,
+      // a equipe deixa de conceder o modulo -- e Relatorios sumiria do menu de
+      // quem acabou de trocar o proprio nome, sem erro nenhum em lugar nenhum.
+      select: { id: true, nome: true, email: true, cargo: true, ativo: true, equipeRanking: true },
     });
   }
 

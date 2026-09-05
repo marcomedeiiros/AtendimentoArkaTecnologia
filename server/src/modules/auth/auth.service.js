@@ -33,6 +33,15 @@ class AuthService {
         nome: usuario.nome,
         email: usuario.email,
         cargo: usuario.cargo,
+        // Em qual ranking a pessoa concorre. Vai para a TELA porque e ela que
+        // decide se o item "Relatorios" aparece no menu -- sem este campo,
+        // `ehDaEquipeExterna` respondia sempre falso e o item nunca aparecia,
+        // mesmo com a marca ligada em Gestao da Equipe.
+        //
+        // NAO entra no TOKEN, so no corpo da resposta: quem manda e o cadastro,
+        // lido a cada requisicao (ver authMiddleware). Assinado no token, tirar
+        // alguem da equipe so valeria quando o token vencesse.
+        equipeRanking: usuario.equipeRanking ?? null,
       },
     };
   }
