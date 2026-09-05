@@ -95,6 +95,16 @@ class RankingController {
     return stream.pipe(res);
   }
 
+  /**
+   * LE O PDF antes de criar nada -- so para a tela sugerir os campos.
+   *
+   * Nao grava mapeamento e nao guarda arquivo: e uma leitura, e a resposta e
+   * SUGESTAO. Quem confirma e a pessoa, no formulario.
+   */
+  async analisarMapeamento(req, res) {
+    return success(res, await mapeamentoService.analisarArquivo(req.body?.arquivo));
+  }
+
   async criarMapeamento(req, res) {
     return success(res, await mapeamentoService.criar(req.body, req.user), 201);
   }

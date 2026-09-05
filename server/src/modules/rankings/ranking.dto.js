@@ -60,6 +60,13 @@ const criarMapeamentoSchema = z.object({
   entregar: z.boolean().optional(),
 });
 
+// So a leitura: um PDF, e nada mais. Sem os campos do mapeamento, porque nao
+// ha mapeamento ainda -- e aceitar mais aqui abriria um segundo caminho de
+// criacao, com validacao propria, para o mesmo recurso.
+const analisarMapeamentoSchema = z.object({
+  arquivo: z.object({ conteudo: z.string().min(16), nome: z.string().max(180).optional() }),
+});
+
 const atualizarMapeamentoSchema = criarMapeamentoSchema.partial().refine(
   (d) => Object.keys(d).length > 0,
   { message: "Nada para atualizar" }
@@ -89,6 +96,7 @@ const premiacaoSchema = z.object({
 module.exports = {
   criarMapeamentoSchema,
   atualizarMapeamentoSchema,
+  analisarMapeamentoSchema,
   validarMapeamentoSchema,
   premiacaoSchema,
 };

@@ -31,8 +31,32 @@ const AppError = require("../../shared/errors/AppError");
 const logger = require("../../config/logger");
 const bus = require("../../shared/events/event-bus");
 const { ITENS_MAPEAMENTO, completudeDe, noPrazo } = require("./pontuacao.externa");
+const { analisarRelatorio } = require("./analise.relatorio");
 
 const STATUS = ["rascunho", "entregue", "em_correcao", "aprovado"];
+
+/**
+ * DATA DO FORMULARIO -> instante, ancorado ao MEIO-DIA.
+ *
+ * ── O DIA QUE SUMIA ────────────────────────────────────────────────────────
+ *
+ * `new Date("2026-09-01")` e meia-noite UTC. Em Brasilia (−3) isso e 31/08 as
+ * 21h -- entao uma visita do dia 1o era gravada, exibida e AGRUPADA como do dia
+ * 31 do mes anterior. No relatorio de virada de mes, o trabalho caia na
+ * competencia errada, que e a unica coisa que a data precisa acertar.
+ *
+ * Meio-dia resolve porque nenhum fuso do mundo desloca 12 horas: o dia
+ * sobrevive a qualquer conversao, em qualquer sentido.
+ *
+ * Valor que ja vem com hora (relatorio antigo, ou uma data ISO completa) passa
+ * direto -- ali o instante e proposital.
+ */
+function dataDoDia(valor) {
+  if (!valor) return valor;
+  const puro = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(valor));
+  if (!puro) return new Date(valor);
+  return new Date(Number(puro[1]), Number(puro[2]) - 1, Number(puro[3]), 12, 0, 0, 0);
+}
 // Teto por evidencia e por mapeamento. Visita rende foto de rack, de quadro e
 // de etiqueta -- 12 cobre isso e ainda barra o album inteiro do celular.
 const MAX_EVIDENCIAS = 12;
@@ -183,6 +207,91 @@ class MapeamentoService {
   }
 
   /**
+   * O QUE O PDF DIZ, virado em campos do mapeamento.
+   *
+   * ── QUEM PREENCHE O QUE PONTUA E O SERVIDOR ────────────────────────────────
+   *
+   * `itens` (a completude) e a contagem de fotos NAO vem do corpo da requisicao
+   * quando ha PDF: sao lidos aqui, do arquivo. Aceitar do cliente seria aceitar
+   * a nota vinda de quem e avaliado -- bastaria mandar oito textos quaisquer em
+   * `itens` para cravar completude cheia sem escrever uma linha no relatorio.
+   *
+   * O que a pessoa continua mandando e o que e DELA: empresa, data da visita e
+   * prazo. A tela sugere os dois primeiros a partir do PDF, e ela confere.
+   *
+   * Sem PDF, nada disto roda e o caminho manual antigo continua valendo --
+   * relatorio de antes, ou PDF que a leitura nao entendeu.
+   */
+  async _lerDoRelatorio(caminhoRelativo, { resumoAtual = "" } = {}) {
+    const analise = await analisarRelatorio(caminhoRelativo);
+    if (!analise?.lido) {
+      logger.info("PDF do relatorio nao pode ser lido; seguindo com o preenchimento manual", {
+        motivo: analise?.motivo,
+      });
+      return { analise, campos: {} };
+    }
+
+    // A cobertura vira o proprio `itens`, no formato que `completudeDe` ja le.
+    // Assim a formula do ranking NAO muda: muda de onde vem a resposta.
+    const itens = {};
+    for (const [chave, achado] of Object.entries(analise.cobertura || {})) {
+      if (achado?.coberto) itens[chave] = `No relatório: ${achado.palavras.join(", ")}`;
+    }
+
+    return {
+      analise,
+      campos: {
+        itens: Object.keys(itens).length ? itens : null,
+        fotosRelatorio: analise.fotos,
+        // O resumo so e escrito quando a pessoa nao escreveu um: o texto dela
+        // vale mais que o meu, e sobrescrever apagaria o que ela digitou.
+        ...(String(resumoAtual || "").trim().length >= 20
+          ? {}
+          : { resumo: this._resumoDe(analise) }),
+      },
+    };
+  }
+
+  /**
+   * Uma linha de resumo a partir do que foi lido.
+   *
+   * A completude exige resumo com 20 caracteres, e sem isto o relatorio lido do
+   * PDF perderia essa fracao so por nao ter um campo digitado a mao -- que e
+   * justamente o que esta mudanca veio tirar do caminho. Diz o que o documento
+   * cobre, e nao um texto generico: um resumo igual em todos os relatorios nao
+   * resume nada.
+   */
+  _resumoDe(analise) {
+    const cobertos = Object.entries(analise.cobertura || {})
+      .filter(([, c]) => c.coberto)
+      .map(([chave]) => ITENS_MAPEAMENTO.find((i) => i.chave === chave)?.rotulo || chave);
+    const partes = [`Relatório em PDF com ${analise.paginas} página${analise.paginas === 1 ? "" : "s"}`];
+    if (analise.fotos) partes.push(`${analise.fotos} foto${analise.fotos === 1 ? "" : "s"} de campo`);
+    if (cobertos.length) partes.push(`cobre ${cobertos.join(", ").toLowerCase()}`);
+    return `${partes.join(", ")}.`;
+  }
+
+  /**
+   * Le um PDF que AINDA NAO E de ninguem, so para a tela sugerir os campos.
+   *
+   * Grava, le e APAGA: nao existe mapeamento ainda, e um arquivo guardado aqui
+   * viraria lixo em disco toda vez que alguem desistisse de preencher. O PDF
+   * sobe de novo junto com o formulario -- os relatorios reais tem dezenas de
+   * KB, e a simplicidade de nao ter estado pendurado vale o reenvio.
+   */
+  async analisarArquivo(entrada) {
+    const salvo = await this._guardarArquivo(entrada);
+    if (!salvo?.arquivoPath) {
+      throw new AppError("Não foi possível ler o arquivo enviado.", 400, "ARQUIVO_INVALIDO");
+    }
+    try {
+      return await analisarRelatorio(salvo.arquivoPath);
+    } finally {
+      await midiaStorage.remover(salvo.arquivoPath).catch(() => {});
+    }
+  }
+
+  /**
    * O PDF PARA DOWNLOAD -- e a mesma regra de quem pode ver.
    *
    * A checagem e refeita AQUI, e nao herdada da listagem: a listagem esconde a
@@ -236,6 +345,10 @@ class MapeamentoService {
     const nome = await this._nomeDe(usuario);
     const evidencias = await this._guardarEvidencias(dados.evidencias);
     const arquivo = (await this._guardarArquivo(dados.arquivo)) || {};
+    // Havendo PDF, e ele quem preenche o que pontua (ver `_lerDoRelatorio`).
+    const lido = arquivo.arquivoPath
+      ? await this._lerDoRelatorio(arquivo.arquivoPath, { resumoAtual: dados.resumo })
+      : { campos: {} };
     const criado = await prisma.mapeamentoTecnico.create({
       data: {
         // O TECNICO E SEMPRE QUEM ESTA LOGADO. Aceitar do corpo deixaria
@@ -244,13 +357,16 @@ class MapeamentoService {
         tecnicoNome: nome,
         empresa: String(dados.empresa || "").trim(),
         cnpj: dados.cnpj ? String(dados.cnpj).replace(/\D/g, "") : null,
-        dataVisita: new Date(dados.dataVisita),
-        prazoEm: new Date(dados.prazoEm),
+        dataVisita: dataDoDia(dados.dataVisita),
+        prazoEm: dataDoDia(dados.prazoEm),
         resumo: String(dados.resumo || "").trim(),
         itens: saneiaItens(dados.itens),
         pendencias: dados.pendencias ? String(dados.pendencias).trim() : null,
         evidencias,
         ...arquivo,
+        // DEPOIS do que veio no corpo, e nao antes: com PDF, o que foi lido do
+        // arquivo prevalece sobre `itens` e `resumo` mandados pelo cliente.
+        ...lido.campos,
         status: dados.entregar ? "entregue" : "rascunho",
         entregueEm: dados.entregar ? new Date() : null,
       },
@@ -273,6 +389,12 @@ class MapeamentoService {
 
     const evidencias = await this._guardarEvidencias(dados.evidencias, atual.evidencias || []);
     const arquivo = await this._guardarArquivo(dados.arquivo, atual);
+    // So rele quando o PDF MUDOU: reler a cada salvamento gastaria CPU para
+    // chegar ao mesmo resultado, e sobrescreveria o resumo que a pessoa pode
+    // ter corrigido a mao depois.
+    const lido = arquivo?.arquivoPath
+      ? await this._lerDoRelatorio(arquivo.arquivoPath, { resumoAtual: dados.resumo ?? atual.resumo })
+      : { campos: {} };
     const entregando = !!dados.entregar;
 
     const salvo = await prisma.mapeamentoTecnico.update({
@@ -280,8 +402,8 @@ class MapeamentoService {
       data: {
         empresa: dados.empresa !== undefined ? String(dados.empresa).trim() : undefined,
         cnpj: dados.cnpj !== undefined ? (dados.cnpj ? String(dados.cnpj).replace(/\D/g, "") : null) : undefined,
-        dataVisita: dados.dataVisita ? new Date(dados.dataVisita) : undefined,
-        prazoEm: dados.prazoEm ? new Date(dados.prazoEm) : undefined,
+        dataVisita: dados.dataVisita ? dataDoDia(dados.dataVisita) : undefined,
+        prazoEm: dados.prazoEm ? dataDoDia(dados.prazoEm) : undefined,
         resumo: dados.resumo !== undefined ? String(dados.resumo).trim() : undefined,
         itens: dados.itens !== undefined ? saneiaItens(dados.itens) : undefined,
         pendencias: dados.pendencias !== undefined ? (dados.pendencias ? String(dados.pendencias).trim() : null) : undefined,
@@ -291,6 +413,7 @@ class MapeamentoService {
         // adiciona campo nenhum -- entao salvar o formulario nao apaga o
         // relatorio que ja estava anexado.
         ...(arquivo || {}),
+        ...lido.campos,
         status: entregando ? "entregue" : undefined,
         // A PRIMEIRA entrega e a que vale para o prazo. Uma correcao devolvida e
         // reenviada duas semanas depois nao pode reescrever o carimbo e
@@ -386,7 +509,15 @@ class MapeamentoService {
       // O PDF: nome, tamanho e quando foi enviado. O CAMINHO em disco nunca sai
       // daqui -- quem quer o arquivo pede pela rota, que reconfere a permissao.
       arquivo: m.arquivoPath
-        ? { nome: m.arquivoNome || "relatorio.pdf", bytes: m.arquivoBytes || 0, enviadoEm: m.arquivoEnviadoEm }
+        ? {
+            nome: m.arquivoNome || "relatorio.pdf",
+            bytes: m.arquivoBytes || 0,
+            enviadoEm: m.arquivoEnviadoEm,
+            // As fotos que estao DENTRO do PDF, contadas pelo servidor. A tela
+            // mostra junto das evidencias anexadas porque as duas alimentam a
+            // mesma parcela (ver pontuacao.externa.quantidadeEvidencias).
+            fotos: m.fotosRelatorio ?? null,
+          }
         : null,
       validadoPorNome: m.validadoPorNome,
       validadoEm: m.validadoEm,

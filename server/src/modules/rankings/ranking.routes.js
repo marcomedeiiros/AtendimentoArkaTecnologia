@@ -8,6 +8,7 @@ const validate = require("../../shared/middlewares/validate.middleware");
 const {
   criarMapeamentoSchema,
   atualizarMapeamentoSchema,
+  analisarMapeamentoSchema,
   validarMapeamentoSchema,
   premiacaoSchema,
 } = require("./ranking.dto");
@@ -79,6 +80,11 @@ router.get("/mapeamentos/:id/arquivo", exigirRelatorioDeVisita, (req, res, next)
   controller.baixarMapeamento(req, res).catch(next)
 );
 router.get("/mapeamentos/:id", exigirRelatorioDeVisita, (req, res, next) => controller.obterMapeamento(req, res).catch(next));
+// LEITURA do PDF, sem criar nada. Antes de POST /mapeamentos por ser caminho
+// mais especifico; e um POST porque o arquivo vai no corpo, e nao porque grava.
+router.post("/mapeamentos/analisar", exigirRelatorioDeVisita, validate(analisarMapeamentoSchema), (req, res, next) =>
+  controller.analisarMapeamento(req, res).catch(next)
+);
 router.post("/mapeamentos", exigirRelatorioDeVisita, validate(criarMapeamentoSchema), (req, res, next) =>
   controller.criarMapeamento(req, res).catch(next)
 );

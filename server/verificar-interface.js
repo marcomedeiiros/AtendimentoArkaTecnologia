@@ -131,6 +131,61 @@ for (const f of arquivos) {
 }
 check("o colar de ARQUIVO nao cancela o colar de texto", engoleTexto);
 
+/**
+ * COMPONENTE USADO NO JSX E NUNCA IMPORTADO -- a TELA BRANCA.
+ *
+ * ── POR QUE O BUILD NAO PEGA ───────────────────────────────────────────────
+ *
+ * `<Trophy />` com `Trophy` inexistente compila sem um pio: o Vite nao resolve
+ * identificador livre dentro de JSX. O erro so aparece quando a tela RENDERIZA,
+ * e ai e "Trophy is not defined" com a pagina em branco -- em producao, depois
+ * do deploy.
+ *
+ * Ja aconteceu duas vezes neste projeto, as duas por edicao em massa: um
+ * `Trophy`/`ClipboardList` que ficou de fora do import, e depois um
+ * `ChevronRight` cuja linha de import nao foi aplicada porque o guard achou que
+ * ja estava la. Nos dois casos o build passou.
+ *
+ * ── O QUE ELA CONSIDERA DEFINIDO ───────────────────────────────────────────
+ *
+ * Import (nomeado, default ou renomeado), funcao/classe declarada no arquivo, e
+ * variavel recebida por desestruturacao ou atribuicao -- que e como um
+ * componente vindo de prop (`{ Icon }`) entra em cena. O objetivo e nao ter
+ * falso positivo: uma varredura que grita a toa e desligada na primeira semana.
+ */
+const naoDefinidos = [];
+for (const f of arquivos.filter((a) => a.endsWith(".jsx"))) {
+  const s = fs.readFileSync(f, "utf8");
+  const definidos = new Set();
+  // `import X, { A, B } from` tambem: o default no meio do caminho fazia a
+  // lista nomeada inteira passar batido, e a varredura acusava seis
+  // componentes importados como se nao estivessem.
+  for (const m of s.matchAll(/import\s+[^{;]*\{([^}]*)\}\s*from/g)) {
+    // COMENTARIO FORA ANTES DE SEPARAR. Ha bloco de import com explicacao no
+    // meio, e uma delas contem " as " -- o `split` colava o comentario inteiro
+    // no nome seguinte, e o import ficava invisivel para esta varredura.
+    const lista = m[1].replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+    for (const n of lista.split(",")) {
+      const nome = n.trim().split(/\s+as\s+/).pop().trim();
+      if (/^[A-Za-z0-9_$]+$/.test(nome)) definidos.add(nome);
+    }
+  }
+  for (const m of s.matchAll(/^\s*import\s+([A-Za-z0-9_$]+)\s*(?:,|from)/gm)) definidos.add(m[1]);
+  for (const m of s.matchAll(/(?:function|class)\s+([A-Za-z0-9_$]+)/g)) definidos.add(m[1]);
+  // `const X = ...`, `const { X, Y } = ...`, `let X`
+  for (const m of s.matchAll(/(?:const|let|var)\s+([A-Za-z0-9_$]+)\s*=/g)) definidos.add(m[1]);
+  for (const m of s.matchAll(/(?:const|let|var|\()\s*\{([^}]*)\}\s*(?:=|\))/g)) {
+    for (const n of m[1].split(",")) definidos.add(n.trim().split(":").pop().trim().split("=")[0].trim());
+  }
+
+  for (const m of s.matchAll(/<([A-Z][A-Za-z0-9_$]*)[\s/>]/g)) {
+    // `<Foo.Bar>` e um namespace; basta `Foo` estar definido.
+    const raiz = m[1].split(".")[0];
+    if (!definidos.has(raiz)) naoDefinidos.push(`${rel(f)}  <${m[1]}> usado sem import nem declaracao`);
+  }
+}
+check("componente usado no JSX esta importado (tela branca)", [...new Set(naoDefinidos)]);
+
 console.log(
   "\n" + (erros.length
     ? `FALHAS (${erros.length}):\n  ` + erros.join("\n  ")

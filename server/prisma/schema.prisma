@@ -166,6 +166,16 @@ model MapeamentoTecnico {
   arquivoNome     String?   @map("arquivo_nome")
   arquivoBytes    Int?      @map("arquivo_bytes")
   arquivoEnviadoEm DateTime? @map("arquivo_enviado_em")
+  /// Quantas fotos o PDF traz, contadas pelo SERVIDOR ao ler o arquivo.
+  ///
+  /// Coluna propria em vez de entrar em `evidencias`: aquela lista guarda
+  /// arquivos gravados em disco, e uma foto que vive dentro do PDF nao e um
+  /// arquivo. Entra na parcela de evidencias pelo maior valor entre as duas
+  /// (ver pontuacao.externa.quantidadeEvidencias).
+  ///
+  /// Nulo = relatorio antigo, de antes da leitura automatica. Nao e zero: zero
+  /// afirmaria que o relatorio nao tem foto, e ninguem conferiu.
+  fotosRelatorio  Int?      @map("fotos_relatorio")
   /// Quantas vezes o supervisor devolveu para correcao. E o indicador de
   /// retrabalho da pontuacao -- por isso e contador, e nao booleano.
   devolucoes   Int       @default(0)

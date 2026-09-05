@@ -111,7 +111,18 @@ function completudeDe(m) {
   return (preenchidos + comResumo) / (ITENS_MAPEAMENTO.length + 1);
 }
 
-const quantidadeEvidencias = (m) => (Array.isArray(m.evidencias) ? m.evidencias.length : 0);
+/**
+ * Quantas evidencias este relatorio tem.
+ *
+ * O MAIOR entre as fotos anexadas a parte e as fotos que estao DENTRO do PDF.
+ * Nao a soma: as duas contam a mesma coisa por caminhos diferentes, e somar
+ * daria ponto dobrado para quem anexasse a mesma foto nos dois lugares.
+ *
+ * `fotosRelatorio` nulo (relatorio anterior a leitura automatica) nao tira nada
+ * de ninguem -- so nao acrescenta.
+ */
+const quantidadeEvidencias = (m) =>
+  Math.max(Array.isArray(m.evidencias) ? m.evidencias.length : 0, m.fotosRelatorio || 0);
 
 // No prazo = entregue ate o fim do dia do prazo. Comparar por instante puniria
 // quem entregou as 18h de um prazo gravado as 9h da manha.

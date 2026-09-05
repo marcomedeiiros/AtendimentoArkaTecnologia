@@ -600,6 +600,10 @@ export const RankingsAPI = {
     return request(`/rankings/mapeamentos${q.toString() ? `?${q}` : ''}`);
   },
   obterMapeamento: (id) => request(`/rankings/mapeamentos/${id}`),
+  // LE o PDF e devolve o que ele diz (empresa, data, fotos, itens cobertos).
+  // Nao cria nada: a resposta e SUGESTAO para o formulario, e quem confirma e
+  // a pessoa. O arquivo sobe de novo no salvar -- aqui nada fica guardado.
+  analisarMapeamento: (arquivo) => request('/rankings/mapeamentos/analisar', { method: 'POST', body: JSON.stringify({ arquivo }) }),
   criarMapeamento: (dados) => request('/rankings/mapeamentos', { method: 'POST', body: JSON.stringify(dados) }),
   atualizarMapeamento: (id, dados) => request(`/rankings/mapeamentos/${id}`, { method: 'PATCH', body: JSON.stringify(dados) }),
   validarMapeamento: (id, dados) => request(`/rankings/mapeamentos/${id}/validar`, { method: 'POST', body: JSON.stringify(dados) }),

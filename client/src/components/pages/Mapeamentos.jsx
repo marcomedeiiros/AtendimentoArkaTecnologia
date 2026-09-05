@@ -22,6 +22,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   ClipboardList, Plus, Loader2, AlertCircle, Camera, CheckCircle2, RotateCcw,
   Clock, Building2, X, Save, Send, Trash2, ShieldCheck, FileText,
+  ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { RankingsAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -53,8 +54,23 @@ function tamanho(bytes) {
   return `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
 }
 
-const data = (iso) =>
-  iso ? new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: FUSO_BR }) : '—';
+/**
+ * A DATA, sem perder um dia no caminho.
+ *
+ * "2026-09-01" (data pura, sem hora) é lida pelo JavaScript como MEIA-NOITE
+ * UTC. Formatada no fuso de Brasília (−3), vira 31/08 -- a visita de setembro
+ * aparecia como agosto, e o mês é justamente o que decide em qual competência
+ * o trabalho conta.
+ *
+ * Data pura é montada componente a componente, sem passar pelo fuso. O que tem
+ * hora (o que vem do banco) continua no caminho de sempre, que aí está certo.
+ */
+const data = (iso) => {
+  if (!iso) return '—';
+  const puro = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso));
+  if (puro) return `${puro[3]}/${puro[2]}/${puro[1]}`;
+  return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: FUSO_BR });
+};
 
 function Selo({ status }) {
   const m = STATUS_META[status] || STATUS_META.rascunho;
@@ -83,15 +99,33 @@ function ModalMapeamento({ itensRegra, inicial, onFechar, onSalvo }) {
   const [pdfSalvo, setPdfSalvo] = useState(() => inicial?.arquivo || null);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
+  // O que foi lido do PDF. `null` = ainda não leu nada.
+  const [analise, setAnalise] = useState(null);
+  const [lendo, setLendo] = useState(false);
+  // Os campos que o PDF preenche sozinho ficam escondidos até alguém pedir.
+  // Eles continuam existindo para o caso de um PDF que a leitura não entendeu.
+  const [manual, setManual] = useState(false);
 
   // A MESMA conta do servidor: itens preenchidos + resumo com pelo menos 20
   // caracteres, sobre o total. Espelhada aqui para o número aparecer enquanto
   // se digita -- se as duas divergirem, a do servidor é a que vale.
   const completude = useMemo(() => {
+    // COM PDF LIDO, a conta é a do PDF -- porque é ela que o servidor vai
+    // gravar. Continuar somando os campos manuais mostraria 0% logo depois de
+    // uma leitura bem-sucedida, e a pessoa preencheria tudo de novo achando que
+    // a leitura não valeu de nada.
+    if (analise?.lido) {
+      const comResumo = 1; // o servidor escreve um resumo a partir do que leu
+      return Math.round(((analise.itensCobertos + comResumo) / (analise.totalItens + 1)) * 100);
+    }
     const preenchidos = itensRegra.filter((i) => String(itens[i.chave] || '').trim()).length;
     const comResumo = resumo.trim().length >= 20 ? 1 : 0;
     return Math.round(((preenchidos + comResumo) / (itensRegra.length + 1)) * 100);
-  }, [itens, resumo, itensRegra]);
+  }, [itens, resumo, itensRegra, analise]);
+
+  // As fotos DE DENTRO do PDF contam na mesma parcela das evidências anexadas,
+  // pelo maior valor entre as duas (ver pontuacao.externa.quantidadeEvidencias).
+  const evidenciasContadas = Math.max(evidencias.length, analise?.fotos || 0);
 
   const dentroDoPrazo = useMemo(() => hojeISO() <= prazoEm, [prazoEm]);
 
@@ -124,8 +158,59 @@ function ModalMapeamento({ itensRegra, inicial, onFechar, onSalvo }) {
     if (f.size > 15 * 1024 * 1024) { setErro(`"${f.name}" passa de 15 MB.`); return; }
     setErro('');
     const r = new FileReader();
-    r.onload = () => setPdf({ conteudo: r.result, nome: f.name, bytes: f.size });
+    r.onload = () => {
+      const escolhido = { conteudo: r.result, nome: f.name, bytes: f.size };
+      setPdf(escolhido);
+      lerPdf(escolhido);
+    };
     r.readAsDataURL(f);
+  };
+
+  /**
+   * LÊ O PDF e preenche o formulário com o que ele já diz.
+   *
+   * ── POR QUE ISTO EXISTE ────────────────────────────────────────────────────
+   *
+   * Empresa, data, o que foi vistoriado e as fotos já estão dentro do relatório
+   * que a pessoa acabou de montar. Digitar de novo é transcrever o próprio
+   * trabalho -- e o efeito prático era campo em branco, que derrubava a
+   * completude e fazia a nota medir preenchimento de formulário.
+   *
+   * ── E POR QUE O RESULTADO É SÓ SUGESTÃO ────────────────────────────────────
+   *
+   * A leitura depende do layout do documento, que é feito fora deste sistema.
+   * Então nada aqui sobrescreve o que a pessoa já digitou, e tudo continua
+   * editável: um campo preenchido errado em silêncio é pior que um vazio.
+   *
+   * Falhar aqui não impede nada -- o formulário continua funcionando à mão.
+   */
+  const lerPdf = async (escolhido) => {
+    setLendo(true);
+    setAnalise(null);
+    try {
+      const r = await RankingsAPI.analisarMapeamento({ conteudo: escolhido.conteudo, nome: escolhido.nome });
+      setAnalise(r);
+      if (!r?.lido) return;
+      // `||` e não sobrescrita: o que a pessoa escreveu vale mais que o que eu li.
+      if (r.empresa && !empresa.trim()) setEmpresa(r.empresa);
+      if (r.dataVisita) {
+        setDataVisita(r.dataVisita);
+        // O PRAZO NÃO PODE NASCER VENCIDO.
+        //
+        // Quando o relatório traz só mês e ano, a data da visita cai no dia 1º
+        // -- e "1º + 3 dias" já passou faz tempo para quem está lançando no fim
+        // do mês. O quadro abria escrito "vencido" antes de a pessoa digitar
+        // qualquer coisa, acusando um atraso que ninguém sabe se houve.
+        //
+        // Com dia presumido, a sugestão sai de HOJE. O campo continua editável:
+        // quem sabe a data real corrige, e aí o atraso (se existir) é de verdade.
+        if (!edicao) setPrazoEm(prazoSugerido(r.dataDiaPresumido ? hojeISO() : r.dataVisita));
+      }
+    } catch (e2) {
+      setAnalise({ lido: false, motivo: e2?.message || 'Não foi possível ler o PDF.' });
+    } finally {
+      setLendo(false);
+    }
   };
 
   const salvar = async (entregar) => {
@@ -187,8 +272,8 @@ function ModalMapeamento({ itensRegra, inicial, onFechar, onSalvo }) {
               </div>
               <div className="rounded-xl border border-linha bg-grafite-700 p-2.5 text-center">
                 <p className="text-[10px] uppercase tracking-wider text-texto-fraco font-bold">Evidências</p>
-                <p className={`font-display font-extrabold text-lg ${evidencias.length >= 3 ? 'text-ativo-400' : 'text-espera-400'}`}>
-                  {evidencias.length}
+                <p className={`font-display font-extrabold text-lg ${evidenciasContadas >= 3 ? 'text-ativo-400' : 'text-espera-400'}`}>
+                  {evidenciasContadas}
                 </p>
               </div>
               <div className="rounded-xl border border-linha bg-grafite-700 p-2.5 text-center">
@@ -204,6 +289,95 @@ function ModalMapeamento({ itensRegra, inicial, onFechar, onSalvo }) {
                 <AlertCircle size={13} className="shrink-0" /> {erro}
               </div>
             )}
+
+            {/* O PDF VEM PRIMEIRO -- é ele que preenche o resto.
+                Antes ele ficava no fim, depois de doze campos que a pessoa
+                digitava com o relatório aberto do lado. Invertido, o formulário
+                começa pelo trabalho que já está pronto. */}
+            <div>
+              <p className="text-[11px] font-semibold text-texto-suave mb-1.5">
+                Relatório em PDF <span className="text-texto-fraco font-normal">(o arquivo que vai para o cliente · até 15 MB)</span>
+              </p>
+              {pdf || pdfSalvo ? (
+                <div className="flex items-center gap-2 p-2.5 rounded-xl border border-acao/30 bg-acao/10">
+                  <FileText size={16} className="text-acao-200 shrink-0" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-xs font-semibold text-texto truncate">
+                      {pdf?.nome || pdfSalvo?.nome}
+                    </span>
+                    <span className="block text-[10px] text-texto-fraco">
+                      {tamanho(pdf?.bytes ?? pdfSalvo?.bytes)}{pdf ? ' · será enviado ao salvar' : ' · já enviado'}
+                    </span>
+                  </span>
+                  {/* Sem PDF novo escolhido, remover significa apagar o que está
+                      no servidor -- e isso só acontece ao salvar. */}
+                  <button
+                    onClick={() => { if (pdf) { setPdf(null); setAnalise(null); } else setPdfSalvo(null); }}
+                    className="shrink-0 p-1.5 rounded-lg text-falha-400 hover:bg-falha/15"
+                    title={pdf ? 'Descartar o arquivo escolhido' : 'Remover o relatório ao salvar'}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex items-center gap-2 p-3 rounded-xl border border-dashed border-linha-forte cursor-pointer text-texto-fraco hover:text-acao-200 hover:border-acao/50 transition-colors">
+                  <FileText size={16} className="shrink-0" />
+                  <span className="min-w-0">
+                    <span className="block text-xs font-semibold">Anexar o relatório em PDF</span>
+                    <span className="block text-[10px]">A empresa, a data e o que foi vistoriado são lidos daqui.</span>
+                  </span>
+                  <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={anexarPdf} />
+                </label>
+              )}
+
+              {lendo && (
+                <p className="mt-2 text-[11px] text-texto-fraco flex items-center gap-1.5">
+                  <Loader2 size={12} className="animate-spin" /> Lendo o relatório
+                </p>
+              )}
+
+              {/* O QUE FOI LIDO, à vista.
+                  Mostrar de onde saiu cada achado é o que torna a leitura
+                  automática confiável: quando ela errar, dá para ver o que ela
+                  leu -- em vez de a pessoa descobrir pelo campo errado. */}
+              {!lendo && analise && (
+                analise.lido ? (
+                  <div className="mt-2 p-2.5 rounded-xl border border-ativo/30 bg-ativo/10 space-y-1.5">
+                    <p className="text-[11px] font-bold text-ativo-400 flex items-center gap-1.5">
+                      <CheckCircle2 size={12} /> Li o relatório {analise.paginas} página{analise.paginas === 1 ? '' : 's'}
+                    </p>
+                    <p className="text-[10px] text-texto-suave leading-relaxed">
+                      {analise.empresa && <>Empresa <strong className="text-texto">{analise.empresa}</strong>. </>}
+                      {analise.dataVisita && (
+                        <>
+                          Visita em <strong className="text-texto">{data(analise.dataVisita)}</strong>
+                          {analise.dataDiaPresumido && ' (o relatório traz só mês e ano confira o dia)'}. {' '}
+                        </>
+                      )}
+                      {analise.fotos > 0 && <>{analise.fotos} foto{analise.fotos === 1 ? '' : 's'} de campo. </>}
+                      Cobre <strong className="text-texto">{analise.itensCobertos} de {analise.totalItens}</strong> itens do checklist.
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {itensRegra.map((i) => {
+                        const c = analise.cobertura?.[i.chave];
+                        return (
+                          <span key={i.chave}
+                            className={`text-[9px] px-1.5 py-0.5 rounded-full border ${c?.coberto ? 'border-ativo/40 bg-ativo/10 text-ativo-400' : 'border-linha text-texto-fraco'}`}
+                            title={c?.coberto ? `Encontrado: ${c.palavras.join(', ')}` : 'Não encontrado no relatório'}>
+                            {i.rotulo}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="mt-2 p-2.5 rounded-xl border border-espera/30 bg-espera/10 text-[10px] text-espera-400 leading-relaxed">
+                    {analise.motivo || 'Não consegui ler este PDF.'}
+                    {' '}O arquivo será enviado do mesmo jeito preencha os campos abaixo à mão.
+                  </p>
+                )
+              )}
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -230,6 +404,22 @@ function ModalMapeamento({ itensRegra, inicial, onFechar, onSalvo }) {
               </div>
             </div>
 
+            {/* O RESUMO E O CHECKLIST SAEM DO PDF -- e por isso não aparecem.
+                São eles que formam a completude, e o servidor os preenche lendo
+                o arquivo. Deixá-los à mostra pediria de novo o que a pessoa
+                acabou de escrever no relatório, que era exatamente o problema.
+                Ficam disponíveis para o caso do PDF que a leitura não entendeu
+                (e para os relatórios antigos, em edição). */}
+            <button
+              onClick={() => setManual((v) => !v)}
+              className="text-[11px] font-semibold text-texto-fraco hover:text-acao-200 flex items-center gap-1.5 self-start"
+            >
+              {manual ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+              Preencher resumo e checklist à mão
+              {analise?.lido && <span className="font-normal">(o PDF já preencheu)</span>}
+            </button>
+
+            <div hidden={!manual} className="space-y-3">
             <div>
               <label className="text-[11px] font-semibold text-texto-suave block mb-1">
                 Resumo da visita <span className="text-texto-fraco font-normal">(conta na completude a partir de 20 caracteres)</span>
@@ -266,47 +456,12 @@ function ModalMapeamento({ itensRegra, inicial, onFechar, onSalvo }) {
                 className="w-full bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto resize-none focus:outline-none focus:border-acao/50" />
             </div>
 
-            {/* O RELATÓRIO EM PDF, separado das evidências de propósito.
-                Evidência é foto de campo e PONTUA pela quantidade; isto é a
-                entrega, um arquivo só. Juntos, o PDF inflaria a contagem que
-                dá ponto. */}
             <div>
               <p className="text-[11px] font-semibold text-texto-suave mb-1.5">
-                Relatório em PDF <span className="text-texto-fraco font-normal">(o arquivo que vai para o cliente · até 15 MB)</span>
-              </p>
-              {pdf || pdfSalvo ? (
-                <div className="flex items-center gap-2 p-2.5 rounded-xl border border-acao/30 bg-acao/10">
-                  <FileText size={16} className="text-acao-200 shrink-0" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-xs font-semibold text-texto truncate">
-                      {pdf?.nome || pdfSalvo?.nome}
-                    </span>
-                    <span className="block text-[10px] text-texto-fraco">
-                      {tamanho(pdf?.bytes ?? pdfSalvo?.bytes)}{pdf ? ' · será enviado ao salvar' : ' · já enviado'}
-                    </span>
-                  </span>
-                  {/* Sem PDF novo escolhido, remover significa apagar o que está
-                      no servidor -- e isso só acontece ao salvar. */}
-                  <button
-                    onClick={() => { if (pdf) setPdf(null); else setPdfSalvo(null); }}
-                    className="shrink-0 p-1.5 rounded-lg text-falha-400 hover:bg-falha/15"
-                    title={pdf ? 'Descartar o arquivo escolhido' : 'Remover o relatório ao salvar'}
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              ) : (
-                <label className="flex items-center gap-2 p-2.5 rounded-xl border border-dashed border-linha-forte cursor-pointer text-texto-fraco hover:text-acao-200 hover:border-acao/50 transition-colors">
-                  <FileText size={16} className="shrink-0" />
-                  <span className="text-xs font-semibold">Anexar o relatório em PDF</span>
-                  <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={anexarPdf} />
-                </label>
-              )}
-            </div>
-
-            <div>
-              <p className="text-[11px] font-semibold text-texto-suave mb-1.5">
-                Evidências <span className="text-texto-fraco font-normal">({evidencias.length}/12 · 3 já valem a faixa cheia)</span>
+                {/* As fotos DE DENTRO do PDF já contam nesta parcela (o servidor
+                    conta ao ler o arquivo), então anexar aqui virou opcional --
+                    serve para o que não entrou no relatório. */}
+                Evidências avulsas <span className="text-texto-fraco font-normal">({evidencias.length}/12 · 3 já valem a faixa cheia{analise?.fotos ? ` · o PDF já traz ${analise.fotos}` : ''})</span>
               </p>
               <div className="flex flex-wrap gap-2">
                 {evidencias.map((ev, i) => (
@@ -332,6 +487,7 @@ function ModalMapeamento({ itensRegra, inicial, onFechar, onSalvo }) {
                   </label>
                 )}
               </div>
+            </div>
             </div>
           </div>
 
@@ -668,7 +824,13 @@ export default function Mapeamentos() {
                       {m.entregueEm ? (m.noPrazo ? 'entregue no prazo' : 'entregue com atraso') : `prazo ${data(m.prazoEm)}`}
                     </span>
                     <span>{m.completude}% completo</span>
-                    <span className="flex items-center gap-1"><Camera size={10} /> {m.evidencias}</span>
+                    {/* O MESMO número que pontua: o maior entre as fotos
+                        anexadas e as que estão dentro do PDF. Mostrar só as
+                        anexadas escreveria "0" num relatório com duas fotos,
+                        e a pessoa iria anexar de novo o que já entregou. */}
+                    <span className="flex items-center gap-1" title="Fotos que contam na pontuação">
+                      <Camera size={10} /> {Math.max(m.evidencias || 0, m.arquivo?.fotos || 0)}
+                    </span>
                   </div>
                   {m.observacaoValidacao && (
                     <p className="text-[11px] text-espera-400 mt-1 flex items-start gap-1">

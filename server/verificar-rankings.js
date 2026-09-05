@@ -607,6 +607,85 @@ async function main() {
    *
    * A regra so ADICIONA: quem tinha o modulo pelo cargo continua com ele.
    */
+  /**
+   * 8d. O PDF PREENCHE O QUE PONTUA -- e o cliente nao.
+   *
+   * O formulario deixou de pedir empresa, resumo e oito campos de checklist que
+   * ja estavam dentro do relatorio. Quem le agora e o servidor.
+   *
+   * O RISCO que isso cria e o que esta secao vigia: se `itens` continuasse vindo
+   * do corpo da requisicao, bastaria mandar oito textos quaisquer para cravar
+   * completude cheia sem escrever uma linha no relatorio -- a nota vinda de quem
+   * e avaliado.
+   */
+  titulo("8d. O PDF E QUEM PREENCHE A PONTUACAO");
+  {
+    const fsPdf = require("fs");
+    const caminhoExemplo = "C:/Users/user/Downloads/Relatorio_Arka_Tecnologia_Mapeamento_Nobreaks.pdf";
+    // O PDF de exemplo mora fora do repositorio (e documento de cliente). Sem
+    // ele, a secao AVISA em vez de passar caladamente -- um teste que some
+    // sozinho quando o insumo falta e pior do que nenhum teste.
+    if (!fsPdf.existsSync(caminhoExemplo)) {
+      check(false, `PULADO: o PDF de exemplo nao esta em ${caminhoExemplo}`);
+    } else {
+      const pdf = "data:application/pdf;base64," + fsPdf.readFileSync(caminhoExemplo).toString("base64");
+
+      const previa = await mapeamentoService.analisarArquivo({ conteudo: pdf, nome: "Relatorio.pdf" });
+      check(previa.lido, `o PDF e lido (${previa.paginas} paginas, ${previa.caracteres} caracteres)`);
+      check(previa.empresa === "PERSPECTIVA", `a empresa sai do rotulo CLIENTE (${previa.empresa})`);
+      check(previa.dataVisita === "2026-09-01", `a data sai de "Setembro / 2026" (${previa.dataVisita})`);
+      check(previa.dataDiaPresumido === true, "e avisa que o dia foi presumido -- o relatorio nao traz dia");
+      check(previa.fotos === 2, `conta as fotos pelas legendas (${previa.fotos})`);
+      check(previa.itensCobertos === 5, `e o que o relatorio cobre (${previa.itensCobertos}/${previa.totalItens})`);
+      // Analisar NAO deixa arquivo para tras: e uma leitura, nao um upload.
+      check(
+        !fsPdf.existsSync(require("path").join(midiaStorage.BASE_DIR, "__nao_existe__")),
+        "a leitura previa nao guarda o arquivo"
+      );
+
+      const mentira = Object.fromEntries(ITENS_MAPEAMENTO.map((i) => [i.chave, "texto inventado"]));
+      const criado = await mapeamentoService.criar(
+        {
+          empresa: "PERSPECTIVA", dataVisita: previa.dataVisita, prazoEm: previa.dataVisita,
+          itens: mentira, resumo: "resumo inventado que passa dos vinte caracteres",
+          arquivo: { conteudo: pdf, nome: "Relatorio.pdf" }, entregar: true,
+        },
+        { sub: joao.id, nome: joao.nome }
+      );
+      const linha = await prisma.mapeamentoTecnico.findUnique({ where: { id: criado.id } });
+
+      const gravados = Object.values(linha.itens || {});
+      check(
+        gravados.length > 0 && !gravados.some((v) => String(v).includes("inventado")),
+        `os \`itens\` do cliente sao IGNORADOS quando ha PDF (${gravados.length} vindos do arquivo)`
+      );
+      check(linha.fotosRelatorio === 2, `as fotos sao contadas pelo servidor (${linha.fotosRelatorio})`);
+      check(
+        criado.completude === Math.round(((previa.itensCobertos + 1) / (previa.totalItens + 1)) * 100),
+        `a completude sai do PDF (${criado.completude}%)`
+      );
+
+      /**
+       * O DIA QUE SUMIA. "2026-09-01" e meia-noite UTC; em Brasilia isso e 31/08
+       * as 21h, e a visita de setembro era gravada como agosto -- caindo na
+       * competencia errada, que e a unica coisa que a data precisa acertar.
+       */
+      const emBrasilia = new Date(linha.dataVisita).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+      check(emBrasilia === "01/09/2026", `a data nao perde um dia no fuso (${emBrasilia})`);
+
+      // A parcela de evidencias enxerga as fotos de dentro do PDF.
+      const { pontuarExterno: pontuar } = require("./src/modules/rankings/pontuacao.externa");
+      const so = pontuar([linha, linha, linha]);
+      check(
+        so.evidencias.valor === 2 && so.evidencias.pontos > 0,
+        `as fotos do PDF contam como evidencia (media ${so.evidencias.valor}, ${so.evidencias.pontos} pts)`
+      );
+
+      if (linha.arquivoPath) await midiaStorage.remover(linha.arquivoPath).catch(() => {});
+      await prisma.mapeamentoTecnico.delete({ where: { id: criado.id } });
+    }
+  }
+
   titulo("8c. RELATORIOS APARECE PARA QUEM ESTA 'FORA DA SEDE'");
   {
     const { podeVerRelatoriosDeVisita } = require("./src/shared/helpers/equipeRanking.helper");
