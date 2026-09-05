@@ -105,6 +105,15 @@ class RankingService {
     const doMes = await painelService.rankingDoMes(ano, mes);
     const porNome = new Map(doMes.classificacao.map((p) => [p.nome, p]));
 
+    // O ULTIMO ATENDIMENTO de cada um, de qualquer data.
+    //
+    // Veio junto quando o ranking virou aba da Visao Geral: a aba anterior
+    // mostrava essa coluna, e some-la sem aviso seria tirar da tela uma
+    // informacao que ninguem pediu para tirar. Uma consulta por pessoa, e o
+    // time tem unidades -- nao milhares.
+    const ultimos = await Promise.all(equipe.map((u) => painelService._ultimoAtendimento(u.nome)));
+    const ultimoPorId = new Map(equipe.map((u, i) => [u.id, ultimos[i]]));
+
     const pessoas = equipe.map((u) => {
       // Sem linha no mes = nao atendeu. Zera, e continua na tabela: uma equipe
       // de tres em que um sumiu precisa mostrar os tres, senao ninguem percebe
@@ -136,6 +145,7 @@ class RankingService {
           },
         ],
         registros: p?.atendimentos.valor ?? 0,
+        ultimo: ultimoPorId.get(u.id) || null,
       };
     });
 

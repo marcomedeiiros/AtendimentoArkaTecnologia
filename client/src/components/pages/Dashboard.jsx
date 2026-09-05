@@ -15,8 +15,9 @@ import { hojeISO, FUSO_BR } from '../../utils/data';
 import HelpDeskPainel from './HelpDeskPainel';
 import RegistroConversas from './RegistroConversas';
 import RelatoriosClientes from './RelatoriosClientes';
-import RankingEquipe from './RankingEquipe';
+import Rankings from './Rankings';
 import { avisar } from '../../utils/dialogo';
+import { useAuth } from '../../context/AuthContext';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -109,6 +110,12 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
   );
   const [gerandoPdf, setGerandoPdf] = useState(false);
   const [abaAtiva, setAbaAtiva] = useState('geral');
+
+  // Modulos que ESTA pessoa pode ver, do servidor. Sem a lista (sessao antiga)
+  // mostramos a aba: quem decide de verdade e o servidor, e esconder por falta
+  // de informacao esconderia de quem tem direito.
+  const { usuario } = useAuth();
+  const podeVerRankings = !Array.isArray(usuario?.permissoes) || usuario.permissoes.includes('rankings');
   const graficosRef = useRef(null);
 
   // Filtros da aba de avaliacoes: nota (0 = todas), texto e setor.
@@ -329,15 +336,22 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
           {/* Cor de medalha (ambar), e nao o verde das demais: e a unica aba
               sobre DESEMPENHO DA EQUIPE, e o ambar e a cor que a plataforma ja
               usa para o podio no painel de parede. */}
-          <button
-            onClick={() => setAbaAtiva('ranking')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
-              abaAtiva === 'ranking'
-                ? 'bg-espera/15 border-espera/40 text-espera-400'
-                : 'bg-grafite-700 border-linha text-slate-400 hover:text-white hover:border-slate-500'
-            }`}>
-            <Trophy size={13} className="inline mr-1.5 -mt-0.5" /> Ranking do Time
-          </button>
+          {/* A ABA SEGUE O MODULO `rankings`, e nao o `dashboard` que abriu esta
+              tela. As duas permissoes sao independentes na matriz: sem esta
+              guarda, quem tem Visao Geral mas nao tem Rankings veria a aba e
+              levaria 403 ao clicar -- uma porta que existe e nao abre e pior do
+              que porta nenhuma. O servidor barra de verdade; isto e a 1a camada. */}
+          {podeVerRankings && (
+            <button
+              onClick={() => setAbaAtiva('ranking')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
+                abaAtiva === 'ranking'
+                  ? 'bg-espera/15 border-espera/40 text-espera-400'
+                  : 'bg-grafite-700 border-linha text-slate-400 hover:text-white hover:border-slate-500'
+              }`}>
+              <Trophy size={13} className="inline mr-1.5 -mt-0.5" /> Ranking do Time
+            </button>
+          )}
         </div>
         {abaAtiva === 'geral' && (
           <div className="flex items-center gap-2 shrink-0">
@@ -767,7 +781,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
           filtrada por setor -- ver o comentario no topo de RelatoriosClientes. */}
       {abaAtiva === 'relatorios' && <RelatoriosClientes />}
 
-      {abaAtiva === 'ranking' && <RankingEquipe />}
+      {abaAtiva === 'ranking' && podeVerRankings && <Rankings />}
     </div>
   );
 }

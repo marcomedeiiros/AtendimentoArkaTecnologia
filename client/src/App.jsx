@@ -31,8 +31,7 @@ import MassaPage        from './pages/MassaPage';
 import ConfiguracoesPage from './pages/ConfiguracoesPage';
 import BugsPage         from './pages/BugsPage';
 import PerfilPage       from './pages/PerfilPage';
-import RankingsPage     from './pages/RankingsPage';
-import MapeamentosPage  from './pages/MapeamentosPage';
+import RelatoriosVisitaPage from './pages/RelatoriosVisitaPage';
 
 export default function App() {
   return (
@@ -74,8 +73,7 @@ export default function App() {
                 <Route path="/equipe"      element={<EquipePage />} />
                 <Route path="/agenda"      element={<AgendaPage />} />
                 <Route path="/bugs"        element={<BugsPage />} />
-                <Route path="/rankings"    element={<RankingsPage />} />
-                <Route path="/mapeamentos" element={<MapeamentosPage />} />
+                <Route path="/relatorios"  element={<RelatoriosVisitaPage />} />
               </Route>
             </Route>
           </Route>

@@ -36,11 +36,15 @@ const NAV_PRINCIPAL = [
 // menu para uma tela que roda numa parede sem mouse nunca teve muito uso.
 const NAV_MONITORAMENTO = [
   { to: '/dashboard',  label: 'Visão Geral',          icon: LayoutGrid, modulo: 'dashboard' },
-  // Rankings e Mapeamentos andam juntos e no mesmo modulo: um mostra a nota, o
-  // outro e a fonte dela para a equipe de fora da sede. Separar em dois modulos
-  // permitiria liberar o ranking para quem nao pode ver o relatorio que o gera.
-  { to: '/rankings',    label: 'Rankings',            icon: Trophy,        modulo: 'rankings' },
-  { to: '/mapeamentos', label: 'Mapeamentos',         icon: ClipboardList, modulo: 'rankings' },
+  // O RANKING SAIU DAQUI e virou uma aba dentro da Visao Geral.
+  //
+  // Ele nasceu como item proprio da barra e durou pouco: quem abre a Visao
+  // Geral esta fazendo exatamente a pergunta que o ranking responde ("como a
+  // equipe foi este mes"), e dois lugares para a mesma pergunta obrigam a
+  // escolher um deles a cada vez. Aqui fica so o que NAO cabe numa aba dela --
+  // a entrega dos relatorios, que e trabalho diario de quem visita cliente e
+  // nao consulta de gestao.
+  { to: '/relatorios', label: 'Relatórios',           icon: ClipboardList, modulo: 'rankings' },
 ];
 
 const NAV_FERRAMENTAS = [

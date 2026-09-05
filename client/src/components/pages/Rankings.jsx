@@ -23,10 +23,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Trophy, Medal, Building2, Car, ChevronDown, ChevronRight, Loader2, AlertCircle,
-  TrendingUp, TrendingDown, Minus, Sparkles, Gift, ClipboardList, Calendar,
+  TrendingUp, TrendingDown, Minus, Sparkles, Gift, ClipboardList, Calendar, Eraser,
 } from 'lucide-react';
-import { RankingsAPI } from '../../services/api';
+import { RankingsAPI, DashboardAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { FUSO_BR } from '../../utils/data';
 import { avisar, confirmar, pedirTexto } from '../../utils/dialogo';
 
 const MEDALHAS = ['--medalha-1', '--medalha-2', '--medalha-3'];
@@ -206,6 +207,24 @@ function LinhaTabela({ p, aberta, onAlternar }) {
         </td>
         <td className="py-2.5 px-3 text-right font-display font-extrabold tabular-nums text-texto">{p.pontos}</td>
         <td className="py-2.5 px-3 text-right tabular-nums text-texto-suave text-xs">{p.registros}</td>
+        {/* ÚLTIMO ATENDIMENTO -- de qualquer data, e não do mês selecionado.
+            São perguntas diferentes: os pontos dizem "como foi o mês", esta
+            coluna diz "quando essa pessoa atendeu pela última vez" -- e ela só
+            é útil justamente quando a resposta é antiga. */}
+        <td className="py-2.5 px-3 text-[11px] text-texto-suave whitespace-nowrap">
+          {p.ultimo ? (
+            <>
+              <span className="text-texto">{p.ultimo.empresa || p.ultimo.cliente || '—'}</span>
+              <span className="text-texto-fraco ml-1.5">
+                {p.ultimo.quando
+                  ? new Date(p.ultimo.quando).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: FUSO_BR })
+                  : ''}
+              </span>
+            </>
+          ) : (
+            <span className="text-texto-fraco">—</span>
+          )}
+        </td>
         <td className="py-2.5 px-3"><Evolucao estado={p.evolucao} anterior={p.anterior} /></td>
         <td className="py-2.5 px-3 text-right text-texto-fraco">
           {aberta ? <ChevronDown size={14} className="inline" /> : <ChevronRight size={14} className="inline" />}
@@ -213,7 +232,7 @@ function LinhaTabela({ p, aberta, onAlternar }) {
       </tr>
       {aberta && (
         <tr className="bg-grafite-800/60">
-          <td colSpan={6} className="px-3 pb-3">
+          <td colSpan={7} className="px-3 pb-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-1">
               {p.criterios.map((c) => {
                 const v = valorCriterio(c);
@@ -299,6 +318,7 @@ export default function Rankings() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
   const [abertas, setAbertas] = useState(() => new Set());
+  const [limpando, setLimpando] = useState(false);
 
   const meses = useMemo(mesesDisponiveis, []);
   const ehAdmin = usuario?.cargo === 'Administrador';
@@ -360,6 +380,42 @@ export default function Rankings() {
     }
   };
 
+  /**
+   * "Limpar dados do painel da equipe" -- herdado da aba anterior.
+   *
+   * Zera o MODO TV (classificação, destaque, satisfação, tempos e fechados
+   * hoje) a partir de agora. NÃO mexe nesta tela: o ranking aqui é mensal e
+   * serve de base para a premiação -- zerá-lo apagaria da vista um mês que já
+   * pode ter sido premiado, e o registro do prêmio apontaria para um ranking
+   * que a tela não conseguiria mais mostrar.
+   */
+  const limparPainelTv = async () => {
+    const ok = await confirmar(
+      'No Modo TV, a classificação, o destaque do mês, a satisfação, os tempos e "fechados hoje" ' +
+      'voltam a zero e passam a contar a partir de agora.\n\n' +
+      'Esta tela NÃO muda: o ranking mensal, o histórico e a premiação continuam completos. ' +
+      'Nenhum atendimento é apagado, e dá para desfazer depois.',
+      {
+        titulo: 'Limpar os dados do painel da equipe?',
+        rotuloConfirmar: 'Limpar o painel da TV',
+        rotuloCancelar: 'Deixar como está',
+        perigo: true,
+      }
+    );
+    if (!ok) return;
+    setLimpando(true);
+    try {
+      await DashboardAPI.limparPainel();
+      avisar('Painel do Modo TV zerado. Esta tela continua com o histórico completo.', {
+        titulo: 'Painel limpo', tipo: 'info',
+      });
+    } catch (e) {
+      avisar(e?.message || 'Não foi possível limpar o painel.', { titulo: 'Limpeza não concluída' });
+    } finally {
+      setLimpando(false);
+    }
+  };
+
   const remover = async (p) => {
     const ok = await confirmar(`Remover o registro de premiação de ${p.usuarioNome}?`, {
       titulo: 'Remover premiação', rotuloConfirmar: 'Remover', perigo: true,
@@ -376,16 +432,14 @@ export default function Rankings() {
   const lista = dados?.classificacao || [];
 
   return (
-    <div className="p-4 sm:p-6 space-y-4 fade-in">
+    // Sem padding nem título próprios: isto é o CONTEÚDO de uma aba da Visão
+    // Geral, que já tem cabeçalho. Um segundo "Rankings" logo abaixo do título
+    // da tela faria a aba parecer outra página dentro da página.
+    <div className="space-y-4 fade-in">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-xl sm:text-2xl font-bold text-texto flex items-center gap-2">
-            <Trophy size={20} className="text-espera-400 shrink-0" /> Rankings
-          </h2>
-          <p className="text-xs text-texto-fraco mt-0.5">
-            Duas competições separadas — as atividades e os indicadores são diferentes.
-          </p>
-        </div>
+        <p className="text-xs text-texto-fraco">
+          Duas competições separadas — as atividades e os indicadores são diferentes.
+        </p>
         <div className="flex items-center gap-2">
           <label className="text-[11px] font-semibold text-texto-suave">Mês</label>
           <select
@@ -398,6 +452,25 @@ export default function Rankings() {
             ))}
           </select>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {/* LIMPAR O PAINEL DA EQUIPE.
+            Veio da aba anterior e continua aqui porque é o mesmo assunto --
+            desempenho da equipe. O que ele zera é o MODO TV; esta tela é
+            mensal e não pode ser zerada, senão um mês já premiado sumiria
+            junto. A confirmação diz isso com todas as letras. */}
+        {ehAdmin && aba === 'sede' && (
+          <button
+            onClick={limparPainelTv}
+            disabled={limpando}
+            title="Zera o painel de parede (Modo TV) a partir de agora"
+            className="ml-auto px-3 py-1.5 rounded-xl bg-falha/15 border border-falha/40 text-falha-400 hover:bg-falha/25 text-[11px] font-bold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+          >
+            {limpando ? <Loader2 size={12} className="animate-spin" /> : <Eraser size={12} />}
+            Limpar dados do painel da equipe
+          </button>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -463,6 +536,7 @@ export default function Rankings() {
                     <th className="text-right py-2 px-3 font-bold text-texto-suave w-24">
                       {aba === 'sede' ? 'Atend.' : 'Relatórios'}
                     </th>
+                    <th className="text-left py-2 px-3 font-bold text-texto-suave">Último atendimento</th>
                     <th className="text-left py-2 px-3 font-bold text-texto-suave w-24">Evolução</th>
                     <th className="w-8" />
                   </tr>

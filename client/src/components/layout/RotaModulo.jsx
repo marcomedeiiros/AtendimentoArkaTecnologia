@@ -15,6 +15,10 @@ const ROTA_MODULO = {
   '/massa': 'massa',
   '/bugs': 'bugs',
   '/configuracoes': 'configuracoes',
+  // Entrega dos relatorios de visita. Mesmo modulo do ranking: um e a fonte da
+  // pontuacao do outro, e liberar so um deixaria a nota visivel sem o que a
+  // gerou (ou o contrario).
+  '/relatorios': 'rankings',
 };
 
 // Ordem de preferencia para onde mandar quem cai numa tela sem permissao.
