@@ -20,6 +20,7 @@ const contatoRoutes = require("./modules/contatos/contato.routes");
 const fluxoRoutes = require("./modules/fluxos/fluxo.routes");
 const conversaRoutes = require("./modules/conversas/conversa.routes");
 const dashboardRoutes = require("./modules/dashboard/dashboard.routes");
+const rankingRoutes = require("./modules/rankings/ranking.routes");
 const helpdeskRoutes = require("./modules/helpdesk/helpdesk.routes");
 const relatorioRoutes = require("./modules/relatorios/relatorio.routes");
 const chatbotRoutes = require("./modules/chatbot/chatbot.routes");
@@ -181,6 +182,7 @@ function createApp() {
   app.use("/api/fluxos", fluxoRoutes);
   app.use("/api/conversas", conversaRoutes);
   app.use("/api/dashboard", dashboardRoutes);
+  app.use("/api/rankings", rankingRoutes);
   app.use("/api/helpdesk", helpdeskRoutes);
   app.use("/api/relatorios", relatorioRoutes);
   app.use("/api/chatbot", chatbotRoutes);

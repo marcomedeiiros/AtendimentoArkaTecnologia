@@ -12,7 +12,7 @@
  * pelo servidor a cada requisicao autenticada.
  */
 import { useState, useEffect } from 'react';
-import { Users, Circle, ShieldCheck, CheckCircle2, XCircle, KeyRound, Loader2, X, Clock, Trash2, SlidersHorizontal, Save, Lock, Eye, EyeOff, AlertCircle, Inbox } from 'lucide-react';
+import { Users, Circle, ShieldCheck, CheckCircle2, XCircle, KeyRound, Loader2, X, Clock, Trash2, SlidersHorizontal, Save, Lock, Eye, EyeOff, AlertCircle, Inbox, Trophy } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { EquipeAPI, PermissoesAPI } from '../services/api';
@@ -210,6 +210,43 @@ export default function EquipePage() {
     }
   }
 
+  /**
+   * EM QUAL RANKING A PESSOA CONCORRE.
+   *
+   * Tres estados num controle so (Sede / Fora da sede / Nao concorre) porque
+   * eles sao exclusivos: ninguem disputa os dois -- as atividades e os
+   * indicadores sao diferentes, e e essa separacao que torna a competicao
+   * justa. Duas caixas independentes permitiriam marcar as duas.
+   */
+  async function definirRanking(membro, equipeRanking) {
+    setLoadingId(membro.id);
+    setErro("");
+    setOkMsg("");
+    try {
+      await EquipeAPI.alterarRanking(membro.id, { equipeRanking });
+      if (recarregarEquipe) await recarregarEquipe();
+    } catch (e) {
+      setErro(e.message);
+    } finally {
+      setLoadingId(null);
+    }
+  }
+
+  // Supervisor ve os dois rankings e valida mapeamento -- e NAO concorre a
+   // premio, mesmo marcado numa equipe. A regra e aplicada no servidor.
+  async function alternarSupervisor(membro) {
+    setLoadingId(membro.id);
+    setErro("");
+    try {
+      await EquipeAPI.alterarRanking(membro.id, { supervisorRanking: !membro.supervisorRanking });
+      if (recarregarEquipe) await recarregarEquipe();
+    } catch (e) {
+      setErro(e.message);
+    } finally {
+      setLoadingId(null);
+    }
+  }
+
   async function excluirConta(membro) {
     if (!(await confirmar(
       `Excluir definitivamente a conta de ${membro.nome}? Esta ação não pode ser desfeita.\n\n` +
@@ -371,6 +408,59 @@ export default function EquipePage() {
                     </button>
                   );
                 })}
+              </div>
+
+              {/* RANKING DE DESEMPENHO.
+                  Fica aqui, no cadastro, e não numa lista de nomes dentro do
+                  código: uma entrada, saída ou troca de função viraria deploy,
+                  e o ranking passaria dias mostrando quem já saiu. */}
+              <div className="mt-3 pt-3 border-t border-linha/60">
+                <div className="mb-2 flex items-center gap-1.5 text-[11px] text-texto-suave">
+                  <Trophy size={13} className="text-espera-400" />
+                  <span className="font-semibold">Ranking de desempenho</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { valor: 'sede', rotulo: 'Atendimento na Sede' },
+                    { valor: 'externo', rotulo: 'Fora da Sede' },
+                    { valor: null, rotulo: 'Não concorre' },
+                  ].map((op) => {
+                    const marcado = (m.equipeRanking || null) === op.valor;
+                    return (
+                      <button
+                        key={op.rotulo}
+                        type="button"
+                        disabled={!ehAdmin || loadingId === m.id}
+                        onClick={() => definirRanking(m, op.valor)}
+                        className={`rounded-lg border px-2 py-1 text-[11px] font-semibold transition-colors ${
+                          marcado
+                            ? 'border-espera/40 bg-espera/15 text-espera-400'
+                            : 'border-linha bg-grafite-700 text-texto-fraco hover:border-linha-forte'
+                        } ${!ehAdmin ? 'cursor-default opacity-80' : 'cursor-pointer'}`}
+                      >
+                        {op.rotulo}
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    disabled={!ehAdmin || loadingId === m.id}
+                    onClick={() => alternarSupervisor(m)}
+                    title="Vê os dois rankings e valida os mapeamentos — e não concorre ao prêmio"
+                    className={`rounded-lg border px-2 py-1 text-[11px] font-semibold transition-colors ${
+                      m.supervisorRanking
+                        ? 'border-acao/40 bg-acao/15 text-acao-200'
+                        : 'border-linha bg-grafite-700 text-texto-fraco hover:border-linha-forte'
+                    } ${!ehAdmin ? 'cursor-default opacity-80' : 'cursor-pointer'}`}
+                  >
+                    Supervisor
+                  </button>
+                </div>
+                {m.supervisorRanking && (
+                  <p className="text-[10px] text-texto-fraco mt-1.5">
+                    Supervisiona os dois rankings e não disputa o prêmio.
+                  </p>
+                )}
               </div>
             </div>
           )}

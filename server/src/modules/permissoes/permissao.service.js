@@ -30,6 +30,10 @@ const MODULOS = [
   { chave: "configuracoes", nome: "Configurações",          grupo: "A" },
   { chave: "bugs",          nome: "Relatos de Bugs",        grupo: "A" },
   { chave: "agenda",        nome: "Agenda",                 grupo: "A" },
+  // Grupo A: o ranking expoe desempenho pessoal da equipe inteira, entao nasce
+  // restrito e o administrador libera para quem deve ver. Quem concorre precisa
+  // do modulo para se ver na lista -- e quem valida, para validar.
+  { chave: "rankings",      nome: "Rankings",               grupo: "A" },
 ];
 
 const CHAVES_MODULO = new Set(MODULOS.map((m) => m.chave));

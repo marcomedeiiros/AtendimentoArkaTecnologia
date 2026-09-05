@@ -33,7 +33,17 @@ const redefinirSenhaSchema = z.object({
   senha: z.string().min(6, "A senha precisa de pelo menos 6 caracteres."),
 });
 
+// Em qual ranking a pessoa concorre. Nulo = nenhum, que e o padrao e o caso
+// do supervisor. `nullable` explicito para poder TIRAR alguem do ranking.
+const alterarRankingSchema = z
+  .object({
+    equipeRanking: z.enum(["sede", "externo"]).nullable().optional(),
+    supervisorRanking: z.boolean().optional(),
+  })
+  .refine((d) => Object.keys(d).length > 0, { message: "Nada para atualizar" });
+
 module.exports = {
+  alterarRankingSchema,
   CARGOS_VALIDOS,
   alterarStatusSchema,
   alterarCargoSchema,

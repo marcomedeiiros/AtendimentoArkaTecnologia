@@ -5,6 +5,8 @@ const sessaoRefreshRepository = require("../../infrastructure/repositories/sessa
 const { CARGOS_VALIDOS } = require("./equipe.dto");
 const { listaDeSetores, setoresVisiveis } = require("../../shared/helpers/setor.helper");
 const bus = require("../../shared/events/event-bus");
+const prisma = require("../../infrastructure/database/prisma.client");
+const logger = require("../../config/logger");
 
 // Alguem conta como online se o servidor viu uma requisicao autenticada dessa
 // pessoa nos ultimos minutos. Com o painel aberto o front consulta a API a cada
@@ -36,6 +38,10 @@ class EquipeService {
         // do que acabou de marcar.
         setoresExtras: listaDeSetores(u.setoresExtras),
         setoresVisiveis: setoresVisiveis(u),
+        // Ranking: a tela de Gestao da Equipe e onde se define quem concorre
+        // em qual, e quem supervisiona sem concorrer.
+        equipeRanking: u.equipeRanking || null,
+        supervisorRanking: !!u.supervisorRanking,
         // Mantem o vocabulario que o resto do painel ja usa (o Dashboard conta
         // `status === "online"`), agora alimentado por presenca real.
         status: u.ativo && agora - visto < JANELA_ONLINE_MS ? "online" : "offline",
@@ -122,6 +128,43 @@ class EquipeService {
 
     const atualizado = await usuarioRepository.atualizarCargo(id, cargo);
     bus.emitRecurso("equipe");
+    return atualizado;
+  }
+
+  /**
+   * EM QUAL RANKING ESTA PESSOA CONCORRE -- e se ela supervisiona.
+   *
+   * Cadastro, e nao lista de nomes no codigo. A alternativa seria escrever
+   * "Marco, Rangel, Gabriel" dentro do servico de ranking, e ai cada entrada,
+   * saida ou troca de funcao viraria um deploy -- e o ranking passaria um tempo
+   * exibindo quem ja saiu, ou faltando quem acabou de chegar.
+   *
+   * Supervisor NAO concorre: quem valida o mapeamento e corrige pontuacao nao
+   * pode disputar o premio com quem ele avalia. A regra e aplicada no ranking
+   * (o supervisor sai da classificacao mesmo marcado numa equipe), e nao aqui,
+   * porque aqui e so cadastro -- deixar alguem marcado nos dois campos e util
+   * para o dia em que a supervisao mudar de mao.
+   */
+  async alterarRanking(id, { equipeRanking, supervisorRanking }, solicitanteId) {
+    await this._exigirAdmin(solicitanteId);
+
+    const alvo = await usuarioRepository.findById(id);
+    if (!alvo) throw new AppError("Conta nao encontrada", 404, "CONTA_INEXISTENTE");
+
+    const equipe = equipeRanking === "sede" || equipeRanking === "externo" ? equipeRanking : null;
+    const atualizado = await prisma.usuario.update({
+      where: { id },
+      data: {
+        ...(equipeRanking !== undefined ? { equipeRanking: equipe } : {}),
+        ...(supervisorRanking !== undefined ? { supervisorRanking: !!supervisorRanking } : {}),
+      },
+    });
+    bus.emitRecurso("equipe");
+    logger.info("Equipe de ranking alterada", {
+      usuario: alvo.nome,
+      equipeRanking: atualizado.equipeRanking,
+      supervisor: atualizado.supervisorRanking,
+    });
     return atualizado;
   }
 

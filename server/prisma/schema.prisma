@@ -82,12 +82,113 @@ model Usuario {
   // Gestao da Equipe: com o painel aberto, o front consulta o servidor a cada
   // poucos segundos, entao presenca recente aqui significa aba aberta agora.
   ultimoAcessoEm DateTime? @map("ultimo_acesso_em")
+  /// EM QUAL RANKING DE DESEMPENHO ESTA PESSOA CONCORRE.
+  ///
+  ///   "sede"    -> atendimento no WhatsApp (pontuacao ja existente do painel)
+  ///   "externo" -> visitas com mapeamento tecnico (pontuacao propria)
+  ///   null      -> nao concorre. E o PADRAO, e vale para o supervisor e para
+  ///                quem faz outra funcao.
+  ///
+  /// Coluna, e nao lista de nomes no codigo: uma pessoa entra, sai ou troca de
+  /// funcao sem deploy, e o ranking nunca fica com nome de quem ja saiu.
+  equipeRanking     String?  @map("equipe_ranking")
+  /// Supervisiona os DOIS rankings: ve tudo, valida mapeamento e corrige
+  /// pontuacao -- e NAO concorre a premio.
+  ///
+  /// Separado de `equipeRanking` de proposito: sao perguntas diferentes ("onde
+  /// concorre" x "quem fiscaliza"), e junta-las num campo so faria o supervisor
+  /// precisar entrar num dos dois rankings para poder validar o outro.
+  supervisorRanking Boolean  @default(false) @map("supervisor_ranking")
   criadoEm       DateTime  @default(now()) @map("criado_em")
   atualizadoEm   DateTime  @updatedAt @map("atualizado_em")
 
   conversasAtendidas Conversa[] @relation("AtendenteConversa")
 
   @@map("usuarios")
+}
+
+/// MAPEAMENTO TECNICO de uma visita fora da sede.
+///
+/// E o registro que a equipe externa entrega no lugar da conversa de WhatsApp:
+/// eles nao sao avaliados pelo cliente (nao ha pesquisa de satisfacao numa
+/// visita), entao o que mede o trabalho deles e o RELATORIO -- se esta
+/// completo, se tem evidencia, se chegou no prazo e se voltou para correcao.
+///
+/// Os campos de julgamento humano (`devolucoes`, `validado*`) existem porque
+/// "qualidade tecnica" nao da para medir sozinho: quem decide e o supervisor,
+/// e o sistema so guarda a decisao e a transforma em ponto.
+model MapeamentoTecnico {
+  id           String    @id @default(uuid())
+  /// Quem visitou. Guardamos id E nome: o id liga ao ranking, o nome sobrevive
+  /// a exclusao da conta -- mesma razao do `ultimoAtendenteNome` da conversa.
+  tecnicoId    String    @map("tecnico_id")
+  tecnicoNome  String    @map("tecnico_nome")
+  /// Empresa visitada. `cnpj` liga ao cadastro de Clientes quando existir; o
+  /// nome fica gravado de qualquer jeito, porque ha visita em prospect que
+  /// ainda nao e cliente.
+  empresa      String
+  cnpj         String?
+  dataVisita   DateTime  @map("data_visita")
+  /// Ate quando o relatorio deveria ser entregue. Gravado no ato da visita para
+  /// o prazo nao poder ser esticado depois que ele estourou.
+  prazoEm      DateTime  @map("prazo_em")
+  entregueEm   DateTime? @map("entregue_em")
+  /// rascunho | entregue | em_correcao | aprovado
+  status       String    @default("rascunho")
+  resumo       String    @default("")
+  /// Checklist tecnico do que foi levantado (rede, servidores, backup, ...).
+  /// JSON e nao colunas: a lista de itens muda com o tempo e uma coluna por
+  /// item viraria migracao a cada revisao do formulario.
+  itens        Json?
+  pendencias   String?
+  /// Fotos e anexos, ja gravados em disco (caminho relativo), nao base64 no
+  /// banco: visita rende dezenas de fotos e base64 em linha e o que inchou o
+  /// banco das mensagens.
+  evidencias   Json?
+  /// Quantas vezes o supervisor devolveu para correcao. E o indicador de
+  /// retrabalho da pontuacao -- por isso e contador, e nao booleano.
+  devolucoes   Int       @default(0)
+  validadoPorId       String?   @map("validado_por_id")
+  validadoPorNome     String?   @map("validado_por_nome")
+  validadoEm          DateTime? @map("validado_em")
+  observacaoValidacao String?   @map("observacao_validacao")
+  criadoEm     DateTime  @default(now()) @map("criado_em")
+  atualizadoEm DateTime  @updatedAt @map("atualizado_em")
+
+  @@index([tecnicoId, entregueEm])
+  @@index([status])
+  @@map("mapeamentos_tecnicos")
+}
+
+/// PREMIACAO de um mes, ja fechada.
+///
+/// O ranking em si NAO e guardado: ele e recalculado a partir dos atendimentos
+/// e mapeamentos, que nao mudam depois de fechados -- um retrato salvo so
+/// poderia divergir da verdade. O que se guarda aqui e a unica coisa que o
+/// calculo nao sabe: QUE PREMIO foi dado, a quem e quando.
+model PremiacaoRanking {
+  id          String    @id @default(uuid())
+  /// "sede" | "externo" -- os dois nunca se misturam.
+  ranking     String
+  /// Mes de competencia no formato "2026-09". Texto, e nao data: o que importa
+  /// e o mes, e uma data exigiria decidir um dia arbitrario dentro dele.
+  competencia String
+  posicao     Int
+  usuarioId   String?   @map("usuario_id")
+  usuarioNome String    @map("usuario_nome")
+  /// Pontos no momento do fechamento -- aqui SIM vale o retrato: e o numero que
+  /// justificou o premio, e ele precisa continuar legivel mesmo que a formula
+  /// mude no ano que vem.
+  pontos      Int
+  premio      String?
+  valor       String?
+  entregueEm  DateTime? @map("entregue_em")
+  observacao  String?
+  criadoEm    DateTime  @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  @@unique([ranking, competencia, posicao])
+  @@map("premiacoes_ranking")
 }
 
 /// Sessao renovavel (refresh token) do operador.

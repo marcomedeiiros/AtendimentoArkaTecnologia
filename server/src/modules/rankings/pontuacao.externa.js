@@ -1,0 +1,195 @@
+/**
+ * A PONTUACAO DO ATENDIMENTO FORA DA SEDE -- 0 a 100.
+ *
+ * ── POR QUE UMA FORMULA NOVA, E SO AQUI ────────────────────────────────────
+ *
+ * A pontuacao da SEDE nao foi tocada e nao e reimplementada em lugar nenhum:
+ * o ranking da sede chama `painelService.rankingDoMes`, que e a mesma funcao do
+ * painel de parede. Esta formula existe porque a equipe externa nao tem o
+ * insumo daquela: ninguem manda pesquisa de satisfacao depois de uma visita
+ * tecnica, e "tempo ate assumir" nao significa nada para quem pega a estrada.
+ *
+ * O que mede o trabalho deles e o RELATORIO de mapeamento: se saiu, se saiu
+ * completo, se tem evidencia, se chegou no prazo e se voltou para correcao.
+ *
+ * ── AS CINCO PARCELAS, E O PORQUE DE CADA PESO ─────────────────────────────
+ *
+ *   VOLUME            25   quantos mapeamentos aprovados no mes
+ *   COMPLETUDE        25   quanto do formulario tecnico foi preenchido
+ *   PRAZO             20   quantos chegaram dentro do prazo
+ *   EVIDENCIAS        15   fotos/anexos por mapeamento
+ *   RETRABALHO        15   desconta por devolucao para correcao
+ *                    ---
+ *                    100
+ *
+ * COMPLETUDE e PRAZO somam 45 de propósito: sao o que o supervisor recebe e o
+ * que faz o relatorio ser util para a empresa visitada. VOLUME vem logo atras
+ * porque visita que nao acontece nao gera nada -- mas ele nao lidera, senao a
+ * corrida vira "quantas portas eu bato", que e exatamente o comportamento que
+ * um mapeamento tecnico nao deve premiar.
+ *
+ * ── FAIXA x PROPORCIONAL, a mesma escolha que a sede ja fazia ──────────────
+ *
+ * VOLUME e EVIDENCIAS sao FAIXAS. Proporcional premiaria cada unidade a mais
+ * para sempre -- e o incentivo vira visita apressada e album de 40 fotos do
+ * mesmo rack. A faixa premia o habito e para de premiar depois, exatamente
+ * como a agilidade da sede (ver FAIXAS_AGILIDADE em painel.service).
+ *
+ * COMPLETUDE e PRAZO sao PROPORCIONAIS, porque ali a media E a nota: entregar
+ * 9 de 10 relatorios no prazo e mesmo 90% do trabalho, sem degrau a defender.
+ *
+ * ── O MINIMO DE AMOSTRA ────────────────────────────────────────────────────
+ *
+ * As parcelas de QUALIDADE (completude, prazo, evidencias) so contam com pelo
+ * menos MINIMO_MAPEAMENTOS entregues. Sem isso, quem fez UMA visita perfeita no
+ * mes ficaria com 65 pontos de qualidade e lideraria o ranking em cima de uma
+ * amostra de um -- o mesmo defeito que o minimo de avaliacoes ja impede do
+ * outro lado (ver MINIMO_AVALIACOES). Abaixo do minimo a tela diz "1 de 3", e
+ * nao "0,0": e amostra pequena, nao trabalho ruim.
+ */
+
+// Quantos mapeamentos entregues para as parcelas de qualidade valerem.
+const MINIMO_MAPEAMENTOS = 3;
+
+const PESOS = { volume: 25, completude: 25, prazo: 20, evidencias: 15, retrabalho: 15 };
+
+// Faixas de volume: aprovados no mes -> pontos. Lidas de cima para baixo.
+const FAIXAS_VOLUME = [
+  { aPartirDe: 8, pontos: 25 },
+  { aPartirDe: 6, pontos: 20 },
+  { aPartirDe: 4, pontos: 15 },
+  { aPartirDe: 2, pontos: 8 },
+  { aPartirDe: 1, pontos: 3 },
+];
+
+// Faixas de evidencia: MEDIA de anexos por mapeamento -> pontos. Tres fotos ja
+// contam a historia de uma visita; a quarta nao informa mais nada a quem le.
+const FAIXAS_EVIDENCIAS = [
+  { aPartirDe: 3, pontos: 15 },
+  { aPartirDe: 2, pontos: 10 },
+  { aPartirDe: 1, pontos: 5 },
+];
+
+// Cada devolucao para correcao custa isto, ate zerar a parcela.
+const CUSTO_POR_DEVOLUCAO = 5;
+
+/**
+ * Itens do checklist tecnico que a completude mede.
+ *
+ * A lista vive aqui e NAO no formulario da tela: se ela morasse so no front,
+ * bastava alguem adicionar um campo novo para a completude de todo mundo cair
+ * sem ninguem ter feito nada de diferente. Mudar esta lista e uma decisao
+ * consciente sobre o que conta como relatorio completo.
+ */
+const ITENS_MAPEAMENTO = [
+  { chave: "infraestrutura", rotulo: "Infraestrutura e rede" },
+  { chave: "servidores", rotulo: "Servidores e estações" },
+  { chave: "backup", rotulo: "Backup e retenção" },
+  { chave: "seguranca", rotulo: "Segurança e antivírus" },
+  { chave: "internet", rotulo: "Links e provedores" },
+  { chave: "telefonia", rotulo: "Telefonia e ramais" },
+  { chave: "softwares", rotulo: "Sistemas e licenças" },
+  { chave: "riscos", rotulo: "Riscos identificados" },
+];
+
+const faixa = (lista, valor) => lista.find((f) => valor >= f.aPartirDe)?.pontos || 0;
+const media = (l) => (l.length ? l.reduce((a, b) => a + b, 0) / l.length : 0);
+
+/**
+ * Quanto deste mapeamento foi preenchido, de 0 a 1.
+ *
+ * Conta o CHECKLIST mais o resumo. Um relatorio com todos os itens marcados e
+ * nenhuma linha escrita nao e um relatorio completo -- e uma lista de caixas.
+ */
+function completudeDe(m) {
+  const itens = m.itens && typeof m.itens === "object" ? m.itens : {};
+  const preenchidos = ITENS_MAPEAMENTO.filter((i) => {
+    const v = itens[i.chave];
+    return typeof v === "string" ? v.trim().length > 0 : !!v;
+  }).length;
+  const comResumo = String(m.resumo || "").trim().length >= 20 ? 1 : 0;
+  return (preenchidos + comResumo) / (ITENS_MAPEAMENTO.length + 1);
+}
+
+const quantidadeEvidencias = (m) => (Array.isArray(m.evidencias) ? m.evidencias.length : 0);
+
+// No prazo = entregue ate o fim do dia do prazo. Comparar por instante puniria
+// quem entregou as 18h de um prazo gravado as 9h da manha.
+function noPrazo(m) {
+  if (!m.entregueEm || !m.prazoEm) return false;
+  const limite = new Date(m.prazoEm);
+  limite.setHours(23, 59, 59, 999);
+  return new Date(m.entregueEm) <= limite;
+}
+
+/**
+ * Pontua UMA pessoa a partir dos mapeamentos dela no mes.
+ *
+ * Devolve as parcelas SEPARADAS, e nao so o total -- pelo mesmo motivo que a
+ * formula da sede faz isso: quem discorda do peso precisa poder discordar de
+ * uma conta visivel, e quem esta em terceiro precisa saber em qual parcela
+ * perdeu. Um numero unico nao responde nem uma coisa nem outra.
+ *
+ * @param {Array} lista mapeamentos ENTREGUES da pessoa no mes
+ */
+function pontuarExterno(lista) {
+  // So o que ja saiu da mao do tecnico entra na conta: rascunho e trabalho em
+  // andamento, e pontuar rascunho premiaria abrir formulario.
+  const entregues = lista.filter((m) => m.status !== "rascunho");
+  const aprovados = entregues.filter((m) => m.status === "aprovado");
+  const temAmostra = entregues.length >= MINIMO_MAPEAMENTOS;
+
+  const ptsVolume = faixa(FAIXAS_VOLUME, aprovados.length);
+
+  const mediaCompletude = media(entregues.map(completudeDe));
+  const ptsCompletude = temAmostra ? Math.round(mediaCompletude * PESOS.completude) : 0;
+
+  const proporcaoPrazo = entregues.length ? entregues.filter(noPrazo).length / entregues.length : 0;
+  const ptsPrazo = temAmostra ? Math.round(proporcaoPrazo * PESOS.prazo) : 0;
+
+  const mediaEvidencias = media(entregues.map(quantidadeEvidencias));
+  const ptsEvidencias = temAmostra ? faixa(FAIXAS_EVIDENCIAS, mediaEvidencias) : 0;
+
+  const devolucoes = entregues.reduce((s, m) => s + (Number(m.devolucoes) || 0), 0);
+  // Sem nenhum mapeamento nao ha retrabalho a premiar: a parcela cheia iria
+  // para quem nao trabalhou, que e o oposto do que ela mede.
+  const ptsRetrabalho = entregues.length
+    ? Math.max(0, PESOS.retrabalho - devolucoes * CUSTO_POR_DEVOLUCAO)
+    : 0;
+
+  return {
+    pontos: ptsVolume + ptsCompletude + ptsPrazo + ptsEvidencias + ptsRetrabalho,
+    volume: { valor: aprovados.length, entregues: entregues.length, pontos: ptsVolume },
+    completude: {
+      valor: entregues.length ? Math.round(mediaCompletude * 100) : null,
+      conta: temAmostra,
+      amostra: entregues.length,
+      pontos: ptsCompletude,
+    },
+    prazo: {
+      valor: entregues.length ? Math.round(proporcaoPrazo * 100) : null,
+      conta: temAmostra,
+      amostra: entregues.length,
+      pontos: ptsPrazo,
+    },
+    evidencias: {
+      valor: entregues.length ? Math.round(mediaEvidencias * 10) / 10 : null,
+      conta: temAmostra,
+      amostra: entregues.length,
+      pontos: ptsEvidencias,
+    },
+    retrabalho: { devolucoes, pontos: ptsRetrabalho },
+  };
+}
+
+module.exports = {
+  pontuarExterno,
+  completudeDe,
+  noPrazo,
+  ITENS_MAPEAMENTO,
+  MINIMO_MAPEAMENTOS,
+  PESOS,
+  FAIXAS_VOLUME,
+  FAIXAS_EVIDENCIAS,
+  CUSTO_POR_DEVOLUCAO,
+};

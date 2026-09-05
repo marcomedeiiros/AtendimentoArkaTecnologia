@@ -72,6 +72,8 @@ export default function App() {
                 <Route path="/equipe"      element={<EquipePage />} />
                 <Route path="/agenda"      element={<AgendaPage />} />
                 <Route path="/bugs"        element={<BugsPage />} />
+                <Route path="/rankings"    element={<RankingsPage />} />
+                <Route path="/mapeamentos" element={<MapeamentosPage />} />
               </Route>
             </Route>
           </Route>

@@ -405,6 +405,50 @@ class PainelService {
    * que esta linha mostra muda junto.
    */
   /**
+   * A MESMA PONTUACAO, PARA UM MES QUALQUER.
+   *
+   * Existe para o Ranking de Atendimento na Sede (modulo `rankings`) poder
+   * fechar setembro em outubro sem reimplementar conta nenhuma: a lista vai
+   * inteira para `_ranking`, que e a MESMA funcao do painel de parede e da
+   * Visao Geral. Se a formula mudar um dia, muda para as tres telas juntas --
+   * que e o unico jeito de elas nunca discordarem sobre quem esta em primeiro.
+   *
+   * ── O ZERAMENTO DO PAINEL NAO ENTRA AQUI, E ISSO E DELIBERADO ──────────────
+   *
+   * "Limpar dados do painel da equipe" existe para dar um recomeco visivel na
+   * parede. Aplicar esse corte tambem aqui apagaria meses fechados do historico
+   * -- inclusive os que ja renderam premio -- e o registro de premiacao ficaria
+   * apontando para um ranking que a tela nao consegue mais mostrar.
+   *
+   * @param {number} ano
+   * @param {number} mes 1-12
+   */
+  async rankingDoMes(ano, mes) {
+    const inicio = new Date(ano, mes - 1, 1, 0, 0, 0, 0);
+    const fim = new Date(ano, mes, 1, 0, 0, 0, 0);
+
+    const doMes = await prisma.atendimento.findMany({
+      where: { abertoEm: { gte: inicio, lt: fim } },
+      select: {
+        atendenteNome: true,
+        status: true,
+        avaliacao: true,
+        abertoEm: true,
+        atendidoEm: true,
+        fechadoEm: true,
+      },
+    });
+
+    // Todo mundo, sem corte: quem filtra por equipe e o modulo de rankings, e
+    // cortar no top 3 aqui esconderia justamente o terceiro colocado de uma
+    // equipe de tres pessoas.
+    return {
+      periodo: { inicio: inicio.toISOString(), fim: fim.toISOString() },
+      ...this._ranking(doMes, { limite: Number.MAX_SAFE_INTEGER, incluirZerados: true }),
+    };
+  }
+
+  /**
    * "Limpar dados do painel da equipe": zera o que a parede mostra, a partir de
    * agora. Ver a nota em `marcoDeZeragem` -- nenhum atendimento e apagado.
    */

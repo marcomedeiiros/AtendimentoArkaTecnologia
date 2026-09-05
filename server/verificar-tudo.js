@@ -109,6 +109,15 @@ const VERIFICACOES = [
     resumo: "mesma pontuacao da parede, time inteiro sem corte, e o ultimo atendimento de cada um",
   },
   {
+    // A regra numero um do pedido era NAO criar formula nova para o ranking da
+    // sede. Este vigia confere que a classificacao devolve exatamente os mesmos
+    // pontos do painel de parede -- e que o supervisor, que valida e corrige,
+    // nunca aparece disputando o premio com quem ele avalia.
+    arquivo: "verificar-rankings.js",
+    titulo: "Rankings de desempenho (sede e externo)",
+    resumo: "a sede reusa a pontuacao existente, o supervisor nao concorre e os dois rankings nunca se misturam",
+  },
+  {
     // Zoom guardado e zoom que volta para uma multiplicacao de coordenadas. Um
     // `0` salvo encolhe o canvas a um ponto -- e nao ha como sair de la, porque
     // os botoes tambem multiplicam. Nem o F5 ajuda: o valor esta no servidor.

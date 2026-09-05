@@ -19,6 +19,13 @@ class EquipeController {
     return equipeService.alterarCargo(id, cargo, req.user.sub).then((data) => success(res, data));
   }
 
+  // Em qual ranking a pessoa concorre (ou nenhum), e se ela supervisiona.
+  alterarRanking(req, res) {
+    return equipeService
+      .alterarRanking(req.params.id, req.body, req.user?.sub)
+      .then((data) => success(res, { id: data.id, equipeRanking: data.equipeRanking, supervisorRanking: data.supervisorRanking }));
+  }
+
   alterarSetores(req, res) {
     const { id } = req.params;
     const { setores } = req.body;

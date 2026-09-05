@@ -566,7 +566,44 @@ export const EquipeAPI = {
   alterarSetores: (id, setores) => request(`/equipe/${id}/setores`, { method: 'PATCH', body: JSON.stringify({ setores }) }),
   // Sem recuperacao por e-mail: um Administrador define a nova senha do membro.
   redefinirSenha: (id, senha) => request(`/equipe/${id}/senha`, { method: 'PATCH', body: JSON.stringify({ senha }) }),
+  // Em qual ranking a pessoa concorre ("sede" | "externo" | null) e se ela
+  // supervisiona sem concorrer. Cadastro, e nao lista de nomes no codigo.
+  alterarRanking: (id, dados) => request(`/equipe/${id}/ranking`, { method: 'PATCH', body: JSON.stringify(dados) }),
   excluir: (id) => request(`/equipe/${id}`, { method: 'DELETE' }),
+};
+
+/**
+ * RANKINGS de desempenho -- dois, e nunca misturados.
+ *
+ * `equipe` e "sede" ou "externo". A pontuacao da sede e a MESMA do painel de
+ * parede (o servidor reaproveita a funcao, nao ha segunda formula); a do
+ * externo sai dos mapeamentos tecnicos.
+ */
+export const RankingsAPI = {
+  obter: (equipe, competencia) =>
+    request(`/rankings/${equipe}${competencia ? `?competencia=${competencia}` : ''}`),
+  historico: (equipe, competencia, meses = 6) =>
+    request(`/rankings/${equipe}/historico?meses=${meses}${competencia ? `&competencia=${competencia}` : ''}`),
+  equipes: () => request('/rankings/equipes'),
+  // Pesos e faixas da formula externa, para a tela explicar a posicao sem
+  // repetir numero de regra no front.
+  regras: () => request('/rankings/regras'),
+
+  premiacoes: (competencia) =>
+    request(`/rankings/premiacoes${competencia ? `?competencia=${competencia}` : ''}`),
+  registrarPremiacao: (dados) => request('/rankings/premiacoes', { method: 'POST', body: JSON.stringify(dados) }),
+  removerPremiacao: (id) => request(`/rankings/premiacoes/${id}`, { method: 'DELETE' }),
+
+  // ── mapeamentos tecnicos (a fonte do ranking externo) ──
+  listarMapeamentos: (filtros = {}) => {
+    const q = new URLSearchParams(Object.entries(filtros).filter(([, v]) => v));
+    return request(`/rankings/mapeamentos${q.toString() ? `?${q}` : ''}`);
+  },
+  obterMapeamento: (id) => request(`/rankings/mapeamentos/${id}`),
+  criarMapeamento: (dados) => request('/rankings/mapeamentos', { method: 'POST', body: JSON.stringify(dados) }),
+  atualizarMapeamento: (id, dados) => request(`/rankings/mapeamentos/${id}`, { method: 'PATCH', body: JSON.stringify(dados) }),
+  validarMapeamento: (id, dados) => request(`/rankings/mapeamentos/${id}/validar`, { method: 'POST', body: JSON.stringify(dados) }),
+  removerMapeamento: (id) => request(`/rankings/mapeamentos/${id}`, { method: 'DELETE' }),
 };
 
 // ── WhatsApp API ──

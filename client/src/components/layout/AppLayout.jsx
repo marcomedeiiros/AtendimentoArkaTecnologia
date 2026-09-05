@@ -36,6 +36,11 @@ const NAV_PRINCIPAL = [
 // menu para uma tela que roda numa parede sem mouse nunca teve muito uso.
 const NAV_MONITORAMENTO = [
   { to: '/dashboard',  label: 'Visão Geral',          icon: LayoutGrid, modulo: 'dashboard' },
+  // Rankings e Mapeamentos andam juntos e no mesmo modulo: um mostra a nota, o
+  // outro e a fonte dela para a equipe de fora da sede. Separar em dois modulos
+  // permitiria liberar o ranking para quem nao pode ver o relatorio que o gera.
+  { to: '/rankings',    label: 'Rankings',            icon: Trophy,        modulo: 'rankings' },
+  { to: '/mapeamentos', label: 'Mapeamentos',         icon: ClipboardList, modulo: 'rankings' },
 ];
 
 const NAV_FERRAMENTAS = [
