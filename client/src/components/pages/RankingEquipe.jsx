@@ -307,7 +307,13 @@ export default function RankingEquipe() {
             Ranking do time
           </h3>
           <p className="text-[11px] text-texto-fraco mt-0.5">
-            Pontos e atendimentos do <strong className="text-texto-suave">mês corrente</strong>
+            {/* Com a limpeza ativa este subtitulo NAO pode continuar dizendo
+                "mês corrente": logo abaixo dele fica o aviso amarelo com a data
+                do zeramento, e os dois se contradiriam na mesma tela. */}
+            Pontos e atendimentos{' '}
+            <strong className="text-texto-suave">
+              {zeradoEm ? 'desde a limpeza do painel' : 'do mês corrente'}
+            </strong>
             {' · '}o último atendimento é o mais recente de cada pessoa, de qualquer data
           </p>
         </div>
@@ -375,10 +381,29 @@ export default function RankingEquipe() {
         </div>
       ) : lista.length === 0 ? (
         <div className="py-12 text-center">
-          <p className="text-sm font-semibold text-texto-suave">Ninguém atendeu neste mês ainda.</p>
-          <p className="text-[11px] text-texto-fraco mt-1">
-            A lista se preenche conforme os atendimentos forem assumidos.
-          </p>
+          {/* A LISTA VAZIA TEM DUAS CAUSAS DIFERENTES, e dizer a errada e pior
+              do que nao dizer nada. Sem limpeza, ninguem atendeu mesmo. COM
+              limpeza, atenderam sim -- a contagem e que recomecou agora, e
+              "ninguem atendeu neste mes" seria uma afirmacao falsa sobre o
+              trabalho da equipe, na tela que existe para medir esse trabalho. */}
+          {zeradoEm ? (
+            <>
+              <p className="text-sm font-semibold text-texto-suave">
+                A contagem recomeçou em {textoZeramento(zeradoEm)}.
+              </p>
+              <p className="text-[11px] text-texto-fraco mt-1">
+                Os atendimentos anteriores continuam no sistema — a lista volta a
+                se preencher com os próximos.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-semibold text-texto-suave">Ninguém atendeu neste mês ainda.</p>
+              <p className="text-[11px] text-texto-fraco mt-1">
+                A lista se preenche conforme os atendimentos forem assumidos.
+              </p>
+            </>
+          )}
         </div>
       ) : (
         <ol className="space-y-2">
