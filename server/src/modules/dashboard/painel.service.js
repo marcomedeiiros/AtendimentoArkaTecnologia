@@ -27,6 +27,7 @@ const equipeService = require("../equipe/equipe.service");
 const configuracaoService = require("../configuracoes/configuracao.service");
 const { podeAcessarSetor } = require("../../shared/helpers/setor.helper");
 const { ehAtendenteReal } = require("../../shared/helpers/atendimentoSintetico.helper");
+const { nomesDaEquipe } = require("../../shared/helpers/equipeRanking.helper");
 const logger = require("../../config/logger");
 
 // Quantos tecnicos entram no ranking. Tres cabe na tela e ainda e disputavel:
@@ -184,7 +185,12 @@ class PainelService {
     const desdeMes = maisRecente(inicioDoMes(), zerado);
     const desdeHoje = maisRecente(inicioDoDia(), zerado);
 
-    const [doMes, fechadosHoje, fila, equipe, meta, carga] = await Promise.all([
+    const [daSede, doMes, fechadosHoje, fila, equipe, meta, carga] = await Promise.all([
+      // QUEM CONCORRE NA SEDE. A parede mostra o ranking de atendimento da
+      // sede: sem este recorte ela coroava como lider do mes quem nao esta
+      // inscrito na competicao -- e discordava, na mesma sala, da tabela que a
+      // Visao Geral mostrava.
+      nomesDaEquipe(prisma, "sede"),
       // So o que o ranking e os tempos precisam. Sem `include`: mensagem
       // nenhuma entra nesta consulta.
       prisma.atendimento.findMany({
@@ -237,7 +243,7 @@ class PainelService {
         rotulo: zerado ? "desde a limpeza" : "mês corrente",
         zeradoEm: zerado ? zerado.toISOString() : null,
       },
-      ranking: this._ranking(doMes),
+      ranking: this._ranking(doMes, { equipe: daSede }),
       csat: this._csat(doMes),
       tempos: this._tempos(doMes),
       hoje: { fechados: fechadosHoje, meta },
@@ -266,7 +272,7 @@ class PainelService {
    * ainda nao tem tres notas pontua ZERO nessa parcela, e a tela diz que esta
    * faltando (ver `aCaminho`), em vez de fingir que a pessoa e ruim de nota.
    */
-  _ranking(atendimentos, { limite = TOP, incluirZerados = false } = {}) {
+  _ranking(atendimentos, { limite = TOP, incluirZerados = false, equipe = null } = {}) {
     const porPessoa = new Map();
     for (const a of atendimentos) {
       // SO GENTE ENTRA NO RANKING DE GENTE.
@@ -281,6 +287,16 @@ class PainelService {
       // atendimento fechado e um ponto, e subia na lista junto com a equipe.
       const nome = a.atendenteNome || null;
       if (!ehAtendenteReal(nome)) continue;
+      // SO CONCORRE QUEM FOI INSCRITO NA COMPETICAO.
+      //
+      // O corte e AQUI, na entrada, e nao depois de classificar: assim ele vale
+      // tambem para o "a caminho da nota" e para o destaque do mes, que saem do
+      // mesmo agrupamento. Cortando so a lista final, a parede continuaria
+      // anunciando gente de fora do ranking no rodape e no podio.
+      //
+      // Conjunto VAZIO nao filtra nada -- e antes de alguem marcar a equipe em
+      // Gestao da Equipe, um filtro vazio apagaria a parede inteira.
+      if (equipe && equipe.size && !equipe.has(nome)) continue;
       if (!porPessoa.has(nome)) porPessoa.set(nome, { nome, fechados: 0, notas: [], assumir: [] });
       const p = porPessoa.get(nome);
       if (a.status === "fechada") p.fechados += 1;
@@ -401,6 +417,9 @@ class PainelService {
     const { classificacao, minimoAvaliacoes, pesos } = this._ranking(doMes, {
       limite: Number.MAX_SAFE_INTEGER,
       incluirZerados: true,
+      // O mesmo recorte da parede, pelo mesmo motivo: e o ranking de
+      // atendimento da SEDE, e nao "todo mundo que ja fechou uma OS".
+      equipe: await nomesDaEquipe(prisma, "sede"),
     });
 
     const comUltimo = await Promise.all(

@@ -136,6 +136,47 @@ async function main() {
     `as parcelas somam o total exibido (${anaAqui.pontos})`
   );
 
+  /**
+   * 1b. A PAREDE MOSTRA O MESMO RANKING QUE A VISAO GERAL.
+   *
+   * O defeito que isto tranca: a TV coroava "Davi" como lider do mes -- 9
+   * atendimentos, nota 5 -- enquanto a tabela da Visao Geral, na sala ao lado,
+   * mostrava outro primeiro colocado. Davi nao esta inscrito em ranking nenhum;
+   * o recorte por equipe existia so no modulo de rankings, e a parede somava
+   * todo mundo que tivesse fechado uma OS.
+   *
+   * Duas telas com a mesma pontuacao e podios diferentes e pior do que nao ter
+   * ranking: a equipe acredita na que esta pendurada na parede.
+   */
+  titulo("1b. A PAREDE E A VISAO GERAL MOSTRAM O MESMO PODIO");
+
+  const parede = await painelService.obter();
+  const nomesNaParede = parede.ranking.classificacao.map((p) => p.nome);
+  check(
+    !nomesNaParede.includes(davi.nome),
+    `quem nao esta inscrito fica fora da parede (${davi.nome} nao aparece)`
+  );
+  check(
+    !parede.ranking.aCaminho.some((p) => p.nome === davi.nome),
+    "e tambem fora do 'a caminho da nota', que sai do mesmo agrupamento"
+  );
+  check(
+    nomesNaParede.every((n) => sede.classificacao.some((p) => p.nome === n)),
+    `todo nome da parede esta no ranking da sede (${nomesNaParede.join(", ")})`
+  );
+  // O PODIO, na ordem: nao basta serem as mesmas pessoas.
+  const topSede = sede.classificacao.filter((p) => p.pontos > 0).slice(0, 3).map((p) => p.nome);
+  check(
+    JSON.stringify(nomesNaParede) === JSON.stringify(topSede),
+    `mesma ordem nas duas telas (parede: ${nomesNaParede.join(" > ")})`
+  );
+  const lider = parede.ranking.classificacao[0];
+  const liderNaVisao = sede.classificacao.find((p) => p.nome === lider?.nome);
+  check(
+    !!lider && lider.pontos === liderNaVisao?.pontos,
+    `e o lider tem os mesmos pontos nas duas (${lider?.nome}: ${lider?.pontos})`
+  );
+
   titulo("2. QUEM SUPERVISIONA E O ADMINISTRADOR, PELO CARGO");
   // Nao ha mais marca de supervisor no cadastro: o administrador ja tem acesso
   // a tudo, e uma segunda marca dizendo a mesma coisa so criava um jeito de as
