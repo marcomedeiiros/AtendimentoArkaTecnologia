@@ -9,6 +9,7 @@ const {
   criarMapeamentoSchema,
   atualizarMapeamentoSchema,
   analisarMapeamentoSchema,
+  regrasRelatorioSchema,
   validarMapeamentoSchema,
   premiacaoSchema,
 } = require("./ranking.dto");
@@ -98,6 +99,17 @@ router.post("/mapeamentos/:id/validar", exigirRelatorioDeVisita, validate(valida
   controller.validarMapeamento(req, res).catch(next)
 );
 router.delete("/mapeamentos/:id", exigirRelatorioDeVisita, (req, res, next) => controller.removerMapeamento(req, res).catch(next));
+
+// ── CONFIGURACAO DOS RELATORIOS. So ADMINISTRADOR, nos dois verbos.
+//
+// Ler tambem e restrito: a tela expoe os pesos da pontuacao e os limites, e
+// quem e avaliado saber a regua exata antes de ela ser anunciada e diferente de
+// a empresa comunicar a regra. Quem precisa da regra para trabalhar (prazo,
+// se o PDF e obrigatorio) recebe pelo /mapeamentos/analisar, sem os pesos.
+router.get("/configuracao", adminMiddleware, (req, res, next) => controller.obterRegras(req, res).catch(next));
+router.put("/configuracao", adminMiddleware, validate(regrasRelatorioSchema), (req, res, next) =>
+  controller.salvarRegras(req, res).catch(next)
+);
 
 // ── PREMIACAO. So administrador: e o registro do que foi pago a quem.
 router.get("/premiacoes", exigirModulo("rankings"), (req, res, next) => controller.listarPremiacoes(req, res).catch(next));

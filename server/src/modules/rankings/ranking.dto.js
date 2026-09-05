@@ -51,7 +51,10 @@ const criarMapeamentoSchema = z.object({
   empresa: z.string().trim().min(2, "Informe a empresa visitada").max(160),
   cnpj: z.string().optional().nullable(),
   dataVisita: z.string().min(8, "Informe a data da visita"),
-  prazoEm: z.string().min(8, "Informe o prazo de entrega"),
+  // Opcional: sem ele, o servidor aplica a regra da empresa (prazo por
+  // relatorio, e o vencimento mensal quando houver). Era obrigatorio quando o
+  // unico caminho era a tela digitar o valor.
+  prazoEm: z.string().min(8).optional().nullable(),
   resumo: z.string().max(4000).optional(),
   itens: itensSchema,
   pendencias: z.string().max(4000).optional().nullable(),
@@ -71,6 +74,30 @@ const atualizarMapeamentoSchema = criarMapeamentoSchema.partial().refine(
   (d) => Object.keys(d).length > 0,
   { message: "Nada para atualizar" }
 );
+
+/**
+ * A CONFIGURACAO DOS RELATORIOS.
+ *
+ * Aqui so a FORMA (tipo e faixa grosseira). A regra de verdade -- pesos que
+ * somam 100, item de checklist sem palavra nenhuma, dia 30 que nao existe em
+ * fevereiro -- fica em `relatorio.regras.validar`, que e chamado tanto ao gravar
+ * quanto ao LER. Defesa em profundidade: um valor editado direto no banco
+ * tambem passa por la antes de virar pontuacao.
+ *
+ * Tudo opcional: a tela pode salvar so o campo que mexeu, e o que nao veio
+ * mantem o valor atual.
+ */
+const regrasRelatorioSchema = z.object({
+  prazoDias: z.number().int().min(1).max(90).optional(),
+  vencimentoDiaDoMes: z.number().int().min(1).max(28).nullable().optional(),
+  exigirPdf: z.boolean().optional(),
+  minimoRelatorios: z.number().int().min(1).max(20).optional(),
+  custoPorDevolucao: z.number().int().min(0).max(25).optional(),
+  pesos: z.record(z.string(), z.number().int().min(0).max(100)).optional(),
+  // Lista ou texto separado por virgula -- a tela usa um campo de texto por
+  // item, e obrigar o front a partir a string so moveria a mesma regra de lugar.
+  palavras: z.record(z.string(), z.union([z.array(z.string()), z.string()])).optional(),
+});
 
 const validarMapeamentoSchema = z.object({
   aprovado: z.boolean(),
@@ -97,6 +124,7 @@ module.exports = {
   criarMapeamentoSchema,
   atualizarMapeamentoSchema,
   analisarMapeamentoSchema,
+  regrasRelatorioSchema,
   validarMapeamentoSchema,
   premiacaoSchema,
 };

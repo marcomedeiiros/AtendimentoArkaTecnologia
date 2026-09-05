@@ -22,7 +22,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   ClipboardList, Plus, Loader2, AlertCircle, Camera, CheckCircle2, RotateCcw,
   Clock, Building2, X, Save, Send, Trash2, ShieldCheck, FileText,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, SlidersHorizontal, Trophy,
 } from 'lucide-react';
 import { RankingsAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -39,10 +39,12 @@ const STATUS_META = {
 };
 
 const hojeISO = () => new Date().toISOString().slice(0, 10);
-// Prazo padrão: 3 dias após a visita. Sugestão, não regra -- o campo é editável.
-function prazoSugerido(dataVisita) {
+// Prazo sugerido: N dias após a visita. O N vem da CONFIGURAÇÃO (o servidor
+// manda junto com a leitura do PDF); o 3 aqui é só o valor de partida para o
+// formulário aberto antes de qualquer leitura.
+function prazoSugerido(dataVisita, dias = 3) {
   const d = new Date(`${dataVisita || hojeISO()}T12:00:00`);
-  d.setDate(d.getDate() + 3);
+  d.setDate(d.getDate() + dias);
   return d.toISOString().slice(0, 10);
 }
 
@@ -105,6 +107,12 @@ function ModalMapeamento({ itensRegra, inicial, onFechar, onSalvo }) {
   // Os campos que o PDF preenche sozinho ficam escondidos até alguém pedir.
   // Eles continuam existindo para o caso de um PDF que a leitura não entendeu.
   const [manual, setManual] = useState(false);
+  // As regras da empresa que a TELA precisa saber (prazo em dias, e se o PDF é
+  // obrigatório para entregar). Vêm junto com a leitura do PDF: o técnico não
+  // tem acesso à tela de Configuração, mas precisa saber o que ela decidiu
+  // para ele -- descobrir a regra pelo erro ao clicar em Entregar é o pior
+  // jeito possível.
+  const [regras, setRegras] = useState(null);
 
   // A MESMA conta do servidor: itens preenchidos + resumo com pelo menos 20
   // caracteres, sobre o total. Espelhada aqui para o número aparecer enquanto
@@ -195,16 +203,24 @@ function ModalMapeamento({ itensRegra, inicial, onFechar, onSalvo }) {
       if (r.empresa && !empresa.trim()) setEmpresa(r.empresa);
       if (r.dataVisita) {
         setDataVisita(r.dataVisita);
-        // O PRAZO NÃO PODE NASCER VENCIDO.
+        // O PRAZO SAI DA REGRA DA EMPRESA, calculada pelo servidor -- ele
+        // combina o prazo por relatório com o vencimento mensal, quando existe.
+        // Repetir essa conta aqui criaria uma segunda regra para manter em dia.
         //
-        // Quando o relatório traz só mês e ano, a data da visita cai no dia 1º
-        // -- e "1º + 3 dias" já passou faz tempo para quem está lançando no fim
-        // do mês. O quadro abria escrito "vencido" antes de a pessoa digitar
-        // qualquer coisa, acusando um atraso que ninguém sabe se houve.
-        //
-        // Com dia presumido, a sugestão sai de HOJE. O campo continua editável:
-        // quem sabe a data real corrige, e aí o atraso (se existir) é de verdade.
-        if (!edicao) setPrazoEm(prazoSugerido(r.dataDiaPresumido ? hojeISO() : r.dataVisita));
+        // E ELE NÃO PODE NASCER VENCIDO: quando o relatório traz só mês e ano, a
+        // visita cai no dia 1º, e "1º + N dias" já passou faz tempo para quem
+        // lança no fim do mês. O quadro abria escrito "vencido" antes de a
+        // pessoa digitar qualquer coisa, acusando um atraso que ninguém sabe se
+        // houve. Com dia presumido, a sugestão sai de HOJE.
+        if (!edicao) {
+          const dias = r.regras?.prazoDias ?? 3;
+          setPrazoEm(
+            r.dataDiaPresumido || !r.prazoSugerido
+              ? prazoSugerido(hojeISO(), dias)
+              : r.prazoSugerido
+          );
+        }
+        if (r.regras) setRegras(r.regras);
       }
     } catch (e2) {
       setAnalise({ lido: false, motivo: e2?.message || 'Não foi possível ler o PDF.' });
@@ -215,11 +231,18 @@ function ModalMapeamento({ itensRegra, inicial, onFechar, onSalvo }) {
 
   const salvar = async (entregar) => {
     if (!empresa.trim()) { setErro('Informe a empresa visitada.'); return; }
+    // A regra é do servidor, que recusa de qualquer jeito. Isto aqui existe
+    // para a pessoa não montar o registro inteiro e só descobrir a exigência no
+    // clique final -- e ainda oferece o caminho que funciona (rascunho).
+    if (entregar && regras?.exigirPdf && !pdf && !pdfSalvo) {
+      setErro('A empresa exige o relatório em PDF para entregar. Anexe o arquivo ou salve como rascunho.');
+      return;
+    }
     if (entregar) {
       const ok = await confirmar(
-        `O relatório entra na contagem de ${data(dataVisita)} e passa para a validação do supervisor. ` +
-        `Você ainda pode corrigir enquanto ele não aprovar, mas a data de entrega não muda depois` +
-        `é ela que define se ficou dentro do prazo.`,
+        `O relatório entra na contagem de ${data(dataVisita)} e passa para a validação do supervisor ` +
+        `você ainda pode corrigir enquanto ele não aprovar, mas a data de entrega não muda depois` +
+        `é ela que define se ficou dentro do prazo`,
         { titulo: 'Entregar o mapeamento?', rotuloConfirmar: 'Entregar', rotuloCancelar: 'Continuar editando' }
       );
       if (!ok) return;
@@ -632,9 +655,228 @@ function Historico({ lista, mostrarTecnico }) {
   );
 }
 
+/**
+ * CONFIGURAÇÃO DOS RELATÓRIOS -- as regras que o administrador define.
+ *
+ * ── O QUE ENTRA AQUI ───────────────────────────────────────────────────────
+ *
+ * O que é POLÍTICA da empresa e antes só mudava com deploy: quanto tempo se tem
+ * para entregar, quanto cada coisa vale na nota, quantos relatórios já permitem
+ * julgar alguém, e o vocabulário que a leitura do PDF procura.
+ *
+ * ── E O QUE NÃO ENTRA ──────────────────────────────────────────────────────
+ *
+ * A fórmula. O jeito de somar as parcelas continua no servidor, fechado: peso é
+ * decisão de negócio, mas "como se calcula" é decisão de engenharia -- e abrir
+ * as duas na mesma tela é como ninguém mais conseguir explicar o número.
+ */
+/**
+ * FORA do componente de propósito -- e isso não é estilo, é correção.
+ *
+ * `Campo` estava definido DENTRO de `Configuracao`. A cada render ele virava um
+ * tipo de componente novo, e o React desmontava e remontava toda a árvore de
+ * campos: o cursor pulava do input a cada tecla, e uma alteração feita logo
+ * depois de outra era perdida porque o nó anterior já tinha sido descartado.
+ *
+ * Foi assim que "mudar o prazo de 7 para 5" salvou 7.
+ */
+function Campo({ rotulo, dica, children }) {
+  return (
+    <div>
+      <label className="text-[11px] font-semibold text-texto-suave block mb-1">{rotulo}</label>
+      {children}
+      {dica && <p className="text-[10px] text-texto-fraco mt-1 leading-relaxed">{dica}</p>}
+    </div>
+  );
+}
+
+const ENTRADA = 'w-full bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto focus:outline-none focus:border-acao/50';
+
+function Configuracao() {
+  const [dados, setDados] = useState(null);
+  const [rascunho, setRascunho] = useState(null);
+  const [carregando, setCarregando] = useState(true);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState('');
+
+  useEffect(() => {
+    let vivo = true;
+    RankingsAPI.configuracaoRelatorios()
+      .then((d) => { if (vivo) { setDados(d); setRascunho(d.regras); } })
+      .catch((e) => { if (vivo) setErro(e?.message || 'Não foi possível carregar.'); })
+      .finally(() => { if (vivo) setCarregando(false); });
+    return () => { vivo = false; };
+  }, []);
+
+  const mexer = (campo, valor) => { setErro(''); setRascunho((r) => ({ ...r, [campo]: valor })); };
+  const mexerPeso = (chave, valor) =>
+    setRascunho((r) => ({ ...r, pesos: { ...r.pesos, [chave]: Math.max(0, Math.min(100, Number(valor) || 0)) } }));
+
+  const somaPesos = useMemo(
+    () => Object.values(rascunho?.pesos || {}).reduce((a, b) => a + Number(b || 0), 0),
+    [rascunho]
+  );
+
+  const salvar = async () => {
+    setSalvando(true);
+    setErro('');
+    try {
+      const salvo = await RankingsAPI.salvarConfiguracaoRelatorios(rascunho);
+      setRascunho(salvo);
+      setDados((d) => ({ ...d, regras: salvo }));
+      avisar('As novas regras já valem para o ranking do mês.', { titulo: 'Configuração salva', tipo: 'info' });
+    } catch (e) {
+      setErro(e?.message || 'Não foi possível salvar.');
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const restaurar = async () => {
+    const ok = await confirmar(
+      'Todas as regras voltam ao padrão do sistema: prazo de 3 dias, os pesos originais e o vocabulário de fábrica.',
+      { titulo: 'Restaurar o padrão?', rotuloConfirmar: 'Restaurar', perigo: true }
+    );
+    if (ok) { setRascunho(dados.padrao); setErro(''); }
+  };
+
+  if (carregando) {
+    return <div className="glass-panel border border-linha rounded-2xl py-14 grid place-items-center">
+      <Loader2 size={22} className="animate-spin text-acao" />
+    </div>;
+  }
+  if (!rascunho) {
+    return <div className="glass-panel border border-linha rounded-2xl p-6 text-center text-xs text-falha-400">{erro || 'Sem dados.'}</div>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {erro && (
+        <div className="flex items-center gap-2 p-3 rounded-xl bg-falha/10 border border-falha/30 text-falha-400 text-xs">
+          <AlertCircle size={14} className="shrink-0" /> {erro}
+        </div>
+      )}
+
+      <div className="glass-panel border border-linha rounded-2xl p-4 sm:p-5 space-y-4">
+        <p className="text-[11px] font-bold text-acao-200 flex items-center gap-1.5">
+          <Clock size={13} /> Prazos
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Campo rotulo="Prazo de entrega (dias após a visita)"
+            dica="É o prazo de cada relatório. Ele decide a parcela “no prazo” da pontuação.">
+            <input type="number" min={1} max={90} className={ENTRADA}
+              value={rascunho.prazoDias}
+              onChange={(e) => mexer('prazoDias', Number(e.target.value))} />
+          </Campo>
+          <Campo rotulo="Vencimento mensal (dia do mês seguinte)"
+            dica="Todos os relatórios de um mês precisam estar entregues até esse dia do mês seguinte. Vazio = a empresa não usa essa regra. Valendo as duas, vale a mais apertada.">
+            <input type="number" min={1} max={28} placeholder="não usar" className={ENTRADA}
+              value={rascunho.vencimentoDiaDoMes ?? ''}
+              onChange={(e) => mexer('vencimentoDiaDoMes', e.target.value === '' ? null : Number(e.target.value))} />
+          </Campo>
+        </div>
+        <label className="flex items-start gap-2 cursor-pointer">
+          <input type="checkbox" className="mt-0.5 accent-acao"
+            checked={!!rascunho.exigirPdf}
+            onChange={(e) => mexer('exigirPdf', e.target.checked)} />
+          <span>
+            <span className="text-[11px] font-semibold text-texto-suave block">Exigir o PDF anexado para entregar</span>
+            <span className="text-[10px] text-texto-fraco">
+              Vale só na entrega o rascunho continua podendo ser salvo sem arquivo, para a pessoa começar o registro e voltar depois.
+            </span>
+          </span>
+        </label>
+      </div>
+
+      <div className="glass-panel border border-linha rounded-2xl p-4 sm:p-5 space-y-4">
+        <p className="text-[11px] font-bold text-acao-200 flex items-center gap-1.5">
+          <Trophy size={13} /> Pontuação
+        </p>
+        {/* O AVISO QUE PRECISA ESTAR AQUI: o histórico é recalculado a cada
+            consulta, então mexer nos pesos muda também os meses passados -- e a
+            premiação já registrada continua apontando para a posição antiga. */}
+        <p className="text-[10px] text-espera-400 leading-relaxed border border-espera/30 bg-espera/10 rounded-xl p-2.5">
+          O ranking é recalculado a cada consulta, então mudar os pesos muda também os
+          <strong> meses já passados</strong>. Premiações já registradas continuam como estão.
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {Object.entries(rascunho.pesos).map(([chave, valor]) => (
+            <Campo key={chave} rotulo={{
+              volume: 'Volume', completude: 'Completude', prazo: 'Prazo',
+              evidencias: 'Evidências', retrabalho: 'Retrabalho',
+            }[chave] || chave}>
+              <input type="number" min={0} max={100} className={ENTRADA}
+                value={valor} onChange={(e) => mexerPeso(chave, e.target.value)} />
+            </Campo>
+          ))}
+          <div className={`rounded-xl border p-2.5 text-center self-end ${somaPesos === 100 ? 'border-ativo/40 bg-ativo/10' : 'border-falha/40 bg-falha/10'}`}>
+            <p className="text-[10px] uppercase tracking-wider text-texto-fraco font-bold">Soma</p>
+            <p className={`font-display font-extrabold text-lg ${somaPesos === 100 ? 'text-ativo-400' : 'text-falha-400'}`}>
+              {somaPesos}
+            </p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Campo rotulo="Mínimo de relatórios no mês"
+            dica="Abaixo disso, as parcelas de qualidade (completude, prazo e evidências) não contam. Impede que uma única visita perfeita lidere o mês.">
+            <input type="number" min={1} max={20} className={ENTRADA}
+              value={rascunho.minimoRelatorios}
+              onChange={(e) => mexer('minimoRelatorios', Number(e.target.value))} />
+          </Campo>
+          <Campo rotulo="Desconto por devolução"
+            dica="Quanto cada devolução para correção tira da parcela de retrabalho, até zerá-la.">
+            <input type="number" min={0} max={25} className={ENTRADA}
+              value={rascunho.custoPorDevolucao}
+              onChange={(e) => mexer('custoPorDevolucao', Number(e.target.value))} />
+          </Campo>
+        </div>
+      </div>
+
+      <div className="glass-panel border border-linha rounded-2xl p-4 sm:p-5 space-y-3">
+        <p className="text-[11px] font-bold text-acao-200 flex items-center gap-1.5">
+          <FileText size={13} /> Leitura do PDF
+        </p>
+        <p className="text-[10px] text-texto-fraco leading-relaxed">
+          Um item do checklist é dado como coberto quando o relatório traz alguma destas palavras.
+          É o ajuste mais provável: cada empresa escreve o relatório com o vocabulário dela, e um item
+          que nunca casa vira completude perdida sem ninguém entender por quê. Separe por vírgula
+          deixar em branco devolve as palavras padrão.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {(dados.itens || []).map((i) => (
+            <Campo key={i.chave} rotulo={i.rotulo}>
+              <input className={ENTRADA}
+                value={(rascunho.palavras?.[i.chave] || []).join(', ')}
+                onChange={(e) => setRascunho((r) => ({
+                  ...r,
+                  palavras: { ...r.palavras, [i.chave]: e.target.value.split(',').map((p) => p.trim()).filter(Boolean) },
+                }))} />
+            </Campo>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <button onClick={restaurar} disabled={salvando}
+          className="px-3 py-2 rounded-xl bg-grafite-700 border border-linha text-texto-suave text-[11px] font-bold hover:border-linha-forte disabled:opacity-50 flex items-center gap-1.5">
+          <RotateCcw size={12} /> Restaurar o padrão
+        </button>
+        <button onClick={salvar} disabled={salvando || somaPesos !== 100}
+          title={somaPesos !== 100 ? 'Os pesos precisam somar 100' : undefined}
+          className="px-4 py-2 rounded-xl bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold disabled:opacity-50 flex items-center gap-1.5">
+          {salvando ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Salvar regras
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const ABAS = [
   { id: 'mapeamentos', rotulo: 'Mapeamentos', Icon: ClipboardList },
   { id: 'historico', rotulo: 'Histórico de relatórios', Icon: FileText },
+  // Só administrador. O servidor recusa os outros nos dois verbos -- isto aqui
+  // decide o que desenhar, não quem pode.
+  { id: 'configuracao', rotulo: 'Configuração', Icon: SlidersHorizontal, soAdmin: true },
 ];
 
 export default function Mapeamentos() {
@@ -747,8 +989,8 @@ export default function Mapeamentos() {
                 melhor a tela dizer isso do que a pessoa descobrir estranhando
                 a lista curta (ou a lista com nome dos outros). */}
             {ehSupervisor
-              ? 'Visitas fora da sede daqui sai a pontuação do ranking externo. Como administrador, você vê os relatórios de toda a equipe.'
-              : 'Visitas fora da sede daqui sai a pontuação do ranking externo. Você vê apenas os relatórios que enviou.'}
+              ? 'Visitas fora da sede daqui sai a pontuação do ranking externo (como administrador, você vê os relatórios de toda a equipe)'
+              : 'Visitas fora da sede daqui sai a pontuação do ranking externo (você vê apenas os relatórios que enviou)'}
           </p>
         </div>
         {/* O botão só na aba de lançamento: no histórico ele leria como "novo
@@ -760,7 +1002,7 @@ export default function Mapeamentos() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        {ABAS.map(({ id, rotulo, Icon }) => (
+        {ABAS.filter((a) => !a.soAdmin || ehSupervisor).map(({ id, rotulo, Icon }) => (
           <button
             key={id}
             onClick={() => setAba(id)}
@@ -781,7 +1023,9 @@ export default function Mapeamentos() {
         </div>
       )}
 
-      {aba === 'historico' ? (
+      {aba === 'configuracao' && ehSupervisor ? (
+        <Configuracao />
+      ) : aba === 'historico' ? (
         carregando ? (
           <div className="glass-panel border border-linha rounded-2xl py-14 grid place-items-center">
             <Loader2 size={22} className="animate-spin text-acao" />

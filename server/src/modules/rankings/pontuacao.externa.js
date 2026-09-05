@@ -141,31 +141,63 @@ function noPrazo(m) {
  * uma conta visivel, e quem esta em terceiro precisa saber em qual parcela
  * perdeu. Um numero unico nao responde nem uma coisa nem outra.
  *
+ * ── OS NUMEROS PODEM VIR DA CONFIGURACAO ───────────────────────────────────
+ *
+ * `regras` traz o que o administrador define na tela de Configuracao de
+ * relatorios: pesos, minimo de relatorios e desconto por devolucao. Ausente,
+ * valem as constantes deste arquivo -- que continuam sendo a FONTE do padrao, e
+ * nao uma copia dele.
+ *
+ * A FORMULA nao vem de fora. O jeito de somar as parcelas continua aqui,
+ * fechado: peso e decisao de negocio, mas "como se calcula" e decisao de
+ * engenharia, e abrir as duas na mesma tela e como ninguem mais conseguir
+ * explicar por que o numero deu aquilo.
+ *
  * @param {Array} lista mapeamentos ENTREGUES da pessoa no mes
+ * @param {object} [regras] pesos e limites vindos da configuracao
  */
-function pontuarExterno(lista) {
+function pontuarExterno(lista, regras = null) {
+  const pesos = { ...PESOS, ...(regras?.pesos || {}) };
+  const minimo = regras?.minimoRelatorios ?? MINIMO_MAPEAMENTOS;
+  const custoDevolucao = regras?.custoPorDevolucao ?? CUSTO_POR_DEVOLUCAO;
   // So o que ja saiu da mao do tecnico entra na conta: rascunho e trabalho em
   // andamento, e pontuar rascunho premiaria abrir formulario.
   const entregues = lista.filter((m) => m.status !== "rascunho");
   const aprovados = entregues.filter((m) => m.status === "aprovado");
-  const temAmostra = entregues.length >= MINIMO_MAPEAMENTOS;
+  const temAmostra = entregues.length >= minimo;
 
-  const ptsVolume = faixa(FAIXAS_VOLUME, aprovados.length);
+  /**
+   * AS FAIXAS ESCALAM COM O PESO.
+   *
+   * FAIXAS_VOLUME e FAIXAS_EVIDENCIAS foram escritas para os tetos padrao (25 e
+   * 15). Se o administrador der 40 a volume e a faixa continuasse cravada em 25,
+   * mexer no peso nao mudaria quase nada e a tela passaria a mentir sobre a
+   * propria regra -- "volume vale 40" com o maximo real em 25.
+   *
+   * Reescalar mantem a FORMA da faixa (os degraus, e onde eles ficam) e muda so
+   * o quanto ela vale no total, que e exatamente o que o peso significa.
+   */
+  const escalar = (pontos, tetoPadrao, tetoAtual) =>
+    tetoPadrao === tetoAtual ? pontos : Math.round((pontos / tetoPadrao) * tetoAtual);
+
+  const ptsVolume = escalar(faixa(FAIXAS_VOLUME, aprovados.length), PESOS.volume, pesos.volume);
 
   const mediaCompletude = media(entregues.map(completudeDe));
-  const ptsCompletude = temAmostra ? Math.round(mediaCompletude * PESOS.completude) : 0;
+  const ptsCompletude = temAmostra ? Math.round(mediaCompletude * pesos.completude) : 0;
 
   const proporcaoPrazo = entregues.length ? entregues.filter(noPrazo).length / entregues.length : 0;
-  const ptsPrazo = temAmostra ? Math.round(proporcaoPrazo * PESOS.prazo) : 0;
+  const ptsPrazo = temAmostra ? Math.round(proporcaoPrazo * pesos.prazo) : 0;
 
   const mediaEvidencias = media(entregues.map(quantidadeEvidencias));
-  const ptsEvidencias = temAmostra ? faixa(FAIXAS_EVIDENCIAS, mediaEvidencias) : 0;
+  const ptsEvidencias = temAmostra
+    ? escalar(faixa(FAIXAS_EVIDENCIAS, mediaEvidencias), PESOS.evidencias, pesos.evidencias)
+    : 0;
 
   const devolucoes = entregues.reduce((s, m) => s + (Number(m.devolucoes) || 0), 0);
   // Sem nenhum mapeamento nao ha retrabalho a premiar: a parcela cheia iria
   // para quem nao trabalhou, que e o oposto do que ela mede.
   const ptsRetrabalho = entregues.length
-    ? Math.max(0, PESOS.retrabalho - devolucoes * CUSTO_POR_DEVOLUCAO)
+    ? Math.max(0, pesos.retrabalho - devolucoes * custoDevolucao)
     : 0;
 
   return {

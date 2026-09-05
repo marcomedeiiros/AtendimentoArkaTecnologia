@@ -439,7 +439,7 @@ export default function EquipePage() {
                      textura. No `title` ela continua a um segundo de distância
                      de quem tiver a dúvida. */
                   title={
-                    'Marque as duas quando a pessoa atende no chat e também visita cliente — ' +
+                    'Marque as duas quando a pessoa atende no chat e também visita cliente ' +
                     'cada função é medida pelo critério dela, e as pontuações não se somam. ' +
                     'Administrador valida os relatórios e registra as premiações, e ainda ' +
                     'concorre nos rankings marcados.'

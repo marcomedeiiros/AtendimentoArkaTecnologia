@@ -604,6 +604,12 @@ export const RankingsAPI = {
   // Nao cria nada: a resposta e SUGESTAO para o formulario, e quem confirma e
   // a pessoa. O arquivo sobe de novo no salvar -- aqui nada fica guardado.
   analisarMapeamento: (arquivo) => request('/rankings/mapeamentos/analisar', { method: 'POST', body: JSON.stringify({ arquivo }) }),
+  // CONFIGURACAO dos relatorios -- so administrador (o servidor recusa os
+  // outros nos dois verbos, inclusive na leitura: a tela expoe os pesos da
+  // pontuacao, e quem e avaliado nao descobre a regua antes de ela ser
+  // anunciada.
+  configuracaoRelatorios: () => request('/rankings/configuracao'),
+  salvarConfiguracaoRelatorios: (regras) => request('/rankings/configuracao', { method: 'PUT', body: JSON.stringify(regras) }),
   criarMapeamento: (dados) => request('/rankings/mapeamentos', { method: 'POST', body: JSON.stringify(dados) }),
   atualizarMapeamento: (id, dados) => request(`/rankings/mapeamentos/${id}`, { method: 'PATCH', body: JSON.stringify(dados) }),
   validarMapeamento: (id, dados) => request(`/rankings/mapeamentos/${id}/validar`, { method: 'POST', body: JSON.stringify(dados) }),

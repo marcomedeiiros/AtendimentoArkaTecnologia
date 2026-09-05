@@ -179,11 +179,15 @@ for (const item of ITENS_MAPEAMENTO) {
   }
 }
 
-function coberturaDoTexto(texto) {
+function coberturaDoTexto(texto, vocabulario = null) {
   const t = chave(texto);
   const out = {};
   for (const item of ITENS_MAPEAMENTO) {
-    const palavras = PALAVRAS[item.chave] || [];
+    // O vocabulario pode vir da CONFIGURACAO (o administrador ajusta as palavras
+    // de cada item, porque cada empresa escreve o relatorio com as palavras
+    // dela). Item sem lista propria cai no padrao -- nunca em lista vazia, que
+    // jamais casaria e viraria completude perdida em silencio.
+    const palavras = vocabulario?.[item.chave]?.length ? vocabulario[item.chave] : PALAVRAS[item.chave] || [];
     const achadas = palavras.filter((p) => t.includes(chave(p)));
     out[item.chave] = { coberto: achadas.length > 0, palavras: achadas.slice(0, 4) };
   }
@@ -198,7 +202,7 @@ function coberturaDoTexto(texto) {
  * registrar a visita. Devolve `{ lido: false, motivo }` e a tela cai no
  * preenchimento manual -- o relatorio e a entrega, a leitura e a conveniencia.
  */
-async function analisarRelatorio(caminhoRelativo) {
+async function analisarRelatorio(caminhoRelativo, { palavras = null } = {}) {
   const aberto = await midiaStorage.abrirParaLeitura(caminhoRelativo);
   if (!aberto) return { lido: false, motivo: "Arquivo não encontrado no servidor." };
 
@@ -236,7 +240,7 @@ async function analisarRelatorio(caminhoRelativo) {
   const empresa = valorDoRotulo(linhas, ["cliente", "empresa visitada", "empresa"], ROTULOS);
   const tecnico = valorDoRotulo(linhas, ["tecnico responsavel", "tecnico"], ROTULOS);
   const data = dataDaVisita(linhas, texto);
-  const cobertura = coberturaDoTexto(texto);
+  const cobertura = coberturaDoTexto(texto, palavras);
   const fotos = contarFotos(texto);
 
   return {
@@ -257,4 +261,14 @@ async function analisarRelatorio(caminhoRelativo) {
   };
 }
 
-module.exports = { analisarRelatorio, contarFotos, coberturaDoTexto, dataDaVisita, valorDoRotulo };
+module.exports = {
+  analisarRelatorio,
+  contarFotos,
+  coberturaDoTexto,
+  dataDaVisita,
+  valorDoRotulo,
+  // Publicado para a CONFIGURACAO oferecer "restaurar o padrao" sem repetir a
+  // lista num segundo lugar -- duas listas para a mesma coisa e o comeco da
+  // divergencia.
+  PALAVRAS_PADRAO: PALAVRAS,
+};

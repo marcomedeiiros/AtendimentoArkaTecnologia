@@ -42,6 +42,7 @@
 const prisma = require("../../infrastructure/database/prisma.client");
 const painelService = require("../dashboard/painel.service");
 const { pontuarExterno } = require("./pontuacao.externa");
+const regrasRelatorio = require("./relatorio.regras");
 const AppError = require("../../shared/errors/AppError");
 const logger = require("../../config/logger");
 
@@ -217,14 +218,25 @@ class RankingService {
       select: {
         tecnicoId: true, status: true, resumo: true, itens: true,
         evidencias: true, devolucoes: true, prazoEm: true, entregueEm: true,
+        // `fotosRelatorio` E OBRIGATORIO NESTE SELECT: a parcela de evidencias
+        // conta o maior valor entre as fotos anexadas e as que estao dentro do
+        // PDF. Sem a coluna aqui o campo chega `undefined`, as fotos do
+        // relatorio valem zero, e a nota cai sem nada acusando -- o mesmo
+        // defeito silencioso que o `equipeRanking` ja causou em outro select.
+        fotosRelatorio: true,
       },
     });
 
     const porTecnico = new Map(equipe.map((u) => [u.id, []]));
     for (const m of mapeamentos) porTecnico.get(m.tecnicoId)?.push(m);
 
+    // Os pesos e limites que o administrador definiu. Lidos AQUI, uma vez por
+    // ranking, e nao dentro do laco: sao os mesmos para todo mundo do mes, e ler
+    // por pessoa faria a conta depender de quando cada linha foi calculada.
+    const regras = await regrasRelatorio.obter();
+
     const pessoas = equipe.map((u) => {
-      const p = pontuarExterno(porTecnico.get(u.id) || []);
+      const p = pontuarExterno(porTecnico.get(u.id) || [], regras);
       return {
         usuarioId: u.id,
         nome: u.nome,

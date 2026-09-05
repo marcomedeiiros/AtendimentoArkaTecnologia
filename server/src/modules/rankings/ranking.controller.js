@@ -1,6 +1,7 @@
 const rankingService = require("./ranking.service");
 const mapeamentoService = require("./mapeamento.service");
 const { success } = require("../../shared/helpers/response.helper");
+const regrasRelatorio = require("./relatorio.regras");
 const { ITENS_MAPEAMENTO, PESOS, FAIXAS_VOLUME, FAIXAS_EVIDENCIAS, CUSTO_POR_DEVOLUCAO, MINIMO_MAPEAMENTOS } =
   require("./pontuacao.externa");
 
@@ -57,6 +58,27 @@ class RankingController {
 
   async removerPremiacao(req, res) {
     return success(res, await rankingService.removerPremiacao(req.params.id));
+  }
+
+ // ── configuracao dos relatorios (so administrador) ───────────────────────
+
+  /**
+   * As regras EM VIGOR, mais o PADRAO e o catalogo do checklist.
+   *
+   * O padrao vai junto para a tela poder oferecer "restaurar" sem repetir os
+   * numeros do servidor -- valor de regra copiado no front e o jeito mais
+   * rapido de a tela passar a explicar uma conta que nao e mais a que roda.
+   */
+  async obterRegras(req, res) {
+    return success(res, {
+      regras: await regrasRelatorio.obter(),
+      padrao: regrasRelatorio.padrao(),
+      itens: ITENS_MAPEAMENTO,
+    });
+  }
+
+  async salvarRegras(req, res) {
+    return success(res, await regrasRelatorio.salvar(req.body, req.user));
   }
 
   // ── mapeamentos ──────────────────────────────────────────────────────────

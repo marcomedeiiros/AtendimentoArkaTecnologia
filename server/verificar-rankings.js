@@ -686,6 +686,95 @@ async function main() {
     }
   }
 
+  /**
+   * 8e. A CONFIGURACAO DOS RELATORIOS.
+   *
+   * O que o administrador define passou a mandar de verdade na pontuacao e no
+   * prazo. Isso cria dois riscos, e sao eles que esta secao vigia:
+   *
+   *   uma regra invalida virando nota    pesos que nao somam 100, item de
+   *                                      checklist sem palavra nenhuma;
+   *   a configuracao nao valendo nada    salvar e a conta continuar usando o
+   *                                      padrao, sem ninguem perceber.
+   *
+   * Roda sobre a configuracao REAL, entao guarda o que estava la e devolve no
+   * fim: verificar nao pode mudar a regra da empresa.
+   */
+  titulo("8e. A CONFIGURACAO DOS RELATORIOS MANDA NA CONTA");
+  {
+    const regras = require("./src/modules/rankings/relatorio.regras");
+    const { pontuarExterno: pontuar } = require("./src/modules/rankings/pontuacao.externa");
+    const antes = await prisma.configuracao.findUnique({ where: { chave: regras.CHAVE } });
+    try {
+      const padrao = regras.padrao();
+      check(
+        Object.values(padrao.pesos).reduce((a, b) => a + b, 0) === 100,
+        "o padrao sai das constantes e soma 100"
+      );
+
+      // PESOS INVALIDOS SAO RECUSADOS, e nao aparados em silencio: aparar daria
+      // um quadro salvo diferente do que a pessoa digitou, e ela so descobriria
+      // pela pontuacao do mes.
+      let recusouPesos = false;
+      try {
+        await regras.salvar({ pesos: { volume: 50, completude: 25, prazo: 20, evidencias: 15, retrabalho: 15 } });
+      } catch (e) {
+        recusouPesos = e.code === "PESOS_NAO_SOMAM_100";
+      }
+      check(recusouPesos, "pesos que nao somam 100 sao recusados (400)");
+
+      // Item de checklist sem palavra NUNCA seria dado como coberto -- e a
+      // completude da equipe cairia sem relacao visivel com o campo esvaziado.
+      const semPalavra = await regras.salvar({ palavras: { backup: "" } });
+      check(semPalavra.palavras.backup.length > 0, "item sem palavra volta ao padrao, em vez de nunca casar");
+
+      // O PRAZO: por relatorio e vencimento mensal, valendo a mais apertada.
+      const so = regras.paraISO(regras.prazoDe("2026-09-20", { prazoDias: 3 }));
+      check(so === "2026-09-23", `prazo por relatorio (20/09 + 3 = ${so})`);
+      const mensalManda = regras.paraISO(regras.prazoDe("2026-09-20", { prazoDias: 30, vencimentoDiaDoMes: 5 }));
+      check(mensalManda === "2026-10-05", `o vencimento mensal aperta o prazo longo (${mensalManda})`);
+      const relatorioManda = regras.paraISO(regras.prazoDe("2026-09-01", { prazoDias: 3, vencimentoDiaDoMes: 5 }));
+      check(relatorioManda === "2026-09-04", `e o prazo curto aperta o mensal (${relatorioManda})`);
+
+      // A CONFIGURACAO MUDA A NOTA -- se nao mudasse, a tela seria decoracao.
+      const m = {
+        status: "aprovado", entregueEm: new Date(), prazoEm: new Date(Date.now() + 86400000),
+        resumo: "x".repeat(30), itens: { infraestrutura: "a", servidores: "a" },
+        fotosRelatorio: 3, devolucoes: 0,
+      };
+      const lista = [m, m, m, m];
+      const comPadrao = pontuar(lista);
+      const comVolume = pontuar(lista, { ...padrao, pesos: { volume: 40, completude: 20, prazo: 15, evidencias: 15, retrabalho: 10 } });
+      check(
+        comVolume.volume.pontos > comPadrao.volume.pontos,
+        `peso maior em volume da mais ponto de volume (${comPadrao.volume.pontos} -> ${comVolume.volume.pontos})`
+      );
+      check(
+        comVolume.retrabalho.pontos < comPadrao.retrabalho.pontos,
+        `e peso menor em retrabalho da menos (${comPadrao.retrabalho.pontos} -> ${comVolume.retrabalho.pontos})`
+      );
+
+      // O MINIMO DE AMOSTRA tambem manda: com minimo alto, as parcelas de
+      // qualidade zeram mesmo com o trabalho todo entregue.
+      const minimoAlto = pontuar(lista, { ...padrao, minimoRelatorios: 10 });
+      check(
+        minimoAlto.completude.pontos === 0 && minimoAlto.completude.conta === false,
+        "minimo de relatorios alto zera as parcelas de qualidade"
+      );
+
+      // As FAIXAS escalam com o peso: se ficassem cravadas, mexer no peso quase
+      // nao mudaria nada e a tela mentiria sobre a propria regra.
+      const evidenciaDobrada = pontuar(lista, { ...padrao, pesos: { ...padrao.pesos, evidencias: 30, retrabalho: 0 } });
+      check(
+        evidenciaDobrada.evidencias.pontos === comPadrao.evidencias.pontos * 2,
+        `a faixa de evidencias escala com o peso (${comPadrao.evidencias.pontos} -> ${evidenciaDobrada.evidencias.pontos})`
+      );
+    } finally {
+      await prisma.configuracao.deleteMany({ where: { chave: regras.CHAVE } });
+      if (antes) await prisma.configuracao.create({ data: { chave: antes.chave, valor: antes.valor } });
+    }
+  }
+
   titulo("8c. RELATORIOS APARECE PARA QUEM ESTA 'FORA DA SEDE'");
   {
     const { podeVerRelatoriosDeVisita } = require("./src/shared/helpers/equipeRanking.helper");

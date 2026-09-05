@@ -32,6 +32,7 @@ const logger = require("../../config/logger");
 const bus = require("../../shared/events/event-bus");
 const { ITENS_MAPEAMENTO, completudeDe, noPrazo } = require("./pontuacao.externa");
 const { analisarRelatorio } = require("./analise.relatorio");
+const regrasRelatorio = require("./relatorio.regras");
 
 const STATUS = ["rascunho", "entregue", "em_correcao", "aprovado"];
 
@@ -223,7 +224,8 @@ class MapeamentoService {
    * relatorio de antes, ou PDF que a leitura nao entendeu.
    */
   async _lerDoRelatorio(caminhoRelativo, { resumoAtual = "" } = {}) {
-    const analise = await analisarRelatorio(caminhoRelativo);
+    const regras = await regrasRelatorio.obter();
+    const analise = await analisarRelatorio(caminhoRelativo, { palavras: regras.palavras });
     if (!analise?.lido) {
       logger.info("PDF do relatorio nao pode ser lido; seguindo com o preenchimento manual", {
         motivo: analise?.motivo,
@@ -285,7 +287,15 @@ class MapeamentoService {
       throw new AppError("Não foi possível ler o arquivo enviado.", 400, "ARQUIVO_INVALIDO");
     }
     try {
-      return await analisarRelatorio(salvo.arquivoPath);
+      const regras = await regrasRelatorio.obter();
+      const analise = await analisarRelatorio(salvo.arquivoPath, { palavras: regras.palavras });
+      // O PRAZO sugerido sai da regra da empresa, e nao de um numero fixo na
+      // tela: e aqui que o administrador manda.
+      return {
+        ...analise,
+        prazoSugerido: analise.dataVisita ? regrasRelatorio.paraISO(regrasRelatorio.prazoDe(analise.dataVisita, regras)) : null,
+        regras: { prazoDias: regras.prazoDias, vencimentoDiaDoMes: regras.vencimentoDiaDoMes, exigirPdf: regras.exigirPdf },
+      };
     } finally {
       await midiaStorage.remover(salvo.arquivoPath).catch(() => {});
     }
@@ -345,6 +355,17 @@ class MapeamentoService {
     const nome = await this._nomeDe(usuario);
     const evidencias = await this._guardarEvidencias(dados.evidencias);
     const arquivo = (await this._guardarArquivo(dados.arquivo)) || {};
+    const regras = await regrasRelatorio.obter();
+    // "Exigir PDF" so vale na ENTREGA, nunca no rascunho: a pessoa precisa poder
+    // abrir o registro e voltar depois com o arquivo. Barrar o rascunho tambem
+    // transformaria a regra num impedimento de comecar.
+    if (dados.entregar && regras.exigirPdf && !arquivo.arquivoPath) {
+      throw new AppError(
+        "A empresa exige o relatório em PDF anexado para entregar. Anexe o arquivo ou salve como rascunho.",
+        400,
+        "PDF_OBRIGATORIO"
+      );
+    }
     // Havendo PDF, e ele quem preenche o que pontua (ver `_lerDoRelatorio`).
     const lido = arquivo.arquivoPath
       ? await this._lerDoRelatorio(arquivo.arquivoPath, { resumoAtual: dados.resumo })
@@ -358,7 +379,11 @@ class MapeamentoService {
         empresa: String(dados.empresa || "").trim(),
         cnpj: dados.cnpj ? String(dados.cnpj).replace(/\D/g, "") : null,
         dataVisita: dataDoDia(dados.dataVisita),
-        prazoEm: dataDoDia(dados.prazoEm),
+        // Sem prazo informado, vale a REGRA DA EMPRESA (prazo por relatório e,
+        // quando existe, o vencimento mensal -- a mais apertada das duas). A
+        // tela sugere o mesmo valor; isto aqui e a rede para quem chega por
+        // outro caminho, e para o dia em que a tela esquecer de mandar.
+        prazoEm: dataDoDia(dados.prazoEm) || regrasRelatorio.prazoDe(dados.dataVisita, regras),
         resumo: String(dados.resumo || "").trim(),
         itens: saneiaItens(dados.itens),
         pendencias: dados.pendencias ? String(dados.pendencias).trim() : null,
