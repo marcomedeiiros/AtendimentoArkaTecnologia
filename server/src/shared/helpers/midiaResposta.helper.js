@@ -22,6 +22,33 @@ const INLINE_PERMITIDO = new Set([
   "image/jpeg", "image/png", "image/webp", "image/gif",
   "video/mp4", "video/webm", "video/quicktime", "video/3gpp",
   "audio/ogg", "audio/mpeg", "audio/mp4", "audio/aac", "audio/wav", "audio/webm", "audio/opus",
+  /**
+   * PDF ENTROU AQUI para o "Ver" da conversa funcionar.
+   *
+   * Ele saia como `attachment`, entao clicar em ver BAIXAVA o arquivo -- e a
+   * nota fiscal que o cliente acabou de mandar so podia ser conferida abrindo a
+   * pasta de downloads. Agora abre numa aba, como no WhatsApp.
+   *
+   * ── POR QUE ISSO NAO AFROUXA A DEFESA ──────────────────────────────────────
+   *
+   * Os cabecalhos que ja acompanham toda midia continuam valendo, e sao eles
+   * que sustentam a decisao:
+   *
+   *   Content-Security-Policy: default-src 'none'; sandbox
+   *       o `sandbox` sem permissao nenhuma poe a resposta numa ORIGEM OPACA e
+   *       sem script. Mesmo que o arquivo tente algo, ele nao alcanca o nosso
+   *       dominio, nem o cookie de sessao, nem o DOM do painel.
+   *   X-Content-Type-Options: nosniff
+   *       o navegador nao "adivinha" outro tipo -- um HTML disfarcado de PDF
+   *       nao vira pagina.
+   *   frame-ancestors 'none'
+   *       ninguem embute isto num iframe de outro site.
+   *
+   * O que continua FORA e o que abriria de verdade: nada de `text/html`,
+   * `image/svg+xml` ou script -- esses executam no contexto de quem abre, e
+   * nenhum cabecalho desfaz isso por completo.
+   */
+  "application/pdf",
 ]);
 
 // Tipos que podem sair no Content-Type mesmo indo como anexo.

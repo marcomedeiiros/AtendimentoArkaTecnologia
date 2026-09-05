@@ -314,6 +314,58 @@ async function main() {
     "e nao ha mais Content-Type montado a mao no XHR"
   );
 
+  /**
+   * 6. O QUE ABRE NA ABA, E O QUE SO BAIXA.
+   *
+   * O "Ver" da conversa depende de o PDF sair `inline` -- ele saia como
+   * `attachment`, e clicar em ver BAIXAVA o arquivo. Abrir mais tipos e
+   * exatamente o tipo de mudanca que precisa de trava: um `text/html` inline no
+   * nosso dominio seria XSS servido por nos mesmos.
+   *
+   * O que sustenta a decisao sao os CABECALHOS, e por isso eles sao conferidos
+   * aqui junto: sem o `sandbox` e o `nosniff`, o PDF inline deixa de ser seguro
+   * e esta secao passa a reprovar.
+   */
+  titulo("6. O que abre na aba (inline) e o que so baixa (attachment)");
+  {
+    const { prepararRespostaMidia } = require("./src/shared/helpers/midiaResposta.helper");
+    const chamar = (mimetype, fileName = "arquivo") => {
+      const headers = {};
+      const res = { setHeader: (k, v) => { headers[k] = String(v); } };
+      prepararRespostaMidia(res, { mimetype, fileName, tamanho: 10 });
+      return headers;
+    };
+
+    const pdf = chamar("application/pdf", "NF_945.pdf");
+    check(pdf["Content-Disposition"].startsWith("inline"), `PDF abre na aba (${pdf["Content-Disposition"]})`);
+    check(pdf["Content-Type"] === "application/pdf", "e com o tipo certo");
+
+    // OS CABECALHOS QUE TORNAM O INLINE DEFENSAVEL. Se algum sair, o "Ver" deixa
+    // de ser seguro -- entao eles falham aqui, e nao em producao.
+    check(/sandbox/.test(pdf["Content-Security-Policy"] || ""), "com CSP em sandbox (origem opaca, sem script)");
+    check(/default-src 'none'/.test(pdf["Content-Security-Policy"] || ""), "e sem carregar recurso externo");
+    check(pdf["X-Content-Type-Options"] === "nosniff", "e sem o navegador adivinhar outro tipo (nosniff)");
+    check(/frame-ancestors 'none'/.test(pdf["Content-Security-Policy"] || ""), "e ninguem embute isto num iframe de fora");
+
+    check(chamar("image/png")["Content-Disposition"].startsWith("inline"), "imagem continua inline");
+
+    // O QUE NAO PODE ABRIR: esses executam no contexto de quem abre, e nenhum
+    // cabecalho desfaz isso por completo.
+    for (const perigoso of ["text/html", "image/svg+xml", "application/javascript"]) {
+      const h = chamar(perigoso, "coisa");
+      check(
+        h["Content-Disposition"].startsWith("attachment"),
+        `${perigoso} NAO abre na aba (${h["Content-Disposition"].split(";")[0]})`
+      );
+      check(h["Content-Type"] !== perigoso, `e nem sai com o proprio tipo (virou ${h["Content-Type"]})`);
+    }
+
+    // Documento de escritorio: conhecido, mas baixa -- o navegador nao abre
+    // mesmo, e um "Ver" que baixa e pior do que nao ter o botao.
+    const docx = chamar("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "a.docx");
+    check(docx["Content-Disposition"].startsWith("attachment"), "docx continua sendo download");
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   titulo("limpeza");
   // Os arquivos gravados em dados/midia sao deste teste: apaga.

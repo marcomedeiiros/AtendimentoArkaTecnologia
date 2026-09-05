@@ -1168,6 +1168,94 @@ function BolhaAudio({ m, escuro }) {
 // Agora o botao abre o visualizador de midia, que tem zoom por roda do mouse,
 // arraste, download E um botao de tela cheia dentro dele. Nada se perdeu: o que
 // era um clique continua a um clique, e o que nao existia passou a existir.
+/**
+ * O DOCUMENTO NA CONVERSA -- com "Ver" e "Salvar como", como no WhatsApp.
+ *
+ * ── O QUE HAVIA ANTES ──────────────────────────────────────────────────────
+ *
+ * O cartão inteiro era UM link que baixava. Para conferir a nota fiscal que o
+ * cliente acabou de mandar, a pessoa baixava o arquivo e ia procurar na pasta
+ * de downloads -- no meio do atendimento, com o cliente esperando.
+ *
+ * ── AS DUAS ACOES, E POR QUE SAO DUAS ──────────────────────────────────────
+ *
+ *   VER          abre numa aba. É o que se quer em 9 de 10 vezes: olhar e
+ *                voltar, sem deixar rastro na maquina.
+ *   SALVAR COMO  baixa de verdade, com o `download` forçando o nome original.
+ *
+ * O "Ver" só aparece para o que o navegador realmente ABRE. Para um .docx ou um
+ * .zip ele levaria a um download disfarçado de visualização -- um botão que faz
+ * outra coisa é pior que um botão a menos.
+ *
+ * ── O `download` PRECISA DO ATRIBUTO ───────────────────────────────────────
+ *
+ * O servidor manda PDF como `inline` (é o que faz o "Ver" funcionar), então um
+ * link simples ABRIRIA em vez de salvar. O atributo `download` é o que inverte
+ * isso -- e só funciona porque a mídia é servida do nosso próprio domínio.
+ */
+function BolhaDocumento({ md, escuro, caption }) {
+  const nome = md.fileName || 'Documento';
+  const tipo = String(md.mimetype || '').toLowerCase().split(';')[0].trim();
+  // O que o navegador abre sozinho. PDF é o caso real do dia a dia (nota
+  // fiscal, boleto, contrato); texto puro vem de vez em quando.
+  const daParaVer = tipo === 'application/pdf' || tipo.startsWith('text/');
+
+  const botao = escuro
+    ? 'border-linha text-slate-200 hover:bg-grafite-600'
+    : 'border-slate-900/20 text-slate-900 hover:bg-slate-900/10';
+
+  return (
+    <div className="space-y-1.5">
+      <div className={`p-2 rounded-lg ${escuro ? 'bg-grafite-700 border border-linha' : 'bg-slate-900/10'}`}>
+        <div className="flex items-center gap-2 min-w-0">
+          <FileText size={20} className={`shrink-0 ${escuro ? 'text-acao-200' : 'text-slate-900'}`} />
+          <div className="min-w-0">
+            <div className={`text-[11px] font-semibold truncate ${escuro ? 'text-slate-100' : 'text-slate-900'}`} title={nome}>
+              {nome}
+            </div>
+            {/* A EXTENSÃO, e não o mimetype cru: "PDF" diz o que "application/
+                pdf" também diz, e cabe na largura de uma bolha de conversa. */}
+            <div className={`text-[9px] uppercase ${escuro ? 'text-slate-400' : 'text-slate-900/60'}`}>
+              {(nome.split('.').pop() || '').length <= 5 && nome.includes('.')
+                ? nome.split('.').pop()
+                : 'arquivo'}
+            </div>
+          </div>
+        </div>
+
+        {/* `whitespace-nowrap`, e o "Ver" sem esticar: a bolha de conversa é
+            estreita, e sem isto "Salvar como" quebrava em duas linhas dentro do
+            próprio botão. Quem manda na largura é o rótulo maior. */}
+        <div className="flex items-center gap-1.5 mt-2">
+          {daParaVer && (
+            <a
+              href={md.url}
+              target="_blank"
+              rel="noreferrer"
+              className={`shrink-0 text-center px-3 py-1 rounded-md border text-[10px] font-bold whitespace-nowrap transition-colors ${botao}`}
+            >
+              Ver
+            </a>
+          )}
+          <a
+            href={md.url}
+            download={nome}
+            className={`flex-1 text-center px-2 py-1 rounded-md border text-[10px] font-bold whitespace-nowrap transition-colors ${botao}`}
+          >
+            Salvar como
+          </a>
+        </div>
+      </div>
+
+      {caption && (
+        <div className={`text-[11px] leading-relaxed whitespace-pre-wrap break-words ${escuro ? 'text-slate-200' : 'text-slate-900'}`}>
+          <TextoFormatado texto={caption} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function BolhaVideo({ src, caption, escuro, nomeArquivo, onAmpliar }) {
   return (
     <div className="space-y-1.5">
@@ -1326,21 +1414,11 @@ function MensagemMidia({ m, escuro, onAbrirMidia, onAbrirContato }) {
   }
   if (m.tipo === 'documento') {
     return (
-      <div className="space-y-1.5">
-        <a href={md.url} download={md.fileName || 'documento'} target="_blank" rel="noreferrer"
-          className={`flex items-center gap-2 p-2 rounded-lg ${escuro ? 'bg-grafite-700 border border-linha' : 'bg-slate-900/10'}`}>
-          <FileText size={20} className={escuro ? 'text-acao-200' : 'text-slate-900'} />
-          <div className="min-w-0">
-            <div className={`text-[11px] font-semibold truncate ${escuro ? 'text-slate-100' : 'text-slate-900'}`}>{md.fileName || 'Documento'}</div>
-            <div className={`text-[9px] ${escuro ? 'text-slate-400' : 'text-slate-900/60'}`}>Baixar</div>
-          </div>
-        </a>
-        {md.caption && (
-          <div className={`text-[11px] leading-relaxed whitespace-pre-wrap break-words ${escuro ? 'text-slate-200' : 'text-slate-900'}`}>
-            <TextoFormatado texto={md.caption} />
-          </div>
-        )}
-      </div>
+      <BolhaDocumento
+        md={md}
+        escuro={escuro}
+        caption={md.caption}
+      />
     );
   }
   if (m.tipo === 'localizacao') {
