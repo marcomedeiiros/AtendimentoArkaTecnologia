@@ -78,7 +78,25 @@
 
     --bolha: 209 250 197;
 
-    --espera: 201 134 0;   --espera-400: 176 122 0;   --espera-600: 176 122 0;
+    /* ÂMBAR ESCURECIDO NO CLARO -- medido, e nao escolhido no olho.
+     *
+     * O `-400` valia 176 122 0: 3,73 de contraste sobre branco e 3,21 sobre o
+     * proprio fundo da badge (`bg-espera/15`, que sobre branco da #F7EDD9).
+     * Era o mais fraco da familia -- `falha-400` tem 5,17, `lida-400` 4,72 --
+     * e o unico que nao alcancava 4,5 nem em texto normal nem na badge, que e
+     * justamente onde ele mais aparece (amarelo sobre fundo amarelado).
+     *
+     * 145 99 0 da 5,26 sobre branco e 4,53 sobre a badge: passa nos dois, e
+     * fica no mesmo peso do vermelho. Mais escuro que isso comeca a ler como
+     * marrom e o ambar perde o significado de "atencao".
+     *
+     * O `-600` acompanha para a escala continuar ordenada: ele valia o MESMO
+     * que o `-400`, e escurecer so um deixaria o tom "mais escuro" da paleta
+     * mais claro que o normal -- uma armadilha para quem for usa-lo depois.
+     *
+     * A medalha de ouro (`--medalha-1`) tem o valor antigo e NAO muda junto: la
+     * a cor e um metal, escolhida contra prata e bronze, nao um tom de aviso. */
+    --espera: 201 134 0;   --espera-400: 145 99 0;    --espera-600: 128 87 0;
     --ativo: 4 154 117;    --ativo-400: 4 154 117;    --ativo-600: 3 122 93;
     --quieto: 102 119 129; --quieto-400: 102 119 129; --quieto-600: 82 97 106;
     --falha: 208 52 68;    --falha-400: 194 61 76;    --falha-600: 176 42 56;
