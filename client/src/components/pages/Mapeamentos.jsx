@@ -725,7 +725,7 @@ function ModalMapeamento({ itensRegra, inicial, onFechar, onSalvo }) {
  * Só o que foi ENTREGUE. Rascunho é trabalho em andamento, não histórico --
  * misturado aqui, a pessoa não saberia dizer o que o cliente já recebeu.
  */
-function Historico({ lista, mostrarTecnico }) {
+function Historico({ lista, mostrarTecnico, onVer }) {
   const [busca, setBusca] = useState('');
   const [mes, setMes] = useState('');
 
@@ -805,22 +805,39 @@ function Historico({ lista, mostrarTecnico }) {
                   </p>
                 </div>
 
-                {m.arquivo ? (
-                  <a
-                    href={RankingsAPI.urlArquivoMapeamento(m.id)}
-                    target="_blank"
-                    rel="noreferrer"
-                    title={m.arquivo.nome}
-                    className="shrink-0 px-3 py-2 rounded-xl bg-acao/15 border border-acao/40 text-acao-200 hover:bg-acao/25 text-[11px] font-bold flex items-center gap-1.5 transition-colors"
+                {/* DOIS CAMINHOS, e não um.
+                    O histórico só oferecia "Abrir PDF", então o resumo, o
+                    checklist, as pendências e as fotos avulsas continuavam sem
+                    caminho ATÉ AQUI -- e o histórico é justamente a tela onde
+                    se procura uma visita antiga. Um relatório sem PDF ficava
+                    sem nada para clicar.
+
+                    "Ver" primeiro: abre o relatório inteiro, do qual o PDF é
+                    uma parte. */}
+                <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                  <button
+                    onClick={() => onVer(m.id)}
+                    className="px-3 py-2 rounded-xl bg-grafite-700 border border-linha text-texto-suave hover:text-texto hover:border-linha-forte text-[11px] font-bold transition-colors"
                   >
-                    <FileText size={13} /> Abrir PDF
-                  </a>
-                ) : (
-                  // Dizer que NÃO TEM é mais útil que esconder: quem procura o
-                  // relatório de uma visita precisa saber se ele não foi
-                  // anexado, e não ficar achando que a tela está com defeito.
-                  <span className="shrink-0 text-[11px] text-texto-fraco px-3 py-2">Sem PDF anexado</span>
-                )}
+                    Ver
+                  </button>
+                  {m.arquivo ? (
+                    <a
+                      href={RankingsAPI.urlArquivoMapeamento(m.id)}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={m.arquivo.nome}
+                      className="px-3 py-2 rounded-xl bg-acao/15 border border-acao/40 text-acao-200 hover:bg-acao/25 text-[11px] font-bold flex items-center gap-1.5 transition-colors"
+                    >
+                      <FileText size={13} /> Abrir PDF
+                    </a>
+                  ) : (
+                    // Dizer que NÃO TEM é mais útil que esconder: quem procura o
+                    // relatório de uma visita precisa saber se ele não foi
+                    // anexado, e não ficar achando que a tela está com defeito.
+                    <span className="text-[11px] text-texto-fraco px-1">Sem PDF</span>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -1209,7 +1226,7 @@ export default function Mapeamentos() {
           // A MESMA lista da outra aba: o recorte por perfil já veio pronto do
           // servidor, e uma segunda consulta seria um segundo lugar onde ele
           // poderia sair diferente.
-          <Historico lista={lista} mostrarTecnico={ehSupervisor} />
+          <Historico lista={lista} mostrarTecnico={ehSupervisor} onVer={setVendo} />
         )
       ) : (
       <div className="glass-panel border border-linha rounded-2xl overflow-hidden">
