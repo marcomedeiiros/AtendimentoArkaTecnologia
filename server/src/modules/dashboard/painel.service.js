@@ -27,6 +27,7 @@ const equipeService = require("../equipe/equipe.service");
 const configuracaoService = require("../configuracoes/configuracao.service");
 const { podeAcessarSetor } = require("../../shared/helpers/setor.helper");
 const { ehAtendenteReal } = require("../../shared/helpers/atendimentoSintetico.helper");
+const logger = require("../../config/logger");
 
 // Quantos tecnicos entram no ranking. Tres cabe na tela e ainda e disputavel:
 // com dez, quem esta em setimo nao olha mais.
@@ -90,6 +91,53 @@ const inicioDoMes = () => {
 
 const media = (lista) => (lista.length ? lista.reduce((a, b) => a + b, 0) / lista.length : 0);
 
+/**
+ * O MARCO DE ZERAMENTO DO PAINEL -- "Limpar dados do painel da equipe".
+ *
+ * ── O QUE ELE FAZ, E O QUE ELE DELIBERADAMENTE NAO FAZ ─────────────────────
+ *
+ * Ele NAO apaga atendimento nenhum. Guarda um INSTANTE, e o painel passa a
+ * contar dali para a frente -- na tela o efeito e o pedido: classificacao,
+ * destaque, CSAT, tempos e "fechados hoje" voltam a zero.
+ *
+ * Apagar as linhas de verdade era a leitura literal do pedido, e o preco seria
+ * pago em telas que ninguem mencionou:
+ *
+ *   Relatorios Clientes (CNPJ)  le as MESMAS OS. O relatorio de agosto de um
+ *                               cliente voltaria vazio -- e ele ja recebeu o
+ *                               documento com os numeros antigos.
+ *   Avaliacoes / Registro /     mesma origem. O historico de CSAT do ano
+ *   Help Desk                   sumiria junto com o ranking do mes.
+ *   O fio da conversa           a mensagem sobrevive (`onDelete: SetNull`),
+ *                               mas perde o carimbo da OS: o historico deixa
+ *                               de se separar por atendimento na Central.
+ *   O numero da OS              #OS00062 ja foi dito ao cliente e nao teria
+ *                               mais registro do outro lado.
+ *
+ * Nada disso e recuperavel depois. O marco entrega o resultado visivel que foi
+ * pedido e pode ser desfeito com um clique -- que e o que um botao vermelho
+ * numa tela de gestao precisa ter.
+ *
+ * Guardado na tabela de configuracao por acesso direto, e nao pelo
+ * `configuracaoService`: aquele so grava chaves da tela de Configuracoes
+ * (allowlist em DEFINICOES) e mantem cache -- isto aqui nao e um ajuste que
+ * alguem edita num formulario.
+ */
+const CHAVE_ZERAGEM = "painel.zeradoEm";
+
+async function marcoDeZeragem() {
+  const linha = await prisma.configuracao.findUnique({ where: { chave: CHAVE_ZERAGEM } });
+  if (!linha?.valor) return null;
+  const d = new Date(linha.valor);
+  // Data invalida guardada nao pode esconder o painel inteiro: sem isto, um
+  // valor corrompido viraria `Invalid Date` e toda comparacao daria falso de um
+  // jeito dificil de diagnosticar.
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+// O comeco da janela: o mais RECENTE entre o periodo natural e o zeramento.
+const maisRecente = (a, b) => (b && b > a ? b : a);
+
 class PainelService {
   /**
    * @param {string|null} acesso cargo de quem pediu. A FILA e recortada por
@@ -97,8 +145,12 @@ class PainelService {
    *   que e o proposito da tela.
    */
   async obter(acesso = null) {
-    const desdeMes = inicioDoMes();
-    const desdeHoje = inicioDoDia();
+    const zerado = await marcoDeZeragem();
+    // O zeramento recorta as DUAS janelas. Recortar so a do mes deixaria
+    // "fechados hoje" contando atendimentos anteriores a limpeza -- um numero
+    // sobrevivente no meio de um painel zerado, que parece defeito.
+    const desdeMes = maisRecente(inicioDoMes(), zerado);
+    const desdeHoje = maisRecente(inicioDoDia(), zerado);
 
     const [doMes, fechadosHoje, fila, equipe, meta, carga] = await Promise.all([
       // So o que o ranking e os tempos precisam. Sem `include`: mensagem
@@ -145,7 +197,14 @@ class PainelService {
 
     return {
       geradoEm: new Date().toISOString(),
-      periodo: { desde: desdeMes.toISOString(), rotulo: "mês corrente" },
+      // O ROTULO MUDA quando o painel foi zerado. Continuar dizendo "mes
+      // corrente" com os numeros comecando no meio do mes faria a tela mentir
+      // -- e quem olha a parede nao tem como saber que houve uma limpeza.
+      periodo: {
+        desde: desdeMes.toISOString(),
+        rotulo: zerado ? "desde a limpeza" : "mês corrente",
+        zeradoEm: zerado ? zerado.toISOString() : null,
+      },
       ranking: this._ranking(doMes),
       csat: this._csat(doMes),
       tempos: this._tempos(doMes),
@@ -290,7 +349,10 @@ class PainelService {
    * arrastar o historico inteiro para achar um maximo por nome.
    */
   async rankingEquipe() {
-    const desdeMes = inicioDoMes();
+    // O MESMO recorte da parede: as duas telas mostram a mesma classificacao, e
+    // uma limpeza que valesse so numa delas seria pior do que nao existir.
+    const zerado = await marcoDeZeragem();
+    const desdeMes = maisRecente(inicioDoMes(), zerado);
 
     const doMes = await prisma.atendimento.findMany({
       where: { abertoEm: { gte: desdeMes } },
@@ -315,7 +377,14 @@ class PainelService {
 
     return {
       geradoEm: new Date().toISOString(),
-      periodo: { desde: desdeMes.toISOString(), rotulo: "mês corrente" },
+      // O ROTULO MUDA quando o painel foi zerado. Continuar dizendo "mes
+      // corrente" com os numeros comecando no meio do mes faria a tela mentir
+      // -- e quem olha a parede nao tem como saber que houve uma limpeza.
+      periodo: {
+        desde: desdeMes.toISOString(),
+        rotulo: zerado ? "desde a limpeza" : "mês corrente",
+        zeradoEm: zerado ? zerado.toISOString() : null,
+      },
       classificacao: comUltimo,
       minimoAvaliacoes,
       pesos,
@@ -335,6 +404,40 @@ class PainelService {
    * assumida (a mesma dos relatorios por cliente): se o vinculo mudar depois, o
    * que esta linha mostra muda junto.
    */
+  /**
+   * "Limpar dados do painel da equipe": zera o que a parede mostra, a partir de
+   * agora. Ver a nota em `marcoDeZeragem` -- nenhum atendimento e apagado.
+   */
+  async limparPainel(autor = null) {
+    const agora = new Date();
+    const valor = agora.toISOString();
+    await prisma.configuracao.upsert({
+      where: { chave: CHAVE_ZERAGEM },
+      update: { valor },
+      create: { chave: CHAVE_ZERAGEM, valor },
+    });
+    // Fica no log com AUTORIA: e uma acao que muda o que a equipe inteira ve na
+    // parede, e "os numeros sumiram" sem rastro de quem e quando e uma manha
+    // perdida procurando defeito onde houve decisao.
+    logger.warn("Painel da equipe zerado", {
+      zeradoEm: valor,
+      por: autor?.nome || autor?.email || autor?.sub || "desconhecido",
+    });
+    return { zeradoEm: valor };
+  }
+
+  /**
+   * Desfaz a limpeza. So e possivel porque nada foi apagado -- e a razao de o
+   * marco existir em vez de um DELETE.
+   */
+  async restaurarPainel(autor = null) {
+    await prisma.configuracao.deleteMany({ where: { chave: CHAVE_ZERAGEM } });
+    logger.warn("Painel da equipe restaurado", {
+      por: autor?.nome || autor?.email || autor?.sub || "desconhecido",
+    });
+    return { zeradoEm: null };
+  }
+
   async _ultimoAtendimento(nome) {
     const a = await prisma.atendimento.findFirst({
       where: { atendenteNome: nome },

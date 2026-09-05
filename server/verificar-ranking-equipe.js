@@ -31,6 +31,7 @@ const agora = Date.now();
 const min = (m) => new Date(agora - m * 60000);
 
 async function limpar() {
+  await prisma.configuracao.deleteMany({ where: { chave: "painel.zeradoEm" } });
   await prisma.atendimento.deleteMany({ where: { conversa: { cliente: { startsWith: MARCA } } } });
   await prisma.conversa.updateMany({
     where: { cliente: { startsWith: MARCA } },
@@ -243,6 +244,73 @@ async function main() {
   } else {
     check(false, "nao consegui gerar o relatorio da empresa para conferir");
   }
+
+  titulo("7. LIMPAR O PAINEL ZERA A TELA SEM APAGAR NADA");
+
+  // O pedido foi "apaga os registros". A leitura literal seria um DELETE nas
+  // OS -- e o preco sairia em telas que ninguem mencionou: os relatorios por
+  // cliente leem as MESMAS linhas, e o documento de agosto de um cliente
+  // voltaria vazio depois de ele ja ter recebido a versao com numeros. O marco
+  // de zeramento entrega o resultado visivel e nao destroi nada; este bloco
+  // prova as duas metades.
+  const antesDeLimpar = await painelService.obter(null);
+  check(antesDeLimpar.ranking.classificacao.length > 0, "antes: o painel tem classificacao");
+  check(antesDeLimpar.csat.total > 0, `antes: CSAT com ${antesDeLimpar.csat.total} notas`);
+  check(antesDeLimpar.periodo.rotulo === "mês corrente", "antes: o rotulo diz 'mês corrente'");
+  check(antesDeLimpar.periodo.zeradoEm === null, "antes: sem marco de zeramento");
+
+  const totalOsAntes = await prisma.atendimento.count();
+  await painelService.limparPainel({ nome: "teste" });
+  const depois = await painelService.obter(null);
+
+  check(depois.ranking.classificacao.length === 0, "depois: a classificacao zera");
+  check(depois.csat.total === 0, "depois: o CSAT zera");
+  check(depois.hoje.fechados === 0, "depois: 'fechados hoje' zera tambem (as duas janelas)");
+  check(depois.tempos.assumirAmostra === 0, "depois: os tempos zeram");
+  check(!!depois.periodo.zeradoEm, "depois: a resposta diz QUANDO foi zerado");
+  check(
+    depois.periodo.rotulo === "desde a limpeza",
+    `depois: o rotulo para de dizer 'mês corrente' (diz "${depois.periodo.rotulo}")`
+  );
+
+  // A MESMA limpeza vale para a aba da Visao Geral -- valer so numa das telas
+  // seria pior do que nao existir.
+  const rankDepois = await painelService.rankingEquipe();
+  check(rankDepois.classificacao.length === 0, "a aba Ranking do Time zera junto");
+
+  // E O QUE NAO PODE TER ACONTECIDO.
+  check(
+    (await prisma.atendimento.count()) === totalOsAntes,
+    `nenhuma OS foi apagada (${totalOsAntes} antes e depois)`
+  );
+  const relDepois = await relatorioService.relatorioEmpresa("11222333000181", {
+    periodo: "mes",
+    referencia: hoje.toISOString().slice(0, 10),
+  }).catch(() => null);
+  check(!!relDepois, "o relatorio do cliente continua sendo gerado");
+
+  // RESTAURAR: so e possivel porque nada foi apagado. E o que torna o botao
+  // seguro -- um clique errado nao custa um mes de historico.
+  await painelService.restaurarPainel({ nome: "teste" });
+  const restaurado = await painelService.obter(null);
+  check(restaurado.ranking.classificacao.length > 0, "restaurar traz a classificacao de volta");
+  check(restaurado.csat.total === antesDeLimpar.csat.total, "e o CSAT volta ao mesmo numero");
+  check(restaurado.periodo.zeradoEm === null, "sem marco depois de restaurar");
+
+  // Marco corrompido nao pode esconder o painel: uma data invalida guardada
+  // viraria `Invalid Date`, toda comparacao daria falso e o painel ficaria
+  // vazio sem ninguem entender por que.
+  await prisma.configuracao.upsert({
+    where: { chave: "painel.zeradoEm" },
+    update: { valor: "nao-e-data" },
+    create: { chave: "painel.zeradoEm", valor: "nao-e-data" },
+  });
+  const comLixo = await painelService.obter(null);
+  check(
+    comLixo.ranking.classificacao.length > 0 && comLixo.periodo.zeradoEm === null,
+    "data invalida guardada e ignorada, e o painel volta ao mes inteiro"
+  );
+  await prisma.configuracao.deleteMany({ where: { chave: "painel.zeradoEm" } });
 
   titulo("limpeza");
   await limpar();

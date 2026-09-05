@@ -571,8 +571,8 @@ function PainelFiltros({ extras, setExtras, visib, setVisib, onLimpar, totalAtiv
             </label>
           ))}
           <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">
-            Desmarcar "Fechadas" esconde a aba correspondente. Nada é apagado do
-            banco.
+            Desmarcar "Fechadas" esconde a aba correspondente nada é apagado do
+            banco
           </p>
         </div>
       </div>

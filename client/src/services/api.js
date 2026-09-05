@@ -591,6 +591,10 @@ export const DashboardAPI = {
   // Ranking do time inteiro (a mesma pontuacao da parede), com o ultimo
   // atendimento de cada pessoa.
   rankingEquipe: () => request('/dashboard/ranking-equipe'),
+  // Zera o painel da equipe a partir de agora. NAO apaga atendimento nenhum --
+  // ver painel.service.marcoDeZeragem. Restrito a administrador no servidor.
+  limparPainel: () => request('/dashboard/painel/limpar', { method: 'POST' }),
+  restaurarPainel: () => request('/dashboard/painel/restaurar', { method: 'POST' }),
 };
 
 // ── n8n API ──

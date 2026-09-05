@@ -24,9 +24,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Trophy, Medal, Building2, Clock, RefreshCw, AlertCircle, Loader2, Star, Timer,
+  Eraser, Undo2,
 } from 'lucide-react';
 import { DashboardAPI } from '../../services/api';
 import { FUSO_BR } from '../../utils/data';
+import { avisar, confirmar } from '../../utils/dialogo';
 
 // Ouro, prata e bronze vem do tema (`--medalha-*`), e nao de hex fixo: no tema
 // claro a prata #B8C4CC sobre branco fica invisivel. Mesma fonte de cor do
@@ -68,6 +70,14 @@ function diaEHora(iso) {
     hour: '2-digit', minute: '2-digit', timeZone: FUSO_BR,
   });
   return { dia, hora };
+}
+
+// Data e hora do zeramento, no fuso de Brasilia -- o aviso precisa dizer
+// EXATAMENTE de quando a contagem comeca, e nao "hoje" ou "ha 2 dias": duas
+// semanas depois, "ha 2 dias" nao ajuda ninguem a entender o numero na tela.
+function textoZeramento(iso) {
+  const q = diaEHora(iso);
+  return q ? `${q.dia} às ${q.hora}` : 'a última limpeza';
 }
 
 function LinhaRanking({ p, minimo }) {
@@ -219,6 +229,10 @@ export default function RankingEquipe() {
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
+  const [limpando, setLimpando] = useState(false);
+  // Vem do servidor, e nao do clique: quem zerou pode ter sido outra pessoa, em
+  // outra maquina. O estado da tela e sempre o que o servidor respondeu.
+  const zeradoEm = dados?.periodo?.zeradoEm || null;
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -233,6 +247,54 @@ export default function RankingEquipe() {
   }, []);
 
   useEffect(() => { carregar(); }, [carregar]);
+
+  /**
+   * "Limpar dados do painel da equipe".
+   *
+   * A confirmacao DIZ O QUE ACONTECE e o que NAO acontece, com todas as letras.
+   * Um botao vermelho chamado "limpar dados" faz qualquer pessoa supor que algo
+   * esta sendo apagado -- e a suposicao errada aqui e cara nos dois sentidos:
+   * quem acha que apaga nao clica quando deveria, e quem clica achando que
+   * apaga fica sem entender por que o relatorio do cliente continua cheio.
+   */
+  const limpar = useCallback(async () => {
+    const ok = await confirmar(
+      'Classificação, destaque do mês, satisfação, tempos e "fechados hoje" voltam a zero ' +
+      'e passam a contar a partir de agora — na Visão Geral e no Modo TV.\n\n' +
+      'Nenhum atendimento é apagado: Relatórios Clientes (CNPJ), Avaliações, Registro e o ' +
+      'histórico das conversas continuam completos. Dá para desfazer depois.',
+      {
+        titulo: 'Limpar os dados do painel da equipe?',
+        rotuloConfirmar: 'Limpar o painel',
+        rotuloCancelar: 'Deixar como está',
+        perigo: true,
+      }
+    );
+    if (!ok) return;
+    setLimpando(true);
+    try {
+      await DashboardAPI.limparPainel();
+      await carregar();
+    } catch (e) {
+      // 403 aqui e o caso mais provavel: a rota e so de administrador, e o
+      // servidor e quem decide -- esconder o botao no front nunca foi a guarda.
+      avisar(e?.message || 'Não foi possível limpar o painel.', { titulo: 'Limpeza não concluída' });
+    } finally {
+      setLimpando(false);
+    }
+  }, [carregar]);
+
+  const restaurar = useCallback(async () => {
+    setLimpando(true);
+    try {
+      await DashboardAPI.restaurarPainel();
+      await carregar();
+    } catch (e) {
+      avisar(e?.message || 'Não foi possível restaurar.', { titulo: 'Restauração não concluída' });
+    } finally {
+      setLimpando(false);
+    }
+  }, [carregar]);
 
   const lista = dados?.classificacao || [];
 
@@ -249,15 +311,57 @@ export default function RankingEquipe() {
             {' · '}o último atendimento é o mais recente de cada pessoa, de qualquer data
           </p>
         </div>
-        <button
-          onClick={carregar}
-          disabled={carregando}
-          className="px-3 py-1.5 rounded-xl bg-grafite-700 border border-linha text-texto-suave hover:text-texto hover:border-linha-forte text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
-        >
-          {carregando ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-          Atualizar
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={carregar}
+            disabled={carregando}
+            className="px-3 py-1.5 rounded-xl bg-grafite-700 border border-linha text-texto-suave hover:text-texto hover:border-linha-forte text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+          >
+            {carregando ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+            Atualizar
+          </button>
+
+          {/* LIMPAR / RESTAURAR -- o mesmo lugar, porque sao a ida e a volta da
+              mesma decisao. Enquanto ha uma limpeza ativa, o botao de limpar
+              nao serve para nada (ja esta zerado) e o que falta e a saida. */}
+          {zeradoEm ? (
+            <button
+              onClick={restaurar}
+              disabled={limpando}
+              title="Volta a contar o mês inteiro"
+              className="px-3 py-1.5 rounded-xl bg-acao/15 border border-acao/40 text-acao-200 hover:bg-acao/25 text-xs font-bold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+            >
+              {limpando ? <Loader2 size={13} className="animate-spin" /> : <Undo2 size={13} />}
+              Restaurar dados
+            </button>
+          ) : (
+            <button
+              onClick={limpar}
+              disabled={limpando || carregando}
+              title="Zera classificação, destaque, CSAT, tempos e fechados hoje"
+              className="px-3 py-1.5 rounded-xl bg-falha/15 border border-falha/40 text-falha-400 hover:bg-falha/25 text-xs font-bold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+            >
+              {limpando ? <Loader2 size={13} className="animate-spin" /> : <Eraser size={13} />}
+              Limpar dados do painel da equipe
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* O AVISO DE QUE O PAINEL ESTA ZERADO fica a vista o tempo todo. Sem ele,
+          daqui a duas semanas alguem olha a classificacao baixa e conclui que a
+          equipe rendeu pouco no mes -- quando a verdade e que a contagem comeca
+          no meio dele. */}
+      {zeradoEm && (
+        <div className="flex items-start gap-2 p-3 rounded-xl bg-espera/10 border border-espera/30 text-espera-400 text-[11px] mb-3">
+          <AlertCircle size={14} className="shrink-0 mt-0.5" />
+          <span>
+            O painel está contando <strong>a partir de {textoZeramento(zeradoEm)}</strong>.
+            Nenhum atendimento foi apagado — Relatórios, Avaliações e Registro seguem
+            com o histórico completo. Use <strong>Restaurar dados</strong> para voltar ao mês inteiro.
+          </span>
+        </div>
+      )}
 
       {erro && (
         <div className="flex items-center gap-2 p-3 rounded-xl bg-falha/10 border border-falha/30 text-falha-400 text-xs mb-3">

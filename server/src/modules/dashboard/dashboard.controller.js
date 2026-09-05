@@ -23,6 +23,20 @@ class DashboardController {
     const data = await painelService.rankingEquipe();
     return success(res, data);
   }
+
+  // Zera o painel da equipe. NAO apaga atendimento nenhum: grava um instante e
+  // as telas passam a contar dali (ver painel.service.marcoDeZeragem). O autor
+  // vai junto para a autoria ficar no log -- "os numeros sumiram" sem rastro de
+  // quem e quando e uma manha perdida procurando defeito onde houve decisao.
+  async limparPainel(req, res) {
+    const data = await painelService.limparPainel(req.user);
+    return success(res, data);
+  }
+
+  async restaurarPainel(req, res) {
+    const data = await painelService.restaurarPainel(req.user);
+    return success(res, data);
+  }
 }
 
 module.exports = new DashboardController();

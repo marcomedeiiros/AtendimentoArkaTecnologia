@@ -2,6 +2,7 @@ const router = require("express").Router();
 const dashboardController = require("./dashboard.controller");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
 const { exigirModulo } = require("../permissoes/modulo.middleware");
+const { adminMiddleware } = require("../../shared/middlewares/admin.middleware");
 
 // Visao Geral: acesso definido pela matriz de permissoes (modulo "dashboard").
 // Antes esta rota nao tinha autenticacao nenhuma: as metricas ficavam publicas.
@@ -50,6 +51,39 @@ router.get("/painel", (req, res, next) =>
  */
 router.get("/ranking-equipe", (req, res, next) =>
   dashboardController.rankingEquipe(req, res).catch(next)
+);
+
+/**
+ * @openapi
+ * /api/dashboard/painel/limpar:
+ *   post:
+ *     tags: [Dashboard]
+ *     security: [{ bearerAuth: [] }]
+ *     summary: Zera o painel da equipe a partir de agora (nao apaga atendimentos)
+ *     responses:
+ *       200:
+ *         description: Instante do zeramento
+ */
+// SO ADMINISTRADOR. Muda o que a equipe INTEIRA ve na parede -- inclusive a
+// propria classificacao de quem clicou. Esconder o botao no front nao basta:
+// sem este guarda, qualquer conta autenticada chamaria a rota no curl.
+router.post("/painel/limpar", adminMiddleware, (req, res, next) =>
+  dashboardController.limparPainel(req, res).catch(next)
+);
+
+/**
+ * @openapi
+ * /api/dashboard/painel/restaurar:
+ *   post:
+ *     tags: [Dashboard]
+ *     security: [{ bearerAuth: [] }]
+ *     summary: Desfaz a limpeza e volta a contar o mes inteiro
+ *     responses:
+ *       200:
+ *         description: Zeramento removido
+ */
+router.post("/painel/restaurar", adminMiddleware, (req, res, next) =>
+  dashboardController.restaurarPainel(req, res).catch(next)
 );
 
 module.exports = router;
