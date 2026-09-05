@@ -197,10 +197,12 @@
  */
 @keyframes brilhoFila {
   0%, 100% {
-    box-shadow: 0 0 0 1px rgb(var(--espera) / 0.45), 0 0 22px -4px rgb(var(--espera) / 0.40);
+    border-color: rgb(var(--espera) / 0.35);
+    box-shadow: 0 0 0 1px rgb(var(--espera) / 0.25), 0 0 18px -6px rgb(var(--espera) / 0.30);
   }
   50% {
-    box-shadow: 0 0 0 1px rgb(var(--espera) / 0.80), 0 0 42px -2px rgb(var(--espera) / 0.70);
+    border-color: rgb(var(--espera) / 1);
+    box-shadow: 0 0 0 2px rgb(var(--espera) / 0.85), 0 0 55px 0 rgb(var(--espera) / 0.85);
   }
 }
 /* A CLASSE APARECE DUAS VEZES DE PROPOSITO -- nao e engano de digitacao.
@@ -219,13 +221,25 @@
   border-color: rgb(var(--espera) / 0.55);
   animation: brilhoFila 2.4s ease-in-out infinite;
 }
-/* Movimento reduzido: o BRILHO fica, a pulsacao sai. O brilho aqui nao e
-   enfeite -- e a informacao "tem gente esperando", a mesma que o numero da. Quem
-   pede menos movimento nao esta pedindo menos informacao. */
+/* MOVIMENTO REDUZIDO: a pulsacao FICA, e mais lenta.
+ *
+ * Contraria a regra geral deste arquivo de propósito, e vale explicar. As
+ * outras animacoes daqui sao acabamento -- o `fade-in`, a grade que deriva no
+ * fundo -- e somem sem custo nenhum. Esta e o AVISO: e ela que diz, do outro
+ * lado da sala, que tem cliente esperando. Desligar deixa a tela silenciosa
+ * justamente na hora em que ela precisa falar.
+ *
+ * O que muda: nada se move nem muda de tamanho -- so a cor e o brilho variam,
+ * e devagar (4s no lugar de 2,4s). Movimento vestibular, que e o que a
+ * preferencia existe para evitar, nao ha aqui.
+ *
+ * A TV da equipe tambem costuma rodar numa maquina cujo Windows veio com
+ * "efeitos de animacao" desligado por politica -- e ninguem escolheu isso
+ * pensando no painel de atendimento.
+ */
 @media (prefers-reduced-motion: reduce) {
   .fila-alerta.fila-alerta {
-    animation: none;
-    box-shadow: 0 0 0 1px rgb(var(--espera) / 0.65), 0 0 26px -4px rgb(var(--espera) / 0.55);
+    animation-duration: 4s;
   }
 }
 

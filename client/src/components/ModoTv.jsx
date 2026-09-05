@@ -224,14 +224,18 @@ function LinhaIndicador({ rotulo, valor, detalhe, pontos, esmaecido }) {
   );
 }
 
-function DestaqueDoMes({ item, minimo }) {
+function DestaqueDoMes({ item, minimo, periodo }) {
   const ouro = MEDALHAS[0];
 
   return (
     <section className="min-h-0 glass-panel border border-linha rounded-2xl p-4 xl:p-5 flex flex-col gap-3 overflow-hidden">
       <div className="flex items-center justify-between gap-3 shrink-0">
         <Rotulo icon={Trophy} cor={medalha(ouro)}>Destaque do mês</Rotulo>
-        <span className="shrink-0 text-slate-500 truncate" style={T.apoio}>mês corrente</span>
+        {/* O PERIODO VEM DO SERVIDOR, e nao escrito aqui: com o painel
+            zerado ele passa a dizer "desde a limpeza", e um "mês corrente"
+            chumbado no codigo continuaria afirmando o contrario logo abaixo do
+            cabecalho, que ja mostra o periodo certo. */}
+        <span className="shrink-0 text-slate-500 truncate" style={T.apoio}>{periodo || "mês corrente"}</span>
       </div>
 
       {!item ? (
@@ -647,8 +651,13 @@ export default function ModoTv({ onFechar, fila = [] }) {
                 Painel da Equipe
               </h1>
               <p className="text-slate-400 mt-1 truncate" style={T.apoio}>
+                {/* Separado por ponto, e nao com "do" na frente: o rotulo mudou
+                    para poder dizer "desde a limpeza" quando o painel e zerado,
+                    e a preposicao fixa produzia "Ranking do desde a limpeza".
+                    Sem colar preposicao em texto que vem de fora, nao ha
+                    concordancia para quebrar. */}
                 {dados
-                  ? `Ranking do ${dados.periodo.rotulo} · atualiza sozinho a cada 30 segundos`
+                  ? `Ranking · ${dados.periodo.rotulo} · atualiza sozinho a cada 30 segundos`
                   : 'atualiza sozinho a cada 30 segundos'}
               </p>
             </div>
@@ -703,7 +712,7 @@ export default function ModoTv({ onFechar, fila = [] }) {
           ) : (
             <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-3 xl:gap-4">
               <div className="flex-[3] min-h-0 grid grid-cols-1 md:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] gap-3 xl:gap-4">
-                <DestaqueDoMes item={ranking.classificacao[0]} minimo={ranking.minimoAvaliacoes} />
+                <DestaqueDoMes item={ranking.classificacao[0]} minimo={ranking.minimoAvaliacoes} periodo={dados.periodo.rotulo} />
                 <Classificacao
                   itens={ranking.classificacao}
                   aCaminho={ranking.aCaminho}
