@@ -588,10 +588,21 @@ export async function exportarRelatorioEmpresaPdf(relatorio) {
   // A LOGO DO CLIENTE fica aqui, à direita, e não junto da marca da Arka lá em
   // cima: em cima é o remetente do documento, aqui é de QUEM ele fala. As duas
   // lado a lado no mesmo cabeçalho ficariam disputando o mesmo papel.
-  const yIdentificacao = y;
   const logoCliente = await carregarLogoCliente(empresa.cnpj);
-  const CX_L = 34;   // caixa da logo do cliente, em mm
-  const CX_A = 22;   // ~ a altura das quatro linhas de identificação
+  const CX_L = 34;        // caixa da logo do cliente, em mm
+  const CX_A = 22;        // ~ a altura das quatro linhas de identificação
+  const RECUO_DIR = 12;   // afasta a logo da borda direita da folha
+
+  // ALINHADA PELO TOPO DA PRIMEIRA LINHA, e não centralizada no bloco.
+  //
+  // Centralizada, a logo flutuava na altura do "Período" -- longe do nome da
+  // empresa, que é a informação com que ela combina. Encostada no topo, ela lê
+  // como parte do mesmo bloco.
+  //
+  // O `- 3.5` existe porque `pdf.text` posiciona pela LINHA DE BASE, e não pelo
+  // topo: sem o desconto, a imagem começaria abaixo da primeira linha em vez de
+  // ao lado dela. É a altura aproximada de uma maiúscula em 9pt.
+  const yTopoTexto = y - 3.5;
   let desenhada = null;
   if (logoCliente) {
     const esc = Math.min(CX_L / logoCliente.largura, CX_A / logoCliente.altura);
@@ -599,7 +610,7 @@ export async function exportarRelatorioEmpresaPdf(relatorio) {
     try {
       pdf.addImage(
         logoCliente.dataUrl, 'PNG',
-        larguraPg - margem - desenhada.l, y + (CX_A - desenhada.a) / 2,
+        larguraPg - margem - RECUO_DIR - desenhada.l, yTopoTexto,
         desenhada.l, desenhada.a
       );
     } catch { desenhada = null; /* formato invalido: segue sem a logo */ }
@@ -616,7 +627,9 @@ export async function exportarRelatorioEmpresaPdf(relatorio) {
   // metade da linha -- e passar por baixo da imagem é o tipo de defeito que só
   // aparece no cadastro comprido de um cliente específico.
   const xValor = margem + 30;
-  const largValor = (larguraPg - margem - (desenhada ? CX_L + 5 : 0)) - xValor;
+  // A logo agora está recuada da borda, então o texto tem de parar ANTES dela:
+  // a conta desconta o recuo junto, senão a razão social avançaria por baixo.
+  const largValor = (larguraPg - margem - (desenhada ? RECUO_DIR + CX_L + 5 : 0)) - xValor;
 
   pdf.setFontSize(9);
   meta.forEach(([rotulo, valor]) => {
@@ -634,7 +647,7 @@ export async function exportarRelatorioEmpresaPdf(relatorio) {
   });
   // Se a logo for mais alta que o texto, o conteúdo seguinte desce até depois
   // dela -- senão o "Resumo do período" subiria por baixo da imagem.
-  if (desenhada) y = Math.max(y, yIdentificacao + CX_A + 2);
+  if (desenhada) y = Math.max(y, yTopoTexto + desenhada.a + 2);
   y += 3;
 
   // ---------- Resumo ----------
