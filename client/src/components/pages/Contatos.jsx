@@ -147,24 +147,16 @@ const ItemContatoWhatsApp = React.memo(function ItemContatoWhatsApp({ contato, o
    *
    * Por isso o `onErroFoto`: quem descobre que o link morreu é o `<img>` do
    * Avatar, e agora ele conta.
+   *
+   * SÓ A FOTO ABRE, e isso foi escolha depois de ver funcionando. O nome e o
+   * telefone também abriam, e era demais: são texto que a pessoa lê e às vezes
+   * seleciona para copiar, e virar botão atrapalha isso para oferecer um
+   * caminho que a própria foto ao lado já dá.
    */
   const [fotoQuebrada, setFotoQuebrada] = useState(false);
   useEffect(() => { setFotoQuebrada(false); }, [contato.fotoUrl]);
   const podeVerFoto = !!contato.fotoUrl && !fotoQuebrada;
   const abrir = () => podeVerFoto && onVerFoto(contato);
-
-  // Nome e número viram botão SÓ quando há foto para abrir. Um texto com
-  // cursor de mão que não faz nada ao clicar ensina a pessoa a desconfiar da
-  // tela inteira.
-  const comoBotao = podeVerFoto
-    ? { role: 'button', tabIndex: 0, onClick: abrir,
-        // Sem o alvo mínimo de 40px do celular: aqui o "botão" é o próprio
-        // texto, e inflá-lo dobraria a altura do cartão. Ver index.css.
-        'data-alvo-livre': true,
-        onKeyDown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(); } },
-        title: `Ver a foto de ${contato.nome}`,
-        className: 'cursor-pointer hover:underline decoration-dotted underline-offset-2' }
-    : {};
 
   return (
     <div className="p-3.5 hover:bg-grafite-600/70 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-linha/60 last:border-b-0">
@@ -203,18 +195,14 @@ const ItemContatoWhatsApp = React.memo(function ItemContatoWhatsApp({ contato, o
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span {...comoBotao}
-              className={`font-bold text-xs sm:text-sm text-white truncate ${comoBotao.className || ''}`}>
-              {contato.nome}
-            </span>
+            <span className="font-bold text-xs sm:text-sm text-white truncate">{contato.nome}</span>
             <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${tagCor}`}>
               {contato.tag}
             </span>
           </div>
 
           <div className="flex items-center gap-3 text-xs text-slate-400 mt-1 flex-wrap font-mono">
-            <span {...comoBotao}
-              className={`flex items-center gap-1 text-slate-300 ${comoBotao.className || ''}`}>
+            <span className="flex items-center gap-1 text-slate-300">
               <Phone size={11} className="text-ativo-400 shrink-0"/>
               {mascararTel(contato.telefone)}
             </span>
