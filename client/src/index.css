@@ -149,19 +149,25 @@
    25x25 -- confortavel com mouse, ruim com o dedo. Pior: em Mensagens Rapidas
    e Parceiros o "excluir" fica encostado no "editar", nesse mesmo tamanho, e um
    erro de toque ali apaga registro.
-   Vale so ate 640px para nao inchar a densidade do painel no desktop. */
+   Vale so ate 640px para nao inchar a densidade do painel no desktop.
+
+   HAVIA DUAS EXCECOES AQUI (`button.emoji-badge` e `button[data-alvo-livre]`),
+   e as duas foram removidas por nunca terem sido usadas: nenhum arquivo do
+   cliente, do servidor ou do index.html menciona qualquer uma das duas. Foram
+   escritas junto com esta regra, para casos que se imaginou que apareceriam.
+   A propria classe `.emoji-badge` saiu junto, pelo mesmo motivo -- ela existia
+   so para ser protegida por uma excecao que protegia ninguem.
+
+   Se algum dia um "botao" precisar acompanhar o texto em vez de virar um alvo
+   de 40px, a saida e criar a excecao NA HORA, para o caso concreto -- e ai ela
+   nasce com um uso, e da para conferir se funciona. Excecao escrita antes do
+   problema so parece protecao: ninguem sabe se o seletor esta certo, porque
+   nada jamais casou com ele. */
 @media (max-width: 640px) {
   button,
   [role='button'] {
     min-height: 40px;
     min-width: 40px;
-  }
-  /* Excecoes: elementos que sao botao mas precisam acompanhar o texto ou a
-     grade em volta, e que cresceriam torto com um minimo quadrado. */
-  button.emoji-badge,
-  button[data-alvo-livre] {
-    min-height: 0;
-    min-width: 0;
   }
 }
 
@@ -420,22 +426,6 @@
 
 .glow-blue {
   box-shadow: 0 0 20px -3px rgba(83, 189, 235, 0.35);
-}
-
-.emoji-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  padding: 4px 8px;
-  font-weight: 600;
-  font-size: 0.75rem;
-  letter-spacing: -0.01em;
-  transition: transform 0.15s ease;
-}
-
-.emoji-badge:hover {
-  transform: scale(1.04);
 }
 
 /* ── Telas de acesso (/login e /cadastrar) ────────────────────────────────
