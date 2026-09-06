@@ -68,10 +68,29 @@ function cabecalhoPdf(pdf, { logo, titulo, subtitulo, margem = 14 }) {
   const largura = pdf.internal.pageSize.getWidth();
   let y = margem;
 
-  if (logo) {
-    try { pdf.addImage(logo, 'PNG', margem, y, 26, 12); } catch { /* formato invalido */ }
+  /**
+   * A MARCA NÃO PODE SAIR DEFORMADA.
+   *
+   * Era desenhada num retângulo fixo de 26x12mm, sem olhar para o arquivo. Como
+   * o PNG é quadrado, a logo saía esticada 117% na horizontal em todo relatório
+   * que a empresa manda para o cliente -- e uma marca torta num documento
+   * assinado é o tipo de detalhe que o cliente nota antes do conteúdo.
+   *
+   * Agora a caixa é um LIMITE, não um tamanho: a imagem entra inteira dentro
+   * dela, encostando no lado que apertar primeiro, e a proporção é a do arquivo.
+   */
+  const CAIXA_L = 26;
+  const CAIXA_A = 13;
+  if (logo?.dataUrl) {
+    const escala = Math.min(CAIXA_L / logo.largura, CAIXA_A / logo.altura);
+    const l = logo.largura * escala;
+    const a = logo.altura * escala;
+    // Centralizada na altura da caixa: numa logo baixa e larga, encostar no
+    // topo a deixaria pendurada acima da linha do título.
+    try { pdf.addImage(logo.dataUrl, 'PNG', margem, y + (CAIXA_A - a) / 2, l, a); }
+    catch { /* formato invalido */ }
   }
-  const x = logo ? margem + 32 : margem;
+  const x = logo?.dataUrl ? margem + CAIXA_L + 6 : margem;
 
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(15);
@@ -130,18 +149,69 @@ function rodapePdf(pdf, { legenda, margem = 14 }) {
   }
 }
 
-// Carrega a logo como dataURL. Best-effort: sem ela o PDF sai só com o titulo.
+/**
+ * Carrega a logo para o PDF. Best-effort: sem ela o documento sai só com o
+ * título.
+ *
+ * Devolve `{ dataUrl, largura, altura }` -- as MEDIDAS vão junto porque o
+ * cabeçalho precisa delas para não deformar a marca. Ver `cabecalhoPdf`.
+ *
+ * ── POR QUE RECORTA A BORDA TRANSPARENTE ───────────────────────────────────
+ *
+ * O arquivo é 200x200, mas o desenho ocupa 196x150: sobram 25px de nada em
+ * cima e 25 embaixo. Encaixando o quadrado inteiro numa caixa, um quarto da
+ * altura reservada para a marca vira espaço vazio e a logo sai pequena sem
+ * motivo. Recortando, o que se encaixa é o desenho.
+ *
+ * O recorte é feito aqui, e não no arquivo, porque trocar o PNG mexeria
+ * também no login e no Modo TV, que usam o mesmo arquivo e já estão certos.
+ */
 async function carregarLogo() {
   try {
-    const resp = await fetch(LOGO_URL);
-    if (!resp.ok) return null;
-    const blob = await resp.blob();
-    return await new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(blob);
+    const img = await new Promise((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = reject;
+      el.src = LOGO_URL;
     });
+
+    const l = img.naturalWidth;
+    const a = img.naturalHeight;
+    if (!l || !a) return null;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = l;
+    canvas.height = a;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+
+    // Caixa do que NÃO é transparente. Se der errado (canvas sujo, imagem sem
+    // alfa), segue com a imagem inteira -- proporção certa é o que importa.
+    let x0 = 0, y0 = 0, x1 = l - 1, y1 = a - 1;
+    try {
+      const px = ctx.getImageData(0, 0, l, a).data;
+      let minX = l, minY = a, maxX = -1, maxY = -1;
+      for (let y = 0; y < a; y++) {
+        for (let x = 0; x < l; x++) {
+          if (px[(y * l + x) * 4 + 3] > 8) {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+      if (maxX >= minX && maxY >= minY) { x0 = minX; y0 = minY; x1 = maxX; y1 = maxY; }
+    } catch { /* sem recorte, e esta tudo bem */ }
+
+    const largura = x1 - x0 + 1;
+    const altura = y1 - y0 + 1;
+    const recorte = document.createElement('canvas');
+    recorte.width = largura;
+    recorte.height = altura;
+    recorte.getContext('2d').drawImage(img, x0, y0, largura, altura, 0, 0, largura, altura);
+
+    return { dataUrl: recorte.toDataURL('image/png'), largura, altura };
   } catch {
     return null;
   }
@@ -451,7 +521,9 @@ export async function exportarRelatorioEmpresaPdf(relatorio) {
 
   const {
     empresa = {}, periodo = {}, resumo = {},
-    porMotivo = [], porSetor = [], chamados = [],
+    // `chamados` NÃO é lido aqui: o extrato caso a caso saiu do PDF (ver mais
+    // abaixo). O campo continua vindo do servidor para a tela.
+    porMotivo = [], porSetor = [],
   } = relatorio || {};
 
   // ---------- Cabecalho ----------
@@ -541,81 +613,15 @@ export async function exportarRelatorioEmpresaPdf(relatorio) {
   distribuicao('Por que os chamados foram abertos', porMotivo);
   distribuicao('Por área de atendimento', porSetor);
 
-  // ---------- Extrato ----------
-  quebra(14);
-  y = tituloSecao(pdf, 'Chamados encerrados no período', margem, y) + 1;
-
-  if (!chamados.length) {
-    pdf.setFont('helvetica', 'italic');
-    pdf.setFontSize(9);
-    pdf.setTextColor(...CINZA);
-    pdf.text('Nenhum chamado encerrado neste período.', margem, y);
-    y += 6;
-  } else {
-    // As larguras somam `util`. O motivo leva toda a folga porque e a coluna
-    // que o cliente de fato le -- as outras sao dado curto e previsivel.
-    const COLS = [
-      { t: 'OS', w: 22 },
-      { t: 'Encerrado', w: 22 },
-      { t: 'Motivo', w: util - 100 },
-      { t: 'Área', w: 26 },
-      { t: 'Duração', w: 16 },
-      { t: 'Nota', w: 14 },
-    ];
-
-    // Cabecalho preenchido na cor da marca, com texto branco -- o mesmo
-    // tratamento da tabela de Indicadores do outro relatorio. Duas tabelas com
-    // desenhos diferentes no mesmo sistema e o que faz o conjunto parecer
-    // improvisado.
-    const cabecalhoTabela = () => {
-      pdf.setFillColor(...MARCA_FUNDO);
-      pdf.rect(margem, y - 3.6, util, 6, 'F');
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(7.5);
-      pdf.setTextColor(255, 255, 255);
-      let x = margem;
-      COLS.forEach((c) => { pdf.text(c.t, x + 1.5, y); x += c.w; });
-      y += 5.5;
-    };
-    cabecalhoTabela();
-
-    pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(8);
-    let zebra = 0;
-    chamados.forEach((c) => {
-      // O motivo pode ocupar mais de uma linha, e a ALTURA DA LINHA acompanha.
-      // Sem isto o texto do motivo invadiria a linha de baixo -- e numa tabela
-      // de trinta chamados o estrago vira uma mancha ilegivel.
-      const linhasMotivo = pdf.splitTextToSize(String(c.motivo || '-'), COLS[2].w - 2);
-      const altura = Math.max(5, linhasMotivo.length * 4);
-      if (y + altura > alturaPg - margem - 12) {
-        pdf.addPage();
-        y = margem + 4;
-        cabecalhoTabela();
-        pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(8);
-      }
-      // Zebra: numa tabela de seis colunas estreitas, e o que impede o olho de
-      // pular de linha no meio do caminho. Pintada ANTES do texto.
-      if (zebra % 2 === 1) {
-        pdf.setFillColor(...FAIXA);
-        pdf.rect(margem, y - 3.4, util, altura, 'F');
-      }
-      zebra += 1;
-
-      let x = margem;
-      pdf.setTextColor(...TINTA);
-      pdf.text(String(c.os || '-'), x + 1.5, y); x += COLS[0].w;
-      pdf.text(fmtDataCurta(c.fechadoEm), x + 1.5, y); x += COLS[1].w;
-      pdf.setTextColor(...TINTA_SUAVE);
-      linhasMotivo.forEach((l, i) => pdf.text(l, x + 1.5, y + i * 4));
-      x += COLS[2].w;
-      pdf.text(String(c.setor || '-'), x + 1.5, y); x += COLS[3].w;
-      pdf.text(c.duracaoHoras != null ? `${c.duracaoHoras}h` : '-', x + 1.5, y); x += COLS[4].w;
-      pdf.text(c.avaliacao != null ? `${c.avaliacao}/5` : '-', x + 1.5, y);
-      y += altura;
-    });
-  }
+  // O EXTRATO DE CHAMADOS SAIU DAQUI, a pedido de quem manda o relatorio.
+  //
+  // Era uma tabela com uma linha por chamado -- num mes movimentado, paginas
+  // dela. O que o cliente le e o resumo e as distribuicoes acima; a lista de
+  // OS por OS e dado interno, e engordava um documento que vai para fora.
+  //
+  // `chamados` continua chegando do servidor e continua na TELA: quem precisa
+  // do caso a caso olha no painel. Tirar o campo da API seria decidir por
+  // outra tela, e ninguem pediu isso.
 
   rodapePdf(pdf, { legenda: 'Arka Tecnologia · Relatório de Atendimento', margem });
 
