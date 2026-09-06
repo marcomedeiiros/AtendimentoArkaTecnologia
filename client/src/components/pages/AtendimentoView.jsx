@@ -3032,9 +3032,11 @@ function PainelChat({
                 /* O papel de parede em uso e a arte ESCURA do WhatsApp, entao as
                    bolhas seguem o tema escuro: recebida em #202C33, enviada em
                    #005C4B, texto claro. Bolha branca aqui brilharia demais. */
+                /* O bico (`bolha-bico-*`) vai no canto que ja era o cortado --
+                   ver `.bolha-bico` no index.css. */
                 m.de === 'cliente'
-                  ? 'bg-grafite-600 text-texto rounded-tl-sm'
-                  : 'bg-bolha text-texto rounded-tr-sm'
+                  ? 'bg-grafite-600 text-texto rounded-tl-sm bolha-bico bolha-bico-esq'
+                  : 'bg-bolha text-texto rounded-tr-sm bolha-bico bolha-bico-dir'
               }`}>
                 <div className="text-[10px] font-semibold text-texto-suave flex items-center gap-1">
                   {m.de === 'cliente' ? conversa.cliente : 'Arka Tecnologia'}

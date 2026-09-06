@@ -357,6 +357,53 @@
   background-image: url("/whatsapp-bg-light.png");
 }
 
+/* O BICO DA BOLHA -- o rabinho que aponta para quem falou.
+ *
+ * A conversa ja usava o papel de parede e as cores do WhatsApp, e as bolhas ja
+ * tinham o canto de cima "cortado" (`rounded-tl-sm` / `rounded-tr-sm`) -- que e
+ * o lugar onde o bico entra. Faltava o bico.
+ *
+ * Nao e enfeite: numa tela cheia de bolhas do mesmo tamanho, o bico e o que diz
+ * de que LADO a mensagem nasceu sem precisar ler a cor. Quem tem daltonismo
+ * vermelho-verde ve o verde da bolha enviada muito perto do cinza da recebida;
+ * a forma nao depende de enxergar cor nenhuma.
+ *
+ * ── POR QUE UM TRIANGULO DE BORDA, E NAO UMA IMAGEM ────────────────────────
+ *
+ * O truque das bordas desenha o triangulo com a COR DO TOKEN, entao o bico
+ * acompanha o tema claro e o escuro sozinho -- uma imagem (SVG ou PNG) teria a
+ * cor congelada dentro do arquivo e precisaria de duas versoes, que e como um
+ * dia elas ficam fora de sincronia com a bolha.
+ *
+ * O bico fica a 7px para fora, dentro dos 12px de respiro (`p-3`) da area de
+ * conversa: ele nao alarga a coluna nem e cortado pela rolagem.
+ */
+.bolha-bico {
+  position: relative;
+}
+.bolha-bico::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  width: 0;
+  height: 0;
+  /* `border-bottom` transparente cria a diagonal; o lado colorido e o que
+     encosta na bolha. Sem `border-top`, o bico nasce alinhado ao topo -- e o
+     canto reto de cima e justamente o que faz ele parecer parte da bolha, e
+     nao um triangulo colado nela. */
+  border-bottom: 11px solid transparent;
+}
+/* RECEBIDA (esquerda): bico apontando para fora, na cor da bolha do cliente. */
+.bolha-bico-esq::after {
+  left: -7px;
+  border-right: 8px solid rgb(var(--grafite-600));
+}
+/* ENVIADA (direita): mesma coisa espelhada, na cor da bolha da equipe. */
+.bolha-bico-dir::after {
+  right: -7px;
+  border-left: 8px solid rgb(var(--bolha));
+}
+
 /* Logo da Arka Tecnologia: branca no tema escuro, preta no tema claro */
 .arka-logo {
   filter: brightness(0) invert(1);
