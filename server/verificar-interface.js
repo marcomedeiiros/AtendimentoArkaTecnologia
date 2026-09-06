@@ -226,6 +226,66 @@ for (const f of arquivos.filter((a) => a.endsWith(".jsx"))) {
 }
 check("componente usado no JSX esta importado (tela branca)", [...new Set(naoDefinidos)]);
 
+// ---------------------------------------------------------------------------
+titulo("6. O aviso da fila do Modo TV nao pode voltar a gritar");
+
+/**
+ * A TV fica ligada o dia inteiro na parede da sala. O brilho ambar do painel
+ * "Aguardando atendimento" ja nasceu forte demais -- borda em opacidade CHEIA,
+ * anel de 2px e halo de 55px, os tres no maximo ao mesmo tempo -- e latejava na
+ * visao periferica de quem senta perto.
+ *
+ * Foi baixado de proposito. Este bloco existe para que subir de novo seja uma
+ * DECISAO, e nao o efeito colateral de alguem mexendo no keyframe achando que
+ * "mais visivel e melhor". O alerta continua: o que se cobra aqui e o teto.
+ */
+const cssTv = fs.readFileSync(path.join(RAIZ, "index.css"), "utf8");
+const brilho = /@keyframes\s+brilhoFila\s*\{([\s\S]*?)\n\}/.exec(cssTv);
+const excessos = [];
+
+if (!brilho) {
+  excessos.push("@keyframes brilhoFila sumiu do index.css");
+} else {
+  const pico = /50%\s*\{([\s\S]*?)\}/.exec(brilho[1]);
+  if (!pico) {
+    excessos.push("brilhoFila perdeu o passo de 50% -- sem pico, nao ha pulsacao");
+  } else {
+    const corpo = pico[1];
+
+    // Opacidade: nenhuma parcela do pico pode chegar perto do opaco.
+    for (const [, alfa] of corpo.matchAll(/var\(--espera\)\s*\/\s*([0-9.]+)\)/g)) {
+      if (Number(alfa) > 0.75) {
+        excessos.push(`pico do brilhoFila com opacidade ${alfa} (teto 0.75)`);
+      }
+    }
+
+    // Halo: o desfoque e o que sangra para fora do painel e cansa a vista.
+    // Exigir o SPREAD depois do desfoque separa o halo do anel: `0 0 34px -8px`
+    // casa, `0 0 0 1px` nao. Sem isso a regra lia o anel e dava o halo por bom.
+    const halo = /0\s+0\s+(\d+)px\s+-?\d+(?:px)?/.exec(corpo);
+    if (halo && Number(halo[1]) > 40) {
+      excessos.push(`halo de ${halo[1]}px no pico (teto 40px)`);
+    }
+
+    // Anel: 2px sobre a borda ja acesa vira contorno duplo.
+    const anel = /0\s+0\s+0\s+(\d+)px/.exec(corpo);
+    if (anel && Number(anel[1]) > 1) {
+      excessos.push(`anel de ${anel[1]}px no pico (teto 1px)`);
+    }
+  }
+}
+
+// Piscar rapido cansa mais que brilhar forte: o ciclo tem que continuar lento.
+const ciclo = /\.fila-alerta\.fila-alerta\s*\{[\s\S]*?animation:\s*brilhoFila\s+([0-9.]+)s/.exec(cssTv);
+if (!ciclo) {
+  excessos.push("nao achei a duracao da animacao em .fila-alerta");
+} else if (Number(ciclo[1]) < 2.4) {
+  excessos.push(`ciclo de ${ciclo[1]}s -- rapido demais para uma tela de parede (minimo 2.4s)`);
+}
+
+check("brilho da fila avisa sem cansar", excessos);
+
+
 console.log(
   "\n" + (erros.length
     ? `FALHAS (${erros.length}):\n  ` + erros.join("\n  ")
