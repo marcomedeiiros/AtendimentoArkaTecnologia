@@ -28,10 +28,18 @@ export function urlLogo(parceiro) {
   return `/api/parceiros/${encodeURIComponent(parceiro.cnpj)}/logo?v=${parceiro.logoEm || 0}`;
 }
 
+/**
+ * `xs` é o tamanho de DENTRO DE UMA BADGE (o selo da empresa no cabeçalho da
+ * conversa), e por isso é o único sem moldura nem fundo próprios: ali quem já
+ * desenha a pílula colorida é a badge em volta, e uma segunda borda de 16px
+ * dentro de outra vira sujeira em vez de contorno.
+ */
 const TAMANHOS = {
+  xs: 'w-4 h-4 rounded-[3px]',
   md: 'w-10 h-10 text-[11px] rounded-xl',
   lg: 'w-16 h-16 text-base rounded-2xl',
 };
+const ICONE = { xs: 13, md: 18, lg: 26 };
 
 /** A logo (ou o ícone de prédio) em modo leitura -- é o que a lista desenha. */
 export function LogoCliente({ parceiro, size = 'md', className = '' }) {
@@ -42,6 +50,7 @@ export function LogoCliente({ parceiro, size = 'md', className = '' }) {
   useEffect(() => { setFalhou(false); }, [url]);
 
   const dimensao = TAMANHOS[size] || TAMANHOS.md;
+  const nu = size === 'xs';
 
   if (url && !falhou) {
     return (
@@ -52,20 +61,33 @@ export function LogoCliente({ parceiro, size = 'md', className = '' }) {
         // `contain` e não `cover`: logo cortada deixa de ser a logo. Sobra
         // espaço nas laterais de uma marca horizontal, e é o certo aqui.
         onError={() => setFalhou(true)}
-        className={`${dimensao} shrink-0 border border-linha bg-grafite-700 object-contain p-1 ${className}`}
+        // NO `xs` A LARGURA E LIVRE, e isso nao e detalhe de acabamento.
+        //
+        // Logo de empresa quase sempre e larga (marca + nome ao lado). Encaixada
+        // num quadrado de 16px, ela sai com uns 16x5 reais e vira um borrao que
+        // nao identifica ninguem -- que e exatamente o problema do icone
+        // generico que este selo veio substituir.
+        //
+        // Com altura fixa e largura ate 3,5rem, a marca horizontal fica legivel
+        // e a quadrada continua quadrada. Nos outros tamanhos a caixa e o
+        // quadrado da lista, e ai a moldura precisa ser fixa.
+        className={`${nu ? 'h-4 w-auto max-w-[3.5rem]' : dimensao} shrink-0 object-contain ${nu ? '' : 'border border-linha bg-grafite-700 p-1'} ${className}`}
       />
     );
   }
 
-  // Sem logo: o mesmo prédio azul de sempre, no mesmo tamanho e na mesma cor
-  // que a tela já usava -- quem não subir imagem nenhuma não vê diferença.
+  // Sem logo: o mesmo prédio de sempre. No `xs` ele HERDA a cor da badge em
+  // volta (`currentColor`), em vez de puxar o azul: dentro de uma pílula verde
+  // ou âmbar, um ícone azul não pertence a nada do que está ali.
   return (
-    <div
+    <span
       title={parceiro?.razaoSocial}
-      className={`${dimensao} flex shrink-0 items-center justify-center border border-blue-500/20 bg-blue-500/10 text-blue-400 ${className}`}
+      className={`${dimensao} flex shrink-0 items-center justify-center ${
+        nu ? '' : 'border border-blue-500/20 bg-blue-500/10 text-blue-400'
+      } ${className}`}
     >
-      <Building2 size={size === 'lg' ? 26 : 18} />
-    </div>
+      <Building2 size={ICONE[size] || ICONE.md} />
+    </span>
   );
 }
 

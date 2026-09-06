@@ -14,6 +14,7 @@ import {
 import { EmojiIcon, FormattedMessage, TextoFormatado } from './EmojiIcon';
 import { useMensagensRapidas } from './MensagensRapidas';
 import Avatar from '../Avatar';
+import { LogoCliente } from '../LogoCliente';
 import Portal from '../Portal';
 import ModoTv from '../ModoTv';
 // O visualizador saiu deste arquivo para components/VisualizadorMidia.jsx: os
@@ -219,6 +220,54 @@ function empresaDaConversa(c, parceiros = []) {
   const digitos = limparDocumento(c.cnpj);
   const parceiro = digitos ? parceiros.find(p => limparDocumento(p.cnpj) === digitos) : null;
   return parceiro?.razaoSocial || c.empresa || null;
+}
+
+// O CADASTRO da empresa desta conversa, quando ela e um parceiro conhecido.
+//
+// E o que carrega `temLogo`/`logoEm`, e por isso vem da lista de parceiros do
+// AppContext e nao da conversa: a conversa guarda o CNPJ, o cadastro guarda a
+// identidade visual. Inclui parceiro INATIVO de proposito -- quem perdeu o
+// contrato continua sendo a mesma empresa, com a mesma logo.
+function parceiroDaConversa(c, parceiros = []) {
+  if (!c?.cnpjVerificado) return null;
+  const digitos = limparDocumento(c.cnpj);
+  if (!digitos) return null;
+  return parceiros.find(p => limparDocumento(p.cnpj) === digitos) || null;
+}
+
+/**
+ * O SELO DA EMPRESA no cabecalho da conversa.
+ *
+ * Ali havia um escudo de verificacao -- o mesmo desenho para todos os
+ * clientes. Ele dizia "parceiro conferido", que a COR da pilula ja diz, e
+ * ocupava o unico lugar onde caberia a identidade de quem esta do outro lado.
+ *
+ * Agora mostra a LOGO da empresa; quem nao cadastrou logo aparece com o icone
+ * de predio, exatamente como em Clientes (CNPJ). Duas telas, o mesmo desenho
+ * para a mesma empresa.
+ *
+ * A cor da pilula continua sendo o que separa contrato de avulso: a logo diz
+ * QUEM e, a cor diz O QUE e. Sao perguntas diferentes e cada uma tem o seu
+ * canal -- trocar a cor pela logo perderia a segunda.
+ */
+function SeloEmpresa({ conversa, parceiros, empresa, avulso = false }) {
+  const parceiro = parceiroDaConversa(conversa, parceiros);
+  const nome = empresa || (avulso ? 'Cliente avulso' : 'Cliente cadastrado');
+  const classe = avulso
+    ? 'bg-espera/15 border-espera/30 text-espera-400'
+    : 'bg-ativo/15 border-ativo/30 text-ativo-400';
+
+  return (
+    <span
+      title={avulso
+        ? `${nome} · atendimento avulso (sem contrato de parceiro)`
+        : `${nome} · parceiro com contrato ativo`}
+      className={`inline-flex h-5 max-w-[16rem] items-center gap-1.5 rounded-lg border px-1.5 text-xs font-semibold shadow-sm ${classe}`}
+    >
+      <LogoCliente parceiro={parceiro || { razaoSocial: nome }} size="xs" />
+      <span className="truncate">{avulso && empresa ? `${nome} (Avulso)` : nome}</span>
+    </span>
+  );
 }
 
 // Situacao do cliente como badge. Fica fora dos componentes porque duas telas
@@ -2802,14 +2851,20 @@ function PainelChat({
             cliente (responde "NÃO" quando o bot confirma) ou pelo
             administrador em Clientes (CNPJ). */}
         {!tipoCliente
+          // AINDA NAO IDENTIFICADO continua com a interrogacao: nao ha empresa
+          // para mostrar, e um predio generico aqui afirmaria "é uma empresa
+          // qualquer" quando o que se sabe e que nao se sabe nada.
           ? <EmojiIcon name="question" label="Cliente não identificado" size="sm" />
-          : tipoCliente === 'cadastrado'
-            ? <EmojiIcon name="shield" label={empresa || 'Cliente cadastrado'} size="sm" />
-            // AVULSO: o rótulo diz o TIPO. Antes escrevia "Cliente
-            // identificado (Sem Contrato)" -- e "identificado" era
-            // justamente a palavra errada, porque a Central não distinguia
-            // o cadastrado do avulso.
-            : <EmojiIcon name="warning" label={empresa ? `${empresa} (Avulso)` : 'Cliente avulso'} size="sm" />
+          // AVULSO: o rótulo diz o TIPO. Antes escrevia "Cliente
+          // identificado (Sem Contrato)" -- e "identificado" era
+          // justamente a palavra errada, porque a Central não distinguia
+          // o cadastrado do avulso.
+          : <SeloEmpresa
+              conversa={conversa}
+              parceiros={parceiros}
+              empresa={empresa}
+              avulso={tipoCliente !== 'cadastrado'}
+            />
         }
         {/* Mesma badge de setor do cartao: com o chat aberto ela continua
             sendo o motivo pelo qual o cliente chamou. */}
