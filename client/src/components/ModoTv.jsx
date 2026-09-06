@@ -56,7 +56,7 @@
  * placar de ausencia, e a parcela de nota exige um minimo de avaliacoes para
  * ninguem liderar por causa de uma unica estrela solta.
  */
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Trophy, Star, Clock, Users, Inbox, Target, WifiOff, X, AlertCircle, UserCheck, Crown, Medal } from 'lucide-react';
 import Portal from './Portal';
 import Avatar from './Avatar';
@@ -619,6 +619,28 @@ export default function ModoTv({ onFechar, fila = [] }) {
     return () => clearInterval(id);
   }, []);
 
+  /**
+   * SACUDIDA QUANDO ALGUEM CHEGA NA FILA.
+   *
+   * Dispara na SUBIDA do numero -- 0 -> 1, 2 -> 3 -- e some sozinha em 1,5s.
+   * Nao dispara quando a fila diminui: alguem sendo atendido e boa noticia, e
+   * boa noticia nao precisa sacudir a tela.
+   *
+   * O primeiro render nao sacode. `anterior` comeca com o tamanho atual da
+   * fila, entao abrir o Modo TV com tres pessoas esperando nao dispara um
+   * tremor sobre gente que ja estava la -- so o que CHEGA depois sacode.
+   */
+  const anteriorFila = useRef(fila.length);
+  const [chegou, setChegou] = useState(false);
+  useEffect(() => {
+    const antes = anteriorFila.current;
+    anteriorFila.current = fila.length;
+    if (fila.length <= antes) return;
+    setChegou(true);
+    const id = setTimeout(() => setChegou(false), 1500);
+    return () => clearTimeout(id);
+  }, [fila.length]);
+
   // ESC fecha. Quem esta na frente da TV nao usa; quem abriu no computador
   // espera que funcione.
   useEffect(() => {
@@ -760,7 +782,7 @@ export default function ModoTv({ onFechar, fila = [] }) {
                 `.fila-alerta` em index.css: da distancia da parede, o numero
                 indo de 0 para 1 nao chama ninguem; a moldura acesa chama. */}
             <section className={`flex-1 min-h-0 glass-panel border rounded-2xl p-3 xl:p-4 flex flex-col gap-2.5 ${
-              fila.length ? 'fila-alerta' : 'border-linha'
+              fila.length ? (chegou ? 'fila-alerta fila-chegou' : 'fila-alerta') : 'border-linha'
             }`}>
               <div className="flex items-center justify-between gap-2 shrink-0">
                 <Rotulo icon={Inbox}>Aguardando atendimento</Rotulo>

@@ -209,32 +209,59 @@
  * vermelho: vermelho e o que esta ATRASADO (ver `urgencia`), e gastar o
  * vermelho no primeiro segundo de espera apaga essa distincao.
  *
- * A pulsacao e lenta de proposito (3s). Piscar rapido numa tela que fica
- * ligada oito horas vira ruido que a equipe aprende a ignorar -- e ai o alerta
- * nao alerta mais ninguem.
+ * ── A INTENSIDADE JA FOI PARA OS DOIS LADOS, e o registro importa ──────────
  *
- * ── O PICO FOI BAIXADO ─────────────────────────────────────────────────────
+ * O pico nasceu no maximo (borda cheia + anel de 2px + halo de 55px), foi
+ * BAIXADO por parecer forte demais, e depois de rodar assim na parede foi
+ * SUBIDO de novo -- mais alto do que era no comeco. O motivo de subir venceu o
+ * de descer: de longe, com a sala cheia, o brilho discreto simplesmente nao
+ * era visto, e um aviso que ninguem ve nao e um aviso.
  *
- * Ele era forte demais: borda em opacidade CHEIA, mais um anel de 2px a 0.85,
- * mais um halo de 55px a 0.85 -- tres coisas no volume maximo ao mesmo tempo.
- * De perto (e alguem sempre acaba sentando perto da TV) aquilo latejava na
- * visao periferica o dia inteiro.
+ * Quem mexer nisto de novo: o numero certo depende da distancia e da luz da
+ * sala, nao de como fica na tela de quem edita o codigo. Olhe na parede.
  *
- * O alerta continua: a moldura ainda acende e apaga, so que a variacao agora e
- * o suficiente para o canto de olho perceber, nao para incomodar quem esta na
- * sala. O ganho de atencao entre 0.55 e 1.0 de opacidade e pequeno; o
- * desgaste de olhar para isso por oito horas nao e.
+ * A pulsacao continua LENTA (2.6s). Piscar rapido numa tela ligada oito horas
+ * vira ruido que a equipe aprende a ignorar. O que aumentou foi a AMPLITUDE, e
+ * nao a velocidade -- sao coisas diferentes: amplitude chama de longe,
+ * velocidade irrita de perto.
  */
 @keyframes brilhoFila {
   0%, 100% {
-    border-color: rgb(var(--espera) / 0.30);
-    box-shadow: 0 0 0 1px rgb(var(--espera) / 0.16), 0 0 16px -8px rgb(var(--espera) / 0.22);
+    border-color: rgb(var(--espera) / 0.45);
+    box-shadow: 0 0 0 1px rgb(var(--espera) / 0.30), 0 0 26px -6px rgb(var(--espera) / 0.35);
   }
   50% {
-    border-color: rgb(var(--espera) / 0.70);
-    box-shadow: 0 0 0 1px rgb(var(--espera) / 0.45), 0 0 34px -8px rgb(var(--espera) / 0.45);
+    border-color: rgb(var(--espera) / 1);
+    box-shadow: 0 0 0 3px rgb(var(--espera) / 0.9), 0 0 70px -2px rgb(var(--espera) / 0.85);
   }
 }
+
+/* SACUDIDA DE CHEGADA -- dispara quando alguem ENTRA na fila.
+ *
+ * Foi pedido "algo pra tremer aquela janela". Treme, mas por um segundo e
+ * meio, e so no momento em que a fila CRESCE -- nao o tempo todo.
+ *
+ * Tremor permanente e a forma mais rapida de destruir um aviso: em cinco
+ * minutos o olho filtra o movimento constante, e ai a tela treme para sempre
+ * sem avisar mais nada -- alem de ser desagradavel para quem trabalha na sala.
+ * Um susto curto no instante da chegada e o oposto: raro, entao continua
+ * funcionando no centesimo cliente do dia.
+ *
+ * Deslocamento pequeno (4px) e horizontal: o painel nao muda de tamanho nem
+ * empurra o resto do layout -- `transform` nao reflui a pagina.
+ */
+@keyframes tremorFila {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  10% { transform: translate3d(-4px, 0, 0); }
+  20% { transform: translate3d(4px, 0, 0); }
+  30% { transform: translate3d(-3px, 0, 0); }
+  40% { transform: translate3d(3px, 0, 0); }
+  50% { transform: translate3d(-2px, 0, 0); }
+  60% { transform: translate3d(2px, 0, 0); }
+  70% { transform: translate3d(-1px, 0, 0); }
+  80% { transform: translate3d(1px, 0, 0); }
+}
+
 /* A CLASSE APARECE DUAS VEZES DE PROPOSITO -- nao e engano de digitacao.
  *
  * `.glass-panel` (mais abaixo neste arquivo) pinta a borda pelo ATALHO
@@ -248,28 +275,43 @@
  * reorganiza o arquivo.
  */
 .fila-alerta.fila-alerta {
-  border-color: rgb(var(--espera) / 0.45);
-  animation: brilhoFila 3s ease-in-out infinite;
+  border-color: rgb(var(--espera) / 0.6);
+  animation: brilhoFila 2.6s ease-in-out infinite;
 }
-/* MOVIMENTO REDUZIDO: a pulsacao FICA, e mais lenta.
+
+/* As duas animacoes convivem: o brilho e continuo, o tremor entra por cima e
+ * sai sozinho. Sao propriedades diferentes (cor/sombra x transform), entao uma
+ * nao apaga a outra. */
+.fila-chegou.fila-chegou {
+  animation: brilhoFila 2.6s ease-in-out infinite, tremorFila 0.5s ease-in-out 3;
+}
+
+/* MOVIMENTO REDUZIDO: o brilho FICA, o tremor SAI.
  *
- * Contraria a regra geral deste arquivo de propósito, e vale explicar. As
- * outras animacoes daqui sao acabamento -- o `fade-in`, a grade que deriva no
- * fundo -- e somem sem custo nenhum. Esta e o AVISO: e ela que diz, do outro
- * lado da sala, que tem cliente esperando. Desligar deixa a tela silenciosa
- * justamente na hora em que ela precisa falar.
+ * A distincao nao e detalhe -- e a razao de as duas coisas serem separadas.
  *
- * O que muda: nada se move nem muda de tamanho -- so a cor e o brilho variam,
- * e devagar (4,5s no lugar de 3s). Movimento vestibular, que e o que a
- * preferencia existe para evitar, nao ha aqui.
+ * O BRILHO fica, e contraria a regra geral deste arquivo de proposito: nada se
+ * move nem muda de tamanho, so a cor varia. Movimento vestibular, que e o que
+ * a preferencia existe para evitar, nao ha ali. E ele e o AVISO: desligar
+ * deixaria a tela silenciosa justamente na hora em que precisa falar. So fica
+ * mais lento (3,6s).
  *
- * A TV da equipe tambem costuma rodar numa maquina cujo Windows veio com
- * "efeitos de animacao" desligado por politica -- e ninguem escolheu isso
- * pensando no painel de atendimento.
+ * O TREMOR sai, e ele SIM e movimento de verdade -- exatamente a classe de
+ * efeito que causa enjoo em quem tem sensibilidade vestibular. Nao ha versao
+ * suave disso que continue sendo um tremor.
+ *
+ * Consequencia assumida: a TV da equipe costuma rodar num Windows com "efeitos
+ * de animacao" desligado por politica, e ninguem escolheu isso pensando no
+ * painel. Nessa maquina o tremor nunca vai disparar -- e por isso o brilho
+ * forte, que vale para todo mundo, e quem carrega o aviso. O tremor e reforco,
+ * nunca o unico sinal.
  */
 @media (prefers-reduced-motion: reduce) {
   .fila-alerta.fila-alerta {
-    animation-duration: 4.5s;
+    animation-duration: 3.6s;
+  }
+  .fila-chegou.fila-chegou {
+    animation: brilhoFila 3.6s ease-in-out infinite;
   }
 }
 

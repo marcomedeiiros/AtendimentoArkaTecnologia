@@ -262,63 +262,110 @@ for (const f of arquivos.filter((a) => a.endsWith(".jsx"))) {
 check("componente usado no JSX esta importado (tela branca)", [...new Set(naoDefinidos)]);
 
 // ---------------------------------------------------------------------------
-titulo("6. O aviso da fila do Modo TV nao pode voltar a gritar");
+titulo("6. O aviso da fila do Modo TV: forte pode, permanente nao");
 
 /**
- * A TV fica ligada o dia inteiro na parede da sala. O brilho ambar do painel
- * "Aguardando atendimento" ja nasceu forte demais -- borda em opacidade CHEIA,
- * anel de 2px e halo de 55px, os tres no maximo ao mesmo tempo -- e latejava na
- * visao periferica de quem senta perto.
+ * A INTENSIDADE DESTE AVISO JA FOI PARA OS DOIS LADOS.
  *
- * Foi baixado de proposito. Este bloco existe para que subir de novo seja uma
- * DECISAO, e nao o efeito colateral de alguem mexendo no keyframe achando que
- * "mais visivel e melhor". O alerta continua: o que se cobra aqui e o teto.
+ * Ele nasceu no maximo, foi baixado por parecer forte demais, rodou assim na
+ * parede -- e ai o dono da tela pediu para subir de novo, mais alto do que era
+ * no comeco. O motivo venceu: de longe, com a sala cheia, brilho discreto
+ * simplesmente nao e visto.
+ *
+ * Entao esta secao NAO cobra mais teto de brilho. Quao forte o alerta pisca e
+ * decisao de quem olha a parede, e nao de quem le o CSS -- e um limite fixo
+ * aqui so serviria para reprovar a pessoa certa.
+ *
+ * O que continua travado sao as tres coisas que NENHUMA intensidade justifica:
+ *
+ *   CICLO LENTO       piscar rapido numa tela ligada oito horas vira ruido que
+ *                     a equipe aprende a ignorar. Amplitude chama de longe;
+ *                     velocidade so irrita de perto.
+ *   TREMOR FINITO     o tremor existe para o INSTANTE em que alguem chega. Em
+ *                     `infinite`, o olho filtra o movimento em minutos e a tela
+ *                     passa a tremer para sempre sem avisar mais nada.
+ *   TREMOR SAI NO MOVIMENTO REDUZIDO
+ *                     brilho e cor e fica para todos; tremor e movimento
+ *                     vestibular de verdade, que e exatamente o que a
+ *                     preferencia existe para evitar.
  */
-const cssTv = fs.readFileSync(path.join(RAIZ, "index.css"), "utf8");
-const brilho = /@keyframes\s+brilhoFila\s*\{([\s\S]*?)\n\}/.exec(cssTv);
-const excessos = [];
+{
+  const cssTv = fs.readFileSync(path.join(RAIZ, "index.css"), "utf8");
+  const problemas = [];
 
-if (!brilho) {
-  excessos.push("@keyframes brilhoFila sumiu do index.css");
-} else {
-  const pico = /50%\s*\{([\s\S]*?)\}/.exec(brilho[1]);
-  if (!pico) {
-    excessos.push("brilhoFila perdeu o passo de 50% -- sem pico, nao ha pulsacao");
+  // Sem o keyframe nao ha aviso nenhum -- e a falha mais grave possivel aqui.
+  const brilho = /@keyframes\s+brilhoFila\s*\{([\s\S]*?)\n\}/.exec(cssTv);
+  check("o brilho da fila existe", brilho ? [] : ["@keyframes brilhoFila sumiu do index.css"]);
+
+  if (brilho && !/50%\s*\{/.test(brilho[1])) {
+    problemas.push("brilhoFila perdeu o passo de 50% -- sem pico, nao ha pulsacao");
+  }
+
+  // CICLO: amplitude e livre, velocidade nao.
+  const ciclo = /\.fila-alerta\.fila-alerta\s*\{[\s\S]*?animation:\s*brilhoFila\s+([0-9.]+)s/.exec(cssTv);
+  if (!ciclo) {
+    problemas.push("nao achei a duracao da animacao em .fila-alerta");
+  } else if (Number(ciclo[1]) < 2.4) {
+    problemas.push(`ciclo de ${ciclo[1]}s -- rapido demais para uma tela de parede (minimo 2.4s)`);
+  }
+  check("o brilho pulsa devagar", problemas);
+}
+
+{
+  const cssTv = fs.readFileSync(path.join(RAIZ, "index.css"), "utf8");
+  const doTremor = [];
+
+  const tremor = /@keyframes\s+tremorFila\s*\{/.test(cssTv);
+  check("o tremor de chegada existe", tremor ? [] : ["@keyframes tremorFila sumiu do index.css"]);
+
+  // A regra que mais importa: o tremor tem CONTAGEM, nunca `infinite`.
+  const usoTremor = /\.fila-chegou\.fila-chegou\s*\{[\s\S]*?\n\}/.exec(cssTv);
+  if (!usoTremor) {
+    doTremor.push("nao achei a regra .fila-chegou");
   } else {
-    const corpo = pico[1];
-
-    // Opacidade: nenhuma parcela do pico pode chegar perto do opaco.
-    for (const [, alfa] of corpo.matchAll(/var\(--espera\)\s*\/\s*([0-9.]+)\)/g)) {
-      if (Number(alfa) > 0.75) {
-        excessos.push(`pico do brilhoFila com opacidade ${alfa} (teto 0.75)`);
+    const regra = usoTremor[0];
+    if (!/tremorFila/.test(regra)) doTremor.push(".fila-chegou nao usa tremorFila");
+    if (/tremorFila[^;}]*\binfinite\b/.test(regra)) {
+      doTremor.push("tremorFila esta como `infinite` -- tremor permanente deixa de avisar");
+    }
+    if (!/tremorFila[^;}]*\b\d+\b\s*(;|\})/.test(regra) && !/tremorFila[^;}]*\s\d+\s*(;|\})/.test(regra)) {
+      // A contagem e o ultimo numero da declaracao (ex: `... 0.5s ease-in-out 3`).
+      if (!/tremorFila\s+[0-9.]+s[^;}]*\s\d+/.test(regra)) {
+        doTremor.push("tremorFila sem contagem de repeticoes explicita");
       }
     }
+  }
+  check("o tremor e um susto curto, e nao um estado", doTremor);
+}
 
-    // Halo: o desfoque e o que sangra para fora do painel e cansa a vista.
-    // Exigir o SPREAD depois do desfoque separa o halo do anel: `0 0 34px -8px`
-    // casa, `0 0 0 1px` nao. Sem isso a regra lia o anel e dava o halo por bom.
-    const halo = /0\s+0\s+(\d+)px\s+-?\d+(?:px)?/.exec(corpo);
-    if (halo && Number(halo[1]) > 40) {
-      excessos.push(`halo de ${halo[1]}px no pico (teto 40px)`);
+{
+  const cssTv = fs.readFileSync(path.join(RAIZ, "index.css"), "utf8");
+  const reduzido = /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}\s*(?:\n|$)/.exec(
+    cssTv.slice(cssTv.indexOf("@keyframes brilhoFila"))
+  );
+  const doMovimento = [];
+  if (!reduzido) {
+    doMovimento.push("nao achei o bloco de prefers-reduced-motion da fila");
+  } else {
+    const bloco = reduzido[1];
+    // O brilho FICA: e o unico aviso que sobra numa maquina com movimento
+    // reduzido ligado por politica -- e a TV da equipe costuma ser uma dessas.
+    if (!/\.fila-alerta\.fila-alerta/.test(bloco)) {
+      doMovimento.push("o brilho nao e tratado no movimento reduzido");
     }
-
-    // Anel: 2px sobre a borda ja acesa vira contorno duplo.
-    const anel = /0\s+0\s+0\s+(\d+)px/.exec(corpo);
-    if (anel && Number(anel[1]) > 1) {
-      excessos.push(`anel de ${anel[1]}px no pico (teto 1px)`);
+    if (/animation:\s*none/.test(bloco)) {
+      doMovimento.push("algo esta desligado com `animation: none` -- o brilho tem de ficar");
+    }
+    // O tremor SAI: a regra de .fila-chegou no bloco nao pode citar tremorFila.
+    const chegouReduzido = /\.fila-chegou\.fila-chegou\s*\{[^}]*\}/.exec(bloco);
+    if (!chegouReduzido) {
+      doMovimento.push(".fila-chegou nao e redefinida no movimento reduzido -- o tremor continua");
+    } else if (/tremorFila/.test(chegouReduzido[0])) {
+      doMovimento.push("o tremor continua ligado com movimento reduzido");
     }
   }
+  check("movimento reduzido mantem o brilho e tira o tremor", doMovimento);
 }
-
-// Piscar rapido cansa mais que brilhar forte: o ciclo tem que continuar lento.
-const ciclo = /\.fila-alerta\.fila-alerta\s*\{[\s\S]*?animation:\s*brilhoFila\s+([0-9.]+)s/.exec(cssTv);
-if (!ciclo) {
-  excessos.push("nao achei a duracao da animacao em .fila-alerta");
-} else if (Number(ciclo[1]) < 2.4) {
-  excessos.push(`ciclo de ${ciclo[1]}s -- rapido demais para uma tela de parede (minimo 2.4s)`);
-}
-
-check("brilho da fila avisa sem cansar", excessos);
 
 
 // ---------------------------------------------------------------------------
