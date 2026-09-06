@@ -195,6 +195,17 @@ function mapParceiro(p) {
     // Contratos guardados como "ti,backups" no banco; devolvidos como array.
     contratos: p.contratos ? p.contratos.split(",").filter(Boolean) : [],
     status: p.status,
+    // A LOGO NAO VAI NOS BYTES, so o aviso de que existe.
+    //
+    // A lista de clientes carrega TODOS os cadastros de uma vez; mandar cada
+    // imagem embutida faria a tela buscar centenas de logos que ninguem vai
+    // olhar. Com o aviso, o front monta a URL e cada `<img>` busca a sua -- e o
+    // navegador guarda em cache.
+    //
+    // `logoEm` e a versao que vai no `?v=` dessa URL: sem ela, trocar a logo
+    // nao mudaria o endereco e o cache continuaria servindo a antiga.
+    temLogo: !!p.logoPath,
+    logoEm: p.logoEm ? new Date(p.logoEm).getTime() : null,
   };
 }
 

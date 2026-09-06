@@ -284,6 +284,22 @@ model Parceiro {
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
+  // LOGO DA EMPRESA -- os bytes ficam no DISCO, aqui so o caminho.
+  //
+  // Mesma decisao da midia das conversas (ver midia.storage.js): guardar a
+  // imagem como base64 numa coluna faria a LISTA inteira de clientes carregar
+  // todas as logos a cada abertura da tela, mesmo as que ninguem vai olhar. Com
+  // o caminho no banco, a lista sai leve e cada `<img>` busca a sua -- e o
+  // navegador guarda em cache.
+  //
+  // `logoEm` nao e enfeite de auditoria: e a VERSAO que a URL da imagem carrega
+  // (`?v=`). Sem ela, trocar a logo nao mudaria o endereco e o navegador
+  // continuaria mostrando a antiga, do cache, ate alguem limpar na mao.
+  logoPath  String?   @map("logo_path")
+  logoTipo  String?   @map("logo_tipo")
+  logoBytes Int?      @map("logo_bytes")
+  logoEm    DateTime? @map("logo_em")
+
   // NAO existe mais `conversas Conversa[]` aqui.
   //
   // `Conversa.cnpj` apontava para esta tabela como CHAVE ESTRANGEIRA, e o CNPJ

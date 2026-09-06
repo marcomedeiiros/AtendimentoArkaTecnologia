@@ -10,6 +10,7 @@ router.use(authMiddleware, exigirModulo("parceiros"));
 router.get("/", (req, res, next) => parceiroController.listar(req, res).catch(next));
 router.post("/", validate(criarParceiroSchema), (req, res, next) => parceiroController.criar(req, res).catch(next));
 router.put("/:cnpj", validate(atualizarParceiroSchema), (req, res, next) => parceiroController.atualizar(req, res).catch(next));
+router.get("/:cnpj/logo", (req, res, next) => parceiroController.logo(req, res).catch(next));
 router.get("/:cnpj/validar", (req, res, next) => parceiroController.validar(req, res).catch(next));
 router.patch("/:cnpj/status", (req, res, next) => parceiroController.alternarStatus(req, res).catch(next));
 // REMOCAO MANUAL DE VINCULO NAO EXISTE MAIS.

@@ -158,18 +158,53 @@ titulo("3. O colar de ARQUIVO nao pode engolir o colar de TEXTO");
 //
 // Distinguir os dois pelo que o handler LE: quem chama `getData('text')` esta
 // tratando texto de proposito.
+// ── O FILTRO PODE MORAR NUM AJUDANTE, e a regra segue ate la ───────────────
+//
+// A checagem so olhava DENTRO do arquivo. Quando o filtro saiu para uma funcao
+// compartilhada (`imagemDoColar`, em LogoCliente.jsx) e a tela passou a chamar
+// essa funcao, a tela virou "cancela sem filtrar" aos olhos daqui -- correta na
+// pratica, reprovada na leitura.
+//
+// A saida NAO e afrouxar para "chamou alguma funcao, entao esta bom": isso
+// aposentaria a regra. E provar o ajudante primeiro. So entra na lista abaixo a
+// funcao EXPORTADA cujo proprio corpo filtra por `kind === 'file'`; quem chama
+// uma dessas herda a garantia, e quem inventar um ajudante que nao filtra
+// continua sendo pego -- ele nunca entra na lista.
+const ajudantesProvados = new Set();
+for (const f of arquivos) {
+  const fonte = semComentarios(fs.readFileSync(f, "utf8"));
+  for (const m of fonte.matchAll(/export\s+function\s+([A-Za-z0-9_]+)\s*\(/g)) {
+    // Corpo = daqui ate o proximo `export` (ou o fim), que e onde a funcao
+    // acaba na pratica neste projeto -- um `export` por declaracao, no topo.
+    const inicio = m.index;
+    const proximo = fonte.indexOf("\nexport ", inicio + 1);
+    const corpo = fonte.slice(inicio, proximo === -1 ? undefined : proximo);
+    if (/kind\s*===\s*['"]file['"]/.test(corpo)) ajudantesProvados.add(m[1]);
+  }
+}
+
 const engoleTexto = [];
 for (const f of arquivos) {
   const fonte = semComentarios(fs.readFileSync(f, "utf8"));
   if (!/onPaste\s*=/.test(fonte)) continue;
   if (/getData\(\s*['"]text/.test(fonte)) continue;   // colar de TEXTO, proposital
   const filtraArquivo = /kind\s*===\s*['"]file['"]/.test(fonte);
+  const delega = [...ajudantesProvados].some((nome) =>
+    new RegExp(`\\b${nome}\\s*\\(`).test(fonte)
+  );
   const cancela = /preventDefault\(\)/.test(fonte);
-  if (cancela && !filtraArquivo) {
+  if (cancela && !filtraArquivo && !delega) {
     engoleTexto.push(`${rel(f)}  cancela o paste de arquivo sem filtrar por kind === 'file'`);
   }
 }
 check("o colar de ARQUIVO nao cancela o colar de texto", engoleTexto);
+// A lista nao pode secar em silencio: se `imagemDoColar` for renomeada ou
+// perder o filtro, ela sai daqui e as telas que dependem dela voltam a ser
+// cobradas -- mas so se alguem estiver olhando. Este check e o olho.
+check(
+  "o ajudante que filtra o colar continua provado",
+  ajudantesProvados.size > 0 ? [] : ["nenhuma funcao exportada filtra por kind === 'file'"]
+);
 
 /**
  * COMPONENTE USADO NO JSX E NUNCA IMPORTADO -- a TELA BRANCA.

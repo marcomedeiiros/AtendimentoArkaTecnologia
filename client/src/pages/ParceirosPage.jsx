@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash2, Search, Building2, Mail, Phone, MapPin, Pencil, X, Loader2, FileText, MessageCircle } from 'lucide-react';
+import { Plus, Trash2, Search, Image as ImageIcon, Mail, Phone, MapPin, Pencil, X, Loader2, FileText, MessageCircle } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { ParceirosAPI } from '../services/api';
 import { confirmar } from '../utils/dialogo';
@@ -7,6 +7,7 @@ import { confirmar } from '../utils/dialogo';
 // duplicadas aqui e em AtendimentoView, com as mesmas regras copiadas, e a mudanca
 // para aceitar CPF teria de ser feita duas vezes.
 import { limparDocumento, mascararDocumento, documentoValido } from '../utils/documento';
+import { LogoCliente, SeletorLogo, imagemDoColar, prepararLogo } from '../components/LogoCliente';
 
 // Tipos de contrato oferecidos ao cliente. `chave` casa com o backend
 // (parceiro.dto.js); `label` e o que aparece na tela.
@@ -56,13 +57,19 @@ export default function ParceirosPage() {
   const [cidades, setCidades] = useState('');
   const [contratos, setContratos] = useState([]);
   const [contratoFiltro, setContratoFiltro] = useState(''); // filtra a lista por tipo de contrato
+  // Logo do cadastro NOVO. `undefined` = ninguém escolheu imagem; sem isto,
+  // cadastrar já com a logo exigiria salvar e abrir a edição em seguida.
+  const [logoNova, setLogoNova] = useState(undefined);
   const [erro, setErro] = useState('');
   const [busca, setBusca] = useState('');
 
   // Edicao: guarda o parceiro em edicao e o rascunho dos campos. O CNPJ nao
   // entra no rascunho porque e a chave -- so leitura no modal.
   const [editando, setEditando] = useState(null);
-  const [rascunho, setRascunho] = useState({ razaoSocial: '', email: '', telefones: '', cidades: '', contratos: [] });
+  // `logo` NASCE `undefined` de propósito, e não `null`: para o servidor, ausente
+  // é "não mexa na que está lá" e `null` é "apague". Se o rascunho começasse
+  // `null`, abrir e salvar sem tocar na imagem apagaria a logo do cliente.
+  const [rascunho, setRascunho] = useState({ razaoSocial: '', email: '', telefones: '', cidades: '', contratos: [], logo: undefined });
   const [editErro, setEditErro] = useState('');
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
 
@@ -74,8 +81,33 @@ export default function ParceirosPage() {
       telefones: p.telefones || '',
       cidades: p.cidades || '',
       contratos: Array.isArray(p.contratos) ? p.contratos : [],
+      logo: undefined,
     });
     setEditErro('');
+  }
+
+  /**
+   * CTRL+V EM QUALQUER LUGAR DO MODAL cola a logo -- não é preciso acertar o
+   * quadradinho antes.
+   *
+   * O `preventDefault` só acontece quando havia mesmo uma IMAGEM na área de
+   * transferência (`imagemDoColar` filtra por `kind === 'file'`). Cancelar todo
+   * `paste` faria colar um telefone ou um e-mail nos campos parar de funcionar
+   * -- trocaria algo que sempre funcionou por um recurso novo.
+   *
+   * Mora aqui, e não dentro do JSX, por um motivo prático: o verificador de
+   * responsividade confere se um modal centralizado limita a altura olhando as
+   * 12 linhas seguintes à `fixed inset-0`. Um comentário longo no meio do
+   * elemento empurra o `modal-cabe` para fora dessa janela e a checagem passa a
+   * acusar um modal que está correto.
+   */
+  function colarLogoNaEdicao(e) {
+    const arquivo = imagemDoColar(e);
+    if (!arquivo) return;
+    e.preventDefault();
+    prepararLogo(arquivo)
+      .then(dataUrl => { setRascunho(r => ({ ...r, logo: dataUrl })); setEditErro(''); })
+      .catch(err => setEditErro(err.message));
   }
 
   function fecharEdicao() {
@@ -96,6 +128,10 @@ export default function ParceirosPage() {
         telefones: rascunho.telefones.trim() || null,
         cidades: rascunho.cidades.trim() || null,
         contratos: rascunho.contratos,
+        // Só vai no corpo quando a pessoa mexeu na imagem. Mandar `logo:
+        // undefined` seria o mesmo que não mandar (o JSON.stringify o remove),
+        // mas o `...` deixa a intenção escrita: quem não tocou não altera.
+        ...(rascunho.logo !== undefined ? { logo: rascunho.logo } : {}),
       });
       atualizarParceiros(parceiros.map(p => p.cnpj === editando.cnpj ? atualizado : p));
       setEditando(null);
@@ -119,13 +155,14 @@ export default function ParceirosPage() {
       telefones: telefones.trim() || null,
       cidades: cidades.trim() || null,
       contratos,
+      ...(logoNova !== undefined ? { logo: logoNova } : {}),
       status: 'ativo'
     };
 
     try {
       const criado = await ParceirosAPI.criar(novo);
       atualizarParceiros([...parceiros.filter(p => p.cnpj !== c), criado]);
-      setCnpjInput(''); setNome(''); setEmail(''); setTelefones(''); setCidades(''); setContratos([]);
+      setCnpjInput(''); setNome(''); setEmail(''); setTelefones(''); setCidades(''); setContratos([]); setLogoNova(undefined);
     } catch (err) {
       setErro(`Não foi possível salvar: ${err.message}. Verifique se o back-end está rodando.`);
     }
@@ -186,7 +223,18 @@ export default function ParceirosPage() {
         </div>
       </div>
 
-      <div className="glass-panel p-5 rounded-2xl border border-linha space-y-4">
+      {/* Mesmo Ctrl+V do modal de edição: com o cursor em qualquer campo deste
+          bloco, colar uma imagem preenche a logo. `imagemDoColar` filtra por
+          `kind === 'file'`, então colar o CNPJ ou o e-mail continua normal. */}
+      <div
+        className="glass-panel p-5 rounded-2xl border border-linha space-y-4"
+        onPaste={e => {
+          const arquivo = imagemDoColar(e);
+          if (!arquivo) return;
+          e.preventDefault();
+          prepararLogo(arquivo).then(setLogoNova).catch(err => setErro(err.message));
+        }}
+      >
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <input
             value={cnpjInput}
@@ -225,6 +273,18 @@ export default function ParceirosPage() {
           >
             <Plus size={15} /> Cadastrar Parceiro
           </button>
+        </div>
+
+        <div>
+          <label className="mb-1 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-slate-400">
+            <ImageIcon size={12} /> Logo da empresa <span className="normal-case tracking-normal text-slate-500">(opcional)</span>
+          </label>
+          <SeletorLogo
+            parceiro={{ razaoSocial: nome }}
+            valor={logoNova}
+            onChange={setLogoNova}
+            onErro={setErro}
+          />
         </div>
 
         <div>
@@ -282,9 +342,11 @@ export default function ParceirosPage() {
         {filtrados.map(p => (
           <div key={p.cnpj} className="glass-panel p-4 rounded-xl border border-linha hover:border-linha-forte transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-start gap-3 flex-1 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
-                <Building2 size={18} />
-              </div>
+              {/* A logo do cliente, ou as iniciais da razão social. Era o mesmo
+                  ícone de prédio em todas as linhas: com 183 cadastros, 183
+                  desenhos idênticos ocupando justamente o lugar onde a
+                  identificação deveria estar. */}
+              <LogoCliente parceiro={p} className="mt-0.5" />
               <div className="min-w-0 space-y-1">
                 <div className="font-bold text-xs sm:text-sm text-white truncate">{p.razaoSocial}</div>
                 <div className="text-[11px] text-slate-400 font-mono">{mascararDocumento(p.cnpj)}</div>
@@ -395,6 +457,7 @@ export default function ParceirosPage() {
           <form
             onSubmit={salvarEdicao}
             onClick={e => e.stopPropagation()}
+            onPaste={colarLogoNaEdicao}
             className="glass-panel modal-cabe w-full max-w-md space-y-4 rounded-2xl border border-linha p-5"
           >
             <div className="flex items-start justify-between gap-3">
@@ -417,6 +480,18 @@ export default function ParceirosPage() {
               <div className="rounded-xl border border-linha bg-grafite-800/60 px-3.5 py-2 text-xs font-mono text-slate-400">
                 {mascararDocumento(editando.cnpj)}
               </div>
+            </div>
+
+            <div>
+              <label className="mb-1.5 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-slate-400">
+                <ImageIcon size={12} /> Logo da empresa
+              </label>
+              <SeletorLogo
+                parceiro={editando}
+                valor={rascunho.logo}
+                onChange={logo => setRascunho(r => ({ ...r, logo }))}
+                onErro={setEditErro}
+              />
             </div>
 
             <div className="space-y-3">

@@ -232,6 +232,11 @@ const VERIFICACOES = [
     resumo: "upload, token da URL, streaming e o Range do player",
   },
   {
+    arquivo: "verificar-logo-cliente.js",
+    titulo: "Logo do cliente (CNPJ)",
+    resumo: "assinatura dos bytes, troca, remoção e nenhum arquivo órfão",
+  },
+  {
     arquivo: "verificar-transferencia.js",
     titulo: "Transferência entre atendentes",
     resumo: "passar a conversa para outro atendente",
