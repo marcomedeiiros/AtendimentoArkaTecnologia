@@ -1,57 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ImagePlus, Trash2, Loader2 } from 'lucide-react';
+import { Building2, Trash2, Loader2 } from 'lucide-react';
 
 /**
  * A LOGO DA EMPRESA na tela de Clientes (CNPJ) -- e o que aparece quando não há.
  *
- * O que estava lá era o mesmo ícone de prediozinho em todas as linhas: com 183
- * cadastros, 183 prediozinhos idênticos. Um ícone repetido não identifica
- * ninguém; ele só ocupa o lugar onde a identificação deveria estar, e ainda dá
- * a impressão de que o lugar já está preenchido.
+ * Quem tem logo mostra a logo. Quem não tem continua com o ÍCONE DE PRÉDIO, do
+ * jeito que sempre foi -- foi decisão do dono da tela, e é a escolha mais
+ * simples: o ícone diz "empresa sem logo cadastrada" sem inventar uma
+ * identidade visual que a empresa não escolheu.
  *
- * Sem logo, o desenho passa a ser as INICIAIS da razão social com uma cor
- * derivada do nome -- o mesmo recurso que o painel já usa para a equipe (ver
- * Avatar.jsx e o ranking do Modo TV). Duas empresas diferentes ficam diferentes
- * na lista mesmo antes de alguém subir imagem nenhuma.
+ * (Chegou a ficar com as iniciais da razão social aqui. Ficava mais variado,
+ * mas ninguém pediu variedade -- pediram poder subir a logo.)
  */
-
-// Mesma paleta do Avatar da equipe: são os tons que funcionam nos dois temas.
-const CORES = [
-  { bg: 'bg-acao/20', ring: 'border-acao/40', text: 'text-acao-200' },
-  { bg: 'bg-blue-500/20', ring: 'border-blue-500/40', text: 'text-blue-300' },
-  { bg: 'bg-ativo/20', ring: 'border-ativo/40', text: 'text-ativo-400' },
-  { bg: 'bg-purple-500/20', ring: 'border-purple-500/40', text: 'text-purple-300' },
-  { bg: 'bg-pink-500/20', ring: 'border-pink-500/40', text: 'text-pink-300' },
-  { bg: 'bg-espera/20', ring: 'border-espera/40', text: 'text-espera-400' },
-  { bg: 'bg-cyan-500/20', ring: 'border-cyan-500/40', text: 'text-cyan-300' },
-];
-
-// Palavras que não identificam empresa nenhuma: estão em metade dos cadastros.
-// "LTDA" e "ME" como inicial dariam "AL" para "A COLLI LTDA" e "ML" para
-// "MERCADO LTDA" -- a segunda letra viria sempre da forma jurídica.
-const RUIDO = new Set(['LTDA', 'ME', 'EPP', 'EIRELI', 'SA', 'S/A', 'MEI', 'DE', 'DA', 'DO', 'DAS', 'DOS', 'E']);
-
-/**
- * Iniciais da razão social. `Array.from` (e não `[0]`) pelo mesmo motivo do
- * Avatar: um nome com emoji quebrava em meio par surrogate e virava o
- * quadradinho de glifo inválido.
- */
-export function iniciaisEmpresa(nome = '') {
-  const letras = (s) => Array.from(String(s)).filter((c) => /[\p{L}\p{N}]/u.test(c));
-  const palavras = String(nome).trim().split(/\s+/)
-    .filter((p) => !RUIDO.has(p.toUpperCase().replace(/[.]/g, '')))
-    .map(letras)
-    .filter((a) => a.length > 0);
-  if (palavras.length === 0) return null;
-  if (palavras.length === 1) return palavras[0].slice(0, 2).join('').toUpperCase();
-  return (palavras[0][0] + palavras[1][0]).toUpperCase();
-}
-
-export function corDaEmpresa(nome = '') {
-  let hash = 0;
-  for (let i = 0; i < nome.length; i++) hash = nome.charCodeAt(i) + ((hash << 5) - hash);
-  return CORES[Math.abs(hash) % CORES.length];
-}
 
 /**
  * Endereço dos bytes da logo.
@@ -73,16 +33,14 @@ const TAMANHOS = {
   lg: 'w-16 h-16 text-base rounded-2xl',
 };
 
-/** A logo (ou as iniciais) em modo leitura -- é o que a lista desenha. */
+/** A logo (ou o ícone de prédio) em modo leitura -- é o que a lista desenha. */
 export function LogoCliente({ parceiro, size = 'md', className = '' }) {
   const url = urlLogo(parceiro);
   const [falhou, setFalhou] = useState(false);
   // A URL muda quando a logo muda; sem este reset, uma imagem que falhou uma vez
-  // ficaria nas iniciais para sempre, mesmo depois de trocada.
+  // ficaria no ícone para sempre, mesmo depois de trocada.
   useEffect(() => { setFalhou(false); }, [url]);
 
-  const cor = corDaEmpresa(parceiro?.razaoSocial || '');
-  const letras = iniciaisEmpresa(parceiro?.razaoSocial || '');
   const dimensao = TAMANHOS[size] || TAMANHOS.md;
 
   if (url && !falhou) {
@@ -99,12 +57,14 @@ export function LogoCliente({ parceiro, size = 'md', className = '' }) {
     );
   }
 
+  // Sem logo: o mesmo prédio azul de sempre, no mesmo tamanho e na mesma cor
+  // que a tela já usava -- quem não subir imagem nenhuma não vê diferença.
   return (
     <div
       title={parceiro?.razaoSocial}
-      className={`${dimensao} ${cor.bg} ${cor.text} border ${cor.ring} flex shrink-0 items-center justify-center font-display font-bold ${className}`}
+      className={`${dimensao} flex shrink-0 items-center justify-center border border-blue-500/20 bg-blue-500/10 text-blue-400 ${className}`}
     >
-      {letras || '—'}
+      <Building2 size={size === 'lg' ? 26 : 18} />
     </div>
   );
 }
@@ -223,8 +183,6 @@ export function SeletorLogo({ valor, onChange, parceiro, onErro }) {
   // null` é remoção pedida agora, e tem de aparecer como vazio ANTES de salvar
   // -- senão o botão de remover não daria sinal nenhum de ter funcionado.
   const previa = valor === undefined ? urlLogo(parceiro) : valor;
-  const letras = iniciaisEmpresa(parceiro?.razaoSocial || '');
-  const cor = corDaEmpresa(parceiro?.razaoSocial || '');
 
   return (
     <div
@@ -263,10 +221,11 @@ export function SeletorLogo({ valor, onChange, parceiro, onErro }) {
           <Loader2 size={18} className="animate-spin text-acao-200" />
         ) : previa ? (
           <img src={previa} alt="Logo" className="h-full w-full object-contain p-1" />
-        ) : letras ? (
-          <span className={`font-display text-base font-bold ${cor.text}`}>{letras}</span>
         ) : (
-          <ImagePlus size={20} className="text-slate-500" />
+          // Sem logo, a prévia mostra o MESMO prédio que a lista vai mostrar --
+          // é o resultado de não escolher imagem nenhuma, e não um convite
+          // genérico do tipo 'adicione um arquivo aqui'.
+          <Building2 size={22} className="text-blue-400" />
         )}
       </button>
 

@@ -279,8 +279,9 @@ export default function ParceirosPage() {
           <label className="mb-1 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-slate-400">
             <ImageIcon size={12} /> Logo da empresa <span className="normal-case tracking-normal text-slate-500">(opcional)</span>
           </label>
+          {/* Sem `parceiro`: cadastro novo não tem logo salva para mostrar. */}
           <SeletorLogo
-            parceiro={{ razaoSocial: nome }}
+            parceiro={null}
             valor={logoNova}
             onChange={setLogoNova}
             onErro={setErro}
@@ -342,10 +343,8 @@ export default function ParceirosPage() {
         {filtrados.map(p => (
           <div key={p.cnpj} className="glass-panel p-4 rounded-xl border border-linha hover:border-linha-forte transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-start gap-3 flex-1 min-w-0">
-              {/* A logo do cliente, ou as iniciais da razão social. Era o mesmo
-                  ícone de prédio em todas as linhas: com 183 cadastros, 183
-                  desenhos idênticos ocupando justamente o lugar onde a
-                  identificação deveria estar. */}
+              {/* A logo do cliente. Quem não tiver logo cadastrada continua com
+                  o ícone de prédio, igual a antes. */}
               <LogoCliente parceiro={p} className="mt-0.5" />
               <div className="min-w-0 space-y-1">
                 <div className="font-bold text-xs sm:text-sm text-white truncate">{p.razaoSocial}</div>
