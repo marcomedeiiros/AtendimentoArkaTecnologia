@@ -75,6 +75,11 @@ const TAMANHOS = {
  */
 export default function Avatar({
   nome = '', size = 'md', online = null, fotoUrl = null, className = '', contato = false,
+  // Avisa quem usa que a URL da foto MORREU -- link de foto do WhatsApp vence.
+  // Serve para uma tela não oferecer "ver a foto" de uma imagem que não existe
+  // mais: sem isto, o único que sabe da falha é este componente, que já trocou
+  // o desenho pelo boneco e não contou a ninguém.
+  onErroFoto = null,
 }) {
   const cor = corDoNome(nome);
   // Se a foto falhar (URL expirada/sem foto), cai para as iniciais.
@@ -96,7 +101,7 @@ export default function Avatar({
           src={fotoUrl}
           alt={nome}
           title={nome}
-          onError={() => setErroFoto(true)}
+          onError={() => { setErroFoto(true); onErroFoto?.(); }}
           className={`${TAMANHOS[size] || TAMANHOS.md} rounded-full border ${cor.ring} object-cover`}
         />
       ) : semRosto ? (

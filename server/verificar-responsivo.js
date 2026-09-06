@@ -254,6 +254,43 @@ const faltando = [
   .map((c) => `.${c} não está em index.css`);
 check("index.css define as classes usadas", faltando);
 
+/**
+ * A FUGA DO ALVO MINIMO PRECISA COBRIR QUEM A USA.
+ *
+ * No celular, `button` e `[role='button']` ganham 40x40 de minimo -- alvo de
+ * dedo. A excecao `data-alvo-livre` existe para o punhado de casos em que o
+ * "botao" e o proprio TEXTO: o nome e o telefone em Contatos, que abrem a foto
+ * do contato.
+ *
+ * O buraco: a excecao so listava `button[data-alvo-livre]`. Um SPAN com
+ * `role="button"` e o atributo continuaria recebendo os 40px -- e o cartao do
+ * contato quase dobraria de altura no celular, sem nada quebrar e sem ninguem
+ * ver, porque o desktop fica igual.
+ *
+ * Entao: quem marca `data-alvo-livre` num elemento que NAO e `<button>` exige
+ * que o index.css tenha a excecao para `[role='button'][data-alvo-livre]`.
+ */
+{
+  const usaEmNaoBotao = [];
+  for (const f of arquivos) {
+    const linhas = linhasDe(f);
+    linhas.forEach((l, i) => {
+      if (!/data-alvo-livre/.test(l)) return;
+      // Num objeto de props (`'data-alvo-livre': true`) nao da para saber a tag
+      // pela linha: conta como nao-botao, que e o caso conservador.
+      const ehTagButton = /<button/.test(l);
+      if (!ehTagButton) usaEmNaoBotao.push(rel(f) + ":" + (i + 1));
+    });
+  }
+  const temExcecao = /\[role=['"]button['"]\]\[data-alvo-livre\]/.test(css);
+  check(
+    "excecao de alvo minimo cobre quem nao e <button>",
+    usaEmNaoBotao.length && !temExcecao
+      ? ["index.css nao tem [role='button'][data-alvo-livre] -- usado em " + usaEmNaoBotao.join(", ")]
+      : []
+  );
+}
+
 // ---------------------------------------------------------------------------
 titulo("7. Ajuste de celular não pode vazar para o computador");
 

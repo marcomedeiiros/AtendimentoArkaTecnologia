@@ -157,9 +157,15 @@
     min-width: 40px;
   }
   /* Excecoes: elementos que sao botao mas precisam acompanhar o texto ou a
-     grade em volta, e que cresceriam torto com um minimo quadrado. */
+     grade em volta, e que cresceriam torto com um minimo quadrado.
+
+     `[role='button']` entra na lista junto com `button` porque um TEXTO pode
+     ser clicavel sem ser um botao de verdade -- o nome e o telefone em Contatos
+     abrem a foto do contato. Sem esta excecao, cada um deles ganharia 40px de
+     altura no celular e o cartao do contato cresceria quase o dobro. */
   button.emoji-badge,
-  button[data-alvo-livre] {
+  button[data-alvo-livre],
+  [role='button'][data-alvo-livre] {
     min-height: 0;
     min-width: 0;
   }

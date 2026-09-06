@@ -7,6 +7,7 @@ import {
 import { ContatosAPI } from '../../services/api';
 import Portal from '../Portal';
 import Avatar from '../Avatar';
+import VisualizadorMidia from '../VisualizadorMidia';
 import { contatoCombina } from '../../utils/busca';
 import { useAppContext } from '../../context/AppContext';
 import { avisar, confirmar } from '../../utils/dialogo';
@@ -133,8 +134,37 @@ function ModalContato({ contato, onSalvar, onFechar }) {
 }
 
 // Item em lista vertical WhatsApp
-const ItemContatoWhatsApp = React.memo(function ItemContatoWhatsApp({ contato, onEditar, onRemover, onToggleFav, onIniciarChat }) {
+const ItemContatoWhatsApp = React.memo(function ItemContatoWhatsApp({ contato, onEditar, onRemover, onToggleFav, onIniciarChat, onVerFoto }) {
   const tagCor = TAGS_CORES[contato.tag] || TAGS_CORES.inativo;
+
+  /**
+   * VER A FOTO SEM SAIR DA TELA.
+   *
+   * A foto só abre quando existe E carrega. `fotoUrl` sozinho não basta: link
+   * de foto do WhatsApp vence, e aí o Avatar já está mostrando o boneco cinza
+   * enquanto o cadastro continua com a URL antiga. Oferecer "ver a foto" nesse
+   * caso abriria um visualizador vazio -- pior do que não oferecer nada.
+   *
+   * Por isso o `onErroFoto`: quem descobre que o link morreu é o `<img>` do
+   * Avatar, e agora ele conta.
+   */
+  const [fotoQuebrada, setFotoQuebrada] = useState(false);
+  useEffect(() => { setFotoQuebrada(false); }, [contato.fotoUrl]);
+  const podeVerFoto = !!contato.fotoUrl && !fotoQuebrada;
+  const abrir = () => podeVerFoto && onVerFoto(contato);
+
+  // Nome e número viram botão SÓ quando há foto para abrir. Um texto com
+  // cursor de mão que não faz nada ao clicar ensina a pessoa a desconfiar da
+  // tela inteira.
+  const comoBotao = podeVerFoto
+    ? { role: 'button', tabIndex: 0, onClick: abrir,
+        // Sem o alvo mínimo de 40px do celular: aqui o "botão" é o próprio
+        // texto, e inflá-lo dobraria a altura do cartão. Ver index.css.
+        'data-alvo-livre': true,
+        onKeyDown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(); } },
+        title: `Ver a foto de ${contato.nome}`,
+        className: 'cursor-pointer hover:underline decoration-dotted underline-offset-2' }
+    : {};
 
   return (
     <div className="p-3.5 hover:bg-grafite-600/70 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-linha/60 last:border-b-0">
@@ -147,7 +177,25 @@ const ItemContatoWhatsApp = React.memo(function ItemContatoWhatsApp({ contato, o
               percorre por code point, ja mostra a FOTO quando existe, ja cai
               para o boneco cinza quando o link vence (`onError`) e ja trata
               "contato salvo com o proprio numero". Uma regra so, num lugar so. */}
-          <Avatar contato nome={contato.nome} fotoUrl={contato.fotoUrl} size="lg" />
+          {/* O botão embrulha SÓ o avatar, e não o `relative` inteiro: o
+              favorito ali embaixo também é botão, e botão dentro de botão é
+              HTML inválido -- o navegador desmonta a marcação e o clique passa
+              a cair em lugares imprevisíveis. */}
+          {podeVerFoto ? (
+            <button
+              type="button"
+              onClick={abrir}
+              title={`Ver a foto de ${contato.nome}`}
+              aria-label={`Ver a foto de ${contato.nome}`}
+              className="block rounded-full ring-offset-2 ring-offset-grafite-700 transition-all hover:ring-2 hover:ring-acao/50 focus:outline-none focus:ring-2 focus:ring-acao"
+            >
+              <Avatar contato nome={contato.nome} fotoUrl={contato.fotoUrl} size="lg"
+                onErroFoto={() => setFotoQuebrada(true)} />
+            </button>
+          ) : (
+            <Avatar contato nome={contato.nome} fotoUrl={contato.fotoUrl} size="lg"
+              onErroFoto={() => setFotoQuebrada(true)} />
+          )}
           <button onClick={() => onToggleFav(contato.id)} className="absolute -bottom-1 -right-1 bg-grafite-700 p-0.5 rounded-full border border-linha text-slate-500 hover:text-espera-400 transition-colors">
             {contato.favorito ? <Star size={11} className="text-espera-400 fill-espera-400"/> : <StarOff size={11}/>}
           </button>
@@ -155,14 +203,18 @@ const ItemContatoWhatsApp = React.memo(function ItemContatoWhatsApp({ contato, o
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-bold text-xs sm:text-sm text-white truncate">{contato.nome}</span>
+            <span {...comoBotao}
+              className={`font-bold text-xs sm:text-sm text-white truncate ${comoBotao.className || ''}`}>
+              {contato.nome}
+            </span>
             <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${tagCor}`}>
               {contato.tag}
             </span>
           </div>
 
           <div className="flex items-center gap-3 text-xs text-slate-400 mt-1 flex-wrap font-mono">
-            <span className="flex items-center gap-1 text-slate-300">
+            <span {...comoBotao}
+              className={`flex items-center gap-1 text-slate-300 ${comoBotao.className || ''}`}>
               <Phone size={11} className="text-ativo-400 shrink-0"/>
               {mascararTel(contato.telefone)}
             </span>
@@ -212,6 +264,8 @@ export default function Contatos({ setAba }) {
   const [contatos,     setContatos]   = useState([]);
   const [carregando,   setCarregando] = useState(true);
   const [modalAberto,  setModal]      = useState(false);
+  // Contato cuja foto está aberta em tela cheia (null = nenhuma).
+  const [fotoAberta,   setFotoAberta] = useState(null);
   const [editando,     setEditando]   = useState(null);
   const [busca,        setBusca]      = useState('');
   const [tagFiltro,    setTagFiltro]  = useState('todas');
@@ -463,7 +517,8 @@ export default function Contatos({ setAba }) {
             onEditar={ct => { setEditando(ct); setModal(true); }}
             onRemover={removerContato}
             onToggleFav={toggleFavorito}
-            onIniciarChat={iniciarChat} />
+            onIniciarChat={iniciarChat}
+            onVerFoto={setFotoAberta} />
         ))}
         {listaFiltrada.length === 0 && (
           <div className="text-center text-slate-400 text-xs py-16">
@@ -476,6 +531,22 @@ export default function Contatos({ setAba }) {
       {modalAberto && (
         <ModalContato contato={editando} onSalvar={salvarContato}
           onFechar={() => { setModal(false); setEditando(null); }}/>
+      )}
+
+      {/* A FOTO ABRE AQUI DENTRO, e nao numa aba nova.
+
+          O mesmo visualizador da Central: zoom, giro e arraste. Ele existe
+          porque abrir foto em outra janela ja falhava la (o navegador barra
+          navegacao para ) -- e mesmo quando funciona, tira a pessoa da
+          tela em que ela estava trabalhando para mostrar uma imagem. */}
+      {fotoAberta && (
+        <VisualizadorMidia
+          url={fotoAberta.fotoUrl}
+          tipo="imagem"
+          legenda={fotoAberta.nome}
+          nomeArquivo={`foto-${String(fotoAberta.nome || 'contato').replace(/[^\w]+/g, '-').toLowerCase()}.jpg`}
+          onFechar={() => setFotoAberta(null)}
+        />
       )}
     </div>
   );
