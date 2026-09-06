@@ -168,52 +168,100 @@ function rodapePdf(pdf, { legenda, margem = 14 }) {
  */
 async function carregarLogo() {
   try {
-    const img = await new Promise((resolve, reject) => {
-      const el = new Image();
-      el.onload = () => resolve(el);
-      el.onerror = reject;
-      el.src = LOGO_URL;
-    });
-
-    const l = img.naturalWidth;
-    const a = img.naturalHeight;
-    if (!l || !a) return null;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = l;
-    canvas.height = a;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0);
-
-    // Caixa do que NÃO é transparente. Se der errado (canvas sujo, imagem sem
-    // alfa), segue com a imagem inteira -- proporção certa é o que importa.
-    let x0 = 0, y0 = 0, x1 = l - 1, y1 = a - 1;
-    try {
-      const px = ctx.getImageData(0, 0, l, a).data;
-      let minX = l, minY = a, maxX = -1, maxY = -1;
-      for (let y = 0; y < a; y++) {
-        for (let x = 0; x < l; x++) {
-          if (px[(y * l + x) * 4 + 3] > 8) {
-            if (x < minX) minX = x;
-            if (x > maxX) maxX = x;
-            if (y < minY) minY = y;
-            if (y > maxY) maxY = y;
-          }
-        }
-      }
-      if (maxX >= minX && maxY >= minY) { x0 = minX; y0 = minY; x1 = maxX; y1 = maxY; }
-    } catch { /* sem recorte, e esta tudo bem */ }
-
-    const largura = x1 - x0 + 1;
-    const altura = y1 - y0 + 1;
-    const recorte = document.createElement('canvas');
-    recorte.width = largura;
-    recorte.height = altura;
-    recorte.getContext('2d').drawImage(img, x0, y0, largura, altura, 0, 0, largura, altura);
-
-    return { dataUrl: recorte.toDataURL('image/png'), largura, altura };
+    return prepararImagemDoPdf(await abrirImagem(LOGO_URL));
   } catch {
     return null;
+  }
+}
+
+/** Carrega uma URL de imagem e devolve o elemento `<img>` já decodificado. */
+function abrirImagem(src) {
+  return new Promise((resolve, reject) => {
+    const el = new Image();
+    el.onload = () => resolve(el);
+    el.onerror = () => reject(new Error('imagem nao carregou'));
+    el.src = src;
+  });
+}
+
+/**
+ * Deixa uma imagem pronta para o `addImage` do jsPDF: recorta a borda
+ * transparente e devolve `{ dataUrl, largura, altura }` SEMPRE em PNG.
+ *
+ * O PNG não é preferência estética -- é o que o jsPDF sabe desenhar. A logo do
+ * cliente é gravada em WebP (é o que o navegador gera no cadastro), e passar
+ * WebP direto para o `addImage` falha. Redesenhar no canvas resolve isso e
+ * ainda normaliza GIF e JPEG pelo mesmo caminho.
+ */
+function prepararImagemDoPdf(img) {
+  const l = img.naturalWidth;
+  const a = img.naturalHeight;
+  if (!l || !a) return null;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = l;
+  canvas.height = a;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+
+  // Caixa do que NÃO é transparente. Se der errado (canvas sujo, imagem sem
+  // alfa), segue com a imagem inteira -- proporção certa é o que importa.
+  let x0 = 0, y0 = 0, x1 = l - 1, y1 = a - 1;
+  try {
+    const px = ctx.getImageData(0, 0, l, a).data;
+    let minX = l, minY = a, maxX = -1, maxY = -1;
+    for (let y = 0; y < a; y++) {
+      for (let x = 0; x < l; x++) {
+        if (px[(y * l + x) * 4 + 3] > 8) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+    if (maxX >= minX && maxY >= minY) { x0 = minX; y0 = minY; x1 = maxX; y1 = maxY; }
+  } catch { /* sem recorte, e esta tudo bem */ }
+
+  const largura = x1 - x0 + 1;
+  const altura = y1 - y0 + 1;
+  const recorte = document.createElement('canvas');
+  recorte.width = largura;
+  recorte.height = altura;
+  recorte.getContext('2d').drawImage(img, x0, y0, largura, altura, 0, 0, largura, altura);
+
+  return { dataUrl: recorte.toDataURL('image/png'), largura, altura };
+}
+
+/**
+ * A LOGO DO PRÓPRIO CLIENTE, a que foi cadastrada em Clientes (CNPJ).
+ *
+ * Só aparece para quem tem: sem logo cadastrada o servidor responde 404 e o
+ * relatório sai como sempre saiu. Nada de desenhar um espaço reservado vazio
+ * -- um retângulo em branco no canto de um documento que vai para o cliente
+ * parece defeito, não parece "sem logo".
+ *
+ * O 404 é resposta esperada aqui, e não erro: a maioria dos cadastros não tem
+ * imagem. Por isso a falha é silenciosa dos dois lados -- rede fora, sessão
+ * expirada, arquivo sumido do volume: o relatório é o que importa, e ele sai.
+ *
+ * O cookie de sessão vai sozinho (same-origin), do mesmo jeito que na `<img>`
+ * da lista de clientes.
+ */
+async function carregarLogoCliente(cnpj) {
+  const doc = String(cnpj || '').replace(/\D/g, '');
+  if (!doc) return null;
+  let objectUrl = null;
+  try {
+    const resp = await fetch(`/api/parceiros/${encodeURIComponent(doc)}/logo`);
+    if (!resp.ok) return null;
+    const blob = await resp.blob();
+    objectUrl = URL.createObjectURL(blob);
+    return prepararImagemDoPdf(await abrirImagem(objectUrl));
+  } catch {
+    return null;
+  } finally {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
   }
 }
 
@@ -536,23 +584,57 @@ export async function exportarRelatorioEmpresaPdf(relatorio) {
   });
 
   // ---------- Identificacao ----------
+  //
+  // A LOGO DO CLIENTE fica aqui, à direita, e não junto da marca da Arka lá em
+  // cima: em cima é o remetente do documento, aqui é de QUEM ele fala. As duas
+  // lado a lado no mesmo cabeçalho ficariam disputando o mesmo papel.
+  const yIdentificacao = y;
+  const logoCliente = await carregarLogoCliente(empresa.cnpj);
+  const CX_L = 34;   // caixa da logo do cliente, em mm
+  const CX_A = 22;   // ~ a altura das quatro linhas de identificação
+  let desenhada = null;
+  if (logoCliente) {
+    const esc = Math.min(CX_L / logoCliente.largura, CX_A / logoCliente.altura);
+    desenhada = { l: logoCliente.largura * esc, a: logoCliente.altura * esc };
+    try {
+      pdf.addImage(
+        logoCliente.dataUrl, 'PNG',
+        larguraPg - margem - desenhada.l, y + (CX_A - desenhada.a) / 2,
+        desenhada.l, desenhada.a
+      );
+    } catch { desenhada = null; /* formato invalido: segue sem a logo */ }
+  }
+
   const meta = [
     ['Empresa', empresa.razaoSocial || '-'],
     ['CNPJ/CPF', fmtDocumento(empresa.cnpj)],
     ['Período', `${fmtDataCurta(periodo.inicio)} a ${fmtDataCurta(periodo.fim)}`],
     ['Gerado em', new Date().toLocaleString('pt-BR', { timeZone: FUSO_BR })],
   ];
+  // Onde o valor pode ir sem esbarrar na logo. Razão social é o campo que
+  // estoura -- "COSTA CAMARGO COM. DE PRODUTOS HOSPITALARES LTDA" já ocupa
+  // metade da linha -- e passar por baixo da imagem é o tipo de defeito que só
+  // aparece no cadastro comprido de um cliente específico.
+  const xValor = margem + 30;
+  const largValor = (larguraPg - margem - (desenhada ? CX_L + 5 : 0)) - xValor;
+
   pdf.setFontSize(9);
   meta.forEach(([rotulo, valor]) => {
-    quebra(6);
+    // O nome comprido QUEBRA em vez de ser cortado: nome de empresa truncado
+    // num relatório oficial vira documento errado, não vira detalhe de layout.
+    const linhas = pdf.splitTextToSize(String(valor), largValor);
+    quebra(linhas.length * 5.5);
     pdf.setFont('helvetica', 'bold');
     pdf.setTextColor(...TINTA);
     pdf.text(`${rotulo}:`, margem, y);
     pdf.setFont('helvetica', 'normal');
     pdf.setTextColor(...CINZA);
-    pdf.text(String(valor), margem + 30, y);
-    y += 5.5;
+    linhas.forEach((linha, i) => pdf.text(linha, xValor, y + i * 5));
+    y += 5.5 + (linhas.length - 1) * 5;
   });
+  // Se a logo for mais alta que o texto, o conteúdo seguinte desce até depois
+  // dela -- senão o "Resumo do período" subiria por baixo da imagem.
+  if (desenhada) y = Math.max(y, yIdentificacao + CX_A + 2);
   y += 3;
 
   // ---------- Resumo ----------

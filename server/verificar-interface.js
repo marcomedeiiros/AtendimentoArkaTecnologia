@@ -321,6 +321,64 @@ if (!ciclo) {
 check("brilho da fila avisa sem cansar", excessos);
 
 
+// ---------------------------------------------------------------------------
+titulo("7. Imagem no PDF nao pode ter largura E altura cravadas");
+
+/**
+ * FOI O DEFEITO DA LOGO TORTA.
+ *
+ * O cabecalho dos relatorios desenhava a marca com `addImage(logo, 'PNG', x, y,
+ * 26, 12)` -- um retangulo fixo, escolhido no olho, sem olhar para o arquivo.
+ * O PNG e quadrado, entao a logo saia esticada 117% na horizontal em TODO
+ * relatorio que a empresa manda para o cliente. Ninguem percebeu por meses:
+ * numa marca desenhada, o olho aceita a deformacao como "e assim mesmo".
+ *
+ * A regra: os dois ultimos parametros de tamanho nao podem ser NUMEROS
+ * ESCRITOS na chamada. Tem de vir de conta -- e a conta so pode ser uma, a que
+ * parte da proporcao do arquivo.
+ *
+ * Cravar SO UM lado seria aceitavel (o outro sairia da proporcao), mas os dois
+ * juntos e o que forca a deformacao, e e isso que se cobra aqui.
+ */
+{
+  const PDF_JS = arquivos.filter((f) => /exportarPdf\.js$/.test(f));
+  const esticadas = [];
+
+  // Sem `check` antes disto, renomear o arquivo apagaria a regra em silencio.
+  check(
+    "achei o gerador de PDF para conferir",
+    PDF_JS.length ? [] : ["nao existe mais nenhum exportarPdf.js"]
+  );
+
+  for (const f of PDF_JS) {
+    const fonte = semComentarios(fs.readFileSync(f, "utf8"));
+    const linhas = fonte.split("\n");
+    for (const [i, linha] of linhas.entries()) {
+      const m = /addImage\(([^;]*)\)/.exec(linha);
+      if (!m) continue;
+      // Divide so nas virgulas de topo (ignora as de dentro de parenteses).
+      const partes = [];
+      let nivel = 0;
+      let atual = "";
+      for (const ch of m[1]) {
+        if (ch === "(" || ch === "[") nivel += 1;
+        if (ch === ")" || ch === "]") nivel -= 1;
+        if (ch === "," && nivel === 0) { partes.push(atual.trim()); atual = ""; continue; }
+        atual += ch;
+      }
+      partes.push(atual.trim());
+      // (dados, formato, x, y, largura, altura, ...)
+      const larg = partes[4];
+      const alt = partes[5];
+      const literal = (p) => p !== undefined && /^-?\d+(\.\d+)?$/.test(p);
+      if (literal(larg) && literal(alt)) {
+        esticadas.push(`${rel(f)}:${i + 1}  addImage com ${larg}x${alt} cravados -- deforma a imagem`);
+      }
+    }
+  }
+  check("addImage calcula o tamanho a partir da imagem", esticadas);
+}
+
 console.log(
   "\n" + (erros.length
     ? `FALHAS (${erros.length}):\n  ` + erros.join("\n  ")
