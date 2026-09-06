@@ -232,6 +232,11 @@ const VERIFICACOES = [
     resumo: "upload, token da URL, streaming e o Range do player",
   },
   {
+    arquivo: "verificar-busca-empresa.js",
+    titulo: "Busca de empresa no perfil",
+    resumo: "filtrar por nome, acento, documento e a lista cortada que avisa",
+  },
+  {
     arquivo: "verificar-logo-cliente.js",
     titulo: "Logo do cliente (CNPJ)",
     resumo: "assinatura dos bytes, troca, remoção e nenhum arquivo órfão",

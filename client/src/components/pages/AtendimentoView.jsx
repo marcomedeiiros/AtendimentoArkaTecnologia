@@ -148,6 +148,12 @@ function idCurto(id) {
   return String(id || '').replace(/-/g, '').slice(0, 8).toUpperCase();
 }
 
+// Quantos cadastros a busca de empresa mostra por vez. A lista rola dentro de
+// um painel estreito; passar disso vira parede de texto. Quando sobra gente de
+// fora, a tela DIZ isso -- ver a linha "e mais N" -- porque uma lista cortada
+// em silencio parece cadastro faltando.
+const LIMITE_ACHADOS = 8;
+
 // Normaliza texto do cliente para comparar palavra-chave: minusculo e sem
 // acento, senao "técnico" e "tecnico" seriam coisas diferentes.
 function semAcento(s) {
@@ -1912,17 +1918,41 @@ function PainelPerfilContato({
   // criar um atalho por fora entregaria a lista inteira a quem o modulo nega.
   // Quem nao tem o modulo recebe `parceiros: []` do AppContext e ve so o campo
   // de documento -- exatamente o que ja podia fazer antes.
-  const achados = (() => {
-    const q = busca.trim().toLowerCase();
+  /**
+   * ── O BUG QUE ISTO CORRIGE: `includes('')` É SEMPRE VERDADEIRO ─────────────
+   *
+   * A busca por documento era `limparDocumento(p.cnpj).includes(limparDocumento(busca))`.
+   * Digitando LETRAS -- que é o caso normal de quem procura por nome --
+   * `limparDocumento('zunik')` tira tudo que não é dígito e devolve string
+   * VAZIA. E qualquer string contém a string vazia: a condição passava para
+   * TODOS os cadastros.
+   *
+   * O efeito na tela era enganoso de um jeito específico: não parecia lista
+   * ignorando a busca, parecia lista QUEBRADA. Como o resultado é cortado em
+   * 8, aparecia sempre o mesmo começo do alfabeto (A COLLI, ACADEMIA, AFAGO) e
+   * dava a impressão de um cadastro incompleto, e não de um filtro que não
+   * filtra.
+   *
+   * Agora o trecho do documento só entra quando há DÍGITOS digitados.
+   */
+  const casaram = (() => {
+    // Sem acento dos dois lados (`semAcento` ja existe neste arquivo): quem
+    // procura "GINASTICA" tem de achar "ACADEMIA DE GINASTICA". Ninguem digita
+    // acento numa caixa de busca, e a razao social vem do cadastro oficial,
+    // que tem.
+    const q = semAcento(busca.trim());
     if (q.length < 2) return [];
+    const digitos = limparDocumento(busca);
+
     return (Array.isArray(parceiros) ? parceiros : [])
       .filter(p => p && p.status !== 'inativo')
       .filter(p =>
-        String(p.razaoSocial || '').toLowerCase().includes(q) ||
-        limparDocumento(p.cnpj || '').includes(limparDocumento(busca))
-      )
-      .slice(0, 8);
+        semAcento(p.razaoSocial).includes(q) ||
+        (digitos.length >= 2 && limparDocumento(p.cnpj || '').includes(digitos))
+      );
   })();
+  const achados = casaram.slice(0, LIMITE_ACHADOS);
+  const achadosOcultos = casaram.length - achados.length;
 
   const vincularDoc = () => {
     const limpo = limparDocumento(doc);
@@ -2068,6 +2098,15 @@ function PainelPerfilContato({
                         </button>
                       ))}
                     </div>
+                  )}
+                  {/* Lista cortada AVISA que foi cortada: sem isto, quem procura
+                      um termo comum ("comercio") ve oito nomes e conclui que o
+                      resto nao esta cadastrado. */}
+                  {achadosOcultos > 0 && (
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      e mais {achadosOcultos} {achadosOcultos === 1 ? 'empresa' : 'empresas'}.
+                      {' '}Escreva mais para afinar a busca.
+                    </p>
                   )}
                   {busca.trim().length >= 2 && achados.length === 0 && (
                     <p className="text-[10px] text-slate-500 mt-1">
