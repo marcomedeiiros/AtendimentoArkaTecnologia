@@ -247,6 +247,11 @@ const VERIFICACOES = [
     resumo: "a recusa que fala, e o webhook conferido ao subir",
   },
   {
+    arquivo: "verificar-checklist-configuravel.js",
+    titulo: "Checklist configuravel",
+    resumo: "adicionar/remover itens sem perder vocabulario nem historico",
+  },
+  {
     arquivo: "verificar-modo-tv.js",
     titulo: "Modo TV: as duas competicoes",
     resumo: "quem esta atras, o ranking externo e a parede que nao cai",

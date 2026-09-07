@@ -179,10 +179,18 @@ for (const item of ITENS_MAPEAMENTO) {
   }
 }
 
-function coberturaDoTexto(texto, vocabulario = null) {
+/**
+ * @param {Array} itens o checklist EM VIGOR -- ele deixou de ser fixo.
+ *
+ * Item criado pela empresa não tem palavras de fábrica, e é isso que torna o
+ * campo de vocabulário OBRIGATÓRIO para ele: sem palavra nenhuma o item nunca
+ * casaria, e viraria completude perdida em silêncio -- o mesmo defeito que a
+ * checagem de carregamento deste arquivo evita para os itens de fábrica.
+ */
+function coberturaDoTexto(texto, vocabulario = null, itens = ITENS_MAPEAMENTO) {
   const t = chave(texto);
   const out = {};
-  for (const item of ITENS_MAPEAMENTO) {
+  for (const item of itens) {
     // O vocabulario pode vir da CONFIGURACAO (o administrador ajusta as palavras
     // de cada item, porque cada empresa escreve o relatorio com as palavras
     // dela). Item sem lista propria cai no padrao -- nunca em lista vazia, que
@@ -202,7 +210,7 @@ function coberturaDoTexto(texto, vocabulario = null) {
  * registrar a visita. Devolve `{ lido: false, motivo }` e a tela cai no
  * preenchimento manual -- o relatorio e a entrega, a leitura e a conveniencia.
  */
-async function analisarRelatorio(caminhoRelativo, { palavras = null } = {}) {
+async function analisarRelatorio(caminhoRelativo, { palavras = null, itens = ITENS_MAPEAMENTO } = {}) {
   const aberto = await midiaStorage.abrirParaLeitura(caminhoRelativo);
   if (!aberto) return { lido: false, motivo: "Arquivo não encontrado no servidor." };
 
@@ -240,7 +248,7 @@ async function analisarRelatorio(caminhoRelativo, { palavras = null } = {}) {
   const empresa = valorDoRotulo(linhas, ["cliente", "empresa visitada", "empresa"], ROTULOS);
   const tecnico = valorDoRotulo(linhas, ["tecnico responsavel", "tecnico"], ROTULOS);
   const data = dataDaVisita(linhas, texto);
-  const cobertura = coberturaDoTexto(texto, palavras);
+  const cobertura = coberturaDoTexto(texto, palavras, itens);
   const fotos = contarFotos(texto);
 
   return {
@@ -256,7 +264,7 @@ async function analisarRelatorio(caminhoRelativo, { palavras = null } = {}) {
     fotos,
     cobertura,
     itensCobertos: Object.values(cobertura).filter((c) => c.coberto).length,
-    totalItens: ITENS_MAPEAMENTO.length,
+    totalItens: itens.length,
     caracteres: texto.length,
   };
 }

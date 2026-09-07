@@ -43,7 +43,10 @@ class RankingController {
         faixasEvidencias: FAIXAS_EVIDENCIAS,
         custoPorDevolucao: CUSTO_POR_DEVOLUCAO,
         minimoMapeamentos: MINIMO_MAPEAMENTOS,
-        itens: ITENS_MAPEAMENTO,
+        // Os itens EM VIGOR, e não a lista de fábrica: a tela desenha o
+        // formulário de visita a partir daqui, e com a lista fixa um item
+        // criado pela empresa não teria campo para ser preenchido.
+        itens: (await regrasRelatorio.obter()).itens,
       },
     });
   }
@@ -73,7 +76,6 @@ class RankingController {
     return success(res, {
       regras: await regrasRelatorio.obter(),
       padrao: regrasRelatorio.padrao(),
-      itens: ITENS_MAPEAMENTO,
     });
   }
 

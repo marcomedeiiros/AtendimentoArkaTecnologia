@@ -59,6 +59,10 @@ function padrao() {
     // E o ajuste mais provavel de todos: cada empresa escreve o relatorio com
     // as palavras dela, e um item que nunca casa vira completude perdida sem
     // ninguem entender por que.
+    // O CHECKLIST. Deixou de ser fixo em 09/2026: cada empresa mapeia coisas
+    // diferentes, e um item que não se usa é completude perdida para sempre --
+    // ninguém preenche "Telefonia e ramais" num cliente que não tem ramal.
+    itens: ITENS_MAPEAMENTO.map((i) => ({ ...i })),
     palavras: Object.fromEntries(ITENS_MAPEAMENTO.map((i) => [i.chave, [...(PALAVRAS_PADRAO[i.chave] || [])]])),
   };
 }
@@ -68,6 +72,60 @@ const inteiro = (v, min, max, atual) => {
   if (!Number.isFinite(n)) return atual;
   return Math.min(max, Math.max(min, Math.round(n)));
 };
+
+// Chave de item: minúsculas, sem acento e sem espaço. É ela que vira campo no
+// formulário e chave no JSON gravado -- se mudar, o texto já escrito naquele
+// item deixa de ser encontrado. Por isso a chave de um item existente NUNCA é
+// reescrita a partir do rótulo: renomear "Backup" para "Cópias" mantém a
+// chave `backup` e o histórico junto.
+function chaveDeItem(texto) {
+  return String(texto || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .slice(0, 40);
+}
+
+// Teto de itens. Não é limite técnico: é o ponto em que o formulário de visita
+// vira um questionário que ninguém preenche até o fim -- e checklist pela
+// metade é completude perdida, que é o defeito que ele deveria evitar.
+const MAX_ITENS = 20;
+
+/**
+ * O CHECKLIST configurado.
+ *
+ * Recusa alto quando a lista chega vazia ou toda inválida: com zero itens a
+ * completude de todo mundo vira zero, e o operador só descobriria pelo ranking
+ * do mês. É o mesmo critério dos pesos que não somam 100.
+ */
+function validarItens(lista, base) {
+  if (lista === undefined) return base;
+  if (!Array.isArray(lista)) return base;
+
+  const vistos = new Set();
+  const out = [];
+  for (const bruto of lista) {
+    const rotulo = String(bruto?.rotulo || "").trim().slice(0, 60);
+    if (!rotulo) continue;
+    // A chave enviada vence; ela existe justamente para sobreviver a um
+    // rótulo renomeado. Só um item NOVO tira a chave do rótulo.
+    const chave = chaveDeItem(bruto?.chave) || chaveDeItem(rotulo);
+    if (!chave || vistos.has(chave)) continue;
+    vistos.add(chave);
+    out.push({ chave, rotulo });
+    if (out.length >= MAX_ITENS) break;
+  }
+
+  if (!out.length) {
+    throw new AppError(
+      "O checklist precisa ter pelo menos um item.",
+      400,
+      "CHECKLIST_VAZIO"
+    );
+  }
+  return out;
+}
 
 /**
  * VALIDA o que veio da tela, campo a campo.
@@ -100,6 +158,11 @@ function validar(entrada, base = padrao()) {
     out.custoPorDevolucao = inteiro(entrada.custoPorDevolucao, 0, 25, base.custoPorDevolucao);
   }
 
+  // ANTES de `palavras`: é o checklist novo que decide quais chaves de
+  // vocabulário fazem sentido guardar. Na ordem inversa, um item recém-criado
+  // teria as palavras descartadas na mesma gravação em que nasceu.
+  out.itens = validarItens(entrada.itens, base.itens);
+
   if (entrada.pesos && typeof entrada.pesos === "object") {
     const pesos = {};
     for (const chave of Object.keys(base.pesos)) {
@@ -118,7 +181,9 @@ function validar(entrada, base = padrao()) {
 
   if (entrada.palavras && typeof entrada.palavras === "object") {
     const palavras = {};
-    for (const item of ITENS_MAPEAMENTO) {
+    // Os itens EM VIGOR, e não a lista de fábrica: item removido não deixa
+    // vocabulário órfão crescendo no JSON, e item novo ganha o campo dele.
+    for (const item of out.itens) {
       const bruto = entrada.palavras[item.chave];
       const lista = (Array.isArray(bruto) ? bruto : String(bruto || "").split(","))
         .map((p) => String(p).trim().toLowerCase())
@@ -127,10 +192,37 @@ function validar(entrada, base = padrao()) {
       // ITEM SEM PALAVRA NENHUMA NUNCA SERIA DADO COMO COBERTO -- e a pessoa
       // veria a completude da equipe cair sem relacionar com o campo que ela
       // esvaziou. Vazio volta ao padrao, e a tela mostra o que ficou.
-      palavras[item.chave] = lista.length ? [...new Set(lista)] : [...base.palavras[item.chave]];
+      // Vazio volta ao padrão -- mas item CRIADO pela empresa não tem padrão.
+      // Ali o vazio fica vazio mesmo, e é a tela que precisa cobrar as
+      // palavras: inventar uma lista para um item que ninguém descreveu seria
+      // pior, porque casaria com texto que não tem nada a ver.
+      const padraoDoItem = base.palavras?.[item.chave] || PALAVRAS_PADRAO[item.chave] || [];
+      palavras[item.chave] = lista.length ? [...new Set(lista)] : [...padraoDoItem];
     }
     out.palavras = palavras;
   }
+
+  // ── O VOCABULÁRIO ACOMPANHA O CHECKLIST, SEMPRE ──────────────────────────
+  //
+  // A reconciliação fica FORA do `if (entrada.palavras)` de propósito. A tela
+  // pode salvar só o checklist -- ao adicionar um item, por exemplo --, e nesse
+  // caso o bloco acima nem roda: o item nasceria sem chave nenhuma em
+  // `palavras`, a leitura do PDF cairia num `undefined` e ele jamais seria dado
+  // como coberto. Completude perdida em silêncio, que é exatamente o defeito
+  // que o vocabulário configurável existe para evitar.
+  //
+  // Aqui também saem os órfãos: item removido não deixa lista crescendo no
+  // JSON para sempre.
+  out.palavras = Object.fromEntries(
+    out.itens.map((i) => [
+      i.chave,
+      // Item de fábrica cai no padrão dele. Item criado pela empresa começa
+      // VAZIO -- e é a tela que cobra as palavras. Inventar uma lista para um
+      // item que ninguém descreveu seria pior: casaria com texto que não tem
+      // nada a ver, e daria o item como coberto sem ele estar.
+      out.palavras?.[i.chave] || base.palavras?.[i.chave] || PALAVRAS_PADRAO[i.chave] || [],
+    ])
+  );
 
   return out;
 }

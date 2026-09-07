@@ -7,17 +7,34 @@
  * a rota pode ganhar um verbo novo amanha.
  */
 const { z } = require("zod");
-const { ITENS_MAPEAMENTO } = require("./pontuacao.externa");
 
 // "2026-09". Regex e nao data solta: o mes e a chave do ranking inteiro, e um
 // formato livre viraria consulta silenciosamente vazia.
 const competencia = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Use AAAA-MM");
 
-// Allowlist dos itens do checklist: o que nao esta na lista da pontuacao nao
-// entra. Sem isso daria para inflar a completude mandando chave inventada.
+/**
+ * O CHECKLIST DEIXOU DE SER FIXO -- e por isso a allowlist saiu daqui.
+ *
+ * Este schema era um objeto com as oito chaves de fábrica, montado no
+ * CARREGAMENTO do módulo. Com o checklist configurável, um item criado pela
+ * empresa seria recusado na borda e o campo nunca chegaria a ser salvo -- e o
+ * erro apareceria como "campo desconhecido", longe da causa.
+ *
+ * A allowlist não sumiu, MUDOU DE LUGAR: aqui fica a forma (chave curta, texto
+ * com teto, nada de objeto aninhado) e no serviço fica o conjunto de chaves
+ * válidas, que só o banco sabe. É a defesa em profundidade de sempre, com a
+ * parte que depende de configuração no lado que enxerga a configuração --
+ * `saneiaItens` continua descartando chave inventada.
+ */
 const itensSchema = z
-  .object(Object.fromEntries(ITENS_MAPEAMENTO.map((i) => [i.chave, z.string().max(2000).optional()])))
-  .partial()
+  .record(
+    z.string().regex(/^[a-z0-9]{1,40}$/, "Chave de item invalida"),
+    z.string().max(2000)
+  )
+  // Teto de chaves: o checklist tem no maximo 20 itens (relatorio.regras), e
+  // sem limite aqui daria para mandar um objeto gigante que so seria
+  // descartado depois de percorrido.
+  .refine((o) => Object.keys(o).length <= 40, "Itens demais no checklist")
   .optional();
 
 // Evidencia: ou uma data URL nova, ou a referencia de uma ja gravada. O teto de

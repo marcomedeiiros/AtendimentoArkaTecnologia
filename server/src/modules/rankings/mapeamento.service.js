@@ -103,14 +103,33 @@ async function ehSupervisor(usuarioId) {
   return u?.cargo === "Administrador";
 }
 
-function saneiaItens(itens) {
+/**
+ * A allowlist dos campos do checklist.
+ *
+ * @param {object} itens o que veio da tela
+ * @param {Array} configurados o checklist EM VIGOR
+ * @param {object} anteriores o que JÁ estava gravado neste mapeamento
+ *
+ * A allowlist continua existindo pelo mesmo motivo de sempre: sem ela dava
+ * para inflar a completude mandando chave inventada. O que mudou é de onde ela
+ * sai -- da configuração, e não de uma lista fixa.
+ *
+ * ── POR QUE O QUE JÁ ESTAVA GRAVADO TAMBÉM PASSA ──────────────────────────
+ *
+ * Item removido da configuração continua existindo nos relatórios antigos. Sem
+ * `anteriores`, abrir um relatório de meses atrás e salvar qualquer correção
+ * APAGARIA aquele texto -- silenciosamente, num salvamento que a pessoa fez por
+ * outro motivo. O campo removido não conta mais para a nota, mas o que foi
+ * escrito não se perde.
+ */
+function saneiaItens(itens, configurados = ITENS_MAPEAMENTO, anteriores = null) {
   if (!itens || typeof itens !== "object") return null;
   const out = {};
-  // Allowlist pela lista da pontuacao: campo desconhecido nao entra. Sem isso o
-  // cliente poderia inflar a completude mandando chaves inventadas.
-  for (const item of ITENS_MAPEAMENTO) {
-    const v = itens[item.chave];
-    if (typeof v === "string" && v.trim()) out[item.chave] = v.trim().slice(0, 2000);
+  const permitidas = new Set(configurados.map((i) => i.chave));
+  for (const chave of Object.keys(anteriores || {})) permitidas.add(chave);
+  for (const chave of permitidas) {
+    const v = itens[chave];
+    if (typeof v === "string" && v.trim()) out[chave] = v.trim().slice(0, 2000);
   }
   return Object.keys(out).length ? out : null;
 }
@@ -226,7 +245,7 @@ class MapeamentoService {
    */
   async _lerDoRelatorio(caminhoRelativo, { resumoAtual = "", itensAtuais = null } = {}) {
     const regras = await regrasRelatorio.obter();
-    const analise = await analisarRelatorio(caminhoRelativo, { palavras: regras.palavras });
+    const analise = await analisarRelatorio(caminhoRelativo, { palavras: regras.palavras, itens: regras.itens });
     if (!analise?.lido) {
       logger.info("PDF do relatorio nao pode ser lido; seguindo com o preenchimento manual", {
         motivo: analise?.motivo,
@@ -271,7 +290,7 @@ class MapeamentoService {
      * (`fotosRelatorio`), porque ali nao ha nada para uma pessoa escrever -- e
      * um numero mandado pelo cliente seria ponto de graca, sem contrapartida.
      */
-    const daPessoa = saneiaItens(itensAtuais) || {};
+    const daPessoa = saneiaItens(itensAtuais, regras.itens) || {};
     const somados = { ...itens, ...daPessoa };
 
     return {
@@ -283,7 +302,7 @@ class MapeamentoService {
         // vale mais que o meu, e sobrescrever apagaria o que ela digitou.
         ...(String(resumoAtual || "").trim().length >= 20
           ? {}
-          : { resumo: this._resumoDe(analise) }),
+          : { resumo: this._resumoDe(analise, regras.itens) }),
       },
     };
   }
@@ -297,10 +316,10 @@ class MapeamentoService {
    * cobre, e nao um texto generico: um resumo igual em todos os relatorios nao
    * resume nada.
    */
-  _resumoDe(analise) {
+  _resumoDe(analise, rotulos = ITENS_MAPEAMENTO) {
     const cobertos = Object.entries(analise.cobertura || {})
       .filter(([, c]) => c.coberto)
-      .map(([chave]) => ITENS_MAPEAMENTO.find((i) => i.chave === chave)?.rotulo || chave);
+      .map(([chave]) => rotulos?.find((i) => i.chave === chave)?.rotulo || chave);
     const partes = [`Relatório em PDF com ${analise.paginas} página${analise.paginas === 1 ? "" : "s"}`];
     if (analise.fotos) partes.push(`${analise.fotos} foto${analise.fotos === 1 ? "" : "s"} de campo`);
     if (cobertos.length) partes.push(`cobre ${cobertos.join(", ").toLowerCase()}`);
@@ -322,7 +341,7 @@ class MapeamentoService {
     }
     try {
       const regras = await regrasRelatorio.obter();
-      const analise = await analisarRelatorio(salvo.arquivoPath, { palavras: regras.palavras });
+      const analise = await analisarRelatorio(salvo.arquivoPath, { palavras: regras.palavras, itens: regras.itens });
       // O PRAZO sugerido sai da regra da empresa, e nao de um numero fixo na
       // tela: e aqui que o administrador manda.
       return {
@@ -455,7 +474,7 @@ class MapeamentoService {
         // outro caminho, e para o dia em que a tela esquecer de mandar.
         prazoEm: dataDoDia(dados.prazoEm) || regrasRelatorio.prazoDe(dados.dataVisita, regras),
         resumo: String(dados.resumo || "").trim(),
-        itens: saneiaItens(dados.itens),
+        itens: saneiaItens(dados.itens, regras.itens),
         pendencias: dados.pendencias ? String(dados.pendencias).trim() : null,
         evidencias,
         ...arquivo,
@@ -497,6 +516,8 @@ class MapeamentoService {
         })
       : { campos: {} };
     const entregando = !!dados.entregar;
+    // O checklist EM VIGOR, para a allowlist dos campos. Lido aqui, uma vez.
+    const regrasAtuais = await regrasRelatorio.obter();
 
     const salvo = await prisma.mapeamentoTecnico.update({
       where: { id },
@@ -506,7 +527,10 @@ class MapeamentoService {
         dataVisita: dados.dataVisita ? dataDoDia(dados.dataVisita) : undefined,
         prazoEm: dados.prazoEm ? dataDoDia(dados.prazoEm) : undefined,
         resumo: dados.resumo !== undefined ? String(dados.resumo).trim() : undefined,
-        itens: dados.itens !== undefined ? saneiaItens(dados.itens) : undefined,
+        // `atual.itens` entra como terceiro argumento: item removido da
+        // configuração continua nos relatórios antigos, e salvar uma correção
+        // qualquer não pode apagar o que foi escrito nele.
+        itens: dados.itens !== undefined ? saneiaItens(dados.itens, regrasAtuais.itens, atual.itens) : undefined,
         pendencias: dados.pendencias !== undefined ? (dados.pendencias ? String(dados.pendencias).trim() : null) : undefined,
         evidencias,
         // Espalhado so quando ha o que gravar: `_guardarArquivo` devolve

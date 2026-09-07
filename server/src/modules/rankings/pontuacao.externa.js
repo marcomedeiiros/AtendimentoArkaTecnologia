@@ -102,14 +102,23 @@ const media = (l) => (l.length ? l.reduce((a, b) => a + b, 0) / l.length : 0);
  * Conta o CHECKLIST mais o resumo. Um relatorio com todos os itens marcados e
  * nenhuma linha escrita nao e um relatorio completo -- e uma lista de caixas.
  */
-function completudeDe(m) {
-  const itens = m.itens && typeof m.itens === "object" ? m.itens : {};
-  const preenchidos = ITENS_MAPEAMENTO.filter((i) => {
-    const v = itens[i.chave];
+/**
+ * @param {object} m o mapeamento
+ * @param {Array} itens o checklist EM VIGOR (configurável desde 09/2026)
+ *
+ * O checklist deixou de ser fixo: a empresa adiciona e remove itens. A conta
+ * usa a lista de agora, e não a que existia quando o relatório foi entregue --
+ * o mesmo que já acontece com os pesos, e pelo mesmo motivo: nada de ranking é
+ * guardado, tudo é recalculado. A tela avisa disso antes de salvar.
+ */
+function completudeDe(m, itens = ITENS_MAPEAMENTO) {
+  const campos = m.itens && typeof m.itens === "object" ? m.itens : {};
+  const preenchidos = itens.filter((i) => {
+    const v = campos[i.chave];
     return typeof v === "string" ? v.trim().length > 0 : !!v;
   }).length;
   const comResumo = String(m.resumo || "").trim().length >= 20 ? 1 : 0;
-  return (preenchidos + comResumo) / (ITENS_MAPEAMENTO.length + 1);
+  return itens.length ? (preenchidos + comResumo) / (itens.length + 1) : 0;
 }
 
 /**
@@ -172,6 +181,8 @@ function pontuarExterno(lista, regras = null) {
   const pesos = { ...PESOS, ...(regras?.pesos || {}) };
   const minimo = regras?.minimoRelatorios ?? MINIMO_MAPEAMENTOS;
   const custoDevolucao = regras?.custoPorDevolucao ?? CUSTO_POR_DEVOLUCAO;
+  // O checklist em vigor. Sem configuração, a lista de fábrica.
+  const itensEmVigor = Array.isArray(regras?.itens) && regras.itens.length ? regras.itens : ITENS_MAPEAMENTO;
   // So o que ja saiu da mao do tecnico entra na conta: rascunho e trabalho em
   // andamento, e pontuar rascunho premiaria abrir formulario.
   const entregues = lista.filter((m) => m.status !== "rascunho");

@@ -1047,23 +1047,67 @@ function Configuracao() {
           <FileText size={13} /> Leitura do PDF
         </p>
         <p className="text-[10px] text-texto-fraco leading-relaxed">
-          Um item do checklist é dado como coberto quando o relatório traz alguma destas palavras.
-          É o ajuste mais provável: cada empresa escreve o relatório com o vocabulário dela, e um item
-          que nunca casa vira completude perdida sem ninguém entender por quê. Separe por vírgula
-          deixar em branco devolve as palavras padrão.
+          Cada linha é um item do checklist da visita. Ele é dado como coberto quando o relatório
+          traz alguma das palavras ao lado — cada empresa escreve com o vocabulário dela, e um item
+          que nunca casa vira completude perdida sem ninguém entender por quê. Separe as palavras
+          por vírgula.
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {(dados.itens || []).map((i) => (
-            <Campo key={i.chave} rotulo={i.rotulo}>
-              <input className={ENTRADA}
-                value={(rascunho.palavras?.[i.chave] || []).join(', ')}
+
+        {/* MEXER NO CHECKLIST MUDA O PASSADO, e isso precisa estar escrito.
+
+            A completude é "itens preenchidos ÷ total", e nada de ranking é
+            guardado: tudo é recalculado a cada consulta. Acrescentar um item
+            baixa a nota de TODOS os relatórios já entregues, que não têm o
+            campo novo. É o mesmo efeito dos pesos, e o aviso é o mesmo. */}
+        <p className="text-[10px] text-espera-400 leading-relaxed border border-espera/30 bg-espera/10 rounded-xl p-2.5">
+          Acrescentar um item <strong>baixa a completude dos relatórios já entregues</strong> — eles não
+          têm o campo novo, e a conta é sobre o total de itens. Remover faz o contrário. O texto já
+          escrito num item removido <strong>não é apagado</strong>: ele deixa de contar, e continua lá.
+        </p>
+
+        <div className="space-y-2">
+          {(rascunho.itens || []).map((item, idx) => (
+            <div key={item.chave || `novo-${idx}`} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)_auto] gap-2 items-start">
+              <input
+                className={ENTRADA}
+                placeholder="Nome do item"
+                value={item.rotulo || ''}
+                onChange={(e) => setRascunho((r) => {
+                  const itens = [...(r.itens || [])];
+                  itens[idx] = { ...itens[idx], rotulo: e.target.value };
+                  return { ...r, itens };
+                })}
+              />
+              <input
+                className={ENTRADA}
+                placeholder="palavras que o PDF pode trazer, separadas por vírgula"
+                value={(rascunho.palavras?.[item.chave] || []).join(', ')}
                 onChange={(e) => setRascunho((r) => ({
                   ...r,
-                  palavras: { ...r.palavras, [i.chave]: e.target.value.split(',').map((p) => p.trim()).filter(Boolean) },
-                }))} />
-            </Campo>
+                  palavras: { ...r.palavras, [item.chave]: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) },
+                }))}
+                // Item recém-criado ainda não tem chave: ela nasce no servidor,
+                // a partir do nome. Sem nome, não há onde guardar as palavras.
+                disabled={!item.chave}
+                title={!item.chave ? 'Salve o item primeiro: a chave dele nasce do nome.' : undefined}
+              />
+              <button
+                onClick={() => setRascunho((r) => ({ ...r, itens: (r.itens || []).filter((_, i) => i !== idx) }))}
+                className="px-2.5 py-2 rounded-xl border border-falha/40 bg-falha/10 text-falha-400 text-[11px] font-bold hover:bg-falha/20 transition-colors"
+                title="Remover este item do checklist"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
           ))}
         </div>
+
+        <button
+          onClick={() => setRascunho((r) => ({ ...r, itens: [...(r.itens || []), { chave: '', rotulo: '' }] }))}
+          className="px-3 py-2 rounded-xl bg-grafite-700 border border-linha text-texto-suave text-[11px] font-bold hover:border-linha-forte flex items-center gap-1.5"
+        >
+          <Plus size={12} /> Adicionar item
+        </button>
       </div>
 
       <div className="flex flex-wrap items-center justify-end gap-2">
