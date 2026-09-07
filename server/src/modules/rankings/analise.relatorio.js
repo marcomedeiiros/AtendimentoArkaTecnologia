@@ -238,7 +238,7 @@ async function analisarRelatorio(caminhoRelativo, { palavras = null, itens = ITE
     return {
       lido: false,
       paginas,
-      motivo: "Este PDF não tem texto — parece ser um documento digitalizado (só imagem).",
+      motivo: "Este PDF não tem texto parece ser um documento digitalizado (só imagem).",
     };
   }
 
