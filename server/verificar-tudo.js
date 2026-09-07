@@ -237,6 +237,11 @@ const VERIFICACOES = [
     resumo: "uma por pessoa, o metadata da midia intacto e a reacao que chega",
   },
   {
+    arquivo: "verificar-historico.js",
+    titulo: "Previa da importacao de historico",
+    resumo: "o numero prometido e o que a importacao de fato insere",
+  },
+  {
     arquivo: "verificar-busca-empresa.js",
     titulo: "Busca de empresa no perfil",
     resumo: "filtrar por nome, acento, documento e a lista cortada que avisa",

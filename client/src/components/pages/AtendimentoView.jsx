@@ -4315,6 +4315,22 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     try {
       const previa = await ConversasAPI.historicoWhatsApp(id);
       const disponivel = Number(previa?.disponivel) || 0;
+      // QUANTAS DE FATO ENTRARIAM -- nao quantas o numero tem.
+      const novas = Number(previa?.novas) || 0;
+
+      // O caso que fazia a tela mentir: o numero TEM historico, mas nao ha
+      // nada novo nele. Antes isso so era descoberto DEPOIS de confirmar e
+      // rodar a importacao inteira para inserir zero.
+      if (disponivel > 0 && novas === 0) {
+        marcarHistoricoVazio(id);
+        await avisar(
+          'Todo o histórico que o WhatsApp guardou deste número já está na Central.\n\n' +
+          'As mensagens antigas estão no início da conversa, em um atendimento ' +
+          'marcado como "Histórico do WhatsApp". Use "Ver mensagens antigas" para chegar até lá.',
+          { titulo: 'Nada de novo para importar', tipo: 'info' }
+        );
+        return;
+      }
 
       if (disponivel === 0) {
         marcarHistoricoVazio(id);
@@ -4330,9 +4346,9 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       }
 
       const ok = await confirmar(
-        `Foram encontradas ${disponivel} mensagens antigas deste número.\n\n` +
-        `A Central já tem ${Number(previa?.jaNaCentral) || 0} mensagens com registro do WhatsApp; ` +
-        'as repetidas são ignoradas automaticamente.\n\n' +
+        `${novas} ${novas === 1 ? 'mensagem antiga' : 'mensagens antigas'} deste número ainda não estão na Central.\n\n` +
+        `O WhatsApp guardou ${disponivel} no total; o resto já está aqui, ou é reação e evento ` +
+        'de sistema, que não vira mensagem.\n\n' +
         'As mensagens entram como um atendimento antigo, acessível pelo botão ' +
         '"Ver mensagens antigas". Nada é enviado ao cliente.',
         { titulo: 'Importar histórico do WhatsApp', rotuloConfirmar: 'Importar' }

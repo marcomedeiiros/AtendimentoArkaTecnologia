@@ -62,18 +62,34 @@ class HistoricoService {
         telefone: conversa.telefone,
         jid: null,
         disponivel: 0,
+        novas: 0,
         jaNaCentral: await conversaRepository.contarMensagensComWaId(conversa.id),
         motivo: "sem_historico",
       };
     }
 
-    const { total } = await evolutionApi.findMessages(jid, { pagina: 1, porPagina: 1 }, instanceName);
+    // A MESMA VARREDURA DA IMPORTACAO, sem escrever nada.
+    //
+    // Antes daqui saia so o TOTAL do numero, e a tela convidava com ele: "foram
+    // encontradas 2298 mensagens antigas". So que 2280 ja estavam na Central e
+    // as 18 restantes eram reacao e evento de protocolo -- nada que vire
+    // mensagem. Quem confirmava esperava 18 e recebia "nenhuma mensagem nova
+    // entrou": um convite para um trabalho que ja se sabia inutil.
+    //
+    // O preco e uma varredura a mais quando ha o que importar. Quando NAO ha --
+    // o caso que motivou isto --, nao ha preco nenhum: a tela para aqui em vez
+    // de rodar a importacao inteira para inserir zero.
+    const { novos, total } = await this._coletar(jid, instanceName, MAX_POR_IMPORTACAO);
+    const novas = [...novos.values()].filter((r) => this._temConteudo(r)).length;
+
     return {
       telefone: conversa.telefone,
       jid,
       disponivel: total,
+      // O que de fato entraria. E este numero que a tela mostra.
+      novas,
       jaNaCentral: await conversaRepository.contarMensagensComWaId(conversa.id),
-      motivo: total > 0 ? null : "sem_historico",
+      motivo: novas > 0 ? null : total > 0 ? "tudo_ja_importado" : "sem_historico",
     };
   }
 
@@ -235,6 +251,18 @@ class HistoricoService {
   }
 
   // ── internos ──────────────────────────────────────────────────────────────
+
+  /**
+   * TEM ALGO PARA MOSTRAR? Reacao, evento de protocolo e mensagem apagada nao.
+   *
+   * Usado pela previa E pelo laco de importacao, de proposito: se cada um
+   * tivesse a sua regra, a previa voltaria a prometer um numero que a
+   * importacao nao cumpre -- que e exatamente o defeito que ela corrige.
+   */
+  _temConteudo(registro) {
+    const envelope = { data: registro, message: registro?.message };
+    return !!(whatsappService.extrairTexto(envelope) || whatsappService.extrairMidia(envelope));
+  }
 
   async _contexto(conversaId) {
     const conversa = await conversaRepository.dadosParaImportacao(conversaId);
