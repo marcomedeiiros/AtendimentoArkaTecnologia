@@ -39,46 +39,44 @@ const premiados = require(path.join(__dirname, "src/modules/rankings/premiados")
 
 console.log("=== Premiacao justa ===");
 
-// ── O pódio acompanha o tamanho da equipe ────────────────────────────────────
+// ── Um campeão por competição ────────────────────────────────────────────────
+//
+// Houve uma regra derivada do tamanho da equipe (um terço, entre 1 e 3). Ela
+// resolvia o caso da equipe de três, mas deixava as duas competições com
+// números diferentes -- 2 na sede, 1 fora --, e a assimetria não se explica
+// para quem é avaliado. Foi REMOVIDA, e as checagens dela saíram junto: teste
+// de regra que não existe mais é teste que nunca reprova.
 {
   const problemas = [];
-  const esperado = [
-    [1, 1, "uma pessoa: ela mesma"],
-    [2, 1, "duas pessoas"],
-    [3, 1, "TRES pessoas -- o caso da equipe externa"],
-    [5, 1, "cinco pessoas"],
-    [6, 2, "seis pessoas"],
-    [8, 2, "oito pessoas"],
-    [9, 3, "nove pessoas"],
-    [30, 3, "trinta: o teto de 3 segura a diluicao"],
-  ];
-  for (const [total, quero, porque] of esperado) {
+  for (const total of [1, 3, 6, 9, 30]) {
     const obtido = premiados.quantos(total);
-    if (obtido !== quero) problemas.push(`${porque}: esperava ${quero}, veio ${obtido}`);
+    if (obtido !== 1) problemas.push(`com ${total} pessoas deveria premiar 1, premiou ${obtido}`);
   }
   if (premiados.quantos(0) !== 0) {
     problemas.push("ranking vazio deveria dar 0 premiados, deu " + premiados.quantos(0));
   }
-  check("o podio e um terco da equipe, entre 1 e 3", problemas);
+  if (premiados.PADRAO.sede !== 1 || premiados.PADRAO.externo !== 1) {
+    problemas.push("o padrao deveria ser 1 em cada: " + JSON.stringify(premiados.PADRAO));
+  }
+  check("um campeao por competicao, em qualquer tamanho de equipe", problemas);
 }
 
 // ── A escolha manual vence, mas não inventa vaga ─────────────────────────────
 {
   const problemas = [];
-  if (premiados.quantos(3, 3) !== 3) problemas.push("com 3 configurado e 3 pessoas, deveria dar 3");
+  if (premiados.quantos(9, 3) !== 3) problemas.push("com 3 configurado e 9 pessoas, deveria dar 3");
   // Pódio com vaga vazia é pior que pódio pequeno.
   if (premiados.quantos(2, 3) !== 2) {
     problemas.push("com 3 configurado e 2 pessoas, deveria dar 2, deu " + premiados.quantos(2, 3));
   }
-  // Zero/vazio DESFAZEM a escolha manual -- é assim que se volta ao automático
-  // sem precisar de um segundo campo.
-  const desfeito = premiados.validar({ sede: 0, externo: "" }, { sede: 3, externo: 1 });
-  if (desfeito.sede !== null || desfeito.externo !== null) {
-    problemas.push("zero/vazio deveriam voltar ao automatico: " + JSON.stringify(desfeito));
+  // Zero/vazio DESFAZEM a escolha manual -- é assim que se volta ao padrão sem
+  // precisar de um segundo campo.
+  const desfeito = premiados.validar({ sede: 0, externo: "" }, { sede: 3, externo: 3 });
+  if (desfeito.sede !== 1 || desfeito.externo !== 1) {
+    problemas.push("zero/vazio deveriam voltar a 1: " + JSON.stringify(desfeito));
   }
   check("a escolha manual vence, sem passar do que existe", problemas);
 }
-
 // ── A NOTA GERAL ─────────────────────────────────────────────────────────────
 //
 // `notaGeral` nao e exportada (e detalhe do servico), entao a formula e extraida
@@ -178,13 +176,13 @@ console.log("=== Premiacao justa ===");
     "utf8"
   );
   const problemas = [];
-  if (tela.includes("{[1, 2, 3].map((pos) => {")) {
+  if (/\{\[1, 2, 3\]\.map\(\(pos\)/.test(tela)) {
     problemas.push("os botoes de premio voltaram a oferecer tres posicoes fixas");
   }
-  if (!tela.includes("Array.from({ length: dados?.premiados ?? 3 }")) {
+  if (!tela.includes("Array.from({ length: dados?.premiados ?? 1 }")) {
     problemas.push("os botoes de premio nao seguem o numero de premiados do servidor");
   }
-  if (!tela.includes("const vagas = Math.max(0, Number(premiados ?? 3));")) {
+  if (!tela.includes("const vagas = Math.max(0, Number(premiados ?? 1));")) {
     problemas.push("o podio nao le mais o numero de premiados do servidor");
   }
   check("os botoes de premio seguem o mesmo numero do podio", problemas);

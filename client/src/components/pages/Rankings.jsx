@@ -146,10 +146,10 @@ function Evolucao({ estado, anterior }) {
  *
  * A conta é do servidor (`rankings/premiados`) porque ela também decide quem
  * PODE receber prêmio registrado -- e uma regra dessas em dois lugares vira
- * duas regras. O `?? 3` cobre só a resposta antiga em cache.
+ * duas regras. O `?? 1` cobre só a resposta antiga em cache, e 1 é o padrão.
  */
 function Podio({ classificacao, premiacoes, premiados }) {
-  const vagas = Math.max(0, Number(premiados ?? 3));
+  const vagas = Math.max(0, Number(premiados ?? 1));
   const top = classificacao.slice(0, vagas);
   if (!top.length) return null;
   // Ordem visual 2 - 1 - 3, como num pódio de verdade: o primeiro no meio e
@@ -208,7 +208,7 @@ function Podio({ classificacao, premiacoes, premiados }) {
   );
 }
 
-function LinhaTabela({ p, aberta, onAlternar, premiados = 3, temGeral = false }) {
+function LinhaTabela({ p, aberta, onAlternar, premiados = 1, temGeral = false }) {
   // A MESMA conta do pódio. Cravar 3 aqui pintaria de bronze um terceiro lugar
   // que não é premiado -- a tabela contradizendo o pódio logo acima dela.
   const temMedalha = p.posicao <= premiados;
@@ -848,16 +848,14 @@ export default function Rankings() {
               Eram três, sempre. Numa equipe de três isso premiava o time
               inteiro -- o "3º lugar" era o último colocado com medalha.
 
-              Em branco = automático: um terço da equipe, entre 1 e 3. Derivar
-              do tamanho é o que impede o problema de voltar quando a equipe
-              crescer, sem ninguém precisar lembrar de vir aqui. */}
+              Agora é um campeão em cada competição. Em branco volta a 1. */}
           <div className="border-t border-linha pt-3 space-y-2">
             <p className="text-[11px] font-semibold text-texto-suave">Premiados no pódio</p>
             <div className="flex flex-wrap items-end gap-3">
               <div>
                 <label className="text-[10px] text-texto-fraco block mb-1">Atendimento na sede</label>
                 <input
-                  type="number" min={1} max={50} placeholder="automático"
+                  type="number" min={1} max={50} placeholder="1"
                   value={rascunho.premiados?.sede ?? ''}
                   onChange={(e) => {
                     setErroCfg('');
@@ -870,7 +868,7 @@ export default function Rankings() {
               <div>
                 <label className="text-[10px] text-texto-fraco block mb-1">Fora da sede</label>
                 <input
-                  type="number" min={1} max={50} placeholder="automático"
+                  type="number" min={1} max={50} placeholder="1"
                   value={rascunho.premiados?.externo ?? ''}
                   onChange={(e) => {
                     setErroCfg('');
@@ -882,8 +880,9 @@ export default function Rankings() {
               </div>
             </div>
             <p className="text-[10px] text-texto-fraco leading-relaxed">
-              Deixe em branco para o automático: <strong>um terço da equipe, entre 1 e 3</strong>.
-              Com 3 pessoas dá 1 premiado; com 9 ou mais, 3. Nunca mais do que existe no ranking.
+              <strong>Um campeão em cada competição</strong> é o padrão — o prêmio é do primeiro
+              lugar. Aumente aqui se um pódio maior fizer sentido; nunca mais do que existe no
+              ranking. Em branco volta a 1.
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
@@ -1031,7 +1030,7 @@ export default function Rankings() {
                       só e, logo abaixo, três botões oferecendo prêmio para 1º,
                       2º e 3º. Pior que feio -- registrar um prêmio para alguém
                       que a regra não premia é um erro que ninguém desfaz. */}
-                  {Array.from({ length: dados?.premiados ?? 3 }, (_, i) => i + 1).map((pos) => {
+                  {Array.from({ length: dados?.premiados ?? 1 }, (_, i) => i + 1).map((pos) => {
                     const reg = dados?.premiacoes?.find((x) => x.posicao === pos);
                     const alvo = lista.find((p) => p.posicao === pos);
                     if (!alvo) return null;
