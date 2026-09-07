@@ -1048,7 +1048,7 @@ function Configuracao() {
         </p>
         <p className="text-[10px] text-texto-fraco leading-relaxed">
           Cada linha é um item do checklist da visita ele é dado como coberto quando o relatório
-          traz alguma das palavras ao lado cada empresa escreve com o vocabulário dela, e um item
+          traz alguma das palavras ao lado — cada empresa escreve com o vocabulário dela, e um item
           que nunca casa vira completude perdida sem ninguém entender por quê separe as palavras
           por vírgula
         </p>
@@ -1060,7 +1060,7 @@ function Configuracao() {
             baixa a nota de TODOS os relatórios já entregues, que não têm o
             campo novo. É o mesmo efeito dos pesos, e o aviso é o mesmo. */}
         <p className="text-[10px] text-espera-400 leading-relaxed border border-espera/30 bg-espera/10 rounded-xl p-2.5">
-          Acrescentar um item <strong>baixa a completude dos relatórios já entregues</strong> eles não
+          Acrescentar um item <strong>baixa a completude dos relatórios já entregues</strong> — eles não
           têm o campo novo, e a conta é sobre o total de itens remover faz o contrário o texto já
           escrito num item removido <strong>não é apagado</strong> ele deixa de contar, e continua lá
         </p>
