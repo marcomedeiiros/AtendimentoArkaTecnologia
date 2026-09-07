@@ -247,6 +247,11 @@ const VERIFICACOES = [
     resumo: "a recusa que fala, e o webhook conferido ao subir",
   },
   {
+    arquivo: "verificar-modo-tv.js",
+    titulo: "Modo TV: as duas competicoes",
+    resumo: "quem esta atras, o ranking externo e a parede que nao cai",
+  },
+  {
     arquivo: "verificar-premiacao-justa.js",
     titulo: "Premiacao justa",
     resumo: "podio do tamanho da equipe e a nota geral ponderada",

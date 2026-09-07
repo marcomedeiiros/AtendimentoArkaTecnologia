@@ -316,7 +316,7 @@ function DestaqueDoMes({ item, minimo, periodo }) {
   );
 }
 
-function LinhaPosicao({ posicao, item, minimo }) {
+function LinhaPosicao({ posicao, item, minimo, detalhe }) {
   const cor = MEDALHAS[posicao - 1] || '--quieto';
   const vago = !item;
   // Ouro, prata e bronze existem; do 4o em diante nao ha metal a mostrar.
@@ -413,9 +413,17 @@ function LinhaPosicao({ posicao, item, minimo }) {
               {nomeCurto(item.nome)}
             </span>
             <span className="block truncate text-slate-400 tabular-nums" style={T.apoio}>
-              {item.atendimentos.valor} aval. ·{' '}
-              {item.nota.conta ? `${nota1(item.nota.valor)} ★` : `${item.nota.amostra} de ${minimo} ★`} ·{' '}
-              {duracao(item.agilidade.medioSeg)}
+              {/* Cada ranking tem as suas parcelas. Com o texto da sede cravado
+                  aqui, o painel de fora da sede mostraria "0 aval. · 0 de 3 ★"
+                  para quem entrega relatório de visita -- números de uma conta
+                  que não é a dele. */}
+              {detalhe ? detalhe(item, minimo) : (
+                <>
+                  {item.atendimentos.valor} aval. ·{' '}
+                  {item.nota.conta ? `${nota1(item.nota.valor)} ★` : `${item.nota.amostra} de ${minimo} ★`} ·{' '}
+                  {duracao(item.agilidade.medioSeg)}
+                </>
+              )}
             </span>
           </span>
 
@@ -431,26 +439,53 @@ function LinhaPosicao({ posicao, item, minimo }) {
   );
 }
 
-function Classificacao({ itens, aCaminho, minimo }) {
+/**
+ * A CLASSIFICAÇÃO -- os três primeiros em destaque, e QUEM ESTÁ ATRÁS embaixo.
+ *
+ * A parede mostrava só três nomes. Numa equipe de seis, metade não se via --
+ * e quem está em 4º é justamente quem mais precisa saber que está em 4º. Do
+ * quarto em diante a linha é compacta: nome e pontos, sem as parcelas. Ali o
+ * que interessa é "onde eu estou", e a conta detalhada de sete pessoas não se
+ * lê de longe -- que é a distância desta tela.
+ */
+function Classificacao({ itens, aCaminho, minimo, titulo = 'Classificação do mês', sublinha = 'avaliados + nota + agilidade', detalhe }) {
   // Posicao sem dono vira linha tracejada "em aberto", e nao some: com uma
   // pessoa so no ranking -- o comeco de qualquer mes -- uma lista de um item
   // nao se le como classificacao.
   const linhas = [0, 1, 2].map((i) => itens[i] || null);
+  const atras = itens.slice(3);
 
   return (
     <section className="min-h-0 glass-panel border border-linha rounded-2xl p-4 xl:p-5 flex flex-col gap-3 overflow-hidden">
       <div className="flex items-center justify-between gap-3 shrink-0">
-        <Rotulo icon={Medal}>Classificação do mês</Rotulo>
+        <Rotulo icon={Medal}>{titulo}</Rotulo>
         <span className="shrink-0 text-slate-500 truncate" style={T.apoio}>
-          avaliados + nota + agilidade
+          {sublinha}
         </span>
       </div>
 
       <ol className="flex-1 min-h-0 flex flex-col gap-2">
         {linhas.map((item, i) => (
-          <LinhaPosicao key={item?.nome || `vago-${i}`} posicao={i + 1} item={item} minimo={minimo} />
+          <LinhaPosicao key={item?.nome || `vago-${i}`} posicao={i + 1} item={item} minimo={minimo} detalhe={detalhe} />
         ))}
       </ol>
+
+      {/* DO QUARTO EM DIANTE. Compacto de propósito: nome e pontos.
+
+          A parede é lida de longe e de passagem. Sete linhas com parcelas
+          viram um bloco de números que ninguém decifra em pé; nome e pontos
+          respondem a única pergunta que essas posições fazem. */}
+      {atras.length > 0 && (
+        <div className="shrink-0 flex items-center gap-x-3 gap-y-1 flex-wrap border-t border-linha pt-2.5">
+          {atras.map((p) => (
+            <span key={p.nome} className="inline-flex items-baseline gap-1.5 text-slate-400" style={T.apoio}>
+              <span className="tabular-nums text-slate-500">{p.posicao}º</span>
+              <span className="font-display font-semibold text-slate-300">{nomeCurto(p.nome)}</span>
+              <span className="tabular-nums text-slate-400">{p.pontos} pts</span>
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* QUEM ESTA A CAMINHO. So a contagem, nunca a nota -- mostrar a media de
           quem ainda nao entrou seria abolir o minimo pela porta dos fundos,
@@ -650,6 +685,8 @@ export default function ModoTv({ onFechar, fila = [] }) {
   }, [onFechar]);
 
   const ranking = dados?.ranking;
+  // O servidor manda `null` quando não existe equipe externa cadastrada.
+  const temExterno = (dados?.rankingExterno?.classificacao?.length ?? 0) > 0;
   const metaPct = dados?.hoje?.meta
     ? Math.min(100, Math.round((dados.hoje.fechados / dados.hoje.meta) * 100))
     : null;
@@ -733,13 +770,39 @@ export default function ModoTv({ onFechar, fila = [] }) {
             </section>
           ) : (
             <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-3 xl:gap-4">
-              <div className="flex-[3] min-h-0 grid grid-cols-1 md:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] gap-3 xl:gap-4">
+              {/* TRÊS COLUNAS QUANDO HÁ EQUIPE EXTERNA, DUAS QUANDO NÃO HÁ.
+
+                  Quem trabalha na rua não se via na parede -- justamente o time
+                  que passa o dia fora e olha a TV de passagem. Mas uma coluna
+                  reservada e vazia é pior que coluna nenhuma: a grade muda de
+                  forma conforme existir gente do outro lado. */}
+              <div className={`flex-[3] min-h-0 grid grid-cols-1 gap-3 xl:gap-4 ${
+                temExterno
+                  ? 'md:grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)_minmax(0,1fr)]'
+                  : 'md:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]'
+              }`}>
                 <DestaqueDoMes item={ranking.classificacao[0]} minimo={ranking.minimoAvaliacoes} periodo={dados.periodo.rotulo} />
                 <Classificacao
                   itens={ranking.classificacao}
                   aCaminho={ranking.aCaminho}
                   minimo={ranking.minimoAvaliacoes}
+                  titulo="Atendimento na sede"
                 />
+                {temExterno && (
+                  <Classificacao
+                    itens={dados.rankingExterno.classificacao}
+                    minimo={0}
+                    titulo="Fora da sede"
+                    sublinha="relatórios de visita"
+                    // As parcelas do externo são outras -- ver `pontuacao.externa`.
+                    // O que cabe numa linha lida de longe é o volume entregue.
+                    detalhe={(item) => (
+                      <>
+                        {item.registros} {item.registros === 1 ? 'relatório' : 'relatórios'}
+                      </>
+                    )}
+                  />
+                )}
               </div>
 
               <div className="flex-1 min-h-0 grid grid-cols-2 xl:grid-cols-4 gap-3 xl:gap-4">

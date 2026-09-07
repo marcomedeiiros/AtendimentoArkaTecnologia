@@ -427,6 +427,13 @@ class PainelService {
       // equipe olha mais. Com os nomes na tela, o zero e ponto de partida
       // visivel em vez de ausencia.
       ranking: this._ranking(doMes, { equipe: daSede, incluirZerados: true, regras }),
+      // O RANKING DE FORA DA SEDE, para a parede mostrar as duas competições.
+      //
+      // A TV só conhecia a sede, e quem trabalha na rua não se via na parede --
+      // exatamente o time que passa o dia fora e para na empresa de vez em
+      // quando. Se a equipe externa não existe, vem `null` e a tela não desenha
+      // o painel: uma coluna vazia é pior que uma coluna a menos.
+      rankingExterno: await this._paredeExterna(desdeMes),
       csat: this._csat(doMes),
       tempos: this._tempos(doMes),
       hoje: { fechados: fechadosDeHoje.filter(resolvidoPorAtendente).length, meta },
@@ -846,6 +853,44 @@ class PainelService {
       por: autor?.nome || autor?.email || autor?.sub || "desconhecido",
     });
     return { ranking: qual, zeradoEm: null };
+  }
+
+  /**
+   * O ranking EXTERNO para a parede.
+   *
+   * ── O `require` FICA AQUI DENTRO, E ISSO É DE PROPÓSITO ───────────────────
+   *
+   * `ranking.service` já requer ESTE arquivo no topo. Requerê-lo de volta no
+   * topo daqui fecha um ciclo, e em ciclo o Node entrega o módulo pela metade
+   * para quem chegar primeiro -- uma falha que aparece como "não é uma função"
+   * na subida, longe da causa. Adiando para a hora da chamada, os dois já estão
+   * carregados.
+   *
+   * ── POR QUE NÃO REPETIR A CONTA AQUI ──────────────────────────────────────
+   *
+   * A fórmula do externo é outra (relatório de visita, não conversa avaliada), e
+   * ela vive em `pontuacao.externa`. Uma segunda implementação para a parede
+   * seria a garantia de a TV e a tela de Rankings discordarem -- e a TV é
+   * justamente a que ninguém confere.
+   */
+  async _paredeExterna(desdeMes) {
+    try {
+      const rankingService = require("../rankings/ranking.service");
+      const equipes = await rankingService.equipes();
+      if (!equipes.externo.length) return null;
+      const r = await rankingService._rankingExterno(
+        desdeMes.getFullYear(),
+        desdeMes.getMonth() + 1,
+        equipes.externo
+      );
+      return { classificacao: r.classificacao };
+    } catch (e) {
+      // A parede NÃO pode cair por causa de um painel a mais. Sem o externo ela
+      // continua mostrando a sede, a fila e os indicadores -- que é o que
+      // estava lá antes desta adição.
+      logger.warn("Nao consegui montar o ranking externo para a parede", { message: e.message });
+      return null;
+    }
   }
 
   async _ultimoAtendimento(nome) {
