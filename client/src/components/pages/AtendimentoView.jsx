@@ -4303,6 +4303,11 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
    * mensagens com data no passado, em nome do cliente e da equipe. É reversível
    * só à mão, então quem clica precisa ver o tamanho do que vai entrar.
    */
+  // O rotulo da OS sintetica que recebe o historico importado. Vem do
+  // servidor (atendimentoSintetico.helper) e e o unico jeito de saber, aqui,
+  // se esta conversa tem mesmo um trecho antigo separado.
+  const OS_HISTORICO_IMPORTADO = 'Histórico do WhatsApp';
+
   const importarHistorico = useCallback(async (id) => {
     if (!id) return;
     // O botao so fica desabilitado na conversa que esta importando, entao a
@@ -4323,10 +4328,22 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       // rodar a importacao inteira para inserir zero.
       if (disponivel > 0 && novas === 0) {
         marcarHistoricoVazio(id);
+        // MANDAR PROCURAR ONDE PODE NAO HAVER NADA E PIOR DO QUE NAO DIZER
+        // NADA. Nem toda conversa sem novidade tem um trecho importado: se as
+        // mensagens do aparelho ja tinham chegado ao vivo pelo webhook, elas
+        // estao no fio normal e nao existe OS de historico nenhuma. Apontar o
+        // botao "Ver mensagens antigas" nesse caso manda procurar um trecho
+        // que nunca foi criado.
+        const temTrechoImportado = (conversas.find(c => c.id === id)?.atendimentos || [])
+          .some(a => a.atendenteNome === OS_HISTORICO_IMPORTADO);
         await avisar(
           'Todo o histórico que o WhatsApp guardou deste número já está na Central.\n\n' +
-          'As mensagens antigas estão no início da conversa, em um atendimento ' +
-          'marcado como "Histórico do WhatsApp". Use "Ver mensagens antigas" para chegar até lá.',
+          (temTrechoImportado
+            ? 'As mensagens antigas estão no início da conversa, em um atendimento ' +
+              'marcado como "Histórico do WhatsApp". Use "Ver mensagens antigas" para chegar até lá.'
+            : 'As mensagens que o aparelho guardou já estavam nesta conversa, então não há um ' +
+              'trecho antigo separado para trazer.') +
+          '\n\nEste botão não vai mais oferecer a busca nesta conversa. Recarregue a página para tentar de novo.',
           { titulo: 'Nada de novo para importar', tipo: 'info' }
         );
         return;
@@ -4388,7 +4405,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       importandoRef.current = null;
       setImportandoHistorico(null);
     }
-  }, [aplicarConversa, marcarHistoricoVazio]);
+  }, [aplicarConversa, marcarHistoricoVazio, conversas]);
 
   // ── TRANSFERÊNCIA ────────────────────────────────────────────────────────
   //

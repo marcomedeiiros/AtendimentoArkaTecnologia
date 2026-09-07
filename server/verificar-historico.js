@@ -21,6 +21,7 @@
  * As dobras substituem só a Evolution e o banco. `previa`, `_coletar` e
  * `_temConteudo` são o código de verdade.
  */
+const fs = require("fs");
 const path = require("path");
 
 const ALVO = path.join(__dirname, "src/modules/whatsapp");
@@ -102,6 +103,35 @@ function check(nome, problemas) {
       : ["a previa diz " + comNovidade.novas + " e a importacao traria " + importaria]),
   ]);
 
+  // ── O ROTULO QUE ATRAVESSA A FRONTEIRA ────────────────────────────────────
+  //
+  // A tela decide o texto do aviso "nada de novo" comparando o `atendenteNome`
+  // da OS com a string "Histórico do WhatsApp". Essa string nasce no servidor.
+  // Se um lado mudar sozinho, a comparacao passa a dar sempre falso -- em
+  // silencio -- e a tela volta a dizer que nao ha trecho antigo em conversas
+  // que tem um. Nada quebra, so a frase fica errada; por isso o par e travado
+  // aqui em vez de confiado ao cuidado de quem editar.
+  {
+    const { ATENDENTE_HISTORICO_IMPORTADO } = require("./src/shared/helpers/atendimentoSintetico.helper");
+    const tela = fs.readFileSync(
+      path.join(__dirname, "../client/src/components/pages/AtendimentoView.jsx"),
+      "utf8"
+    );
+    const declarado = /const OS_HISTORICO_IMPORTADO = ['"](.+?)['"];/.exec(tela)?.[1];
+
+    check("a tela e o servidor usam o mesmo rotulo de OS importada", [
+      ...(declarado ? [] : ["nao achei `OS_HISTORICO_IMPORTADO` em AtendimentoView.jsx"]),
+      ...(declarado && declarado !== ATENDENTE_HISTORICO_IMPORTADO
+        ? [`a tela usa ${JSON.stringify(declarado)} e o servidor grava ${JSON.stringify(ATENDENTE_HISTORICO_IMPORTADO)}`]
+        : []),
+    ]);
+
+    check("o aviso de 'nada de novo' nao promete um trecho que pode nao existir", [
+      ...(tela.includes("const temTrechoImportado =")
+        ? []
+        : ["o aviso nao verifica se a conversa tem OS de historico antes de mandar usar 'Ver mensagens antigas'"]),
+    ]);
+  }
   console.log(
     "\n" + (erros.length ? `FALHAS (${erros.length}):\n  ` + erros.join("\n  ") : "HISTORICO: TUDO CONFERE")
   );
