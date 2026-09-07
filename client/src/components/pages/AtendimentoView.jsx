@@ -3043,7 +3043,15 @@ function PainelChat({
                  `relative`, mas depender disso seria ligar duas coisas sem
                  relacao -- quem um dia tirasse o bico faria o horario ir parar
                  no canto de outro elemento, longe da mensagem. */
-              <div className={`relative max-w-[80%] sm:max-w-[72%] px-2.5 py-1.5 rounded-lg text-[13px] shadow-sm space-y-0.5 break-words ${
+              /* TIPOGRAFIA E RESPIRO DO WHATSAPP WEB, medidos de la:
+                 texto 14.2px com entrelinha 19px, e o recheio 6/7/8/9 (a
+                 esquerda um pouco maior, a base tambem, que e o que abre espaco
+                 para o horario no canto).
+
+                 Estava 13px com recheio 6/10. A diferenca de largura da bolha e
+                 pequena -- 77px contra 81px no "oi" --, mas a LETRA e 9% maior,
+                 e e ela que se le como "a bolha do WhatsApp e maior". */
+              <div className={`relative max-w-[80%] sm:max-w-[72%] pl-[9px] pr-[7px] pt-[6px] pb-2 rounded-lg text-[14.2px] leading-[19px] shadow-sm space-y-0.5 break-words ${
                 /* O papel de parede em uso e a arte ESCURA do WhatsApp, entao as
                    bolhas seguem o tema escuro: recebida em #202C33, enviada em
                    #005C4B, texto claro. Bolha branca aqui brilharia demais. */
@@ -3130,7 +3138,7 @@ function PainelChat({
                     {/* Mídia mantém o horário em linha própria: flutuar sobre
                         uma imagem exigiria o degradê que o WhatsApp usa para o
                         texto não sumir em foto clara, e isso é outro assunto. */}
-                    <div className="text-[9px] flex items-center justify-end gap-1 text-texto-suave">
+                    <div className="text-[11px] flex items-center justify-end gap-1 text-texto-suave">
                       {relogio}
                     </div>
                   </>
@@ -3168,10 +3176,10 @@ function PainelChat({
                         idêntica à do horário. Com `inline-block` sem o `gap`, a
                         reserva saía menor e o texto encostava no relógio. */}
                     <span aria-hidden="true"
-                      className="invisible inline-flex items-center gap-1 whitespace-nowrap pl-2 text-[9px] select-none">
+                      className="invisible inline-flex items-center gap-1 whitespace-nowrap pl-2 text-[11px] select-none">
                       {relogio}
                     </span>
-                    <span className="absolute bottom-1.5 right-2.5 inline-flex items-center gap-1 whitespace-nowrap text-[9px] text-texto-suave">
+                    <span className="absolute bottom-1 right-[7px] inline-flex items-center gap-1 whitespace-nowrap text-[11px] text-texto-suave">
                       {relogio}
                     </span>
                   </div>
