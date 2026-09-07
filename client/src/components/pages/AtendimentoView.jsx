@@ -3930,7 +3930,18 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   // barra de novo (ver adminMiddleware na rota). Esconder o botão é conforto de
   // interface, não a autorização.
   const ehAdmin = usuario?.cargo === 'Administrador';
-  const [importandoHistorico, setImportandoHistorico] = useState(false);
+  /**
+   * QUAL conversa esta importando -- nao "se" alguma esta.
+   *
+   * Era um booleano solto, e o aviso "Procurando no WhatsApp..." e desenhado na
+   * conversa ABERTA. Como a importacao passa a maior parte do tempo parada num
+   * modal esperando a pessoa confirmar, dava tempo de sobra de trocar de
+   * conversa -- e a outra, que ninguem mandou buscar, mostrava o aviso.
+   *
+   * Guardando o id, o aviso so aparece onde o clique aconteceu.
+   */
+  const [importandoHistorico, setImportandoHistorico] = useState(null);
+  const importandoRef = useRef(null);
   /**
    * Conversas em que a busca no WhatsApp já respondeu "não tem mais nada".
    *
@@ -4294,7 +4305,13 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
    */
   const importarHistorico = useCallback(async (id) => {
     if (!id) return;
-    setImportandoHistorico(true);
+    // O botao so fica desabilitado na conversa que esta importando, entao a
+    // trava contra uma SEGUNDA importacao simultanea (em outra conversa) tem de
+    // ser aqui. Duas ao mesmo tempo empilhariam dois modais de confirmacao, e o
+    // segundo esconderia o primeiro.
+    if (importandoRef.current) return;
+    importandoRef.current = id;
+    setImportandoHistorico(id);
     try {
       const previa = await ConversasAPI.historicoWhatsApp(id);
       const disponivel = Number(previa?.disponivel) || 0;
@@ -4352,7 +4369,8 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     } catch (e) {
       await avisar('Não foi possível importar o histórico: ' + (e?.message || 'erro desconhecido'));
     } finally {
-      setImportandoHistorico(false);
+      importandoRef.current = null;
+      setImportandoHistorico(null);
     }
   }, [aplicarConversa, marcarHistoricoVazio]);
 
@@ -5232,7 +5250,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               // histórico local se houver a chance de existir algo no WhatsApp:
               // Administrador, e esta conversa ainda não respondeu "não tem nada".
               podeBuscarHistorico={ehAdmin && !historicoVazio.has(conversa.id)}
-              buscandoHistorico={importandoHistorico}
+              buscandoHistorico={importandoHistorico === conversa.id}
               onBuscarHistorico={importarHistorico}
               onAbrirContato={conversarComContatoRecebido}
             />

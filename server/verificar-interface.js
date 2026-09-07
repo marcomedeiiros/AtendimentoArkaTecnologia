@@ -476,6 +476,46 @@ titulo("8. O menu da mensagem abre DENTRO da conversa");
   }
 }
 
+// ---------------------------------------------------------------------------
+titulo("9. O aviso de importacao fica na conversa que pediu");
+
+/**
+ * "Procurando no WhatsApp..." aparecia em conversa que ninguem mandou buscar.
+ *
+ * O estado era um BOOLEANO -- dizia que ALGUMA importacao estava em curso, nao
+ * QUAL --, e o aviso e desenhado na conversa que esta aberta. A importacao passa
+ * a maior parte do tempo parada num modal esperando confirmacao, entao havia
+ * tempo de sobra para trocar de conversa e ver o aviso no lugar errado.
+ *
+ * O estado guarda o ID, e o aviso e comparado com a conversa aberta.
+ *
+ * A trava contra duas importacoes ao mesmo tempo vai junto e nao e enfeite:
+ * o botao so fica desabilitado na conversa que importa, entao sem a guarda um
+ * segundo clique em OUTRA conversa empilharia dois modais de confirmacao -- e o
+ * de baixo ficaria escondido, esperando um clique que ninguem daria.
+ */
+{
+  const alvo = arquivos.find((f) => f.endsWith("AtendimentoView.jsx"));
+  const fonte = alvo ? fs.readFileSync(alvo, "utf8") : "";
+
+  const doEstado = [];
+  // Comparacoes por texto, e nao por regex: o que se quer travar aqui sao
+  // trechos de codigo exatos, e regex sobre codigo so acrescenta escape.
+  if (fonte.includes("[importandoHistorico, setImportandoHistorico] = useState(false)")) {
+    doEstado.push("`importandoHistorico` voltou a ser booleano -- o aviso aparece em qualquer conversa aberta");
+  }
+  if (!fonte.includes("buscandoHistorico={importandoHistorico === conversa.id}")) {
+    doEstado.push("o aviso nao e comparado com a conversa aberta (`importandoHistorico === conversa.id`)");
+  }
+  check("o aviso so aparece na conversa que pediu a importacao", doEstado);
+
+  const daTrava = [];
+  if (!fonte.includes("if (importandoRef.current) return;")) {
+    daTrava.push("sem guarda contra uma segunda importacao simultanea -- dois modais de confirmacao empilhados");
+  }
+  check("duas importacoes ao mesmo tempo sao recusadas", daTrava);
+}
+
 console.log(
   "\n" + (erros.length
     ? `FALHAS (${erros.length}):\n  ` + erros.join("\n  ")
