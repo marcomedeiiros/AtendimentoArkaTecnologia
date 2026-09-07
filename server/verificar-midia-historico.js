@@ -93,7 +93,7 @@ const historico = require(path.join(ALVO, "historico.service"));
 (async () => {
   console.log("=== Midia do historico importado ===");
 
-  const recuperadas = await historico._recuperarMidias(
+  const { recuperadas, tentadas } = await historico._recuperarMidias(
     { id: "c1" },
     "5511999@s.whatsapp.net",
     "arka"
@@ -103,6 +103,12 @@ const historico = require(path.join(ALVO, "historico.service"));
     ...(recuperadas === 2 ? [] : ["deveria recuperar 2, recuperou " + recuperadas]),
     ...(gravados.nova?.arquivo ? [] : ["a mais recente nao foi gravada com o arquivo"]),
     ...(gravados.velha?.arquivo ? [] : ["a terceira nao foi tentada -- uma falha no meio nao pode parar tudo"]),
+  ]);
+
+  // "0 de 14" e uma resposta; "nada aconteceu" nao e. Sem o denominador a tela
+  // nao distingue arquivo que o WhatsApp apagou de tentativa que nem ocorreu.
+  check("conta quantas TENTOU, e nao so quantas voltaram", [
+    ...(tentadas === 3 ? [] : ["deveria ter tentado as 3 pendentes, tentou " + tentadas]),
   ]);
 
   check("a marca de indisponivel sai de quem voltou", [

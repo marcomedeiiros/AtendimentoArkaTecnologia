@@ -12,6 +12,18 @@ import {
   Bot, StickyNote, SpellCheck, Undo2, History, MessageSquarePlus, Copy, StarOff
 } from 'lucide-react';
 import { EmojiIcon, FormattedMessage, TextoFormatado } from './EmojiIcon';
+
+/**
+ * O rótulo da OS sintética que recebe o histórico importado do WhatsApp. Vem
+ * do servidor (`atendimentoSintetico.helper`); o par está travado em
+ * `verificar-midia-historico`/`verificar-historico`.
+ *
+ * Serve para duas coisas: saber se a conversa tem um trecho importado, e NÃO
+ * desenhar número de OS nele -- aquele trecho não é um chamado, é conversa
+ * copiada do aparelho.
+ */
+const OS_HISTORICO_IMPORTADO = 'Histórico do WhatsApp';
+const ehOsImportada = (os) => os?.atendenteNome === OS_HISTORICO_IMPORTADO;
 import { useMensagensRapidas } from './MensagensRapidas';
 import Avatar from '../Avatar';
 import { LogoCliente } from '../LogoCliente';
@@ -3138,7 +3150,9 @@ function PainelChat({
               title={
                 temMaisAntigas
                   ? proximaOsAntiga
-                    ? `Carregar a conversa inteira, desde o atendimento #${proximaOsAntiga.os} (${dataHoraCurta(proximaOsAntiga.abertoEm)})`
+                    ? ehOsImportada(proximaOsAntiga)
+                      ? `Carregar a conversa inteira, desde o histórico do WhatsApp (${dataHoraCurta(proximaOsAntiga.abertoEm)})`
+                      : `Carregar a conversa inteira, desde o atendimento #${proximaOsAntiga.os} (${dataHoraCurta(proximaOsAntiga.abertoEm)})`
                     : 'Carregar a conversa inteira'
                   : 'Procurar no WhatsApp as conversas anteriores a este número entrar na Central'
               }
@@ -3155,7 +3169,9 @@ function PainelChat({
               {/* O número da OS aparece só quando há uma OS conhecida para
                   carregar. Na busca do WhatsApp ainda não se sabe o que vem. */}
               {!buscandoHistorico && temMaisAntigas && proximaOsAntiga && (
-                <span className="font-mono text-acao-200/90">#{proximaOsAntiga.os}</span>
+                ehOsImportada(proximaOsAntiga)
+                  ? <span className="text-slate-400">(histórico do WhatsApp)</span>
+                  : <span className="font-mono text-acao-200/90">#{proximaOsAntiga.os}</span>
               )}
             </button>
           </div>
@@ -3186,7 +3202,14 @@ function PainelChat({
             <div className="flex items-center gap-2 py-2">
               <span className="flex-1 h-px bg-linha" />
               <span className="text-[10px] px-2.5 py-1 rounded-full bg-grafite-700/70 border border-linha whitespace-nowrap flex items-center gap-1.5">
-                <span className="font-mono font-bold text-acao-200/90">#{osDaMsg.os}</span>
+                {/* O trecho importado do WhatsApp NÃO leva número de OS: ele não
+                    é um chamado que alguém abriu, é conversa copiada do aparelho.
+                    O número existe no banco (é ele que recorta o trecho na tela),
+                    mas exibi-lo fazia um atendimento aparecer onde não houve um.
+                    Data e rótulo bastam para identificar o trecho. */}
+                {!ehOsImportada(osDaMsg) && (
+                  <span className="font-mono font-bold text-acao-200/90">#{osDaMsg.os}</span>
+                )}
                 <span className="text-slate-400">{dataHoraCurta(osDaMsg.abertoEm)}</span>
                 {osDaMsg.atendenteNome && (
                   <span className="text-slate-500">· {osDaMsg.atendenteNome}</span>
@@ -4358,10 +4381,6 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
    * mensagens com data no passado, em nome do cliente e da equipe. É reversível
    * só à mão, então quem clica precisa ver o tamanho do que vai entrar.
    */
-  // O rotulo da OS sintetica que recebe o historico importado. Vem do
-  // servidor (atendimentoSintetico.helper) e e o unico jeito de saber, aqui,
-  // se esta conversa tem mesmo um trecho antigo separado.
-  const OS_HISTORICO_IMPORTADO = 'Histórico do WhatsApp';
 
   const importarHistorico = useCallback(async (id) => {
     if (!id) return;
@@ -4449,6 +4468,17 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
 
       const importadas = Number(r?.importadas) || 0;
       const recuperadas = Number(r?.midiasRecuperadas) || 0;
+      const tentadas = Number(r?.midiasTentadas) || 0;
+      // "0 de 14" e uma resposta; "nada aconteceu" nao e. Sem o denominador,
+      // nao da para distinguir arquivo que o WhatsApp apagou de tentativa que
+      // nem chegou a acontecer -- e a diferenca muda o que fazer a seguir.
+      const saldoMidia = tentadas > 0 && recuperadas === 0
+        ? `Tentei baixar ${tentadas} ${tentadas === 1 ? 'arquivo antigo' : 'arquivos antigos'} e nenhum voltou: ` +
+          'o WhatsApp já apagou esses arquivos dos servidores dele. As mensagens continuam aí, ' +
+          'com o rótulo do tipo.'
+        : recuperadas > 0
+          ? `${recuperadas} de ${tentadas} ${tentadas === 1 ? 'arquivo antigo baixado' : 'arquivos antigos baixados'}.`
+          : '';
 
       if (importadas === 0) {
         // Recuperar midia NAO e "nada aconteceu": a conversa mudou, e marcar a
@@ -4456,10 +4486,8 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
         // resgatar na proxima passada.
         if (recuperadas === 0) marcarHistoricoVazio(id);
         await avisar(
-          recuperadas > 0
-            ? `${recuperadas} ${recuperadas === 1 ? 'arquivo do histórico foi baixado' : 'arquivos do histórico foram baixados'}. ` +
-              'Nenhuma mensagem nova entrou: o histórico disponível já estava todo na Central.'
-            : 'Nenhuma mensagem nova entrou: o histórico disponível já estava todo na Central.',
+          (saldoMidia ? saldoMidia + '\n\n' : '') +
+          'Nenhuma mensagem nova entrou: o histórico disponível já estava todo na Central.',
           { titulo: recuperadas > 0 ? 'Arquivos recuperados' : 'Histórico já importado', tipo: 'info' }
         );
         return;
@@ -4470,9 +4498,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       if (restante === 0) marcarHistoricoVazio(id);
       await avisar(
         `${importadas} ${importadas === 1 ? 'mensagem' : 'mensagens'} importadas.\n\n` +
-        (recuperadas > 0
-          ? `${recuperadas} ${recuperadas === 1 ? 'arquivo antigo foi baixado' : 'arquivos antigos foram baixados'}.\n\n`
-          : '') +
+        (saldoMidia ? saldoMidia + '\n\n' : '') +
         'Elas estão no início da conversa, em um atendimento marcado como ' +
         '"Histórico do WhatsApp". Use "Ver mensagens antigas" para chegar até lá.' +
         (restante > 0

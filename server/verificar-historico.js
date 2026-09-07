@@ -129,6 +129,20 @@ function check(nome, problemas) {
         : []),
     ]);
 
+    // O trecho importado NAO leva numero de OS na tela: nao e um chamado que
+    // alguem abriu, e conversa copiada do aparelho. O numero existe no banco
+    // (e ele que recorta o trecho), mas exibi-lo fazia um atendimento aparecer
+    // onde nao houve nenhum -- e o numero sai do mesmo contador dos chamados
+    // reais, entao ele parecia um.
+    check("o trecho importado nao exibe numero de OS", [
+      ...(tela.includes("{!ehOsImportada(osDaMsg) && (")
+        ? []
+        : ["o separador voltou a desenhar #OS no trecho importado do WhatsApp"]),
+      ...(tela.includes("const ehOsImportada = (os) => os?.atendenteNome === OS_HISTORICO_IMPORTADO;")
+        ? []
+        : ["nao achei `ehOsImportada` -- sem ela cada lugar decide sozinho o que e trecho importado"]),
+    ]);
+
     check("o aviso de 'nada de novo' nao promete um trecho que pode nao existir", [
       ...(tela.includes("const temTrechoImportado =")
         ? []

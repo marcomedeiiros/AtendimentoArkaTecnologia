@@ -125,6 +125,7 @@ class HistoricoService {
         ignoradas: 0,
         disponivel: 0,
         midiasRecuperadas: 0,
+        midiasTentadas: 0,
         motivo: "sem_historico",
       };
     }
@@ -135,9 +136,9 @@ class HistoricoService {
     // `waMessageId` -- ela ja existe --, entao a midia nunca teria uma segunda
     // chance, e a primeira acontece no pior momento possivel (ver a nota das
     // travas de desistencia).
-    const midiasRecuperadas = baixarMidia
+    const { recuperadas: midiasRecuperadas, tentadas: midiasTentadas } = baixarMidia
       ? await this._recuperarMidias(conversa, jid, instanceName)
-      : 0;
+      : { recuperadas: 0, tentadas: 0 };
 
     const teto = Math.min(Number(limite) || MAX_POR_IMPORTACAO, MAX_POR_IMPORTACAO);
     const { novos: mapaNovos, total, jaExistiam } = await this._coletar(jid, instanceName, teto);
@@ -150,6 +151,7 @@ class HistoricoService {
         ignoradas: 0,
         disponivel: total,
         midiasRecuperadas,
+        midiasTentadas,
         motivo: jaExistiam > 0 ? "tudo_ja_importado" : "sem_historico",
       };
     }
@@ -225,6 +227,7 @@ class HistoricoService {
         ignoradas: semConteudo,
         disponivel: total,
         midiasRecuperadas,
+        midiasTentadas,
         // Nada com conteudo para inserir tem duas causas diferentes, e o motivo
         // precisa distinguir: se o resto do historico ja estava na Central, o
         // desfecho e "ja importado" (o normal, ao clicar duas vezes). Reacao e
@@ -259,6 +262,7 @@ class HistoricoService {
     return {
       importadas: inseridas,
       midiasRecuperadas,
+      midiasTentadas,
       jaExistiam,
       ignoradas: ignoradas + semConteudo,
       disponivel: total,
@@ -311,9 +315,10 @@ class HistoricoService {
    */
   async _recuperarMidias(conversa, jid, instanceName) {
     const pendentes = await conversaRepository.midiasPendentes(conversa.id, MAX_TENTATIVAS_MIDIA);
-    if (pendentes.length === 0) return 0;
+    if (pendentes.length === 0) return { recuperadas: 0, tentadas: 0 };
 
     let recuperadas = 0;
+    let tentadas = 0;
     let falhasSeguidas = 0;
 
     for (const pendente of pendentes) {
@@ -331,6 +336,7 @@ class HistoricoService {
         fromMe: pendente.origem === "equipe",
       };
 
+      tentadas += 1;
       const arquivo = await this._baixarMidia(key, metadata, instanceName);
       if (!arquivo) {
         falhasSeguidas += 1;
@@ -346,14 +352,19 @@ class HistoricoService {
       recuperadas += 1;
     }
 
-    if (recuperadas > 0) {
-      logger.info("Midia de historico recuperada", {
-        conversaId: conversa.id,
-        recuperadas,
-        tentadas: pendentes.length,
-      });
-    }
-    return recuperadas;
+    // Registrado NOS DOIS CASOS, e o de zero e o que mais importa: e a prova
+    // de que a tentativa aconteceu e o WhatsApp nao tinha mais os bytes. Sem
+    // esta linha, "nao voltou nada" e indistinguivel de "nem tentou".
+    logger.info("Recuperacao de midia do historico", {
+      conversaId: conversa.id,
+      pendentes: pendentes.length,
+      tentadas,
+      recuperadas,
+      // A desistencia por falhas seguidas encerra a passada. Saber que ela
+      // disparou explica por que `tentadas` < `pendentes`.
+      desistiu: falhasSeguidas >= FALHAS_SEGUIDAS_PARA_DESISTIR,
+    });
+    return { recuperadas, tentadas };
   }
 
   async _contexto(conversaId) {
