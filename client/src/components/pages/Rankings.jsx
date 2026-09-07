@@ -208,10 +208,22 @@ function Podio({ classificacao, premiacoes, premiados }) {
   );
 }
 
+/**
+ * MEDALHA É POSIÇÃO; PRÊMIO É OUTRA COISA.
+ *
+ * Por um tempo a medalha aqui seguiu o número de premiados -- o raciocínio era
+ * não pintar de bronze um terceiro lugar que não ganha nada. Estava errado por
+ * confundir duas coisas: ouro, prata e bronze dizem ONDE a pessoa chegou, e é
+ * disso que uma tabela de classificação trata. Quem leva prêmio é o pódio, logo
+ * acima, e o botão de registrar -- os dois seguem `premiados` e continuam
+ * seguindo.
+ *
+ * Vale para os dois rankings: esta linha desenha a sede e o fora da sede.
+ */
+const MEDALHAS_NA_LISTA = 3;
+
 function LinhaTabela({ p, aberta, onAlternar, premiados = 1, temGeral = false }) {
-  // A MESMA conta do pódio. Cravar 3 aqui pintaria de bronze um terceiro lugar
-  // que não é premiado -- a tabela contradizendo o pódio logo acima dela.
-  const temMedalha = p.posicao <= premiados;
+  const temMedalha = p.posicao <= MEDALHAS_NA_LISTA;
   const cor = MEDALHAS[p.posicao - 1] || '--quieto';
   return (
     <>
@@ -228,13 +240,36 @@ function LinhaTabela({ p, aberta, onAlternar, premiados = 1, temGeral = false })
         </td>
         <td className="py-2.5 px-3">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="w-7 h-7 rounded-full border grid place-items-center text-[10px] font-bold shrink-0"
-              style={{
-                borderColor: temMedalha ? medalha(cor, 0.5) : 'rgb(var(--linha-forte))',
-                background: temMedalha ? medalha(cor, 0.15) : 'rgb(var(--grafite-600))',
-                color: temMedalha ? medalha(cor) : 'rgb(var(--texto-suave))',
-              }}>
-              {iniciais(p.nome)}
+            {/* A MEDALHA PENDURADA NO AVATAR, como no Modo TV.
+
+                `relative` no invólucro e a medalha em `absolute`: pendurá-la
+                dentro do círculo empurraria as iniciais, e ao lado ela roubaria
+                largura de uma coluna que já é estreita no celular.
+
+                A sombra na cor do fundo é o que separa o contorno da medalha do
+                contorno do avatar -- sem ela os dois se encostam e viram uma
+                mancha só. Mesma solução da parede, mesmo motivo. */}
+            <span className="relative shrink-0">
+              <span className="w-7 h-7 rounded-full border grid place-items-center text-[10px] font-bold"
+                style={{
+                  borderColor: temMedalha ? medalha(cor, 0.5) : 'rgb(var(--linha-forte))',
+                  background: temMedalha ? medalha(cor, 0.15) : 'rgb(var(--grafite-600))',
+                  color: temMedalha ? medalha(cor) : 'rgb(var(--texto-suave))',
+                }}>
+                {iniciais(p.nome)}
+              </span>
+              {temMedalha && (
+                <Medal
+                  size={13}
+                  className="absolute left-1/2 -bottom-1 -translate-x-1/2 pointer-events-none"
+                  style={{
+                    color: medalha(cor),
+                    fill: medalha(cor, 0.22),
+                    filter: 'drop-shadow(0 0 2px rgb(var(--grafite-800))) drop-shadow(0 0 2px rgb(var(--grafite-800)))',
+                  }}
+                  aria-label={`${p.posicao}º lugar`}
+                />
+              )}
             </span>
             <div className="min-w-0">
               <span className="font-semibold text-xs text-texto truncate block">{p.nome}</span>
