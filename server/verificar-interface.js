@@ -516,6 +516,61 @@ titulo("9. O aviso de importacao fica na conversa que pediu");
   check("duas importacoes ao mesmo tempo sao recusadas", daTrava);
 }
 
+// ---------------------------------------------------------------------------
+titulo("10. `hidden` que nao esconde");
+
+/**
+ * O ATRIBUTO `hidden` PERDE PARA QUALQUER CLASSE DE DISPLAY DO TAILWIND.
+ *
+ * O preflight gera `[hidden]{display:none}` no BASE; `flex`, `grid`, `block` e
+ * companhia geram `.flex{display:flex}` nas UTILITIES, que vem depois no
+ * arquivo. Mesma especificidade, e a ultima vence -- o elemento continua na
+ * tela como se o `hidden` nao existisse.
+ *
+ * Foi assim que o botao "Novo mapeamento" apareceu nas abas de historico e
+ * configuracao por meses: o `hidden={aba !== "mapeamentos"}` estava escrito,
+ * parecia certo em toda revisao, e nunca funcionou. Conferido no bundle:
+ * `[hidden]` na posicao 4572, `.flex` na 10815.
+ *
+ * O conserto e nao renderizar (`{cond && <.../>}`), que nao entra em disputa de
+ * cascata. `hidden` sozinho, em elemento sem classe de display, continua valido
+ * -- e por isso a checagem olha o par, e nao o atributo.
+ */
+{
+  const DISPLAY = /(^|\s)(flex|inline-flex|grid|inline-grid|block|inline-block|table|inline|contents|flow-root)(\s|$)/;
+  const problemas = [];
+
+  for (const arquivo of arquivos) {
+    if (!arquivo.endsWith(".jsx")) continue;
+    const fonte = fs.readFileSync(arquivo, "utf8");
+    const linhas = fonte.split("\n");
+
+    linhas.forEach((linha, n) => {
+      // SO O ATRIBUTO, nunca a classe de mesmo nome.
+      //
+      // `className="... hidden md:flex"` e o padrao responsivo do Tailwind e
+      // esta CERTO -- conferido no bundle: `.hidden` (10907) vem depois de
+      // `.flex` (10815), e `md:flex` (72787) depois das duas. Casar a classe
+      // faria esta checagem gritar em codigo correto, que e o jeito mais rapido
+      // de ela passar a ser ignorada.
+      const semTexto = linha.replace(/"[^"]*"/g, '""').replace(/'[^']*'/g, "''");
+      if (!/\shidden(=|\s*\/?>)/.test(semTexto)) return;
+      // A tag pode quebrar em varias linhas: o `className` costuma vir na
+      // seguinte. Olhamos a janela da tag inteira, ate o `>`.
+      const janela = linhas.slice(n, n + 6).join(" ");
+      const ateFecharTag = janela.slice(0, janela.indexOf(">") + 1 || janela.length);
+      const classe = /className="([^"]*)"/.exec(ateFecharTag)?.[1] || "";
+      if (DISPLAY.test(classe)) {
+        problemas.push(
+          `${arquivo.split(/[\\/]/).pop()}:${n + 1} usa \`hidden\` num elemento com classe de display ` +
+            `(${classe.match(DISPLAY)[2]}) -- a utility vence e o elemento NAO some. Nao renderize em vez de esconder.`
+        );
+      }
+    });
+  }
+
+  check("nenhum `hidden` perdendo para classe de display", problemas);
+}
 console.log(
   "\n" + (erros.length
     ? `FALHAS (${erros.length}):\n  ` + erros.join("\n  ")

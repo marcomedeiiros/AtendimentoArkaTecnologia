@@ -1204,11 +1204,21 @@ export default function Mapeamentos() {
           </p>
         </div>
         {/* O botão só na aba de lançamento: no histórico ele leria como "novo
-            item do histórico", que não é o que ele faz. */}
-        <button onClick={abrirNovo} hidden={aba !== 'mapeamentos'}
+            item do histórico", e na configuração não faz sentido nenhum.
+
+            NÃO É `hidden`. Ele estava aqui e nunca escondeu nada: o atributo
+            vira `[hidden]{display:none}` no preflight do Tailwind, e a classe
+            `flex` deste mesmo botão vira `.flex{display:flex}` -- mesma
+            especificidade, e as utilities vêm DEPOIS do base no CSS gerado.
+            Conferido no bundle: `[hidden]` na posição 4572, `.flex` na 10815.
+
+            Não renderizar não tem como perder essa disputa. */}
+        {aba === 'mapeamentos' && (
+        <button onClick={abrirNovo}
           className="px-4 py-2 rounded-xl bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold flex items-center gap-1.5">
           <Plus size={14} /> Novo mapeamento
         </button>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
