@@ -1,5 +1,5 @@
 /**
- * O AVISO DE MENSAGEM NOVA -- som e notificação do sistema.
+ * O AVISO DE MENSAGEM NOVA -- som e notificação do sistema, SEMPRE ligados.
  *
  * ── O QUE FALTAVA ──────────────────────────────────────────────────────────
  *
@@ -15,15 +15,16 @@
  * neste código muda isso: sem aba não há JavaScript rodando. Só Service Worker
  * com Web Push resolveria, e é outro assunto.
  *
- * ── O QUE ESTÁ TRAVADO AQUI ────────────────────────────────────────────────
+ * ── SEM INTERRUPTOR, E POR QUE ISSO MUDA O PEDIDO DE PERMISSÃO ─────────────
  *
- *   O CORTE        só notifica quem NÃO está olhando -- cartão do sistema por
- *                  cima do painel em foco é ruído.
- *   UM AVISO SÓ    várias conversas viram uma notificação, não uma pilha.
- *   A PERMISSÃO    pedida a partir de um CLIQUE; automática, o navegador recusa
- *                  e ainda marca o site.
- *   A PREFERÊNCIA  por usuário (viaja com o perfil), lida por referência para
- *                  não fazer o efeito de mensagem nova rodar à toa.
+ * Houve uma preferência por usuário e um botão na barra lateral para ligar e
+ * desligar. Saíram a pedido: o aviso fica sempre ligado, e interruptor para algo
+ * que nunca se desliga é linha ocupada por nada. As checagens da preferência
+ * saíram junto -- teste de regra que não existe mais é teste que nunca reprova.
+ *
+ * Só que a permissão continua exigindo um GESTO da pessoa; isso é regra do
+ * navegador. Sem botão, o gesto passou a ser o primeiro clique no painel -- e é
+ * essa passagem que este arquivo protege.
  */
 const fs = require("fs");
 const path = require("path");
@@ -40,19 +41,22 @@ function check(nome, problemas) {
 }
 
 const C = path.resolve(__dirname, "../client/src");
-const util = fs.readFileSync(path.join(C, "utils/notificacao.js"), "utf8");
-const app = fs.readFileSync(path.join(C, "context/AppContext.jsx"), "utf8");
-const auth = fs.readFileSync(path.join(C, "context/AuthContext.jsx"), "utf8");
-const layout = fs.readFileSync(path.join(C, "components/layout/AppLayout.jsx"), "utf8");
+// Lidos com a quebra de linha NORMALIZADA. Os arquivos do repositorio estao em
+// CRLF, e um padrao escrito aqui com barra-n nao casaria nada -- a checagem
+// passaria a reprovar codigo correto, que e o jeito mais rapido de ela ser
+// ignorada. Foi exatamente o que aconteceu na primeira versao deste arquivo.
+const ler = (rel) => fs.readFileSync(path.join(C, rel), "utf8").split("\r\n").join("\n");
+const util = ler("utils/notificacao.js");
+const app = ler("context/AppContext.jsx");
+const layout = ler("components/layout/AppLayout.jsx");
 
 console.log("=== Aviso de mensagem nova ===");
 
 // ── `estaOlhando` é o corte, e ele executa de verdade ────────────────────────
 //
 // `document.hidden` sozinho não basta: a aba pode estar visível numa janela que
-// está ATRÁS de outro programa, e aí a pessoa não está lendo nada. Este é o
-// caso que mais acontece num turno -- o operador com o painel aberto e o Excel
-// por cima.
+// está ATRÁS de outro programa, e aí a pessoa não está lendo nada. É o caso mais
+// comum de um turno -- o painel aberto e outro programa por cima.
 {
   const corpo = /export function estaOlhando\(\) \{([\s\S]*?)\n\}/.exec(util)?.[1];
   check("achei `estaOlhando`", corpo ? [] : ["nao achei a funcao em utils/notificacao.js"]);
@@ -72,28 +76,57 @@ console.log("=== Aviso de mensagem nova ===");
       if (obtido !== quero) problemas.push(`${porque}: esperava ${quero}, veio ${obtido}`);
     }
     // A funcao estar certa nao basta: o disparo precisa USA-LA. Sem esta linha,
-    // remover o corte do AppContext passava despercebido -- a checagem media a
+    // tirar o corte do AppContext passava despercebido -- a checagem mediria a
     // ferramenta, e nao o lugar onde ela e usada.
-    if (!app.includes("if (avisosRef.current.desktop && !estaOlhando()) {")) {
+    if (!app.includes("if (!estaOlhando()) {")) {
       problemas.push("o disparo nao usa `!estaOlhando()`: o cartao aparece por cima do painel em foco");
     }
     check("so avisa quem NAO esta olhando", problemas);
   }
 }
 
-// ── A permissão só é pedida a partir de um clique ────────────────────────────
+// ── O aviso é incondicional ──────────────────────────────────────────────────
+//
+// Sem interruptor: nada entre a mensagem e o aviso. Uma condição que volte a
+// aparecer aqui é um jeito de alguém ficar mudo sem saber -- e silêncio é
+// indistinguível de "não chegou mensagem".
 {
   const problemas = [];
-  if (/pedirPermissao\(\)/.test(util.replace(/export async function pedirPermissao[\s\S]*?\n\}/, ""))) {
-    problemas.push("`pedirPermissao` e chamada dentro do proprio utilitario -- pedido automatico");
+  if (/avisosRef|avisos\.som|avisos\.desktop/.test(app)) {
+    problemas.push("voltou uma preferencia condicionando o aviso");
   }
-  if (/useEffect\([^)]*\)[\s\S]{0,200}pedirPermissao\(/.test(layout)) {
-    problemas.push("a permissao e pedida dentro de um efeito: o navegador recusa e marca o site");
+  if (!/if \(novas\.length > 0\) \{\n\s*playPing\(\);/.test(app)) {
+    problemas.push("o som deixou de ser incondicional");
   }
-  if (!/onClick=\{async \(\) => \{[\s\S]{0,400}pedirPermissao\(\)/.test(layout)) {
-    problemas.push("nao achei o pedido de permissao dentro de um onClick");
+  if (/Notificações ligadas|Notificações bloqueadas|BellOff/.test(layout)) {
+    problemas.push("o botao de ligar/desligar voltou para a barra lateral");
   }
-  check("a permissao e pedida a partir de um clique", problemas);
+  check("o aviso e sempre ligado, sem interruptor", problemas);
+}
+
+// ── A permissão sai de um GESTO, e só quando falta responder ────────────────
+{
+  const problemas = [];
+  const corpo = /export function pedirPermissaoNoPrimeiroGesto\(\) \{([\s\S]*?)\n\}/.exec(util)?.[1] || "";
+
+  if (!corpo) problemas.push("nao achei `pedirPermissaoNoPrimeiroGesto`");
+  if (corpo && !corpo.includes("{ once: true, passive: true }")) {
+    problemas.push("o ouvinte nao e `once`: ficaria pendurado em todo clique do turno");
+  }
+  // `default` = ainda nao perguntaram. Com `granted` nao ha o que pedir; com
+  // `denied` insistir nao abre nada -- so gasta o gesto.
+  if (corpo && !corpo.includes("Notification.permission !== 'default'")) {
+    problemas.push("pede a permissao mesmo com resposta ja dada (granted/denied)");
+  }
+  // O que NAO pode: pedir no carregamento. O navegador recusa e marca o site,
+  // estragando o pedido tambem para as proximas vezes.
+  if (/^\s*pedirPermissao\(\)/m.test(util.replace(/export async function pedirPermissao[\s\S]*?\n\}/, ""))) {
+    problemas.push("`pedirPermissao` e chamada solta no modulo -- pedido no carregamento");
+  }
+  if (!/pedirPermissaoNoPrimeiroGesto\(\);/.test(app)) {
+    problemas.push("ninguem arma o pedido: a permissao nunca seria pedida sem o botao");
+  }
+  check("a permissao sai de um gesto, uma vez, e so se faltar responder", problemas);
 }
 
 // ── Uma notificação, e não uma pilha ────────────────────────────────────────
@@ -109,40 +142,6 @@ console.log("=== Aviso de mensagem nova ===");
     problemas.push("a `tag` nao agrupa por conversa -- mensagens seguidas do mesmo cliente empilham");
   }
   check("varias conversas viram UM aviso", problemas);
-}
-
-// ── A preferência é do perfil, e não trava o efeito ─────────────────────────
-{
-  const problemas = [];
-  if (!/const CHAVE_AVISOS = .interface\.avisos.;/.test(auth)) {
-    problemas.push("a preferencia nao esta em `interface.avisos` (por usuario, viaja com o perfil)");
-  }
-  if (!/PreferenciasAPI\.salvar\(CHAVE_AVISOS/.test(auth)) {
-    problemas.push("a preferencia nao e salva no servidor -- ficaria so naquele navegador");
-  }
-  // Lida por REFERENCIA: com `avisos` nas dependencias, trocar a preferencia
-  // faria o efeito de mensagem nova rodar de novo, mexendo no `ref` do
-  // historico por um motivo que nao e mensagem nova.
-  if (!/const avisosRef = useRef\(avisos\);/.test(app)) {
-    problemas.push("a preferencia nao e lida por referencia no efeito de aviso");
-  }
-  if (!/avisosRef\.current\.som/.test(app) || !/avisosRef\.current\.desktop/.test(app)) {
-    problemas.push("som e notificacao nao respeitam a preferencia");
-  }
-  check("a preferencia viaja com o perfil, sem re-disparar o efeito", problemas);
-}
-
-// ── O padrão é AVISAR ────────────────────────────────────────────────────────
-//
-// Preferência gravada por uma versão anterior não tem estes campos. Com `=== true`
-// o operador ficaria sem aviso nenhum sem ter pedido -- e não teria como
-// desconfiar, porque o silêncio é o mesmo do "não chegou mensagem".
-{
-  const problemas = [];
-  if (!/som: v\?\.som !== false/.test(auth) || !/desktop: v\?\.desktop !== false/.test(auth)) {
-    problemas.push("o padrao nao e avisar: preferencia antiga (sem o campo) deixaria o operador mudo");
-  }
-  check("preferencia antiga nao deixa ninguem sem aviso", problemas);
 }
 
 console.log(

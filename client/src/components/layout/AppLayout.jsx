@@ -11,10 +11,9 @@ import { aplicarTema } from '../../utils/tema';
 import {
   LayoutGrid, Users, Zap, MessageSquare, ShieldCheck,
   GitFork, MessageCircle, CalendarDays, Send, Loader2, Menu, X, WifiOff, Settings, LogOut, Bug,
-  PanelLeftClose, PanelLeftOpen, Sun, Moon, UserCog, Trophy, ClipboardList, Bell, BellOff
+  PanelLeftClose, PanelLeftOpen, Sun, Moon, UserCog, Trophy, ClipboardList
 } from 'lucide-react';
 import Portal from '../Portal';
-import { suportado as notificacaoSuportada, permissao as permissaoNotificacao, pedirPermissao } from '../../utils/notificacao';
 import { ehDaEquipeExterna } from '../../utils/equipeRanking';
 import { useAppContext } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
@@ -309,11 +308,7 @@ function MenuUsuario({ usuario, recolhida, onIrParaPerfil, onSair }) {
 
 function Sidebar({ aberto, onClose }) {
   const { conversas } = useAppContext();
-  const { usuario, sair, tema, alternarTema, navRecolhida, alternarNav, avisos, salvarAvisos } = useAuth();
-  // A permissão é do NAVEGADOR desta máquina, então mora em estado local e
-  // não em preferência. Lida uma vez; o clique atualiza.
-  const avisosSuportado = notificacaoSuportada();
-  const [permissaoAviso, setPermissaoAviso] = useState(() => permissaoNotificacao());
+  const { usuario, sair, tema, alternarTema, navRecolhida, alternarNav } = useAuth();
   const navigate = useNavigate();
 
   // A gaveta do celular ignora a preferencia: ver o comentario em NavItem.
@@ -510,53 +505,6 @@ function Sidebar({ aberto, onClose }) {
           </span>
         </button>
 
-        {/* AVISO DE MENSAGEM NOVA.
-
-            DUAS COISAS QUE PARECEM UMA. A preferência ("eu quero ser avisado")
-            viaja com o perfil, porque quem atende usa mais de um computador. A
-            PERMISSÃO do navegador não viaja e não tem como viajar: ela é desta
-            máquina, e só quem está nela pode conceder.
-
-            Por isso o clique faz o que falta, na ordem: sem permissão, PEDE (e
-            tem de partir de um clique -- pedido automático no carregamento é
-            recusado pelos navegadores e ainda marca o site); com permissão,
-            liga e desliga a preferência.
-
-            Permissão NEGADA não tem volta pelo código: só nas configurações do
-            navegador. O rótulo diz isso em vez de deixar a pessoa clicando num
-            botão que nunca vai reagir. */}
-        <button
-          onClick={async () => {
-            if (!avisosSuportado) return;
-            if (permissaoAviso === 'default') {
-              const r = await pedirPermissao();
-              setPermissaoAviso(r);
-              if (r === 'granted') salvarAvisos({ desktop: true, som: true });
-              return;
-            }
-            if (permissaoAviso === 'granted') salvarAvisos({ desktop: !avisos.desktop });
-          }}
-          disabled={permissaoAviso === 'denied' || !avisosSuportado}
-          title={
-            !avisosSuportado ? 'Este navegador não mostra notificações do sistema'
-              : permissaoAviso === 'denied' ? 'O navegador bloqueou as notificações deste site. Libere nas configurações dele.'
-              : permissaoAviso === 'default' ? 'Permitir notificações de mensagem nova'
-              : avisos.desktop ? 'Desligar as notificações de mensagem nova' : 'Ligar as notificações de mensagem nova'
-          }
-          className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-xs font-semibold transition-colors hover:bg-slate-800/40 disabled:opacity-50 disabled:cursor-not-allowed ${
-            permissaoAviso === 'granted' && avisos.desktop ? 'text-acao-200' : 'text-texto-suave hover:text-texto'
-          } ${recolhida ? 'lg:justify-center lg:px-0' : ''}`}
-        >
-          {permissaoAviso === 'granted' && avisos.desktop
-            ? <Bell size={15} className="shrink-0" />
-            : <BellOff size={15} className="shrink-0" />}
-          <span className={`truncate ${recolhida ? 'lg:hidden' : ''}`}>
-            {!avisosSuportado ? 'Sem notificações'
-              : permissaoAviso === 'denied' ? 'Notificações bloqueadas'
-              : permissaoAviso === 'default' ? 'Ativar notificações'
-              : avisos.desktop ? 'Notificações ligadas' : 'Notificações desligadas'}
-          </span>
-        </button>
       </div>
 
       {/* Quem esta logado, e a saida. No rodape porque e o unico item que nao e

@@ -8,7 +8,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { EquipeAPI, FluxosAPI, ParceirosAPI, ConversasAPI, WhatsAppAPI, AuthAPI } from '../services/api';
 import { playPing } from '../utils/sound';
-import { notificar, estaOlhando } from '../utils/notificacao';
+import { notificar, estaOlhando, pedirPermissaoNoPrimeiroGesto } from '../utils/notificacao';
 import { mesclarConversa, aplicarStatusMensagem } from '../utils/mesclarConversa';
 import { useAuth } from './AuthContext';
 
@@ -37,16 +37,15 @@ export function AppProvider({ children }) {
   // Só para reaplicar a sessão quando a matriz de permissões muda (ver
   // `recarregarSessao`). O AppProvider vive DENTRO do AuthProvider (ver
   // RotaProtegida), então o hook está sempre disponível aqui.
-  const { usuario, atualizarUsuario, avisos } = useAuth();
-  // LIDO POR REFERÊNCIA, e não como dependência do efeito.
-  //
-  // O efeito que avisa reage a `conversas`: ele compara a marca da última
-  // mensagem com a da rodada anterior. Pondo `avisos` nas dependências, trocar
-  // a preferência dispararia o efeito com a MESMA lista -- as marcas iguais
-  // não avisariam nada, mas seria uma execução a mais mexendo no `ref` do
-  // histórico por um motivo que não é mensagem nova.
-  const avisosRef = useRef(avisos);
-  avisosRef.current = avisos;
+  const { usuario, atualizarUsuario } = useAuth();
+
+  // O aviso de mensagem nova fica SEMPRE ligado, e por isso não há botão para
+  // pedir a permissão. Ela é pedida no primeiro clique de quem entrou -- o
+  // navegador exige um gesto, e este é o primeiro que aparece.
+  useEffect(() => {
+    if (!usuario?.id) return;
+    pedirPermissaoNoPrimeiroGesto();
+  }, [usuario?.id]);
   const [carregando,        setCarregando]        = useState(true);
   const [equipe,            setEquipe]            = useState([]);
   const [fluxos,            setFluxos]            = useState([]);
@@ -532,9 +531,7 @@ export function AppProvider({ children }) {
         });
       });
       if (novas.length > 0) {
-        // O som é preferência do PERFIL, e não do navegador: quem atende usa
-        // mais de um computador e não quer desligar o som em cada um.
-        if (avisosRef.current.som) playPing();
+        playPing();
 
         // ── O AVISO PARA QUEM NÃO ESTÁ OLHANDO ────────────────────────────
         //
@@ -548,7 +545,7 @@ export function AppProvider({ children }) {
         //
         // Só quando a pessoa NÃO está olhando: um cartão do sistema por cima do
         // painel em foco é ruído, porque a conversa já entrou na lista dela.
-        if (avisosRef.current.desktop && !estaOlhando()) {
+        if (!estaOlhando()) {
           // UMA notificação, mesmo com várias conversas. Cinco cartões
           // empilhados para quem voltou do café é pior que um: ninguém lê
           // cinco, e a pilha esconde o resto da área de trabalho.

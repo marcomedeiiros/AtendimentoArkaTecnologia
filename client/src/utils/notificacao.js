@@ -42,10 +42,10 @@ export function permissao() {
 /**
  * Pede a permissão ao navegador.
  *
- * TEM DE SER CHAMADA A PARTIR DE UM CLIQUE. Os navegadores recusam (e alguns
- * marcam o site como abusivo) quando o pedido aparece sozinho no carregamento --
- * por isso não há chamada automática em lugar nenhum: quem dispara é o botão da
- * tela de configurações.
+ * TEM DE SAIR DE UM GESTO DA PESSOA. Chamada durante o carregamento, ela é
+ * recusada -- e o navegador ainda marca o site como abusivo, o que estraga o
+ * pedido também para as próximas vezes. Por isso quem a dispara é
+ * `pedirPermissaoNoPrimeiroGesto`, e nunca o carregamento direto.
  */
 export async function pedirPermissao() {
   if (!suportado()) return 'indisponivel';
@@ -98,5 +98,37 @@ export function notificar({ titulo, corpo, tag, aoClicar }) {
     // Alguns navegadores lançam quando o construtor é usado onde só o Service
     // Worker pode notificar. Falhar aqui não pode derrubar o recebimento.
     return false;
+  }
+}
+
+/**
+ * PEDE A PERMISSÃO NO PRIMEIRO CLIQUE, e uma vez só.
+ *
+ * ── POR QUE NÃO HÁ MAIS UM BOTÃO ──────────────────────────────────────────
+ *
+ * Havia um na barra lateral, para ligar e desligar. Ele saiu a pedido: o aviso
+ * de mensagem nova fica sempre ligado, e um interruptor para algo que nunca se
+ * desliga é uma linha ocupada por nada.
+ *
+ * Só que a permissão continua exigindo um gesto -- essa parte é regra do
+ * navegador, não escolha nossa. Sem botão, o gesto vira o PRIMEIRO CLIQUE da
+ * pessoa no painel, seja ele onde for. É um gesto real, que é o que o
+ * navegador cobra, e chega em segundos: ninguém abre a Central e fica parado.
+ *
+ * ── UMA VEZ, E SÓ QUANDO AINDA NÃO HÁ RESPOSTA ────────────────────────────
+ *
+ * `default` é "ainda não perguntaram". Com `granted` não há o que pedir, e com
+ * `denied` insistir não abre nada: a decisão passa a viver nas configurações do
+ * navegador, e chamar de novo só gasta o gesto.
+ *
+ * O ouvinte se remove sozinho na primeira vez -- `{ once: true }` -- para não
+ * ficar pendurado em todo clique de um turno inteiro.
+ */
+export function pedirPermissaoNoPrimeiroGesto() {
+  if (!suportado() || Notification.permission !== 'default') return;
+  if (typeof window === "undefined") return;
+  const aoGesto = () => { pedirPermissao().catch(() => {}); };
+  for (const ev of ['pointerdown', 'keydown']) {
+    window.addEventListener(ev, aoGesto, { once: true, passive: true });
   }
 }

@@ -22,21 +22,6 @@ const CHAVE_TEMA = 'interface.tema';
 // (mesa e notebook) espera encontrar o painel do mesmo jeito nas duas.
 const CHAVE_NAV = 'interface.navRecolhida';
 
-/**
- * AVISO DE MENSAGEM NOVA -- som e notificação do sistema.
- *
- * Fica em preferência POR USUÁRIO, e não no navegador, porque foi assim que
- * o pedido veio: quem atende usa mais de um computador (a sede, o notebook, a
- * máquina de outro turno) e não quer reconfigurar em cada um. Salvo no
- * servidor, a escolha viaja com o perfil.
- *
- * A PERMISSÃO do navegador NÃO viaja, e não há como fazer viajar: ela é do
- * navegador daquela máquina, concedida por quem está nela. A preferência diz
- * "eu quero"; a permissão diz "este computador deixa". As duas precisam estar
- * de pé, e a tela mostra as duas separadas por isso.
- */
-const CHAVE_AVISOS = 'interface.avisos';
-const AVISOS_PADRAO = { som: true, desktop: true };
 const primeiroNomeDe = (nome) => String(nome || '').trim().split(/\s+/)[0] || '';
 
 // Entrada e saida cobrem a tela inteira, entao saem rapido: tempo de ler a
@@ -60,7 +45,6 @@ export function AuthProvider({ children }) {
   // Barra lateral na faixa de icones. Comeca expandida: e o estado em que a
   // barra se explica sozinha, e a preferencia salva chega logo depois.
   const [navRecolhida, setNavRecolhida] = useState(false);
-  const [avisos, setAvisos] = useState(AVISOS_PADRAO);
 
   const avisar = useCallback((texto, tipo = 'entrada') => {
     clearTimeout(timerAviso.current);
@@ -162,33 +146,6 @@ export function AuthProvider({ children }) {
     return () => { vivo = false; };
   }, [usuario?.id]);
 
-  useEffect(() => {
-    if (!usuario?.id) { setAvisos(AVISOS_PADRAO); return; }
-    let vivo = true;
-    PreferenciasAPI.obter(CHAVE_AVISOS)
-      .then((r) => {
-        if (!vivo) return;
-        const v = r?.valor;
-        // Só campo conhecido, e o padrão por baixo: uma preferência gravada
-        // por uma versão anterior não pode virar `undefined` na comparação e
-        // deixar o operador sem aviso nenhum sem ele ter pedido.
-        setAvisos({
-          som: v?.som !== false,
-          desktop: v?.desktop !== false,
-        });
-      })
-      .catch(() => { if (vivo) setAvisos(AVISOS_PADRAO); });
-    return () => { vivo = false; };
-  }, [usuario?.id]);
-
-  const salvarAvisos = useCallback((parcial) => {
-    setAvisos((atual) => {
-      const novo = { ...atual, ...parcial };
-      PreferenciasAPI.salvar(CHAVE_AVISOS, novo).catch(() => {});
-      return novo;
-    });
-  }, []);
-
   const alternarNav = useCallback(() => {
     setNavRecolhida((atual) => {
       const novo = !atual;
@@ -263,7 +220,6 @@ export function AuthProvider({ children }) {
       assinaturaNome, assinaturaCustom, salvarAssinatura,
       tema, alternarTema,
       navRecolhida, alternarNav,
-      avisos, salvarAvisos,
     }}>
       {children}
       <AvisoSessao aviso={aviso} onFechar={() => setAviso(null)} />
