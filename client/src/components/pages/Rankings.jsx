@@ -55,16 +55,34 @@ function rotuloCompetencia(comp) {
   return `${MES_NOME[mes - 1]}/${ano}`;
 }
 
-// Os ultimos 18 meses. Suficiente para comparar com o ano passado e curto o
-// bastante para caber num select sem virar rolagem infinita.
+/**
+ * O PRIMEIRO MÊS QUE EXISTE PARA ESTE RANKING.
+ *
+ * A lista dos últimos 18 meses oferecia até abril/2025 -- meses em que este
+ * ranking não existia e a tabela abre vazia. Escolher um deles não é um erro
+ * que a tela avise: parece que os dados sumiram.
+ *
+ * É uma constante porque a data de início é um fato da operação, e não algo
+ * que dê para deduzir do banco: atendimento antigo existe (a Central é mais
+ * velha que o ranking), então a primeira linha do banco responderia a pergunta
+ * errada.
+ */
+const PRIMEIRA_COMPETENCIA = '2026-09';
+
+// Do mês corrente para trás, parando no primeiro mês do ranking. O teto de 18
+// continua: é curto o bastante para caber num select sem virar rolagem.
 function mesesDisponiveis() {
   const out = [];
   const d = new Date();
   for (let i = 0; i < 18; i += 1) {
-    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    const comp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    if (comp < PRIMEIRA_COMPETENCIA) break;
+    out.push(comp);
     d.setMonth(d.getMonth() - 1);
   }
-  return out;
+  // Antes do primeiro mês, a lista ficaria vazia e o select não teria o que
+  // mostrar -- nem o mês em que se está.
+  return out.length ? out : [PRIMEIRA_COMPETENCIA];
 }
 
 function iniciais(nome = '') {
@@ -1006,7 +1024,14 @@ export default function Rankings() {
                   <Gift size={12} className="text-espera-400" /> Premiação de {rotuloCompetencia(competencia)}
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
-                  {[1, 2, 3].map((pos) => {
+                  {/* AS MESMAS VAGAS DO PÓDIO.
+
+                      Ficou `[1, 2, 3]` cravado quando o pódio virou variável, e
+                      o resultado era a tela se contradizendo: pódio de um lugar
+                      só e, logo abaixo, três botões oferecendo prêmio para 1º,
+                      2º e 3º. Pior que feio -- registrar um prêmio para alguém
+                      que a regra não premia é um erro que ninguém desfaz. */}
+                  {Array.from({ length: dados?.premiados ?? 3 }, (_, i) => i + 1).map((pos) => {
                     const reg = dados?.premiacoes?.find((x) => x.posicao === pos);
                     const alvo = lista.find((p) => p.posicao === pos);
                     if (!alvo) return null;

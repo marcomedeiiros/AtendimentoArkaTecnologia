@@ -165,6 +165,30 @@ console.log("=== Premiacao justa ===");
   check("o desempate olha o mes inteiro da pessoa", problemas);
 }
 
+// ── A TELA NAO PODE CONTRADIZER A REGRA ──────────────────────────────────────
+//
+// O podio virou variavel e os botoes de premio ficaram com `[1, 2, 3]` cravado:
+// podio de UM lugar e, logo abaixo, tres botoes oferecendo premio para 1o, 2o e
+// 3o. Nao e so feio -- registrar premio para quem a regra nao premia vira linha
+// no banco, e ninguem desfaz.
+{
+  const fs = require("fs");
+  const tela = fs.readFileSync(
+    path.join(__dirname, "../client/src/components/pages/Rankings.jsx"),
+    "utf8"
+  );
+  const problemas = [];
+  if (tela.includes("{[1, 2, 3].map((pos) => {")) {
+    problemas.push("os botoes de premio voltaram a oferecer tres posicoes fixas");
+  }
+  if (!tela.includes("Array.from({ length: dados?.premiados ?? 3 }")) {
+    problemas.push("os botoes de premio nao seguem o numero de premiados do servidor");
+  }
+  if (!tela.includes("const vagas = Math.max(0, Number(premiados ?? 3));")) {
+    problemas.push("o podio nao le mais o numero de premiados do servidor");
+  }
+  check("os botoes de premio seguem o mesmo numero do podio", problemas);
+}
 console.log(
   "\n" +
     (erros.length
