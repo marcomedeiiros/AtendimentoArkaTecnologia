@@ -10,16 +10,17 @@
  *
  *   pesos              quanto vale cada parcela: atendimentos, nota, agilidade
  *   minimoAvaliacoes   quantas notas ja permitem julgar alguem
+ *   alvoAtendimentos   quantos atendimentos valem a pontuacao maxima de volume
  *
  * ── E O QUE NAO MORA ───────────────────────────────────────────────────────
  *
- * As FAIXAS (quantos atendimentos valem quanto; que tempo cai em qual degrau) e
- * a formula. Elas continuam em `painel.service`, e ESCALAM com o peso: mexer no
- * teto move a faixa inteira junto, sem ninguem precisar redesenhar a escada.
+ * Os DEGRAUS um a um, e a formula. Eles continuam em `painel.service` e sao
+ * derivados: o peso move quanto a escada vale, o `alvoAtendimentos` move onde
+ * ela termina, e a forma (a distancia entre os degraus) e sempre a mesma.
  *
- * Editar degrau a degrau numa tela seria dar corda para uma escada que nao soma
- * -- e "por que 6 atendimentos valem menos que 4?" e uma pergunta que ninguem
- * quer ter de responder.
+ * Abrir os seis degraus para edicao seria dar corda para uma escada que nao
+ * sobe -- e "por que 6 atendimentos valem menos que 4?" e uma pergunta que
+ * ninguem quer ter de responder. Um numero so nao tem como ficar incoerente.
  *
  * ── O MESMO CUIDADO DA OUTRA TELA ──────────────────────────────────────────
  *
@@ -45,6 +46,8 @@ function padraoDe({ PESO_NOTA, MINIMO_AVALIACOES, FAIXAS_VOLUME, FAIXAS_AGILIDAD
       agilidade: FAIXAS_AGILIDADE[0].pontos,
     },
     minimoAvaliacoes: MINIMO_AVALIACOES,
+    // O degrau de cima da escada de volume, que e o alvo do mes.
+    alvoAtendimentos: FAIXAS_VOLUME[0].aPartirDe,
   };
 }
 
@@ -59,6 +62,13 @@ function validar(entrada, base) {
 
   if (entrada.minimoAvaliacoes !== undefined) {
     out.minimoAvaliacoes = inteiro(entrada.minimoAvaliacoes, 1, 20, base.minimoAvaliacoes);
+  }
+
+  if (entrada.alvoAtendimentos !== undefined) {
+    // Minimo 1: alvo zero deixaria todo mundo no teto sempre, que e o oposto
+    // do problema que este campo existe para resolver. O maximo e folgado --
+    // quem tiver uma operacao de 500 atendimentos por mes tem de poder dizer.
+    out.alvoAtendimentos = inteiro(entrada.alvoAtendimentos, 1, 1000, base.alvoAtendimentos);
   }
 
   if (entrada.pesos && typeof entrada.pesos === "object") {

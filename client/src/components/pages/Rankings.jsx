@@ -695,6 +695,34 @@ export default function Rankings() {
             </div>
           </div>
 
+          {/* O NÚMERO QUE DECIDE SE O MÊS INTEIRO VALE.
+
+              A parcela de atendimentos é uma escada: mais atendimentos, mais
+              pontos, até um teto. O teto vinha cravado em 10 -- calibrado para
+              uma operação menor -- e uma equipe que faz isso numa manhã chegava
+              ao máximo no primeiro dia. Do 11º em diante o mês não mudava mais
+              nada, várias pessoas empatavam no topo e a ordem entre elas virava
+              sorteio.
+
+              É um número só, e não os seis degraus: escada editada degrau a
+              degrau é escada que pode não subir. */}
+          <div>
+            <label className="text-[11px] font-semibold text-texto-suave block mb-1">
+              Atendimentos para a pontuação máxima
+            </label>
+            <input
+              type="number" min={1} max={1000} value={rascunho.alvoAtendimentos ?? 10}
+              onChange={(e) => { setErroCfg(''); setRascunho((r) => ({ ...r, alvoAtendimentos: Math.max(1, Math.min(1000, Number(e.target.value) || 1)) })); }}
+              className="w-full sm:w-48 bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto focus:outline-none focus:border-acao/50"
+            />
+            <p className="text-[10px] text-texto-fraco mt-1 leading-relaxed">
+              Quantos atendimentos <strong>fechados e avaliados no mês</strong> valem os
+              {' '}{rascunho.pesos?.atendimentos ?? 35} pontos cheios desta parcela. Os degraus abaixo
+              acompanham sozinhos. Ponha aqui o que um mês <strong>muito bom</strong> tem — se for
+              baixo demais, todo mundo empata no topo e o resto do mês deixa de contar.
+            </p>
+          </div>
+
           <div>
             <label className="text-[11px] font-semibold text-texto-suave block mb-1">Mínimo de avaliações</label>
             <input
@@ -810,7 +838,8 @@ export default function Rankings() {
                   {/* Os tetos vêm do SERVIDOR, e não escritos aqui: um texto
                       com os números copiados envelhece calado no dia em que
                       alguém mexe no peso, e passa a explicar outra conta. */}
-                  Pontuação de 0 a 100 volume de atendimentos ({dados?.pesos?.tetos?.atendimentos ?? 35}),
+                  Pontuação de 0 a 100 volume de atendimentos ({dados?.pesos?.tetos?.atendimentos ?? 35} a partir de{' '}
+                  {dados?.pesos?.alvoAtendimentos ?? 10} no mês),
                   nota média × {dados?.pesos?.nota ?? 7} ({dados?.pesos?.tetos?.nota ?? 35}, a partir
                   de {dados?.minimoAvaliacoes ?? 3} notas) e agilidade até
                   assumir ({dados?.pesos?.tetos?.agilidade ?? 30})

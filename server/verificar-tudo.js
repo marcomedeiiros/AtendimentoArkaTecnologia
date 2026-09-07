@@ -242,6 +242,11 @@ const VERIFICACOES = [
     resumo: "o clique pula OS vazia e sempre revela algo",
   },
   {
+    arquivo: "verificar-pontuacao-sede.js",
+    titulo: "Pontuacao da sede",
+    resumo: "a escada de volume e o alvo que o administrador decide",
+  },
+  {
     arquivo: "verificar-midia-historico.js",
     titulo: "Midia do historico importado",
     resumo: "segunda chance para a imagem/audio que nao desceu",

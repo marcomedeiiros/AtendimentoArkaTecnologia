@@ -99,8 +99,61 @@ const FAIXAS_VOLUME = [
   { aPartirDe: 1, pontos: 4 },
 ];
 
-function pontosDeVolume(fechados) {
-  return FAIXAS_VOLUME.find((f) => fechados >= f.aPartirDe)?.pontos || 0;
+/**
+ * A ESCADA DE VOLUME REDESENHADA PARA O ALVO CONFIGURADO.
+ *
+ * ── POR QUE UM NUMERO SO, E NAO SEIS ──────────────────────────────────────
+ *
+ * `FAIXAS_VOLUME` foi calibrada para uma operacao que fazia menos de 10
+ * atendimentos avaliados por mes. Quando a equipe cresce, o degrau de cima e
+ * alcancado no primeiro dia e o resto do mes deixa de valer -- varias pessoas
+ * empatam no teto e a ordem entre elas vira sorteio.
+ *
+ * A saida NAO e abrir os seis degraus para edicao. Escada editada degrau a
+ * degrau e escada que pode nao subir, e "por que 6 atendimentos valem menos
+ * que 4?" nao e uma pergunta que alguem queira ter de responder.
+ *
+ * Configura-se UM numero: quantos atendimentos valem a pontuacao maxima. A
+ * escada inteira e reescalada por ele, mantendo a FORMA (os degraus e a
+ * distancia entre eles) e mudando so onde ela termina.
+ *
+ * ── O CUIDADO COM O ARREDONDAMENTO ────────────────────────────────────────
+ *
+ * Com alvo pequeno dois degraus caem no mesmo numero (alvo 3: 8 -> 2,4 e
+ * 6 -> 1,8, ambos 2). O risco NAO e a pontuacao descer -- `pontosDeVolume`
+ * casa o primeiro degrau da lista, que e o de maior pontuacao, entao um
+ * empate nunca inverte a ordem. Isto foi medido antes de escrever a regra.
+ *
+ * O que acontece e o degrau repetido ficar MORTO: com alvo 3 e sem o ajuste,
+ * os degraus de 24, 9 e 4 pontos nao sao alcancaveis por numero nenhum de
+ * atendimentos, e a escada de seis degraus vira uma de tres. Quem configurou
+ * um alvo baixo perde a resolucao do meio sem ser avisado.
+ *
+ * Por isso cada degrau e forcado a ficar ao menos 1 abaixo do anterior, e a
+ * escada termina quando nao cabe mais degrau -- assim todo degrau que sobra
+ * e alcancavel.
+ */
+function escadaDeVolume(alvo) {
+  const base = FAIXAS_VOLUME[0].aPartirDe;
+  const desejado = Number(alvo) > 0 ? Number(alvo) : base;
+  // Sem atalho para o caso padrao: com fator 1 cada degrau mapeia em si
+  // mesmo, entao o resultado ja e identico. Um segundo caminho que "deveria"
+  // dar no mesmo lugar e so mais um lugar para divergir.
+  const fator = desejado / base;
+  const escada = [];
+  let anterior = Infinity;
+  for (const f of FAIXAS_VOLUME) {
+    let limiar = Math.max(1, Math.round(f.aPartirDe * fator));
+    if (limiar >= anterior) limiar = anterior - 1;
+    if (limiar < 1) break;
+    escada.push({ aPartirDe: limiar, pontos: f.pontos });
+    anterior = limiar;
+  }
+  return escada;
+}
+
+function pontosDeVolume(fechados, escada = FAIXAS_VOLUME) {
+  return escada.find((f) => fechados >= f.aPartirDe)?.pontos || 0;
 }
 
 /**
@@ -445,6 +498,9 @@ class PainelService {
     const padrao = this.regrasPadrao();
     const pesos = { ...padrao.pesos, ...(regras?.pesos || {}) };
     const minimoNotas = regras?.minimoAvaliacoes ?? MINIMO_AVALIACOES;
+    // Quantos atendimentos avaliados no mes valem a pontuacao maxima de
+    // volume. E o unico numero da escada que o administrador decide.
+    const escadaVolume = escadaDeVolume(regras?.alvoAtendimentos ?? padrao.alvoAtendimentos);
     const escalar = (pontos, tetoPadrao, tetoAtual) =>
       tetoPadrao === tetoAtual ? pontos : Math.round((pontos / tetoPadrao) * tetoAtual);
     const porPessoa = new Map();
@@ -518,7 +574,7 @@ class PainelService {
       // duas telas sem nenhum ganho para quem olha.
       const assumirTipico = p.assumir.length ? Math.round(mediana(p.assumir)) : null;
 
-      const ptsAtendimentos = escalar(pontosDeVolume(p.fechados), padrao.pesos.atendimentos, pesos.atendimentos);
+      const ptsAtendimentos = escalar(pontosDeVolume(p.fechados, escadaVolume), padrao.pesos.atendimentos, pesos.atendimentos);
       const ptsNota = notaConta ? Math.round((notaMedia / 5) * pesos.nota) : 0;
       const ptsAgilidade = escalar(pontosDeAgilidade(assumirTipico), padrao.pesos.agilidade, pesos.agilidade);
 
@@ -574,7 +630,13 @@ class PainelService {
       pesos: {
         nota: PESO_NOTA,
         agilidade: FAIXAS_AGILIDADE,
-        volume: FAIXAS_VOLUME,
+        // A escada EM VIGOR, e nao a constante: com o alvo configurado a
+        // constante descreve outra escada, e cairia na mesma armadilha que a
+        // nota logo abaixo descreve para os tetos.
+        volume: escadaVolume,
+        // O alvo em vigor -- o numero de atendimentos que vale a parcela
+        // cheia. E ele que a tela precisa para escrever a regra por extenso.
+        alvoAtendimentos: escadaVolume[0]?.aPartirDe ?? FAIXAS_VOLUME[0].aPartirDe,
         // Os tetos EM VIGOR (o padrao, com o que o administrador configurou por
         // cima) -- e nao as constantes. A tela escreve "volume de atendimentos
         // (35)" a partir daqui; com o valor cravado, ela continuaria dizendo 35
