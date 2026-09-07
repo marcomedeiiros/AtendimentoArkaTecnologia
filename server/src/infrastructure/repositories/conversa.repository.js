@@ -706,6 +706,57 @@ class ConversaRepository {
     return prisma.mensagem.findUnique({ where: { id } });
   }
 
+  /**
+   * MENSAGENS DO HISTORICO CUJA MIDIA NAO PODE SER BAIXADA.
+   *
+   * SQL cru, e nao um `findMany` filtrado em JS, por um motivo medido: o
+   * `metadata` das outras mensagens carrega base64 de midia. Ler o metadata da
+   * conversa inteira para descartar quase tudo e o mesmo gargalo de 87 MB
+   * documentado em `listar` -- so que aqui bastam tres colunas.
+   *
+   * ORDEM DECRESCENTE de proposito: a midia recuperavel e a RECENTE. O WhatsApp
+   * descarta os bytes dos servidores dele com o tempo; comecar pelas antigas e
+   * gastar as tentativas justamente no que nao existe mais.
+   */
+  midiasPendentes(conversaId, limite = 60) {
+    return prisma.$queryRaw`
+      SELECT id, wa_message_id AS waMessageId, origem
+      FROM mensagens
+      WHERE conversa_id = ${conversaId}
+        AND wa_message_id IS NOT NULL
+        AND metadata LIKE '%"midiaIndisponivel":true%'
+      ORDER BY criado_em DESC
+      LIMIT ${limite}
+    `;
+  }
+
+  async contarMidiasPendentes(conversaId) {
+    const [linha] = await prisma.$queryRaw`
+      SELECT COUNT(*) AS total
+      FROM mensagens
+      WHERE conversa_id = ${conversaId}
+        AND wa_message_id IS NOT NULL
+        AND metadata LIKE '%"midiaIndisponivel":true%'
+    `;
+    return Number(linha?.total) || 0;
+  }
+
+  async metadataDaMensagem(id) {
+    const m = await prisma.mensagem.findUnique({ where: { id }, select: { metadata: true } });
+    return m?.metadata || null;
+  }
+
+  /**
+   * Grava o metadata SEM tocar a conversa -- ao contrario de `atualizarMetadata`.
+   *
+   * Recuperar midia antiga altera dezenas de mensagens de uma vez. Cada toque
+   * sobe `versao` e `atualizadoEm`, e a conversa saltaria para o topo da lista
+   * como se tivesse acabado de receber mensagem -- dezenas de vezes. Nao houve
+   * atividade nenhuma: sao bytes de um arquivo de meses atras.
+   */
+  async gravarMetadata(id, metadata) {
+    return prisma.mensagem.update({ where: { id }, data: { metadata } });
+  }
   async atualizarMetadata(id, metadata) {
     const msg = await prisma.mensagem.update({ where: { id }, data: { metadata } });
     await this._tocarConversaDaMensagem(id);

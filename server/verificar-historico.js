@@ -48,6 +48,9 @@ dobra("../../infrastructure/repositories/conversa.repository", {
   dadosParaImportacao: async () => ({ id: "c1", telefone: "5511999", instanciaId: "i1" }),
   contarMensagensComWaId: async () => JA_NA_CENTRAL.size,
   waIdsExistentes: async (ids) => new Set(ids.filter((i) => JA_NA_CENTRAL.has(i))),
+  // Sem midia pendente: este arquivo mede a CONTAGEM da previa. A recuperacao
+  // de midia tem verificador proprio (verificar-midia-historico.js).
+  contarMidiasPendentes: async () => 0,
 });
 dobra("../../infrastructure/repositories/instancia.repository", {
   findById: async () => ({ nome: "arka" }),

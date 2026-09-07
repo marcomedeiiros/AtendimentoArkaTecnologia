@@ -4378,10 +4378,14 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       // QUANTAS DE FATO ENTRARIAM -- nao quantas o numero tem.
       const novas = Number(previa?.novas) || 0;
 
-      // O caso que fazia a tela mentir: o numero TEM historico, mas nao ha
-      // nada novo nele. Antes isso so era descoberto DEPOIS de confirmar e
-      // rodar a importacao inteira para inserir zero.
-      if (disponivel > 0 && novas === 0) {
+      // Midia de mensagem ja importada que nao desceu na epoca. Enquanto
+      // houver uma, "nada de novo" e falso: ha o que ir buscar.
+      const midiasPendentes = Number(previa?.midiasPendentes) || 0;
+
+      // O caso que fazia a tela mentir: o numero TEM historico, nao ha nada
+      // novo nele, e nao ha arquivo pendente. Antes isso so era descoberto
+      // DEPOIS de confirmar e rodar a importacao inteira para inserir zero.
+      if (disponivel > 0 && novas === 0 && midiasPendentes === 0) {
         marcarHistoricoVazio(id);
         // MANDAR PROCURAR ONDE PODE NAO HAVER NADA E PIOR DO QUE NAO DIZER
         // NADA. Nem toda conversa sem novidade tem um trecho importado: se as
@@ -4418,12 +4422,23 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       }
 
       const ok = await confirmar(
-        `${novas} ${novas === 1 ? 'mensagem antiga' : 'mensagens antigas'} deste número ainda não estão na Central.\n\n` +
-        `O WhatsApp guardou ${disponivel} no total; o resto já está aqui, ou é reação e evento ` +
-        'de sistema, que não vira mensagem.\n\n' +
-        'As mensagens entram como um atendimento antigo, acessível pelo botão ' +
-        '"Ver mensagens antigas". Nada é enviado ao cliente.',
-        { titulo: 'Importar histórico do WhatsApp', rotuloConfirmar: 'Importar' }
+        (novas > 0
+          ? `${novas} ${novas === 1 ? 'mensagem antiga' : 'mensagens antigas'} deste número ainda não estão na Central.\n\n` +
+            `O WhatsApp guardou ${disponivel} no total; o resto já está aqui, ou é reação e evento ` +
+            'de sistema, que não vira mensagem.\n\n'
+          : '') +
+        (midiasPendentes > 0
+          ? `${midiasPendentes} ${midiasPendentes === 1 ? 'imagem, áudio ou arquivo' : 'imagens, áudios ou arquivos'} do histórico ` +
+            'não puderam ser baixados na importação; a Central vai tentar de novo. O WhatsApp apaga ' +
+            'os arquivos antigos dos servidores dele, então os mais velhos podem não voltar.\n\n'
+          : '') +
+        (novas > 0
+          ? 'As mensagens entram como um atendimento antigo, acessível pelo botão ' +
+            '"Ver mensagens antigas". Nada é enviado ao cliente.'
+          : 'Nada é enviado ao cliente.'),
+        novas > 0
+          ? { titulo: 'Importar histórico do WhatsApp', rotuloConfirmar: 'Importar' }
+          : { titulo: 'Baixar arquivos do histórico', rotuloConfirmar: 'Baixar' }
       );
       if (!ok) return;
 
@@ -4433,11 +4448,19 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       if (r?.conversa?.id) aplicarConversa(r.conversa);
 
       const importadas = Number(r?.importadas) || 0;
+      const recuperadas = Number(r?.midiasRecuperadas) || 0;
+
       if (importadas === 0) {
-        marcarHistoricoVazio(id);
+        // Recuperar midia NAO e "nada aconteceu": a conversa mudou, e marcar a
+        // busca como esgotada esconderia o botao de quem ainda tem arquivos a
+        // resgatar na proxima passada.
+        if (recuperadas === 0) marcarHistoricoVazio(id);
         await avisar(
-          'Nenhuma mensagem nova entrou: o histórico disponível já estava todo na Central.',
-          { titulo: 'Histórico já importado', tipo: 'info' }
+          recuperadas > 0
+            ? `${recuperadas} ${recuperadas === 1 ? 'arquivo do histórico foi baixado' : 'arquivos do histórico foram baixados'}. ` +
+              'Nenhuma mensagem nova entrou: o histórico disponível já estava todo na Central.'
+            : 'Nenhuma mensagem nova entrou: o histórico disponível já estava todo na Central.',
+          { titulo: recuperadas > 0 ? 'Arquivos recuperados' : 'Histórico já importado', tipo: 'info' }
         );
         return;
       }
@@ -4447,6 +4470,9 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
       if (restante === 0) marcarHistoricoVazio(id);
       await avisar(
         `${importadas} ${importadas === 1 ? 'mensagem' : 'mensagens'} importadas.\n\n` +
+        (recuperadas > 0
+          ? `${recuperadas} ${recuperadas === 1 ? 'arquivo antigo foi baixado' : 'arquivos antigos foram baixados'}.\n\n`
+          : '') +
         'Elas estão no início da conversa, em um atendimento marcado como ' +
         '"Histórico do WhatsApp". Use "Ver mensagens antigas" para chegar até lá.' +
         (restante > 0

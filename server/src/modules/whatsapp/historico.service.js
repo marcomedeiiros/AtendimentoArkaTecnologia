@@ -63,6 +63,7 @@ class HistoricoService {
         jid: null,
         disponivel: 0,
         novas: 0,
+        midiasPendentes: 0,
         jaNaCentral: await conversaRepository.contarMensagensComWaId(conversa.id),
         motivo: "sem_historico",
       };
@@ -88,6 +89,12 @@ class HistoricoService {
       disponivel: total,
       // O que de fato entraria. E este numero que a tela mostra.
       novas,
+      // Midia de mensagem JA importada que nao pode ser baixada na epoca.
+      // Sem isto a tela para em "nada de novo" e nao ha como tentar de novo --
+      // e a segunda tentativa e o unico caminho, porque a primeira acontece
+      // quando o historico inteiro esta chegando e as travas de desistencia
+      // fecham cedo.
+      midiasPendentes: await conversaRepository.contarMidiasPendentes(conversa.id),
       jaNaCentral: await conversaRepository.contarMensagensComWaId(conversa.id),
       motivo: novas > 0 ? null : total > 0 ? "tudo_ja_importado" : "sem_historico",
     };
@@ -117,9 +124,20 @@ class HistoricoService {
         jaExistiam: 0,
         ignoradas: 0,
         disponivel: 0,
+        midiasRecuperadas: 0,
         motivo: "sem_historico",
       };
     }
+
+    // ANTES de procurar mensagem nova: tentar de novo a midia que faltou.
+    //
+    // Sem isto, "[Imagem]" e permanente. A segunda passada pula a mensagem pelo
+    // `waMessageId` -- ela ja existe --, entao a midia nunca teria uma segunda
+    // chance, e a primeira acontece no pior momento possivel (ver a nota das
+    // travas de desistencia).
+    const midiasRecuperadas = baixarMidia
+      ? await this._recuperarMidias(conversa, jid, instanceName)
+      : 0;
 
     const teto = Math.min(Number(limite) || MAX_POR_IMPORTACAO, MAX_POR_IMPORTACAO);
     const { novos: mapaNovos, total, jaExistiam } = await this._coletar(jid, instanceName, teto);
@@ -131,6 +149,7 @@ class HistoricoService {
         jaExistiam,
         ignoradas: 0,
         disponivel: total,
+        midiasRecuperadas,
         motivo: jaExistiam > 0 ? "tudo_ja_importado" : "sem_historico",
       };
     }
@@ -205,6 +224,7 @@ class HistoricoService {
         jaExistiam,
         ignoradas: semConteudo,
         disponivel: total,
+        midiasRecuperadas,
         // Nada com conteudo para inserir tem duas causas diferentes, e o motivo
         // precisa distinguir: se o resto do historico ja estava na Central, o
         // desfecho e "ja importado" (o normal, ao clicar duas vezes). Reacao e
@@ -238,6 +258,7 @@ class HistoricoService {
 
     return {
       importadas: inseridas,
+      midiasRecuperadas,
       jaExistiam,
       ignoradas: ignoradas + semConteudo,
       disponivel: total,
@@ -262,6 +283,77 @@ class HistoricoService {
   _temConteudo(registro) {
     const envelope = { data: registro, message: registro?.message };
     return !!(whatsappService.extrairTexto(envelope) || whatsappService.extrairMidia(envelope));
+  }
+
+  /**
+   * SEGUNDA CHANCE PARA A MIDIA QUE NAO DESCEU.
+   *
+   * ── POR QUE A PRIMEIRA FALHA TANTO ────────────────────────────────────────
+   *
+   * O laco de importacao insere em ordem CRONOLOGICA, do mais antigo para o
+   * mais novo, e tenta a midia na mesma ordem. Midia antiga e justamente a que
+   * o WhatsApp ja descartou dos servidores dele -- entao as primeiras oito
+   * tentativas sao as mais propensas a falhar, e sao elas que disparam a
+   * desistencia. Tudo que vem depois, inclusive midia recente que baixaria sem
+   * problema, e marcado indisponivel SEM UMA TENTATIVA.
+   *
+   * Aqui a ordem e a inversa (`midiasPendentes` devolve da mais recente para a
+   * mais antiga), que e a ordem em que a chance de sucesso decresce: a
+   * desistencia passa a significar "daqui para tras nao existe mais", em vez de
+   * "as primeiras oito eram velhas demais".
+   *
+   * ── O QUE ISTO NAO RESOLVE ────────────────────────────────────────────────
+   *
+   * Midia velha o bastante nao volta. O WhatsApp guarda os BYTES por tempo
+   * limitado; o historico guarda o ponteiro. Nenhuma tentativa traz de volta o
+   * que nao esta mais la, e por isso a mensagem continua existindo com o rotulo
+   * ([Imagem], [Audio]) em vez de sumir.
+   */
+  async _recuperarMidias(conversa, jid, instanceName) {
+    const pendentes = await conversaRepository.midiasPendentes(conversa.id, MAX_TENTATIVAS_MIDIA);
+    if (pendentes.length === 0) return 0;
+
+    let recuperadas = 0;
+    let falhasSeguidas = 0;
+
+    for (const pendente of pendentes) {
+      if (falhasSeguidas >= FALHAS_SEGUIDAS_PARA_DESISTIR) break;
+
+      const metadata = await conversaRepository.metadataDaMensagem(pendente.id);
+      if (!metadata || typeof metadata !== "object") continue;
+
+      // A `key` que a Evolution espera, remontada: o id da mensagem no
+      // WhatsApp, o fio, e quem mandou. `fromMe` e do AUTOR da mensagem, nao de
+      // quem esta pedindo -- errar isso faz a Evolution procurar no fio errado.
+      const key = {
+        id: pendente.waMessageId,
+        remoteJid: jid,
+        fromMe: pendente.origem === "equipe",
+      };
+
+      const arquivo = await this._baixarMidia(key, metadata, instanceName);
+      if (!arquivo) {
+        falhasSeguidas += 1;
+        continue;
+      }
+
+      falhasSeguidas = 0;
+      const novo = { ...metadata, arquivo: arquivo.arquivo, mimetype: arquivo.mimetype };
+      // A marca sai: sem isso a mensagem voltaria a esta fila para sempre,
+      // gastando uma tentativa por importacao com algo que ja esta resolvido.
+      delete novo.midiaIndisponivel;
+      await conversaRepository.gravarMetadata(pendente.id, novo);
+      recuperadas += 1;
+    }
+
+    if (recuperadas > 0) {
+      logger.info("Midia de historico recuperada", {
+        conversaId: conversa.id,
+        recuperadas,
+        tentadas: pendentes.length,
+      });
+    }
+    return recuperadas;
   }
 
   async _contexto(conversaId) {

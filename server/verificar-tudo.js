@@ -242,6 +242,11 @@ const VERIFICACOES = [
     resumo: "o clique pula OS vazia e sempre revela algo",
   },
   {
+    arquivo: "verificar-midia-historico.js",
+    titulo: "Midia do historico importado",
+    resumo: "segunda chance para a imagem/audio que nao desceu",
+  },
+  {
     arquivo: "verificar-historico.js",
     titulo: "Previa da importacao de historico",
     resumo: "o numero prometido e o que a importacao de fato insere",
