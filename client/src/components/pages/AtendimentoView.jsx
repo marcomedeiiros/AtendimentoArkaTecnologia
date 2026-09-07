@@ -2834,13 +2834,31 @@ function PainelChat({
     [atendimentos]
   );
 
-  const { mensagensVisiveis, temMaisAntigas, proximaOsAntiga } = useMemo(() => {
+  /**
+   * O QUE ESTA VISIVEL, E QUANTO FALTA PARA APARECER ALGO NOVO.
+   *
+   * ── UM PASSO NEM SEMPRE MOSTRA ALGUMA COISA ───────────────────────────────
+   *
+   * Revelar uma OS por clique parece obvio, e estava errado: existe OS SEM
+   * MENSAGEM NENHUMA. Um atendimento aberto e fechado sem ninguem escrever
+   * (fora de horario, bot que encerrou, transferencia desfeita) deixa a OS no
+   * banco com zero mensagens.
+   *
+   * Com um passo fixo, clicar em "Ver mensagens antigas" nessa OS mudava o
+   * NUMERO no botao e mais nada -- a conversa ficava igual. Quem clicava
+   * concluia, com razao, que o botao nao funciona; e conversa com varias OS
+   * vazias em sequencia exigia varios cliques as cegas para o proximo trecho
+   * de verdade aparecer.
+   *
+   * Entao o passo e calculado: anda ate a primeira OS mais antiga que TENHA
+   * mensagem. O botao anuncia essa OS, e nao a proxima da fila.
+   */
+  const { mensagensVisiveis, temMaisAntigas, proximaOsAntiga, passosParaRevelar } = useMemo(() => {
     const todas = conversa.mensagens || [];
+    const nada = { mensagensVisiveis: todas, temMaisAntigas: false, proximaOsAntiga: null, passosParaRevelar: 0 };
     // Conversa sem OS (base ainda não consolidada): mostra o fio inteiro, como
     // sempre foi -- não há por onde recortar.
-    if (osCronologicas.length === 0) {
-      return { mensagensVisiveis: todas, temMaisAntigas: false, proximaOsAntiga: null };
-    }
+    if (osCronologicas.length === 0) return nada;
 
     const visiveis = osCronologicas.slice(-osCarregadas);
     const idsVisiveis = new Set(visiveis.map(a => a.id));
@@ -2851,12 +2869,32 @@ function PainelChat({
     const ehOrfa = (m) => !m.atendimentoId || !idsConhecidos.has(m.atendimentoId);
     const mostrandoTudo = visiveis.length === osCronologicas.length;
 
+    const mensagensVisiveis = todas.filter(m =>
+      ehOrfa(m) ? mostrandoTudo : idsVisiveis.has(m.atendimentoId)
+    );
+    if (mostrandoTudo) return { ...nada, mensagensVisiveis };
+
+    const comMensagem = new Set(todas.map(m => m.atendimentoId).filter(Boolean));
+    const ocultas = osCronologicas.slice(0, osCronologicas.length - osCarregadas);
+
+    // Da mais recente das ocultas para tras, ate achar uma que tenha conteudo.
+    let passos = 0;
+    for (let i = ocultas.length - 1; i >= 0; i--) {
+      passos += 1;
+      if (comMensagem.has(ocultas[i].id)) break;
+    }
+    const achou = ocultas.some(a => comMensagem.has(a.id));
+
+    // Nenhuma OS oculta tem mensagem. Ainda vale andar se houver ORFA
+    // esperando: ela so aparece com a conversa inteira carregada. Sem orfa,
+    // nao ha o que revelar -- e o botao nao deve prometer que ha.
+    if (!achou) passos = todas.some(ehOrfa) ? ocultas.length : 0;
+
     return {
-      mensagensVisiveis: todas.filter(m =>
-        ehOrfa(m) ? mostrandoTudo : idsVisiveis.has(m.atendimentoId)
-      ),
-      temMaisAntigas: !mostrandoTudo,
-      proximaOsAntiga: osCronologicas[osCronologicas.length - osCarregadas - 1] || null,
+      mensagensVisiveis,
+      temMaisAntigas: passos > 0,
+      proximaOsAntiga: ocultas[ocultas.length - passos] || null,
+      passosParaRevelar: passos,
     };
   }, [conversa.mensagens, osCronologicas, osCarregadas]);
 
@@ -2884,8 +2922,10 @@ function PainelChat({
   const verMensagensAntigas = useCallback(() => {
     const el = scrollRef.current;
     ancoraRef.current = el ? el.scrollHeight - el.scrollTop : null;
-    setOsCarregadas(n => n + 1);
-  }, [scrollRef]);
+    // `passosParaRevelar`, e nao 1: pular as OS vazias no mesmo clique e o que
+    // faz o botao mostrar alguma coisa toda vez que e apertado.
+    setOsCarregadas(n => n + Math.max(1, passosParaRevelar));
+  }, [scrollRef, passosParaRevelar]);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;

@@ -237,6 +237,11 @@ const VERIFICACOES = [
     resumo: "uma por pessoa, o metadata da midia intacto e a reacao que chega",
   },
   {
+    arquivo: "verificar-mensagens-antigas.js",
+    titulo: "Ver mensagens antigas",
+    resumo: "o clique pula OS vazia e sempre revela algo",
+  },
+  {
     arquivo: "verificar-historico.js",
     titulo: "Previa da importacao de historico",
     resumo: "o numero prometido e o que a importacao de fato insere",
