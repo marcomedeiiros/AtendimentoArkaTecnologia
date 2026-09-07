@@ -330,6 +330,103 @@ check(
   );
 }
 
+/**
+ * ── 8. MENSAGEM PROPRIA DE UMA DATA ─────────────────────────────────────────
+ *
+ * A excecao tinha `data` e `descricao`, e so. A descricao e um ROTULO: ela
+ * entra no meio da mensagem padrao, dentro de "Hoje: <descricao> (fechado)".
+ *
+ * Quem quis avisar do feriado com um texto de verdade -- emoji, negrito,
+ * paragrafos -- escreveu tudo na descricao, e saiu isto:
+ *
+ *     Hoje: 📢 *AVISO*
+ *     Informamos que estaremos fechados no dia 07/09...
+ *     Retornaremos no proximo dia util. (fechado)
+ *
+ * O "(fechado)" grudado no fim do ultimo paragrafo. Agora a excecao tem
+ * `mensagem`: quando preenchida, ela SUBSTITUI a mensagem daquele dia.
+ *
+ * O que se cobra aqui e a fronteira dos dois campos -- e, principalmente, que
+ * o texto do dia NAO VAZE para os outros dias.
+ */
+console.log("\n=== mensagem propria de uma data ===");
+{
+  const AVISO = "📢 *AVISO*\n\nFechados hoje pelo feriado da Independência.\n\nVoltamos no próximo dia útil.";
+  const base = { ...comAlmoco, encerrarAposMin: 5 };
+  const comTexto = (mensagem, extra = {}) => ({
+    ...base, ...extra,
+    excecoes: [{ data: "2026-09-07", fechado: true, descricao: "Independência", mensagem }],
+  });
+  const FERIADO = em("2026-09-07T10:00:00-03:00");
+  const OUTRO_DIA = em("2026-09-08T22:00:00-03:00");
+
+  const saiu = h.mensagemFora(comTexto(AVISO), FERIADO);
+  check(saiu.includes("📢 *AVISO*"), "o texto do dia e o que sai");
+  check(!saiu.includes("Atendimento fora do horário"), "a mensagem padrao NAO sai junto");
+  check(!/Segunda|Terça|Sexta/.test(saiu), "nem a tabela de horarios, que ninguem pediu");
+
+  // O TEXTO DO DIA NAO PODE VAZAR. E a falha que passaria despercebida: so
+  // aparece no dia seguinte, quando o cliente recebe um aviso de feriado que
+  // ja passou.
+  const noutroDia = h.mensagemFora(comTexto(AVISO), OUTRO_DIA);
+  check(noutroDia.includes("Atendimento fora do horário"), "outro dia recebe a mensagem normal");
+  check(!/AVISO|Independência/.test(noutroDia), "e nenhum pedaco do aviso do feriado");
+
+  // Os marcadores valem dentro do texto do dia -- senao quem quiser repetir os
+  // horarios teria de escrever a tabela a mao, criando a segunda fonte que este
+  // modulo inteiro existe para evitar.
+  const comMarcadores = h.mensagemFora(
+    comTexto(AVISO + "\n\nHorário normal:\n\n{{horarios}}\n\nEncerra em {{minutos}} minutos."),
+    FERIADO
+  );
+  check(/08:00/.test(comMarcadores), "{{horarios}} funciona dentro do texto do dia");
+  check(/em 5 minutos/.test(comMarcadores), "{{minutos}} tambem");
+  check(!/\{\{/.test(comMarcadores), "e nao sobra marcador cru");
+
+  // A regra do encerramento desligado vale para QUALQUER texto, inclusive este.
+  const semEncerrar = h.mensagemFora(
+    comTexto(AVISO + "\n\nEncerra em {{minutos}} minutos.", { encerrarAposMin: 0 }),
+    FERIADO
+  );
+  check(!/Encerra em/.test(semEncerrar), "com encerramento desligado, o paragrafo do prazo sai");
+  check(/Voltamos no próximo dia útil/.test(semEncerrar), "e o resto do aviso fica inteiro");
+
+  // Campo em branco tem de ser IGUAL a nao ter campo: senao um texto apagado
+  // pela metade deixaria o dia sem mensagem nenhuma.
+  check(
+    h.mensagemFora(comTexto("   \n \n"), FERIADO).includes("Atendimento fora do horário"),
+    "texto so com espacos conta como vazio e cai na mensagem padrao"
+  );
+  check(
+    h.normalizarHorario(comTexto(AVISO)).excecoes[0].mensagem === AVISO,
+    "o campo sobrevive a normalizacao"
+  );
+  check(
+    h.normalizarHorario({ ...base, excecoes: [{ data: "2026-09-07", fechado: true }] }).excecoes[0].mensagem === "",
+    "e vira string vazia quando nunca foi preenchido"
+  );
+
+  // A DESCRICAO CONTINUA SENDO OUTRA COISA. Os dois campos convivem: o rotulo
+  // curto para o {{excecao}}, o texto longo para o dia.
+  const soDescricao = {
+    ...base,
+    mensagem: "Olá.\n\n{{excecao}}\n\n{{horarios}}",
+    excecoes: [{ data: "2026-09-07", fechado: true, descricao: "feriado da Independência" }],
+  };
+  check(
+    h.mensagemFora(soDescricao, FERIADO).includes("Hoje: feriado da Independência (fechado)"),
+    "sem texto do dia, o {{excecao}} continua valendo"
+  );
+
+  // O CAMPO NA TELA -- sem ele, isto so e configuravel por quem mexe no banco.
+  const form = fs.readFileSync(
+    path.join(__dirname, "..", "client", "src", "components", "HorarioAtendimento.jsx"),
+    "utf8"
+  );
+  check(/trocar\(\{\s*mensagem:/.test(form), "o formulario edita a mensagem da excecao");
+  check(/e\.mensagem/.test(form), "e le o valor gravado nela");
+}
+
 console.log(
   "\n" + (erros.length ? `FALHAS (${erros.length}):\n  ` + erros.join("\n  ") : "HORARIO: TODAS AS VERIFICACOES PASSARAM")
 );

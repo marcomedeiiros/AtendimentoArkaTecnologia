@@ -253,6 +253,21 @@ function normalizarHorario(bruto) {
         fechado: e.fechado === true || periodos.length === 0,
         periodos,
         descricao: textoOuVazio(e.descricao),
+        /**
+         * MENSAGEM PROPRIA DAQUELE DIA -- opcional.
+         *
+         * A `descricao` e um ROTULO curto: ela entra no meio da mensagem
+         * padrao, dentro de "Hoje: <descricao> (fechado)". Serve para "feriado
+         * da Independencia" e nao serve para um aviso escrito, com emoji,
+         * negrito e paragrafos -- tentar isso produzia "Hoje: 📢 *AVISO* ...
+         * proximo dia util. (fechado)", com o "(fechado)" grudado no fim.
+         *
+         * `mensagem` e o texto INTEIRO do dia: quando preenchida, ela SUBSTITUI
+         * a mensagem de fora do horario naquela data. Os dois campos convivem
+         * porque respondem a coisas diferentes -- o rotulo aparece em lista e
+         * em relatorio, o texto e o que o cliente le.
+         */
+        mensagem: textoOuVazio(e.mensagem),
       };
     })
     // Data fora de YYYY-MM-DD nunca casaria com nada: sai daqui para nao virar
@@ -420,13 +435,29 @@ function resumoHorario(horario, { incluirFechados = false } = {}) {
  */
 function mensagemFora(horario, agora = new Date()) {
   const cfg = normalizarHorario(horario);
-  const template = cfg.mensagem.trim() || MENSAGEM_PADRAO;
   const horarios = resumoHorario(cfg);
 
-  // Uma excecao COM descricao explica melhor que a tabela ("Feriado: Natal").
   const quando = agora instanceof Date ? agora : new Date(agora);
   const dataISO = dataISOEmFuso(quando, cfg.timezone);
-  const excecao = cfg.excecoes.find((e) => e.data === dataISO && e.descricao);
+  const excecaoDeHoje = cfg.excecoes.find((e) => e.data === dataISO) || null;
+
+  /**
+   * A MENSAGEM DO DIA VENCE A PADRAO.
+   *
+   * Quando a data tem texto proprio, e ELE que sai -- inteiro, do jeito que foi
+   * escrito. Um feriado nao e "o expediente de sempre, so que fechado": o aviso
+   * util diz o motivo, a data e quando se volta, e isso nao cabe encaixado numa
+   * frase da mensagem generica.
+   *
+   * A troca e do TEMPLATE, e nao do resto: os marcadores continuam valendo
+   * dentro do texto do dia. Quem quiser repetir a tabela de horarios ou o prazo
+   * de encerramento escreve `{{horarios}}` e `{{minutos}}` ali tambem -- e quem
+   * nao quiser simplesmente nao escreve, e a mensagem sai so com o aviso.
+   */
+  const template = excecaoDeHoje?.mensagem?.trim() || cfg.mensagem.trim() || MENSAGEM_PADRAO;
+
+  // Uma excecao COM descricao explica melhor que a tabela ("Feriado: Natal").
+  const excecao = excecaoDeHoje?.descricao ? excecaoDeHoje : null;
 
   let texto = template.replace(/\{\{\s*horarios\s*\}\}/g, horarios || "");
 

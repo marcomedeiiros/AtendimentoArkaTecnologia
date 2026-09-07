@@ -413,6 +413,30 @@ export default function HorarioAtendimento({ horario, resumo, mensagemPrevia, se
                   </>
                 )}
               </div>
+              {/* MENSAGEM PRÓPRIA DO DIA.
+                  A descrição acima é um rótulo curto que entra no meio da
+                  mensagem padrão ("Hoje: feriado da Independência"). Este campo
+                  é o aviso inteiro, e quando preenchido é ELE que o cliente
+                  recebe naquela data -- no lugar da mensagem de sempre. */}
+              <label className="flex flex-col gap-1">
+                <span className="text-[9px] uppercase text-slate-500 tracking-wide">
+                  Mensagem só deste dia <span className="normal-case tracking-normal">(opcional)</span>
+                </span>
+                <textarea
+                  rows={4}
+                  value={e.mensagem || ''}
+                  onChange={(ev) => trocar({ mensagem: ev.target.value })}
+                  placeholder={'📢 *AVISO*\n\nEstaremos fechados hoje, 07/09, em razão do feriado da Independência.\n\nRetornamos no próximo dia útil.'}
+                  className="bg-grafite-800 border border-linha rounded-lg px-2 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-acao/50 resize-y"
+                />
+                <span className="text-[10px] text-slate-500 leading-relaxed">
+                  Deixe em branco para usar a mensagem normal de fora do horário.
+                  {' '}Dentro deste texto valem os mesmos marcadores:{' '}
+                  <code className="text-acao-200 font-mono">{'{{horarios}}'}</code> e{' '}
+                  <code className="text-acao-200 font-mono">{'{{minutos}}'}</code>.
+                </span>
+              </label>
+
               {!/^\d{4}-\d{2}-\d{2}$/.test(String(e.data || '')) && (
                 <p className="text-[10px] text-espera-400">
                   Sem data preenchida, esta exceção não será salva.
