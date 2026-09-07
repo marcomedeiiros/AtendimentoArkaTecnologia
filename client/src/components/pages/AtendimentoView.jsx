@@ -2954,6 +2954,16 @@ function PainelChat({
           const anterior = mensagensVisiveis[i - 1];
           const trocouOS = !!m.atendimentoId && (!anterior || anterior.atendimentoId !== m.atendimentoId);
           const osDaMsg = trocouOS ? atendimentos.find(a => a.id === m.atendimentoId) : null;
+          // O conteúdo do horário, montado UMA vez: a bolha de texto o desenha
+          // duas (uma visível no canto, uma invisível reservando o espaço), e
+          // as duas precisam ter exatamente a mesma largura. Ver a nota lá.
+          const relogio = (
+            <>
+              {m.editada && <span className="italic">editada</span>}
+              <span>{m.hora}</span>
+              <StatusMensagem status={m.status} escuro />
+            </>
+          );
           return (
           <React.Fragment key={m.id || `tmp-${i}`}>
           {osDaMsg && (
@@ -3028,7 +3038,12 @@ function PainelChat({
                 {m.texto}
               </div>
             ) : (
-              <div className={`max-w-[80%] sm:max-w-[72%] px-2.5 py-1.5 rounded-lg text-[13px] shadow-sm space-y-0.5 break-words ${
+              /* `relative` EXPLICITO: e contra esta bolha que o horario se
+                 ancora no canto de baixo. Hoje `.bolha-bico` tambem declara
+                 `relative`, mas depender disso seria ligar duas coisas sem
+                 relacao -- quem um dia tirasse o bico faria o horario ir parar
+                 no canto de outro elemento, longe da mensagem. */
+              <div className={`relative max-w-[80%] sm:max-w-[72%] px-2.5 py-1.5 rounded-lg text-[13px] shadow-sm space-y-0.5 break-words ${
                 /* O papel de parede em uso e a arte ESCURA do WhatsApp, entao as
                    bolhas seguem o tema escuro: recebida em #202C33, enviada em
                    #005C4B, texto claro. Bolha branca aqui brilharia demais. */
@@ -3038,18 +3053,27 @@ function PainelChat({
                   ? 'bg-grafite-600 text-texto rounded-tl-sm bolha-bico bolha-bico-esq'
                   : 'bg-bolha text-texto rounded-tr-sm bolha-bico bolha-bico-dir'
               }`}>
-                <div className="text-[10px] font-semibold text-texto-suave flex items-center gap-1">
-                  {m.de === 'cliente' ? conversa.cliente : 'Arka Tecnologia'}
-                  {/* Automação do fluxo: quem lê a conversa precisa saber que
-                      ninguém digitou isso. A marca vem do servidor
-                      (`automacao`), não da aparência do texto. */}
-                  {m.automacao && m.de !== 'cliente' && (
-                    <span className="inline-flex items-center gap-0.5 text-[9px] font-normal text-texto-fraco"
-                      title="Mensagem automática do Fluxo de Automação (não notifica a equipe)">
-                      <Bot size={9} /> automação
-                    </span>
-                  )}
-                </div>
+                {/* O NOME DO REMETENTE SAIU DE DENTRO DA BOLHA.
+
+                    Ele era uma linha inteira em TODA bolha, escrevendo sempre a
+                    mesma coisa: "Arka Tecnologia" de um lado, o nome do cliente
+                    do outro -- constantes da conversa, não informação da
+                    mensagem. Quem enviou já se lê pelo lado, pela cor e agora
+                    pelo bico; quem é o cliente está no cabeçalho da tela.
+
+                    Era o que fazia "alo" virar uma caixa de três linhas. O
+                    WhatsApp não mostra nome em conversa de duas pessoas pelo
+                    mesmo motivo.
+
+                    A MARCA DE AUTOMAÇÃO FICA: essa não é constante nenhuma --
+                    diz que ninguém da equipe digitou aquilo, e quem lê a
+                    conversa precisa saber. */}
+                {m.automacao && m.de !== 'cliente' && (
+                  <div className="inline-flex items-center gap-0.5 text-[9px] font-normal text-texto-fraco"
+                    title="Mensagem automática do Fluxo de Automação (não notifica a equipe)">
+                    <Bot size={9} /> automação
+                  </div>
+                )}
 
                 {/* Selo de ENCAMINHADA, como no WhatsApp. A marca vem do próprio
                     aparelho (contextInfo.isForwarded / forwardingScore) ou de um
@@ -3095,23 +3119,63 @@ function PainelChat({
                 })()}
 
                 {m.tipo && m.tipo !== 'texto' ? (
-                  // A LEGENDA É DESENHADA POR `MensagemMidia`, e só por ela.
-                  //
-                  // Aqui existia um segundo render da mesma legenda. Numa
-                  // mensagem rápida com anexo (o PIX com QR Code) o texto saía
-                  // duas vezes na bolha: uma dentro do bloco da imagem, outra
-                  // logo abaixo. Não era duplicação de dados -- a mensagem
-                  // sempre esteve gravada uma vez só.
-                  <MensagemMidia m={m} escuro onAbrirMidia={setImagemAmpliada} onAbrirContato={onAbrirContato} />
+                  <>
+                    {/* A LEGENDA É DESENHADA POR `MensagemMidia`, e só por ela.
+                        Aqui existia um segundo render da mesma legenda. Numa
+                        mensagem rápida com anexo (o PIX com QR Code) o texto
+                        saía duas vezes na bolha: uma dentro do bloco da imagem,
+                        outra logo abaixo. Não era duplicação de dados -- a
+                        mensagem sempre esteve gravada uma vez só. */}
+                    <MensagemMidia m={m} escuro onAbrirMidia={setImagemAmpliada} onAbrirContato={onAbrirContato} />
+                    {/* Mídia mantém o horário em linha própria: flutuar sobre
+                        uma imagem exigiria o degradê que o WhatsApp usa para o
+                        texto não sumir em foto clara, e isso é outro assunto. */}
+                    <div className="text-[9px] flex items-center justify-end gap-1 text-texto-suave">
+                      {relogio}
+                    </div>
+                  </>
                 ) : (
-                  <FormattedMessage text={m.texto} />
+                  /* TEXTO: o horário fica no CANTO DE BAIXO, dentro da última
+                   * linha -- é o que o WhatsApp faz, e é o que deixa "alo"
+                   * caber numa linha só em vez de virar uma caixa de três.
+                   *
+                   * ── POR QUE DUAS CÓPIAS DO MESMO HORÁRIO ──────────────────
+                   *
+                   * O horário de verdade é posicionado no canto inferior
+                   * direito da bolha, FORA do fluxo do texto. Sozinho, ele
+                   * ficaria por cima das últimas palavras.
+                   *
+                   * A segunda cópia é invisível e fica no FIM do texto, no
+                   * fluxo normal: ela não aparece, mas ocupa espaço -- e é esse
+                   * espaço que faz a última linha terminar antes, deixando o
+                   * canto livre para o horário de verdade.
+                   *
+                   * Renderizar o mesmo conteúdo duas vezes (em vez de um
+                   * espaçador de largura fixa) é o que garante que a reserva
+                   * tenha EXATAMENTE o tamanho do horário: "9:05" e
+                   * "22:19 editada ✓✓" têm larguras bem diferentes, e um número
+                   * fixo erraria nos dois sentidos -- sobra buraco ou o texto
+                   * passa por baixo.
+                   *
+                   * `float` foi tentado antes e não serve: ele gruda o horário
+                   * no topo da bolha, e numa mensagem de vários parágrafos ele
+                   * apareceria lá em cima, ao lado da primeira linha.
+                   */
+                  <div className="min-w-0">
+                    <FormattedMessage text={m.texto} />
+                    {/* MESMAS classes de layout do visível (`inline-flex`,
+                        `gap-1`, `text-[9px]`) -- só assim a largura reservada é
+                        idêntica à do horário. Com `inline-block` sem o `gap`, a
+                        reserva saía menor e o texto encostava no relógio. */}
+                    <span aria-hidden="true"
+                      className="invisible inline-flex items-center gap-1 whitespace-nowrap pl-2 text-[9px] select-none">
+                      {relogio}
+                    </span>
+                    <span className="absolute bottom-1.5 right-2.5 inline-flex items-center gap-1 whitespace-nowrap text-[9px] text-texto-suave">
+                      {relogio}
+                    </span>
+                  </div>
                 )}
-
-                <div className="text-[9px] flex items-center justify-end gap-1 text-texto-suave">
-                  {m.editada && <span className="italic">editada</span>}
-                  <span>{m.hora}</span>
-                  <StatusMensagem status={m.status} escuro />
-                </div>
               </div>
             )}
 
