@@ -382,6 +382,17 @@ const editarMensagemSchema = z.object({
   texto: z.string().min(1, "Informe o novo texto"),
 });
 
+/**
+ * REAGIR a uma mensagem. `emoji` VAZIO e valido: e o pedido de REMOVER a
+ * reacao, do mesmo jeito que o WhatsApp remove reagindo com nada.
+ *
+ * A allowlist do que pode SAIR mora no servico (reacao.helper): aqui a peneira
+ * e so de tamanho, para um "emoji" de mil caracteres nem chegar la.
+ */
+const reagirMensagemSchema = z.object({
+  emoji: z.string().max(16).optional().default(""),
+});
+
 // Mover a conversa de setor: so setores conhecidos.
 const atualizarSetorSchema = z.object({
   setor: z.enum(SETORES),
@@ -428,6 +439,7 @@ module.exports = {
   atualizarFlagsSchema,
   encaminharMensagemSchema,
   editarMensagemSchema,
+  reagirMensagemSchema,
   atualizarSetorSchema,
   definirAtendenteSchema,
   avaliarAtendimentoSchema,

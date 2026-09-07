@@ -402,6 +402,23 @@ class EvolutionApiClient {
     }
   }
 
+  /**
+   * REAGIR a uma mensagem (o 👍 do WhatsApp).
+   *
+   * `key` e a chave da mensagem ALVO -- { remoteJid, fromMe, id } --, e nao um
+   * numero de telefone: a reacao pertence a uma mensagem especifica, nao a
+   * conversa. Por isso este e o unico `send*` daqui que nao recebe `number`.
+   *
+   * `reaction` vazia REMOVE a reacao. E o mesmo endpoint: no WhatsApp, tirar o
+   * emoji e reagir com nada. Quem chama nao precisa de dois caminhos.
+   */
+  async sendReaction(key, reaction, instance = this.defaultInstance) {
+    return this.request("POST", `/message/sendReaction/${instance}`, {
+      key,
+      reaction: reaction || "",
+    });
+  }
+
   // `quoted` reproduz o "responder" do WhatsApp: { key, message } da original.
   async sendText(number, text, instance = this.defaultInstance, quoted = null) {
     return this.request("POST", `/message/sendText/${instance}`, {

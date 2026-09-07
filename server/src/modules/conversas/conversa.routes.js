@@ -17,6 +17,7 @@ const {
   atualizarFlagsSchema,
   encaminharMensagemSchema,
   editarMensagemSchema,
+  reagirMensagemSchema,
   atualizarSetorSchema,
   definirAtendenteSchema,
   avaliarAtendimentoSchema,
@@ -137,6 +138,9 @@ router.post("/mensagens/encaminhar", validate(encaminharMensagemSchema), (req, r
 );
 router.patch("/mensagens/:mensagemId", validate(editarMensagemSchema), (req, res, next) =>
   conversaController.editarMensagem(req, res).catch(next)
+);
+router.post("/mensagens/:mensagemId/reacao", validate(reagirMensagemSchema), (req, res, next) =>
+  conversaController.reagirMensagem(req, res).catch(next)
 );
 router.post("/mensagens/:mensagemId/transcrever", (req, res, next) =>
   conversaController.transcreverAudio(req, res).catch(next)

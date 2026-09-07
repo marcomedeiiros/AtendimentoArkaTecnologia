@@ -1048,6 +1048,122 @@ function StatusMensagem({ status, escuro }) {
   return null;
 }
 
+// Os emojis que a Central oferece para reagir. Mesma lista do servidor
+// (reacao.helper): ele RECUSA o que não estiver aqui, então as duas precisam
+// concordar -- uma opção a mais na tela viraria erro 400 no clique.
+const EMOJIS_REACAO = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+
+/**
+ * A CARINHA que abre o seletor de reação, ao lado da bolha.
+ *
+ * Fica FORA da bolha, do lado oposto ao bico -- é onde o WhatsApp a põe, e é o
+ * único lugar em que ela não disputa espaço com o texto nem com a seta de ações
+ * (que mora dentro, no canto de cima).
+ */
+function BotaoReacao({ mensagemId, ehPropria, jaReagiu, onReagir }) {
+  const [aberto, setAberto] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const caixaRef = useRef(null);
+
+  useEffect(() => {
+    if (!aberto) return;
+    const fora = (e) => { if (!caixaRef.current?.contains(e.target)) setAberto(false); };
+    const fechar = () => setAberto(false);
+    document.addEventListener('mousedown', fora);
+    // Rolar a conversa com o seletor aberto o deixaria "solto" longe da bolha.
+    window.addEventListener('scroll', fechar, true);
+    return () => {
+      document.removeEventListener('mousedown', fora);
+      window.removeEventListener('scroll', fechar, true);
+    };
+  }, [aberto]);
+
+  const escolher = async (emoji) => {
+    setAberto(false);
+    if (enviando) return;
+    setEnviando(true);
+    try { await onReagir(mensagemId, emoji); } finally { setEnviando(false); }
+  };
+
+  return (
+    // `order-first` nas ENVIADAS: no flex a carinha nasce depois da bolha, o
+    // que a jogaria para a borda direita da tela. O WhatsApp a põe do lado de
+    // DENTRO da conversa nos dois casos.
+    <div ref={caixaRef} className={`relative shrink-0 self-center ${ehPropria ? "order-first" : ""}`}>
+      <button
+        type="button"
+        onClick={() => setAberto((v) => !v)}
+        disabled={enviando}
+        title="Reagir a esta mensagem"
+        aria-label="Reagir a esta mensagem"
+        className={`rounded-full p-1.5 transition-all disabled:opacity-40 ${
+          jaReagiu ? 'text-espera-400' : 'text-slate-500 hover:text-slate-200'
+        } ${
+          // No celular não há "passar o mouse": lá ela fica sempre visível,
+          // senão reagir viraria um recurso inalcançável no aparelho.
+          aberto || jaReagiu ? 'opacity-100' : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100'
+        }`}
+      >
+        <Smile size={16} />
+      </button>
+
+      {aberto && (
+        // Sem Portal, ao contrário do menu de ações: esta caixinha é pequena e
+        // fica colada na bolha, então o `overflow` do chat não a corta. Portal
+        // aqui só traria o problema de reposicionar no scroll.
+        <div className={`absolute bottom-full z-20 mb-1 flex gap-0.5 rounded-full border border-linha bg-grafite-700 px-1.5 py-1 shadow-xl ${
+          ehPropria ? 'right-0' : 'left-0'
+        }`}>
+          {EMOJIS_REACAO.map((e) => (
+            <button
+              key={e}
+              type="button"
+              onClick={() => escolher(e)}
+              title={`Reagir com ${e}`}
+              className="rounded-full px-1 text-lg leading-none transition-transform hover:scale-125"
+            >
+              {e}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * As reações JÁ DADAS, desenhadas coladas na bolha.
+ *
+ * Ficam meio para fora, na borda de baixo, como no WhatsApp -- e não numa linha
+ * própria abaixo: assim a conversa não ganha uma linha de altura por mensagem
+ * reagida, e fica claro a QUAL bolha a reação pertence.
+ */
+function ReacoesDaBolha({ reacoes, ehPropria, onReagir, mensagemId }) {
+  if (!reacoes?.length) return null;
+  return (
+    <div className={`absolute -bottom-2.5 z-10 flex gap-1 ${ehPropria ? 'right-2' : 'left-2'}`}>
+      {reacoes.map((r) => (
+        <button
+          key={r.emoji}
+          type="button"
+          // Clicar na reação que a equipe já deu a REMOVE -- o servidor entende
+          // o mesmo emoji de novo como "tirar", igual ao aparelho.
+          onClick={() => onReagir(mensagemId, r.emoji)}
+          title={r.autores?.length ? `Reagiu: ${r.autores.join(', ')}` : `${r.total} reação(ões)`}
+          className={`flex items-center gap-0.5 rounded-full border px-1.5 py-px text-[11px] leading-none shadow-sm transition-colors ${
+            r.daEquipe
+              ? 'border-acao/50 bg-grafite-700 text-acao-200'
+              : 'border-linha bg-grafite-700 text-texto-suave hover:border-linha-forte'
+          }`}
+        >
+          <span className="text-[13px] leading-none">{r.emoji}</span>
+          {r.total > 1 && <span className="font-semibold">{r.total}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /**
  * O MENU DA MENSAGEM: responder, encaminhar, editar, apagar.
  *
@@ -2297,7 +2413,7 @@ function PainelChat({
   onMarcarLido, onSolicitarCnpj, onValidarCnpjModal, onAbrirPerfil,
   onVoltar, atendente, onTransferir,
   onEditar, onEncaminharPara, conversas, onAtender,
-  assinar, onToggleAssinar, assinaturaNome, onApagarMensagem,
+  assinar, onToggleAssinar, assinaturaNome, onApagarMensagem, onReagirMensagem,
   podeBuscarHistorico, buscandoHistorico, onBuscarHistorico,
   // Clique em "Conversar" no cartao de contato que o cliente encaminhou.
   onAbrirContato
@@ -3000,7 +3116,11 @@ function PainelChat({
               <span className="flex-1 h-px bg-linha" />
             </div>
           )}
-          <div className={`group flex items-center gap-1 ${m.de === 'cliente' ? 'justify-start' : m.de === 'sistema' || m.de === 'nota' ? 'justify-center' : 'justify-end'}`}>
+          {/* A FOLGA EXTRA quando há reação não é estética: a etiqueta fica
+              PARA FORA da bolha (`-bottom-2.5`), e medido sem isto ela invadia
+              4px da mensagem seguinte. Só as linhas com reação pagam o espaço
+              -- somar em todas afastaria a conversa inteira à toa. */}
+          <div className={`group flex items-center gap-1 ${m.reacoes?.length ? 'mb-3' : ''} ${m.de === 'cliente' ? 'justify-start' : m.de === 'sistema' || m.de === 'nota' ? 'justify-center' : 'justify-end'}`}>
             {m.deletada ? (
               /* "Apagar para todos": some para o cliente no WhatsApp e vira este
                  aviso no chat ao vivo. O texto original continua no Registro
@@ -3198,7 +3318,28 @@ function PainelChat({
                     </span>
                   </div>
                 )}
+                <ReacoesDaBolha
+                  reacoes={m.reacoes}
+                  mensagemId={m.id}
+                  ehPropria={m.de !== 'cliente'}
+                  onReagir={onReagirMensagem}
+                />
               </div>
+            )}
+
+            {/* A CARINHA fica FORA da bolha, no lado oposto ao bico -- é onde o
+                WhatsApp a põe. Dentro ela disputaria espaço com a seta de ações
+                (canto de cima) e com o horário (canto de baixo).
+
+                Fora para NOTA e SISTEMA: não são mensagens do WhatsApp, não há
+                nada no aparelho de ninguém para reagir. */}
+            {m.de !== 'nota' && m.de !== 'sistema' && (
+              <BotaoReacao
+                mensagemId={m.id}
+                ehPropria={m.de !== 'cliente'}
+                jaReagiu={(m.reacoes || []).some((r) => r.daEquipe)}
+                onReagir={onReagirMensagem}
+              />
             )}
 
             </>
@@ -4558,6 +4699,30 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   }, [aplicarConversa, conversa, setConversas]);
 
   /**
+   * REAGIR a uma mensagem -- o 👍 do WhatsApp.
+   *
+   * SEM BOLHA OTIMISTA, ao contrário do apagar logo acima, e a razão é a mesma
+   * que justifica a otimista lá, aplicada ao contrário: apagar tem valor no
+   * painel mesmo se o WhatsApp recusar (a mensagem sai da frente de quem
+   * atende). Uma reação existe para o CLIENTE ver -- se não saiu, não houve
+   * reação, e mostrá-la aqui seria o painel mentindo.
+   *
+   * O servidor devolve a conversa inteira já atualizada, então não há o que
+   * remendar na tela: `aplicarConversa` põe o estado no lugar.
+   */
+  const reagirMensagem = useCallback(async (mensagemId, emoji) => {
+    if (!mensagemId) {
+      avisar('Aguarde a mensagem terminar de enviar para reagir.');
+      return;
+    }
+    try {
+      aplicarConversa(await ConversasAPI.reagirMensagem(mensagemId, emoji));
+    } catch (e) {
+      avisar('Não foi possível reagir: ' + e.message);
+    }
+  }, [aplicarConversa]);
+
+  /**
    * Grava uma NOTA INTERNA na conversa.
    *
    * Sem bolha otimista, ao contrário do envio de mensagem. A razão é a mesma que
@@ -5032,6 +5197,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               onToggleAssinar={() => setAssinar(v => !v)}
               assinaturaNome={assinaturaNome}
               onApagarMensagem={apagarMensagem}
+              onReagirMensagem={reagirMensagem}
               // O botão de "ver mensagens antigas" só continua depois do fim do
               // histórico local se houver a chance de existir algo no WhatsApp:
               // Administrador, e esta conversa ainda não respondeu "não tem nada".

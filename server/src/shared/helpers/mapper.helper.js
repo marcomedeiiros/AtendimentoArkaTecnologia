@@ -1,3 +1,4 @@
+const reacoes = require("./reacao.helper");
 const { formatarHora } = require("../helpers/cnpj.helper");
 const { gerarTokenMidia } = require("./midiaToken.helper");
 
@@ -74,6 +75,12 @@ function mapMensagem(m) {
     // e deduzido pela aparencia da mensagem.
     encaminhada: !!meta.encaminhada,
     encaminhadaVezes: Number(meta.encaminhadaVezes) || 0,
+    // REACOES (o 👍 do WhatsApp), ja AGRUPADAS por emoji.
+    //
+    // A tela precisa de "👍 2", e nao de duas linhas de 👍 -- e agrupar no
+    // servidor mantem essa conta num lugar so. Vem junto o `daEquipe`, que e o
+    // que deixa o botao aparecer marcado para quem ja reagiu.
+    reacoes: reacoes.agrupar(meta),
     tipo,
     // Dados da midia (url, mimetype, nome, legenda, coords, contato) quando a
     // mensagem nao for de texto puro. `url` vai como link curto (ver urlDaMidia),

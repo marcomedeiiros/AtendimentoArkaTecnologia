@@ -809,6 +809,10 @@ export const ConversasAPI = {
   // tela precisa saber a diferença para não dizer "corrigido" sem ter mudado nada.
   corrigirTexto: (texto) => request('/conversas/corrigir-texto', { method: 'POST', body: JSON.stringify({ texto }) }),
   apagarMensagem: (mensagemId) => request(`/conversas/mensagens/${mensagemId}`, { method: 'DELETE' }),
+  // Reagir a uma mensagem (o 👍 do WhatsApp). `emoji` vazio, ou o mesmo de
+  // novo, REMOVE -- o servidor decide, e devolve a conversa já atualizada.
+  reagirMensagem: (mensagemId, emoji) =>
+    request(`/conversas/mensagens/${mensagemId}/reacao`, { method: 'POST', body: JSON.stringify({ emoji }) }),
   encaminharMensagem: (mensagemId, conversaDestinoId) => request('/conversas/mensagens/encaminhar', { method: 'POST', body: JSON.stringify({ mensagemId, conversaDestinoId }) }),
   // Perfil publico do contato no WhatsApp: recado, foto e dados de conta
   // comercial. O resto (nome, empresa, setor, OS) ja vem no DTO da conversa.

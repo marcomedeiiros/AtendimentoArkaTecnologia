@@ -80,6 +80,15 @@ class ConversaController {
       .then((data) => success(res, data));
   }
 
+  // `req.user` vai DUAS vezes: como acesso (o recorte de setor) e como autor
+  // da reacao. Sao papeis diferentes do mesmo objeto, e o servico trata cada um
+  // em separado -- ver reagirMensagem.
+  reagirMensagem(req, res) {
+    return conversaService
+      .reagirMensagem(req.params.mensagemId, req.body.emoji, req.user, req.user)
+      .then((data) => success(res, data));
+  }
+
   enviarMidia(req, res) {
     return conversaService.enviarMidia(req.params.id, req.body, "equipe", req.user, req.user).then((data) => success(res, data));
   }

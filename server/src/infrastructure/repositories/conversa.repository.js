@@ -668,6 +668,12 @@ class ConversaRepository {
     return msg;
   }
 
+  // A mensagem ALVO de uma reacao. `waMessageId` e unico no schema, entao
+  // `findUnique` basta -- nao ha ambiguidade possivel.
+  findMensagemPorWaId(waMessageId) {
+    return prisma.mensagem.findUnique({ where: { waMessageId } });
+  }
+
   // Nao rebaixa o status: um "entregue" atrasado nao pode apagar um "lida".
   async atualizarStatusPorWaId(waMessageId, status) {
     const ordem = { enviando: 0, enviada: 1, entregue: 2, lida: 3 };

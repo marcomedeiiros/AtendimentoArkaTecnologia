@@ -4,6 +4,7 @@ const evolutionApi = require("../../infrastructure/external/evolution-api.client
 const transcricaoClient = require("../../infrastructure/external/transcricao.client");
 const correcaoClient = require("../../infrastructure/external/correcao.client");
 const midiaStorage = require("../../infrastructure/storage/midia.storage");
+const reacoes = require("../../shared/helpers/reacao.helper");
 const fotos = require("./conversa.fotos");
 const { mapConversa, mapAtendimento } = require("../../shared/helpers/mapper.helper");
 // `mascararCnpj` saiu daqui: nenhuma mensagem deste service imprime mais os 14
@@ -857,6 +858,88 @@ class ConversaService {
     }
 
     await conversaRepository.editarMensagem(mensagemId, texto);
+    return this._emitir(await conversaRepository.findById(msg.conversaId));
+  }
+
+  /**
+   * REAGIR a uma mensagem -- o 👍 do WhatsApp, saindo da Central.
+   *
+   * ── A REACAO VAI PARA O APARELHO DO CLIENTE ────────────────────────────────
+   *
+   * Nao e um enfeite interno: o cliente VE que a equipe reagiu, do mesmo jeito
+   * que veria se alguem tivesse reagido pelo celular. Por isso ela e tratada
+   * como envio, e nao como anotacao -- se a Evolution recusar, a reacao NAO e
+   * gravada aqui. Gravar de qualquer forma criaria a pior das telas: o painel
+   * mostrando um 👍 que o cliente nunca recebeu.
+   *
+   * Isso e o oposto da decisao do `apagarMensagem` logo abaixo, e de proposito:
+   * apagar do painel tem valor mesmo se o WhatsApp recusar (a mensagem sai da
+   * frente de quem atende). Uma reacao que nao saiu nao tem valor nenhum -- ela
+   * existe para o cliente ver.
+   *
+   * `emoji` vazio, ou o mesmo emoji de novo, REMOVE (ver reacao.helper).
+   */
+  async reagirMensagem(mensagemId, emoji, acesso = null, usuario = null) {
+    const msg = await conversaRepository.findMensagem(mensagemId);
+    if (!msg) throw new AppError("Mensagem nao encontrada", 404, "NOT_FOUND");
+
+    const conversa = await conversaRepository.findByIdBasico(msg.conversaId);
+    exigirAcessoSetor(acesso, conversa?.setor);
+
+    const pedido = reacoes.limparEmoji(emoji);
+    // ALLOWLIST na saida: o que sai daqui vai para o WhatsApp do cliente, e um
+    // campo livre deixaria passar texto inteiro no lugar de um emoji. O vazio
+    // passa porque e o pedido de REMOVER.
+    if (pedido && !reacoes.EMOJIS_PERMITIDOS.includes(pedido)) {
+      throw new AppError("Este emoji nao esta disponivel para reagir", 400, "EMOJI_INVALIDO");
+    }
+
+    // Sem `waMessageId` a mensagem nunca existiu no WhatsApp (otimista, ou
+    // anterior a integracao): nao ha o que reagir la, e reagir so aqui seria
+    // exatamente o painel mentindo que foi.
+    if (!msg.waMessageId) {
+      throw new AppError(
+        "Esta mensagem ainda nao foi sincronizada com o WhatsApp",
+        400,
+        "SEM_WA_MESSAGE_ID"
+      );
+    }
+
+    // O que vai ser gravado -- calculado ANTES de enviar, porque e ele que diz
+    // se o pedido e de por ou de tirar, e o WhatsApp precisa receber o mesmo.
+    const { metadata, mudou } = reacoes.aplicar(msg.metadata, {
+      emoji: pedido,
+      de: "equipe",
+      autorId: usuario?.id || "equipe",
+      autorNome: usuario?.nome || "",
+    });
+    if (!mudou) return this._emitir(await conversaRepository.findById(msg.conversaId));
+
+    // Reagir com o mesmo emoji e um pedido de REMOVER: o WhatsApp remove
+    // recebendo reacao vazia. Sem isto, tirar no painel deixaria o emoji no
+    // aparelho do cliente.
+    const aindaTem = reacoes.listar(metadata).some((r) => r.autorId === (usuario?.id || "equipe"));
+    try {
+      await evolutionApi.sendReaction(
+        {
+          remoteJid: `${conversa.telefone}@s.whatsapp.net`,
+          // A chave e da mensagem ALVO: `fromMe` diz quem a enviou, e nao quem
+          // esta reagindo. Errar isto faz o WhatsApp nao achar a mensagem.
+          fromMe: msg.origem !== "cliente",
+          id: msg.waMessageId,
+        },
+        aindaTem ? pedido : "",
+        env.evolutionApi.instance
+      );
+    } catch (err) {
+      throw new AppError(
+        `Nao foi possivel reagir no WhatsApp: ${err.message}`,
+        502,
+        "REACAO_FALHOU"
+      );
+    }
+
+    await conversaRepository.atualizarMetadata(mensagemId, metadata);
     return this._emitir(await conversaRepository.findById(msg.conversaId));
   }
 

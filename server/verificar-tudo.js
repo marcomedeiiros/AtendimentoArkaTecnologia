@@ -232,6 +232,11 @@ const VERIFICACOES = [
     resumo: "upload, token da URL, streaming e o Range do player",
   },
   {
+    arquivo: "verificar-reacoes.js",
+    titulo: "Reacoes de mensagem",
+    resumo: "uma por pessoa, o metadata da midia intacto e a reacao que chega",
+  },
+  {
     arquivo: "verificar-busca-empresa.js",
     titulo: "Busca de empresa no perfil",
     resumo: "filtrar por nome, acento, documento e a lista cortada que avisa",

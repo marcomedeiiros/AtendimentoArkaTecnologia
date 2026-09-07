@@ -6,6 +6,7 @@ const contatoService = require("../contatos/contato.service");
 const reconexao = require("./whatsapp.reconexao");
 const midiaStorage = require("../../infrastructure/storage/midia.storage");
 const { mapConversa } = require("../../shared/helpers/mapper.helper");
+const reacoes = require("../../shared/helpers/reacao.helper");
 const bus = require("../../shared/events/event-bus");
 const logger = require("../../config/logger");
 const env = require("../../config/env");
@@ -159,6 +160,26 @@ class WhatsAppService {
       }
     }
     return null;
+  }
+
+  /**
+   * REACAO recebida: devolve `{ waMessageId, emoji }` ou `null`.
+   *
+   * `reactionMessage.key.id` e a mensagem ALVO -- a que foi reagida --, e nao a
+   * "mensagem" da reacao. E por ele que se acha a linha no banco.
+   *
+   * `text` VAZIO nao e erro: e o cliente TIRANDO a reacao. Por isso o retorno
+   * distingue "nao e reacao" (null) de "e reacao, com emoji vazio" -- confundir
+   * os dois faria o painel manter para sempre um emoji que o cliente ja
+   * removeu.
+   */
+  extrairReacao(payload) {
+    const msg = payload?.data?.message || payload?.message || null;
+    const r = msg?.reactionMessage;
+    if (!r || typeof r !== "object") return null;
+    const alvo = r.key?.id || r.key?.ID || null;
+    if (!alvo) return null;
+    return { waMessageId: String(alvo), emoji: String(r.text ?? "") };
   }
 
   /**
@@ -455,6 +476,47 @@ class WhatsAppService {
     return { recebido: true, processado: true, status, waMessageId };
   }
 
+  /**
+   * Grava a reacao que o CLIENTE deu, e avisa a tela.
+   *
+   * Nao cria conversa, nao mexe em atendimento e NAO acorda o bot: reagir nao e
+   * pedir atendimento. Uma conversa encerrada que recebe um 👍 continua
+   * encerrada -- reabrir por causa de um emoji encheria a fila de atendimentos
+   * que ninguem pediu.
+   *
+   * Reacao a uma mensagem que nao existe aqui e caso NORMAL, nao erro: o
+   * cliente pode reagir a algo anterior a integracao, ou fora da janela
+   * importada. Sai em silencio.
+   */
+  async _processarReacao({ waMessageId, emoji }, jid) {
+    const msg = await conversaRepository.findMensagemPorWaId(waMessageId);
+    if (!msg) {
+      logger.debug("Reacao a mensagem desconhecida", { waMessageId, jid });
+      return { recebido: true, processado: false, motivo: "reacao_sem_alvo" };
+    }
+
+    const { metadata, mudou } = reacoes.aplicar(msg.metadata, {
+      emoji,
+      de: "cliente",
+      // O telefone identifica quem reagiu do lado do cliente. Numa conversa de
+      // duas pontas isso e sempre a mesma pessoa, mas o campo mantem a mesma
+      // forma da reacao da equipe -- uma regra so em `aplicar`.
+      autorId: this.extrairTelefone(jid) || "cliente",
+      autorNome: "",
+    });
+    if (!mudou) return { recebido: true, processado: false, motivo: "reacao_repetida" };
+
+    await conversaRepository.atualizarMetadata(msg.id, metadata);
+    // A tela precisa ver o emoji aparecer sozinha, como ve a mensagem chegar.
+    bus.emitRecurso("conversas");
+    logger.info("Reacao do cliente registrada", {
+      conversaId: msg.conversaId,
+      waMessageId,
+      emoji: emoji || "(removida)",
+    });
+    return { recebido: true, processado: true, motivo: "reacao", conversaId: msg.conversaId };
+  }
+
   async _processarMensagem(body, instanceName) {
     const data = body?.data || body;
     const key = data?.key || body?.key;
@@ -480,6 +542,22 @@ class WhatsAppService {
       logger.debug("Mensagem ignorada: nao e conversa de atendimento", { jid, motivo: motivoIgnorar });
       return { recebido: true, processado: false, motivo: motivoIgnorar };
     }
+
+    /**
+     * REACAO DO CLIENTE (o 👍 que ele deu no aparelho).
+     *
+     * Chega como um `messages.upsert` comum, mas NAO e mensagem: e um evento
+     * SOBRE outra mensagem. Sai daqui antes de tudo o que trata mensagem --
+     * senao ela viraria uma bolha propria no chat (o `extrairTexto` nao le
+     * `reactionMessage`, entao seria uma bolha VAZIA) e, pior, acordaria o bot
+     * como se o cliente tivesse escrito algo.
+     *
+     * Fica DEPOIS do recorte de grupo/canal de proposito: reacao vinda de grupo
+     * tambem nao interessa, e a regra de "o que e conversa de atendimento" e uma
+     * so.
+     */
+    const reacao = this.extrairReacao(body);
+    if (reacao) return this._processarReacao(reacao, jid);
 
     const telefone = this.extrairTelefone(jid);
     const texto = this.extrairTexto(body);
