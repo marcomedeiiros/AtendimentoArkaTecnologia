@@ -242,6 +242,11 @@ const VERIFICACOES = [
     resumo: "o clique pula OS vazia e sempre revela algo",
   },
   {
+    arquivo: "verificar-webhook-entrada.js",
+    titulo: "Entrada do webhook",
+    resumo: "a recusa que fala, e o webhook conferido ao subir",
+  },
+  {
     arquivo: "verificar-ciclo-ranking.js",
     titulo: "Ciclo do ranking",
     resumo: "o dia de fechamento, e o passado que nao se mexe",
