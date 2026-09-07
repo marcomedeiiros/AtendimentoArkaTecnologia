@@ -44,6 +44,7 @@ const painelService = require("../dashboard/painel.service");
 const { pontuarExterno } = require("./pontuacao.externa");
 const regrasRelatorio = require("./relatorio.regras");
 const ciclo = require("./ciclo");
+const premiados = require("./premiados");
 const AppError = require("../../shared/errors/AppError");
 const logger = require("../../config/logger");
 
@@ -97,13 +98,78 @@ function competenciaAnterior(comp) {
  * ordem estavel -- sem ele, dois empates trocariam de lugar a cada F5 e a
  * equipe veria o podio "mudando sozinho".
  */
+/**
+ * A NOTA GERAL -- média das duas notas, PONDERADA PELO TRABALHO FEITO.
+ *
+ * ── POR QUE NÃO SOMAR ──────────────────────────────────────────────────────
+ *
+ * As mesmas pessoas atendem na sede E visitam cliente. A pergunta "quem se
+ * saiu melhor no mês, considerando tudo?" é legítima -- mas somar as duas
+ * notas responde errado, de três jeitos:
+ *
+ *   Um dia na rua é um dia sem atender no chat. A nota da sede já cai
+ *   sozinha; somando, quem viaja mais perde de um lado e não recupera.
+ *
+ *   Quem decide a escala é a empresa. A soma passaria a medir o planejamento
+ *   de rotas, e não o desempenho de quem foi.
+ *
+ *   As duas notas saturam em 100. Quem trabalha bem dos dois lados chega a
+ *   200 e empata de novo -- exatamente o problema que se queria resolver.
+ *
+ * ── O QUE A MÉDIA PONDERADA RESPONDE ───────────────────────────────────────
+ *
+ * "Quão bem esta pessoa fez o trabalho que de fato fez" -- seja qual for a
+ * mistura. Quem passou o mês só na sede recebe a nota da sede, sem prejuízo;
+ * quem passou metade na rua tem as duas pesadas na proporção real.
+ *
+ * O peso é o VOLUME de cada lado (atendimentos avaliados, relatórios
+ * entregues) porque é ele que diz onde a pessoa gastou o mês. Pesar meio a
+ * meio faria duas visitas valerem tanto quanto quarenta atendimentos.
+ *
+ * Continua de 0 a 100, na mesma escala das duas -- é média, não soma. Isto
+ * NÃO derruba a regra de nunca misturar os dois rankings (ver o cabeçalho
+ * deste arquivo): lá o erro é comparar PESSOAS DIFERENTES em réguas
+ * diferentes; aqui é a mesma pessoa, e o que se pergunta é sobre ela.
+ */
+function notaGeral(sede, externo) {
+  const vSede = Math.max(0, Number(sede?.registros) || 0);
+  const vExterno = Math.max(0, Number(externo?.registros) || 0);
+  const total = vSede + vExterno;
+  // Mês sem trabalho nenhum dos dois lados não tem nota geral. `0` seria uma
+  // afirmação ("foi mal") sobre um mês em que não há o que julgar.
+  if (total === 0) return null;
+  const pSede = Number(sede?.pontos) || 0;
+  const pExterno = Number(externo?.pontos) || 0;
+  return Math.round((pSede * vSede + pExterno * vExterno) / total);
+}
+
+/**
+ * Ordena e numera. O DESEMPATE é a nota geral -- foi para isso que ela nasceu.
+ *
+ * Empate na pontuação é comum (as parcelas saturam), e até aqui era resolvido
+ * pelo volume e, em último caso, pela ordem alfabética -- sorteio disfarçado.
+ * Com a geral, o desempate passa a olhar o mês INTEIRO da pessoa, incluindo o
+ * outro lado do trabalho.
+ *
+ * Para quem atua num lado só, a geral é igual à nota do próprio ranking:
+ * o empate continua caindo no volume, exatamente como antes. Ninguém é
+ * prejudicado por não fazer o outro trabalho.
+ *
+ * `posicao` vai por ÚLTIMO no objeto de propósito: com ela antes do espalhar,
+ * reclassificar uma lista já classificada mantinha a posição velha -- e é
+ * exatamente isso que `obter` faz depois de anexar a nota geral.
+ */
 function classificar(pessoas, volumeDe) {
   return pessoas
     .slice()
     .sort(
-      (a, b) => b.pontos - a.pontos || volumeDe(b) - volumeDe(a) || a.nome.localeCompare(b.nome)
+      (a, b) =>
+        b.pontos - a.pontos ||
+        (b.geral ?? b.pontos) - (a.geral ?? a.pontos) ||
+        volumeDe(b) - volumeDe(a) ||
+        a.nome.localeCompare(b.nome)
     )
-    .map((p, i) => ({ posicao: i + 1, ...p }));
+    .map((p, i) => ({ ...p, posicao: i + 1 }));
 }
 
 class RankingService {
@@ -281,21 +347,63 @@ class RankingService {
     const equipes = await this.equipes();
     const equipe = equipes[equipeChave];
 
-    const atual =
-      equipeChave === "sede"
-        ? await this._rankingSede(ano, mes, equipe)
-        : await this._rankingExterno(ano, mes, equipe);
+    // ── A NOTA GERAL, e por que ela é aplicada AOS DOIS MESES ──────────────
+    //
+    // Ela precisa do OUTRO ranking, que custa uma rodada de consultas. Só vale
+    // para quem está nas DUAS equipes: para os demais a geral é igual à nota do
+    // próprio ranking, e buscar o outro lado seria pagar por um número já
+    // conhecido. Onde as equipes não se cruzam, isto não custa nada.
+    //
+    // O MÊS ANTERIOR RECEBE O MESMO TRATAMENTO, e isso não é capricho: dele sai
+    // só a POSIÇÃO de cada um, que a tela transforma em "subiu"/"caiu". Com o
+    // desempate novo valendo num mês e não no outro, dois empatados trocariam
+    // de lugar entre os meses sem nada ter acontecido -- e a tela anunciaria um
+    // movimento que não existiu.
+    const outraChave = equipeChave === "sede" ? "externo" : "sede";
+    const nosDois = new Set(
+      equipe.filter((u) => equipes[outraChave].some((o) => o.id === u.id)).map((u) => u.id)
+    );
+
+    const rankingDe = (chave, aa, mm) =>
+      chave === "sede"
+        ? this._rankingSede(aa, mm, equipes.sede)
+        : this._rankingExterno(aa, mm, equipes.externo);
+
+    // Anexa a geral e reordena. Sem gente nos dois lados, devolve como veio.
+    const comGeral = async (r, aa, mm) => {
+      if (nosDois.size === 0) return r;
+      const outra = await rankingDe(outraChave, aa, mm);
+      const doOutroLado = new Map(outra.classificacao.map((x) => [x.usuarioId, x]));
+      const lista = r.classificacao.map((p) => {
+        // Quem atua num lado só: a geral é a própria nota. Não é "não tem" --
+        // é que a média de um número só é ele mesmo, e usar `null` aqui jogaria
+        // essa pessoa para o fim de todo desempate.
+        if (!nosDois.has(p.usuarioId)) return { ...p, geral: p.pontos, geralDeDoisLados: false };
+        const o = doOutroLado.get(p.usuarioId);
+        return {
+          ...p,
+          geral: equipeChave === "sede" ? notaGeral(p, o) : notaGeral(o, p),
+          geralDeDoisLados: true,
+          // O outro lado, para a tela poder explicar de onde a geral saiu em vez
+          // de mostrar um número que ninguém consegue conferir.
+          outroLado: o ? { pontos: o.pontos, registros: o.registros } : null,
+        };
+      });
+      return { ...r, classificacao: classificar(lista, (x) => x.registros) };
+    };
+
+    const atual = await comGeral(await rankingDe(equipeChave, ano, mes), ano, mes);
 
     // Mes anterior so para saber a posicao de cada um. Uma consulta a mais, e
     // ela vale: sem ela a tela mostraria "1o lugar" sem dizer se isso e novo.
     const antes = interpretarCompetencia(competenciaAnterior(comp));
-    const anterior =
-      equipeChave === "sede"
-        ? await this._rankingSede(antes.ano, antes.mes, equipe)
-        : await this._rankingExterno(antes.ano, antes.mes, equipe);
+    const anterior = await comGeral(
+      await rankingDe(equipeChave, antes.ano, antes.mes),
+      antes.ano,
+      antes.mes
+    );
     const posicaoAntes = new Map(anterior.classificacao.map((p) => [p.usuarioId, p.posicao]));
     const pontosAntes = new Map(anterior.classificacao.map((p) => [p.usuarioId, p.pontos]));
-
     const classificacao = atual.classificacao.map((p) => {
       const antesPos = posicaoAntes.get(p.usuarioId) ?? null;
       // Sem mes anterior nao ha movimento a declarar. "manteve" seria uma
@@ -321,6 +429,10 @@ class RankingService {
       pesos: atual.pesos || null,
       minimoAvaliacoes: atual.minimoAvaliacoes ?? null,
       participantes: equipe.length,
+      // Quantos sobem ao pódio. Decidido no SERVIDOR (ver `premiados`): a tela
+      // desenhava três lugares fixos, o que numa equipe de três premiava até o
+      // último colocado.
+      premiados: premiados.quantos(classificacao.length, (await premiados.obter())[equipeChave]),
       // Desde quando este ranking esta contando. `zeradoEm` e o marco (existe ou
       // nao, e o que decide se a tela mostra "Limpar" ou "Restaurar");
       // `zeradoNoMes` diz se ele realmente corta o mes que esta na tela.

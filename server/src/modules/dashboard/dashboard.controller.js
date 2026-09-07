@@ -1,6 +1,7 @@
 const dashboardService = require("./dashboard.service");
 const painelService = require("./painel.service");
 const ciclo = require("../rankings/ciclo");
+const premiados = require("../rankings/premiados");
 const { success } = require("../../shared/helpers/response.helper");
 const AppError = require("../../shared/errors/AppError");
 
@@ -58,6 +59,10 @@ class DashboardController {
       // formas de ele aparecer meio preenchido.
       ciclo: await ciclo.obter(),
       cicloPadrao: ciclo.PADRAO,
+      // Pelo mesmo motivo do ciclo: nao e regra da sede, vale para os dois
+      // rankings, mas quem configura e a mesma pessoa na mesma tela.
+      premiados: await premiados.obter(),
+      premiadosPadrao: premiados.PADRAO,
     });
   }
 
@@ -67,7 +72,10 @@ class DashboardController {
     // ciclo antes deixaria metade do formulario aplicada num pedido que a
     // pessoa viu falhar.
     const cicloNovo = req.body?.ciclo ? await ciclo.salvar(req.body.ciclo, req.user) : await ciclo.obter();
-    return success(res, { ...regras, ciclo: cicloNovo });
+    const premiadosNovo = req.body?.premiados
+      ? await premiados.salvar(req.body.premiados, req.user)
+      : await premiados.obter();
+    return success(res, { ...regras, ciclo: cicloNovo, premiados: premiadosNovo });
   }
 
   // Zera o painel da equipe. NAO apaga atendimento nenhum: grava um instante e

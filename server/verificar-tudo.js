@@ -247,6 +247,11 @@ const VERIFICACOES = [
     resumo: "a recusa que fala, e o webhook conferido ao subir",
   },
   {
+    arquivo: "verificar-premiacao-justa.js",
+    titulo: "Premiacao justa",
+    resumo: "podio do tamanho da equipe e a nota geral ponderada",
+  },
+  {
     arquivo: "verificar-ciclo-ranking.js",
     titulo: "Ciclo do ranking",
     resumo: "o dia de fechamento, e o passado que nao se mexe",

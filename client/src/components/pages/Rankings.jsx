@@ -119,16 +119,29 @@ function Evolucao({ estado, anterior }) {
   );
 }
 
-/** O pódio. Os três primeiros ganham cartão próprio; o resto vai na tabela. */
-function Podio({ classificacao, premiacoes }) {
-  const tres = classificacao.slice(0, 3);
-  if (!tres.length) return null;
+/**
+ * O pódio -- com o número de lugares que o SERVIDOR decidiu.
+ *
+ * Eram três, sempre. Na equipe externa, que tem três pessoas, isso premiava o
+ * time inteiro: o "3º lugar" era o último colocado recebendo medalha. Pódio que
+ * inclui todo mundo não premia ninguém.
+ *
+ * A conta é do servidor (`rankings/premiados`) porque ela também decide quem
+ * PODE receber prêmio registrado -- e uma regra dessas em dois lugares vira
+ * duas regras. O `?? 3` cobre só a resposta antiga em cache.
+ */
+function Podio({ classificacao, premiacoes, premiados }) {
+  const vagas = Math.max(0, Number(premiados ?? 3));
+  const top = classificacao.slice(0, vagas);
+  if (!top.length) return null;
   // Ordem visual 2 - 1 - 3, como num pódio de verdade: o primeiro no meio e
   // mais alto. Numa lista 1-2-3 o olho lê ordem de leitura, não hierarquia.
-  const ordem = [tres[1], tres[0], tres[2]].filter(Boolean);
+  // Com um lugar só não há o que reordenar, e com dois o primeiro fica à
+  // direita -- que é onde o degrau alto do pódio está nos outros casos.
+  const ordem = vagas >= 3 ? [top[1], top[0], top[2]].filter(Boolean) : [top[1], top[0]].filter(Boolean);
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+    <div className={`grid grid-cols-1 gap-3 mb-5 ${ordem.length >= 3 ? 'sm:grid-cols-3' : ordem.length === 2 ? 'sm:grid-cols-2' : ''}`}>
       {ordem.map((p) => {
         const cor = MEDALHAS[p.posicao - 1];
         const premio = premiacoes?.find((x) => x.posicao === p.posicao);
@@ -177,8 +190,10 @@ function Podio({ classificacao, premiacoes }) {
   );
 }
 
-function LinhaTabela({ p, aberta, onAlternar }) {
-  const temMedalha = p.posicao <= 3;
+function LinhaTabela({ p, aberta, onAlternar, premiados = 3, temGeral = false }) {
+  // A MESMA conta do pódio. Cravar 3 aqui pintaria de bronze um terceiro lugar
+  // que não é premiado -- a tabela contradizendo o pódio logo acima dela.
+  const temMedalha = p.posicao <= premiados;
   const cor = MEDALHAS[p.posicao - 1] || '--quieto';
   return (
     <>
@@ -227,6 +242,24 @@ function LinhaTabela({ p, aberta, onAlternar }) {
           </div>
         </td>
         <td className="py-2.5 px-3 text-right font-display font-extrabold tabular-nums text-texto">{p.pontos}</td>
+        {/* A GERAL, só para quem acumula as duas funções.
+
+            Para quem atua num lado só ela é igual à coluna Pontos, e repetir o
+            mesmo número duas vezes na mesma linha faz procurar diferença onde
+            não há. O traço diz "esta pessoa não tem os dois lados" sem gastar
+            uma frase. */}
+        {temGeral && (
+          <td className="py-2.5 px-3 text-right tabular-nums text-xs hidden sm:table-cell"
+            title={
+              p.geralDeDoisLados && p.outroLado
+                ? `${p.pontos} aqui (${p.registros}) e ${p.outroLado.pontos} do outro lado (${p.outroLado.registros}), na proporção do trabalho`
+                : undefined
+            }>
+            {p.geralDeDoisLados
+              ? <span className="font-display font-extrabold text-acao-200">{p.geral ?? '—'}</span>
+              : <span className="text-texto-fraco">—</span>}
+          </td>
+)}
         <td className="py-2.5 px-3 text-right tabular-nums text-texto-suave text-xs hidden lg:table-cell">{p.registros}</td>
         {/* ÚLTIMO ATENDIMENTO -- de qualquer data, e não do mês selecionado.
             São perguntas diferentes: os pontos dizem "como foi o mês", esta
@@ -259,7 +292,7 @@ function LinhaTabela({ p, aberta, onAlternar }) {
       </tr>
       {aberta && (
         <tr className="bg-grafite-800/60">
-          <td colSpan={7} className="px-3 pb-3">
+          <td colSpan={7 + (temGeral ? 1 : 0)} className="px-3 pb-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-1">
               {p.criterios.map((c) => {
                 const v = valorCriterio(c);
@@ -514,7 +547,7 @@ export default function Rankings() {
       const d = await DashboardAPI.regrasSede();
       setConfig(d);
       // O ciclo entra no MESMO rascunho: um formulário, um botão de salvar.
-      setRascunho({ ...d.regras, ciclo: d.ciclo || d.cicloPadrao });
+      setRascunho({ ...d.regras, ciclo: d.ciclo || d.cicloPadrao, premiados: d.premiados || d.premiadosPadrao });
     } catch (e) {
       avisar(e?.message || 'Não foi possível abrir a configuração.', { titulo: 'Configuração' });
     }
@@ -552,6 +585,9 @@ export default function Rankings() {
   };
 
   const lista = dados?.classificacao || [];
+  // Alguem acumula as duas funcoes neste mes? E o servidor quem sabe: ele
+  // marca `geralDeDoisLados` em quem esta nas duas equipes.
+  const temGeral = lista.some((p) => p.geralDeDoisLados);
   const rotuloAba = ABAS.find((a) => a.id === aba)?.rotulo || '';
   // Desde quando ESTE ranking está contando. Vem do servidor junto com a
   // classificação, e não de um estado local: quem limpou pode ter sido outro
@@ -789,8 +825,51 @@ export default function Rankings() {
               continuem apontando para o ranking que existia quando foram dadas.
             </p>
           </div>
+          {/* QUANTOS SOBEM AO PÓDIO.
+
+              Eram três, sempre. Numa equipe de três isso premiava o time
+              inteiro -- o "3º lugar" era o último colocado com medalha.
+
+              Em branco = automático: um terço da equipe, entre 1 e 3. Derivar
+              do tamanho é o que impede o problema de voltar quando a equipe
+              crescer, sem ninguém precisar lembrar de vir aqui. */}
+          <div className="border-t border-linha pt-3 space-y-2">
+            <p className="text-[11px] font-semibold text-texto-suave">Premiados no pódio</p>
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <label className="text-[10px] text-texto-fraco block mb-1">Atendimento na sede</label>
+                <input
+                  type="number" min={1} max={50} placeholder="automático"
+                  value={rascunho.premiados?.sede ?? ''}
+                  onChange={(e) => {
+                    setErroCfg('');
+                    const v = e.target.value === '' ? null : Math.max(1, Math.min(50, Number(e.target.value) || 1));
+                    setRascunho((r) => ({ ...r, premiados: { ...r.premiados, sede: v } }));
+                  }}
+                  className="w-32 bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto focus:outline-none focus:border-acao/50"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-texto-fraco block mb-1">Fora da sede</label>
+                <input
+                  type="number" min={1} max={50} placeholder="automático"
+                  value={rascunho.premiados?.externo ?? ''}
+                  onChange={(e) => {
+                    setErroCfg('');
+                    const v = e.target.value === '' ? null : Math.max(1, Math.min(50, Number(e.target.value) || 1));
+                    setRascunho((r) => ({ ...r, premiados: { ...r.premiados, externo: v } }));
+                  }}
+                  className="w-32 bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto focus:outline-none focus:border-acao/50"
+                />
+              </div>
+            </div>
+            <p className="text-[10px] text-texto-fraco leading-relaxed">
+              Deixe em branco para o automático: <strong>um terço da equipe, entre 1 e 3</strong>.
+              Com 3 pessoas dá 1 premiado; com 9 ou mais, 3. Nunca mais do que existe no ranking.
+            </p>
+          </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <button onClick={() => setRascunho({ ...config.padrao, ciclo: config.cicloPadrao })} disabled={salvandoCfg}
+            <button onClick={() => setRascunho({ ...config.padrao, ciclo: config.cicloPadrao, premiados: config.premiadosPadrao })} disabled={salvandoCfg}
               className="px-3 py-2 rounded-xl bg-grafite-700 border border-linha text-texto-suave text-[11px] font-bold hover:border-linha-forte disabled:opacity-50 flex items-center gap-1.5">
               <RotateCcw size={12} /> Restaurar o padrão
             </button>
@@ -855,7 +934,7 @@ export default function Rankings() {
           </div>
         ) : (
           <>
-            <Podio classificacao={lista} premiacoes={dados?.premiacoes} />
+            <Podio classificacao={lista} premiacoes={dados?.premiacoes} premiados={dados?.premiados} />
 
             <div className="overflow-x-auto rounded-xl border border-linha">
               <table className="w-full text-xs">
@@ -864,6 +943,15 @@ export default function Rankings() {
                     <th className="text-left py-2 px-3 font-bold text-texto-suave w-14">Pos.</th>
                     <th className="text-left py-2 px-3 font-bold text-texto-suave">Funcionário</th>
                     <th className="text-right py-2 px-3 font-bold text-texto-suave w-20">Pontos</th>
+                    {/* GERAL: só aparece quando há alguém nos dois times. Numa
+                        operação em que ninguém acumula as duas funções ela seria
+                        uma cópia da coluna Pontos -- ruído com cara de dado. */}
+                    {temGeral && (
+                      <th className="text-right py-2 px-3 font-bold text-texto-suave w-20 hidden sm:table-cell"
+                        title="Média das duas notas, ponderada pelo trabalho feito de cada lado">
+                        Geral
+                      </th>
+                    )}
                     <th className="text-right py-2 px-3 font-bold text-texto-suave w-24 hidden lg:table-cell">
                       {aba === 'sede' ? 'Avaliados' : 'Relatórios'}
                     </th>
@@ -879,6 +967,8 @@ export default function Rankings() {
                       p={p}
                       aberta={abertas.has(p.usuarioId)}
                       onAlternar={() => alternar(p.usuarioId)}
+                      premiados={dados?.premiados}
+                      temGeral={temGeral}
                     />
                   ))}
                 </tbody>
