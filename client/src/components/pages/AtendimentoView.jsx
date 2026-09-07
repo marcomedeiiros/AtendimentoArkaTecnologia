@@ -2877,24 +2877,30 @@ function PainelChat({
     const comMensagem = new Set(todas.map(m => m.atendimentoId).filter(Boolean));
     const ocultas = osCronologicas.slice(0, osCronologicas.length - osCarregadas);
 
-    // Da mais recente das ocultas para tras, ate achar uma que tenha conteudo.
-    let passos = 0;
-    for (let i = ocultas.length - 1; i >= 0; i--) {
-      passos += 1;
-      if (comMensagem.has(ocultas[i].id)) break;
-    }
-    const achou = ocultas.some(a => comMensagem.has(a.id));
-
-    // Nenhuma OS oculta tem mensagem. Ainda vale andar se houver ORFA
-    // esperando: ela so aparece com a conversa inteira carregada. Sem orfa,
-    // nao ha o que revelar -- e o botao nao deve prometer que ha.
-    if (!achou) passos = todas.some(ehOrfa) ? ocultas.length : 0;
+    // O clique traz TUDO, e nao o proximo trecho.
+    //
+    // Revelar de um em um era para a conversa abrir leve -- e ela continua
+    // abrindo leve, porque o recorte inicial nao mudou. O que mudou e o que
+    // acontece DEPOIS de a pessoa pedir para ver o que veio antes: ela quer o
+    // historico, nao um trecho dele. Quem atende estava clicando meia duzia de
+    // vezes para chegar no comeco, que e justamente onde mora o historico
+    // importado do WhatsApp.
+    //
+    // Nao ha ida ao servidor aqui: `GET /conversas/:id` ja trouxe o fio
+    // inteiro. O custo e so de desenho, e e pago uma vez, a pedido.
+    const primeiraComMensagem = ocultas.find(a => comMensagem.has(a.id)) || null;
+    // Sem OS com conteudo ainda pode haver ORFA esperando (mensagem anterior ao
+    // modelo de OS): ela so aparece com a conversa inteira carregada. Sem uma
+    // coisa nem outra nao ha o que revelar, e o botao nao deve prometer que ha.
+    const haOQueRevelar = !!primeiraComMensagem || todas.some(ehOrfa);
 
     return {
       mensagensVisiveis,
-      temMaisAntigas: passos > 0,
-      proximaOsAntiga: ocultas[ocultas.length - passos] || null,
-      passosParaRevelar: passos,
+      temMaisAntigas: haOQueRevelar,
+      // A OS que vai ficar no TOPO depois do clique -- e o numero que o botao
+      // anuncia. Nao a proxima da fila: a fila inteira vem junto.
+      proximaOsAntiga: primeiraComMensagem,
+      passosParaRevelar: haOQueRevelar ? ocultas.length : 0,
     };
   }, [conversa.mensagens, osCronologicas, osCarregadas]);
 
@@ -2922,8 +2928,8 @@ function PainelChat({
   const verMensagensAntigas = useCallback(() => {
     const el = scrollRef.current;
     ancoraRef.current = el ? el.scrollHeight - el.scrollTop : null;
-    // `passosParaRevelar`, e nao 1: pular as OS vazias no mesmo clique e o que
-    // faz o botao mostrar alguma coisa toda vez que e apertado.
+    // `passosParaRevelar` e o que falta para a conversa inteira: um clique
+    // basta. Ele ja desconta o caso de nao haver nada a revelar.
     setOsCarregadas(n => n + Math.max(1, passosParaRevelar));
   }, [scrollRef, passosParaRevelar]);
 
@@ -3132,8 +3138,8 @@ function PainelChat({
               title={
                 temMaisAntigas
                   ? proximaOsAntiga
-                    ? `Carregar o atendimento #${proximaOsAntiga.os} (${dataHoraCurta(proximaOsAntiga.abertoEm)})`
-                    : 'Carregar o atendimento anterior'
+                    ? `Carregar a conversa inteira, desde o atendimento #${proximaOsAntiga.os} (${dataHoraCurta(proximaOsAntiga.abertoEm)})`
+                    : 'Carregar a conversa inteira'
                   : 'Procurar no WhatsApp as conversas anteriores a este número entrar na Central'
               }
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-grafite-700/80 hover:bg-grafite-600 border border-linha text-slate-300 hover:text-white text-[11px] font-semibold transition-colors disabled:opacity-60 disabled:cursor-wait"

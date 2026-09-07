@@ -96,6 +96,42 @@ const MENSAGENS = [msg("m1", "1"), msg("m2", "1"), msg("m3", "3"), msg("m4", "4"
   ]);
 }
 
+// ── UM CLIQUE TRAZ A CONVERSA INTEIRA ────────────────────────────────────────
+//
+// Revelar de um em um era para a conversa abrir leve. Ela continua abrindo
+// leve -- o recorte inicial nao mudou --, mas quem PEDE para ver o que veio
+// antes quer o historico, nao um pedaco dele; estava clicando meia duzia de
+// vezes para chegar no comeco, que e onde mora o historico importado do
+// WhatsApp.
+//
+// Este cenario e o que separa "traz tudo" de "traz o proximo trecho": com dois
+// blocos de mensagem separados por uma OS vazia, a versao antiga parava no
+// primeiro. As outras checagens deste arquivo passam nas duas.
+{
+  const OSS = [os("1", 40), os("2", 46), os("3", 83), os("4", 86)];
+  const msgs = [msg("m1", "1"), msg("m2", "2"), msg("m3", "4")];
+  const r = calcular({ mensagens: msgs }, OSS, 1);
+
+  check("um clique traz tudo, e nao so o proximo trecho", [
+    ...(r.passosParaRevelar === 3
+      ? []
+      : ["deveria andar 3 (as tres OS ocultas), anda " + r.passosParaRevelar + " -- voltou a trazer so o proximo trecho"]),
+  ]);
+
+  const depois = calcular({ mensagens: msgs }, OSS, 1 + Math.max(1, r.passosParaRevelar));
+  check("depois do clique a conversa inteira esta na tela", [
+    ...(depois.mensagensVisiveis.length === msgs.length
+      ? []
+      : [`ficaram ${depois.mensagensVisiveis.length} de ${msgs.length} mensagens`]),
+    ...(depois.temMaisAntigas === false ? [] : ["o botao ainda promete mais, mas nao ha mais nada"]),
+  ]);
+
+  check("o botao anuncia a OS mais antiga, que vai ficar no topo", [
+    ...(r.proximaOsAntiga?.os === 40
+      ? []
+      : ["deveria anunciar a #40 (a mais antiga com mensagem); anuncia " + JSON.stringify(r.proximaOsAntiga?.os)]),
+  ]);
+}
 // ── Nada oculto tem conteudo: o botao nao pode prometer ──────────────────────
 {
   const soVazias = [os("1", 40), os("2", 41), os("3", 86)];
