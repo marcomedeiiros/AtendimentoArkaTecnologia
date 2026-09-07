@@ -8,7 +8,7 @@ import {
   // midia girava um icone de IMAGEM. Agora e o Loader2 de verdade.
   FileText, MapPin, Contact, Paperclip, Smile, Loader2,
   SlidersHorizontal, Star, Archive, EyeOff, MoreVertical,
-  Maximize2, Download, CornerUpLeft, CornerUpRight, Share2, Pencil, MoreHorizontal, Mic, Tag, PenLine,
+  Maximize2, Download, CornerUpLeft, CornerUpRight, Share2, Pencil, ChevronDown, Mic, Tag, PenLine,
   Bot, StickyNote, SpellCheck, Undo2, History, MessageSquarePlus, Copy, StarOff
 } from 'lucide-react';
 import { EmojiIcon, FormattedMessage, TextoFormatado } from './EmojiIcon';
@@ -1048,8 +1048,19 @@ function StatusMensagem({ status, escuro }) {
   return null;
 }
 
-// Menu de tres pontinhos da bolha: responder, encaminhar, editar.
-function MenuMensagem({ m, ehPropria, onResponder, onEncaminhar, onEditar, onApagar }) {
+/**
+ * O MENU DA MENSAGEM: responder, encaminhar, editar, apagar.
+ *
+ * A SETA FICA DENTRO DA BOLHA, no canto de cima, como no WhatsApp -- antes era
+ * um botão de três pontinhos AO LADO dela.
+ *
+ * A diferença não é só de ícone. Do lado de fora, o botão ocupava uma coluna
+ * própria em toda linha da conversa: nas mensagens curtas ele era maior que a
+ * própria bolha, e empurrava o texto para longe da borda. Dentro, ele não
+ * ocupa espaço nenhum -- só aparece quando o mouse passa, sobre um degradê da
+ * cor da bolha (ver `.acoes-recebida` / `.acoes-enviada` no index.css).
+ */
+function MenuMensagem({ m, ehPropria, onResponder, onEncaminhar, onEditar, onApagar, className = '' }) {
   const [aberto, setAberto] = useState(false);
   // Posicao FIXA (viewport) calculada na hora de abrir. O menu vai num Portal
   // (document.body), entao nao e cortado pelo overflow do chat -- que era o que
@@ -1110,17 +1121,21 @@ function MenuMensagem({ m, ehPropria, onResponder, onEncaminhar, onEditar, onApa
   const item = 'w-full text-left px-3 py-2.5 text-xs font-semibold text-slate-300 hover:bg-grafite-600 hover:text-white transition-colors flex items-center gap-2.5';
 
   return (
-    <div className="shrink-0 self-center">
+    <div className={className || 'shrink-0 self-center'}>
       <button
         ref={botaoRef}
         onClick={alternar}
-        title="Mais ações"
-        aria-label="Mais ações"
-        className={`rounded-lg p-2 text-slate-400 transition-all hover:bg-grafite-600 hover:text-white ${
-          aberto ? 'bg-grafite-600 text-white opacity-100' : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100'
+        title="Responder, encaminhar, editar ou apagar"
+        aria-label="Ações da mensagem"
+        className={`rounded pl-5 pr-1 py-0.5 text-texto-suave transition-opacity hover:text-texto ${
+          ehPropria ? 'acoes-enviada' : 'acoes-recebida'
+        } ${
+          // No celular NÃO existe "passar o mouse": lá o botão fica sempre
+          // visível, senão o menu vira um recurso inalcançável no aparelho.
+          aberto ? 'opacity-100' : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100'
         }`}
       >
-        <MoreHorizontal size={16} />
+        <ChevronDown size={17} />
       </button>
 
       {aberto && (
@@ -2997,22 +3012,6 @@ function PainelChat({
               </div>
             ) : (
             <>
-            {/* Nas mensagens enviadas por nos (direita), o menu fica a ESQUERDA da bolha.
-                A NOTA fica de fora: "responder" e "encaminhar" são recursos do
-                WhatsApp, e encaminhar uma nota a levaria para o cliente. O
-                servidor recusa esse encaminhamento de qualquer forma (ver
-                encaminharMensagem) -- aqui o botão nem aparece, para ninguém
-                tentar. */}
-            {m.de !== 'cliente' && m.de !== 'sistema' && m.de !== 'nota' && (
-              <MenuMensagem
-                m={m}
-                ehPropria
-                onResponder={setRespondendoA}
-                onEncaminhar={setEncaminhando}
-                onEditar={iniciarEdicao}
-                onApagar={onApagarMensagem}
-              />
-            )}
             {m.de === 'nota' ? (
               /* NOTA INTERNA -- precisa ser IMPOSSÍVEL de confundir com uma
                  mensagem enviada. Por isso ela não usa nada do vocabulário das
@@ -3061,6 +3060,21 @@ function PainelChat({
                   ? 'bg-grafite-600 text-texto rounded-tl-sm bolha-bico bolha-bico-esq'
                   : 'bg-bolha text-texto rounded-tr-sm bolha-bico bolha-bico-dir'
               }`}>
+                {/* A SETA DAS AÇÕES, no canto de cima da bolha -- responder,
+                    encaminhar, editar, apagar. Fica sobre o degradê da cor da
+                    bolha para não cobrir a primeira linha do texto.
+
+                    `rounded-tr-lg` acompanha o canto: sem isso o degradê
+                    quadrado escapa por fora do arredondado da bolha. */}
+                <MenuMensagem
+                  m={m}
+                  ehPropria={m.de !== 'cliente'}
+                  onResponder={setRespondendoA}
+                  onEncaminhar={setEncaminhando}
+                  onEditar={iniciarEdicao}
+                  onApagar={onApagarMensagem}
+                  className="absolute right-0 top-0 z-10 overflow-hidden rounded-tr-lg"
+                />
                 {/* O NOME DO REMETENTE SAIU DE DENTRO DA BOLHA.
 
                     Ele era uma linha inteira em TODA bolha, escrevendo sempre a
@@ -3187,17 +3201,6 @@ function PainelChat({
               </div>
             )}
 
-            {/* Nas mensagens do cliente (esquerda), o menu fica a DIREITA da bolha */}
-            {m.de === 'cliente' && (
-              <MenuMensagem
-                m={m}
-                ehPropria={false}
-                onResponder={setRespondendoA}
-                onEncaminhar={setEncaminhando}
-                onEditar={iniciarEdicao}
-                onApagar={onApagarMensagem}
-              />
-            )}
             </>
             )}
           </div>

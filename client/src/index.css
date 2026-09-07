@@ -242,6 +242,27 @@
   }
 }
 
+/* FUNDO DO BOTAO DE ACOES DENTRO DA BOLHA (a setinha para baixo).
+ *
+ * A seta fica no canto superior direito, POR CIMA do texto -- e numa mensagem
+ * cuja primeira linha e comprida ela cairia em cima das palavras. O WhatsApp
+ * resolve com um degrade da cor da propria bolha atras do icone: o texto some
+ * suavemente embaixo dele em vez de brigar.
+ *
+ * Sao duas classes porque as duas bolhas tem cores diferentes, e o degrade
+ * precisa nascer da cor de cada uma.
+ *
+ * `rgb(var(--x) / 0)` e nao `transparent`: `transparent` e preto com alfa zero,
+ * e no meio de um degrade ele passa por cinza -- a faixa fica suja. Terminar na
+ * PROPRIA cor com alfa zero mantem o degrade limpo.
+ */
+.acoes-recebida {
+  background-image: linear-gradient(to left, rgb(var(--grafite-600)) 58%, rgb(var(--grafite-600) / 0));
+}
+.acoes-enviada {
+  background-image: linear-gradient(to left, rgb(var(--bolha)) 58%, rgb(var(--bolha) / 0));
+}
+
 /* SACUDIDA DE CHEGADA -- dispara quando alguem ENTRA na fila.
  *
  * Foi pedido "algo pra tremer aquela janela". Treme, mas por um segundo e
