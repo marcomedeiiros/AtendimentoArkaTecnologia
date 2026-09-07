@@ -121,38 +121,30 @@ const MENSAGENS = [msg("m1", "1"), msg("m2", "1"), msg("m3", "3"), msg("m4", "4"
   ]);
 }
 
-// ── A BUSCA NO WHATSAPP NAO PODE DEPENDER DE ESGOTAR AS OS ──────────────────
+// ── DEPOIS DE "NADA DE NOVO", O BOTAO FICA ──────────────────────────────────
 //
-// Ela ja foi o segundo estado de um botao unico: primeiro revelar tudo, e so
-// entao procurar. Conversa com muitas OS escondia a importacao atras de uma
-// fila de cliques -- e o motivo de a importacao existir e o tecnico NAO
-// precisar abrir o celular da empresa. Uma acao que existe para isso nao pode
-// ficar no fim da fila.
+// O botao e um so, por escolha de quem usa: primeiro revela as OS carregadas
+// e, quando elas acabam, procura no WhatsApp. Ja foram dois lado a lado por um
+// dia -- desfeito a pedido.
 //
-// Duas coisas travadas: que os dois botoes sejam independentes (a busca nao
-// condicionada a `temMaisAntigas`), e que ela continue disponivel depois de um
-// "nada de novo" -- o historico do WhatsApp muda a cada pareamento.
+// O que NAO acompanha essa volta e o sumico. O botao desaparecia depois de uma
+// busca sem novidade, para poupar clique inutil, e com ele ia embora a unica
+// forma de tentar outra vez. O historico do WhatsApp muda a cada pareamento:
+// "nao tem nada" hoje nao e "nao tera nunca". Isto ja foi reclamado uma vez
+// ("nao aparece mais opcao de importar") e nao pode voltar de carona numa
+// mudanca de layout.
 {
   const problemas = [];
-
-  // O botao unico decidia a acao no proprio onClick. Se isso voltar, voltou o
-  // sequenciamento.
-  if (/onClick=\{temMaisAntigas \?/.test(fonte)) {
-    problemas.push("o clique voltou a escolher entre revelar e buscar -- a busca so aparece quando as OS acabam");
-  }
-  if (!fonte.includes("{podeBuscarHistorico && (")) {
-    problemas.push("nao achei o botao de busca proprio, renderizado por conta de `podeBuscarHistorico`");
-  }
-  check("a busca no WhatsApp e um botao proprio, independente das OS", problemas);
-
-  const daPermanencia = [];
   if (/podeBuscarHistorico=\{ehAdmin && !historicoVazio/.test(fonte)) {
-    daPermanencia.push("o botao volta a sumir depois de um 'nada de novo', e nao ha como tentar de novo");
+    problemas.push("o botao voltou a sumir depois de um 'nada de novo', e nao ha como tentar de novo");
   }
-  if (!fonte.includes("buscaSemNovidade={historicoVazio.has(conversa.id)}")) {
-    daPermanencia.push("o resultado anterior deixou de mudar o rotulo do botao");
+  if (!fonte.includes("podeBuscarHistorico={ehAdmin}")) {
+    problemas.push("nao achei `podeBuscarHistorico={ehAdmin}` -- a busca deixou de ser oferecida a todo administrador");
   }
-  check("depois de 'nada de novo' o botao fica, com outro rotulo", daPermanencia);
+  if (!fonte.includes("buscaSemNovidade")) {
+    problemas.push("o resultado anterior deixou de mudar o rotulo do botao");
+  }
+  check("uma busca sem novidade muda o rotulo, nao esconde o botao", problemas);
 }
 console.log(
   "\n" +
