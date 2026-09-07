@@ -43,6 +43,7 @@ const prisma = require("../../infrastructure/database/prisma.client");
 const painelService = require("../dashboard/painel.service");
 const { pontuarExterno } = require("./pontuacao.externa");
 const regrasRelatorio = require("./relatorio.regras");
+const ciclo = require("./ciclo");
 const AppError = require("../../shared/errors/AppError");
 const logger = require("../../config/logger");
 
@@ -203,8 +204,10 @@ class RankingService {
 
   /** RANKING EXTERNO -- formula propria, ver pontuacao.externa.js. */
   async _rankingExterno(ano, mes, equipe) {
-    const inicio = new Date(ano, mes - 1, 1, 0, 0, 0, 0);
-    const fim = new Date(ano, mes, 1, 0, 0, 0, 0);
+    // O MESMO ciclo da sede. Os dois rankings nunca se misturam na conta, mas
+    // o mes tem de ser o mesmo mes -- dois calendarios diferentes na mesma
+    // tela seria o pior dos dois mundos.
+    const { inicio, fim } = ciclo.janela(ano, mes, await ciclo.obter());
     // "Limpar dados de atendimento fora da sede" recomeca a contagem daqui. O
     // piso e por MES (ver painelService.pisoDoMes): a limpeza nao apaga meses
     // ja fechados, senao uma premiacao antiga apontaria para um ranking vazio.
@@ -266,7 +269,13 @@ class RankingService {
     if (!EQUIPES.includes(equipeChave)) {
       throw new AppError("Ranking desconhecido", 400, "RANKING_INVALIDO");
     }
-    const comp = interpretarCompetencia(competencia) ? competencia : competenciaDe(new Date());
+    // QUE MES ESTA CORRENTE depende do ciclo: com fechamento no dia 25, o dia 7
+    // ainda pertence ao ciclo que comecou no mes passado. Usar o mes do
+    // calendario aqui abriria a tela num ciclo que ainda nao comecou -- vazio,
+    // parecendo defeito.
+    const comp = interpretarCompetencia(competencia)
+      ? competencia
+      : ciclo.competenciaDe(new Date(), await ciclo.obter());
     const { ano, mes } = interpretarCompetencia(comp);
 
     const equipes = await this.equipes();
@@ -297,8 +306,7 @@ class RankingService {
     });
 
     const marco = await painelService.marcoDe(equipeChave);
-    const inicioMes = new Date(ano, mes - 1, 1);
-    const fimMes = new Date(ano, mes, 1);
+    const { inicio: inicioMes, fim: fimMes } = ciclo.janela(ano, mes, await ciclo.obter());
 
     const premiacoes = await prisma.premiacaoRanking.findMany({
       where: { ranking: equipeChave, competencia: comp },
@@ -340,7 +348,13 @@ class RankingService {
     if (!EQUIPES.includes(equipeChave)) {
       throw new AppError("Ranking desconhecido", 400, "RANKING_INVALIDO");
     }
-    const comp = interpretarCompetencia(competencia) ? competencia : competenciaDe(new Date());
+    // QUE MES ESTA CORRENTE depende do ciclo: com fechamento no dia 25, o dia 7
+    // ainda pertence ao ciclo que comecou no mes passado. Usar o mes do
+    // calendario aqui abriria a tela num ciclo que ainda nao comecou -- vazio,
+    // parecendo defeito.
+    const comp = interpretarCompetencia(competencia)
+      ? competencia
+      : ciclo.competenciaDe(new Date(), await ciclo.obter());
     const limite = Math.min(Math.max(Number(meses) || 6, 2), 12);
 
     const equipes = await this.equipes();

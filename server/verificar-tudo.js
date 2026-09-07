@@ -242,6 +242,11 @@ const VERIFICACOES = [
     resumo: "o clique pula OS vazia e sempre revela algo",
   },
   {
+    arquivo: "verificar-ciclo-ranking.js",
+    titulo: "Ciclo do ranking",
+    resumo: "o dia de fechamento, e o passado que nao se mexe",
+  },
+  {
     arquivo: "verificar-pontuacao-sede.js",
     titulo: "Pontuacao da sede",
     resumo: "a escada de volume e o alvo que o administrador decide",

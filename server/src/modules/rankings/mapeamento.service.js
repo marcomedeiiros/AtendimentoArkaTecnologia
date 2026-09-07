@@ -26,6 +26,7 @@
  * e o relatorio atrasado passaria a constar como no prazo.
  */
 const prisma = require("../../infrastructure/database/prisma.client");
+const ciclo = require("./ciclo");
 const midiaStorage = require("../../infrastructure/storage/midia.storage");
 const AppError = require("../../shared/errors/AppError");
 const logger = require("../../config/logger");
@@ -393,7 +394,11 @@ class MapeamentoService {
     if (filtros?.status && STATUS.includes(filtros.status)) where.status = filtros.status;
     if (filtros?.competencia && /^\d{4}-\d{2}$/.test(filtros.competencia)) {
       const [ano, mes] = filtros.competencia.split("-").map(Number);
-      where.dataVisita = { gte: new Date(ano, mes - 1, 1), lt: new Date(ano, mes, 1) };
+      // Mesma janela do ranking (ver `ciclo`): a lista filtrada por mes e o
+      // ranking daquele mes precisam conter as MESMAS visitas, senao a conta
+      // nao bate com o que a tela lista logo abaixo dela.
+      const j = ciclo.janela(ano, mes, await ciclo.obter());
+      where.dataVisita = { gte: j.inicio, lt: j.fim };
     }
 
     const linhas = await prisma.mapeamentoTecnico.findMany({

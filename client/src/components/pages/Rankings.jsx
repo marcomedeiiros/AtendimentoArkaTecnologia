@@ -513,7 +513,8 @@ export default function Rankings() {
     try {
       const d = await DashboardAPI.regrasSede();
       setConfig(d);
-      setRascunho(d.regras);
+      // O ciclo entra no MESMO rascunho: um formulário, um botão de salvar.
+      setRascunho({ ...d.regras, ciclo: d.ciclo || d.cicloPadrao });
     } catch (e) {
       avisar(e?.message || 'Não foi possível abrir a configuração.', { titulo: 'Configuração' });
     }
@@ -534,9 +535,15 @@ export default function Rankings() {
       // Recarrega a tabela: os pontos mudam AGORA, e mostrar o quadro antigo ao
       // lado das regras novas faria a pessoa achar que não valeu.
       await carregar();
-      avisar('As novas regras já valem, inclusive para os meses anteriores.', {
-        titulo: 'Configuração salva', tipo: 'info',
-      });
+      // A RESSALVA IMPORTA: pesos e alvo recalculam o passado, o ciclo não.
+      // Dizer "vale para os meses anteriores" sem distinguir faria alguém
+      // esperar que o dia de fechamento novo reescrevesse janeiro -- e ele
+      // não reescreve, de propósito.
+      avisar(
+        'Pesos, alvo e mínimo de avaliações já valem, inclusive para os meses anteriores.\n\n' +
+        'O dia de fechamento vale só a partir deste ciclo: os meses já passados continuam como foram vividos.',
+        { titulo: 'Configuração salva', tipo: 'info' }
+      );
     } catch (e) {
       setErroCfg(e?.message || 'Não foi possível salvar.');
     } finally {
@@ -736,8 +743,54 @@ export default function Rankings() {
             </p>
           </div>
 
+          {/* QUANDO O CICLO VIRA.
+
+              Existe para quem fecha folha no dia 25 e precisa que o ranking
+              feche junto. O padrão -- dia 1, meia-noite -- é o mês do
+              calendário de sempre.
+
+              O intervalo é escrito por extenso porque "dia 25" é ambíguo: pode
+              ser onde o ciclo começa ou onde ele acaba. Aqui é onde começa. */}
+          <div className="border-t border-linha pt-3 space-y-2">
+            <p className="text-[11px] font-semibold text-texto-suave">Fechamento do ciclo</p>
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <label className="text-[10px] text-texto-fraco block mb-1">Dia do mês</label>
+                <input
+                  type="number" min={1} max={28} value={rascunho.ciclo?.dia ?? 1}
+                  onChange={(e) => { setErroCfg(''); setRascunho((r) => ({ ...r, ciclo: { ...r.ciclo, dia: Math.max(1, Math.min(28, Number(e.target.value) || 1)) } })); }}
+                  className="w-24 bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto focus:outline-none focus:border-acao/50"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-texto-fraco block mb-1">Hora</label>
+                <input
+                  type="time"
+                  value={`${String(rascunho.ciclo?.hora ?? 0).padStart(2, '0')}:${String(rascunho.ciclo?.minuto ?? 0).padStart(2, '0')}`}
+                  onChange={(e) => {
+                    const [h, m] = String(e.target.value || '00:00').split(':').map(Number);
+                    setErroCfg('');
+                    setRascunho((r) => ({ ...r, ciclo: { ...r.ciclo, hora: h || 0, minuto: m || 0 } }));
+                  }}
+                  className="w-32 bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto focus:outline-none focus:border-acao/50"
+                />
+              </div>
+            </div>
+            <p className="text-[10px] text-texto-fraco leading-relaxed">
+              {(rascunho.ciclo?.dia ?? 1) === 1 && !(rascunho.ciclo?.hora || rascunho.ciclo?.minuto)
+                ? 'Mês do calendário: do dia 1 ao último dia, como sempre foi.'
+                : `Cada ciclo vai do dia ${rascunho.ciclo?.dia} de um mês até o dia ${rascunho.ciclo?.dia} do mês seguinte, ` +
+                  `às ${String(rascunho.ciclo?.hora ?? 0).padStart(2, '0')}:${String(rascunho.ciclo?.minuto ?? 0).padStart(2, '0')}. ` +
+                  'O dia 28 é o maior permitido — fevereiro não tem 30.'}
+            </p>
+            <p className="text-[10px] text-espera-400 leading-relaxed border border-espera/30 bg-espera/10 rounded-xl p-2.5">
+              Diferente dos pesos, o dia de fechamento <strong>não mexe no passado</strong>. Os meses
+              anteriores continuam sendo mês de calendário, para que as premiações já registradas
+              continuem apontando para o ranking que existia quando foram dadas.
+            </p>
+          </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <button onClick={() => setRascunho(config.padrao)} disabled={salvandoCfg}
+            <button onClick={() => setRascunho({ ...config.padrao, ciclo: config.cicloPadrao })} disabled={salvandoCfg}
               className="px-3 py-2 rounded-xl bg-grafite-700 border border-linha text-texto-suave text-[11px] font-bold hover:border-linha-forte disabled:opacity-50 flex items-center gap-1.5">
               <RotateCcw size={12} /> Restaurar o padrão
             </button>

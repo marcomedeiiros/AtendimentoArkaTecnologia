@@ -29,6 +29,7 @@ const { podeAcessarSetor } = require("../../shared/helpers/setor.helper");
 const { ehAtendenteReal } = require("../../shared/helpers/atendimentoSintetico.helper");
 const { nomesDaEquipe } = require("../../shared/helpers/equipeRanking.helper");
 const sedeRegras = require("./sede.regras");
+const ciclo = require("../rankings/ciclo");
 const logger = require("../../config/logger");
 
 // Quantos tecnicos entram no ranking. Tres cabe na tela e ainda e disputavel:
@@ -751,8 +752,9 @@ class PainelService {
    * @param {number} mes 1-12
    */
   async rankingDoMes(ano, mes) {
-    const inicio = new Date(ano, mes - 1, 1, 0, 0, 0, 0);
-    const fim = new Date(ano, mes, 1, 0, 0, 0, 0);
+    // A janela vem do ciclo configurado -- ver `rankings/ciclo`. Com o padrao
+    // (dia 1, meia-noite) ela e exatamente o mes do calendario de antes.
+    const { inicio, fim } = ciclo.janela(ano, mes, await ciclo.obter());
     // A limpeza da SEDE vale aqui tambem -- era o pedido: "limpar dados de
     // atendimento na sede". O `pisoDoMes` garante que ela recomeca a contagem
     // sem apagar meses ja fechados (ver a nota la).

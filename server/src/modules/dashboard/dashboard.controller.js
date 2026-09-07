@@ -1,5 +1,6 @@
 const dashboardService = require("./dashboard.service");
 const painelService = require("./painel.service");
+const ciclo = require("../rankings/ciclo");
 const { success } = require("../../shared/helpers/response.helper");
 const AppError = require("../../shared/errors/AppError");
 
@@ -51,11 +52,22 @@ class DashboardController {
     return success(res, {
       regras: await painelService.regras(),
       padrao: painelService.regrasPadrao(),
+      // O CICLO VAI NA MESMA RESPOSTA de proposito. Ele nao e regra da sede --
+      // vale para os dois rankings --, mas quem o configura e a mesma pessoa,
+      // na mesma tela, e dois pedidos para montar um formulario so dariam duas
+      // formas de ele aparecer meio preenchido.
+      ciclo: await ciclo.obter(),
+      cicloPadrao: ciclo.PADRAO,
     });
   }
 
   async salvarRegras(req, res) {
-    return success(res, await painelService.salvarRegras(req.body, req.user));
+    const regras = await painelService.salvarRegras(req.body, req.user);
+    // Salvo DEPOIS: `salvarRegras` recusa pesos que nao somam 100, e gravar o
+    // ciclo antes deixaria metade do formulario aplicada num pedido que a
+    // pessoa viu falhar.
+    const cicloNovo = req.body?.ciclo ? await ciclo.salvar(req.body.ciclo, req.user) : await ciclo.obter();
+    return success(res, { ...regras, ciclo: cicloNovo });
   }
 
   // Zera o painel da equipe. NAO apaga atendimento nenhum: grava um instante e
