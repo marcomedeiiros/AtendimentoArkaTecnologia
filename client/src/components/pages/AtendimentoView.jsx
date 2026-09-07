@@ -2444,7 +2444,7 @@ function PainelChat({
   onVoltar, atendente, onTransferir,
   onEditar, onEncaminharPara, conversas, onAtender,
   assinar, onToggleAssinar, assinaturaNome, onApagarMensagem, onReagirMensagem,
-  podeBuscarHistorico, buscandoHistorico, onBuscarHistorico,
+  podeBuscarHistorico, buscandoHistorico, onBuscarHistorico, buscaSemNovidade,
   // Clique em "Conversar" no cartao de contato que o cliente encaminhou.
   onAbrirContato
 }) {
@@ -3100,49 +3100,57 @@ function PainelChat({
             Antes cada chamado virava uma conversa separada e o histórico sumia
             da tela; agora ele está aqui, no mesmo fio, um atendimento por vez --
             a conversa abre leve, mostrando o que está acontecendo agora. */}
-        {/* UM BOTÃO SÓ PARA "VOLTAR NO TEMPO" -- e ele não muda de nome conforme
-            a origem do que vai aparecer.
-            
-            Para quem atende, "ver mensagens antigas" é uma pergunta única: o que
-            veio antes disto? De onde a resposta sai (do que já está carregado ou
-            do histórico do WhatsApp) é detalhe de implementação, e virar dois
-            botões lado a lado transferia esse detalhe para a pessoa -- que teria
-            de saber a diferença entre "revelar" e "importar" para escolher.
-            
-            Então o mesmo botão faz as duas coisas, na ordem certa: primeiro
-            revela os atendimentos que já vieram com a conversa (instantâneo, não
-            busca nada), e só quando eles acabam é que o clique vai procurar no
-            WhatsApp. Buscar antes seria trabalho à toa; buscar nunca deixaria o
-            histórico do celular inalcançável.
-            
-            A busca no WhatsApp é restrita a Administrador (`podeBuscarHistorico`)
-            porque ela ESCREVE mensagens com data no passado. Para os demais o
-            botão simplesmente desaparece quando o histórico local termina, como
-            sempre foi. */}
+        {/* DOIS BOTOES, E NAO UM. Foi um botao so por um tempo, com uma
+            justificativa que parecia boa: "para quem atende, ver o que veio
+            antes e uma pergunta unica; de onde a resposta sai e detalhe de
+            implementacao". Entao o mesmo botao primeiro revelava as OS ja
+            carregadas e, so quando elas acabavam, ia procurar no WhatsApp.
+
+            Na pratica isso escondeu a importacao. Conversa com muitas OS
+            exigia percorrer todas antes de a busca sequer ser oferecida -- e
+            o motivo de a importacao existir e justamente o contrario: o
+            tecnico nao poder depender de abrir o celular da empresa para ler
+            o que foi conversado. Uma acao que existe para isso nao pode estar
+            no fim de uma fila de cliques.
+
+            Sao acoes diferentes e agora parecem diferentes: revelar e
+            instantaneo e nao busca nada; importar vai ao WhatsApp e ESCREVE
+            mensagens com data no passado -- por isso e restrita a
+            Administrador. Cada uma aparece quando faz sentido, lado a lado. */}
         {(temMaisAntigas || podeBuscarHistorico) && (
-          <div className="flex justify-center pb-2">
-            <button
-              onClick={temMaisAntigas ? verMensagensAntigas : () => onBuscarHistorico?.(conversa.id)}
-              disabled={buscandoHistorico}
-              title={
-                temMaisAntigas
-                  ? proximaOsAntiga
+          <div className="flex flex-wrap justify-center items-center gap-2 pb-2">
+            {temMaisAntigas && (
+              <button
+                onClick={verMensagensAntigas}
+                title={
+                  proximaOsAntiga
                     ? `Carregar o atendimento #${proximaOsAntiga.os} (${dataHoraCurta(proximaOsAntiga.abertoEm)})`
                     : 'Carregar o atendimento anterior'
-                  : 'Procurar no WhatsApp as conversas anteriores a este número entrar na Central'
-              }
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-grafite-700/80 hover:bg-grafite-600 border border-linha text-slate-300 hover:text-white text-[11px] font-semibold transition-colors disabled:opacity-60 disabled:cursor-wait"
-            >
-              {buscandoHistorico
-                ? <History size={12} className="animate-spin" />
-                : <ArrowUp size={12} />}
-              {buscandoHistorico ? 'Procurando no WhatsApp...' : 'Ver mensagens antigas'}
-              {/* O número da OS aparece só quando há uma OS conhecida para
-                  carregar. Na busca do WhatsApp ainda não se sabe o que vem. */}
-              {!buscandoHistorico && temMaisAntigas && proximaOsAntiga && (
-                <span className="font-mono text-acao-200/90">#{proximaOsAntiga.os}</span>
-              )}
-            </button>
+                }
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-grafite-700/80 hover:bg-grafite-600 border border-linha text-slate-300 hover:text-white text-[11px] font-semibold transition-colors"
+              >
+                <ArrowUp size={12} />
+                Ver mensagens antigas
+                {proximaOsAntiga && (
+                  <span className="font-mono text-acao-200/90">#{proximaOsAntiga.os}</span>
+                )}
+              </button>
+            )}
+            {podeBuscarHistorico && (
+              <button
+                onClick={() => onBuscarHistorico?.(conversa.id)}
+                disabled={buscandoHistorico}
+                title="Trazer para a Central as conversas que este número tem no WhatsApp"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-grafite-700/80 hover:bg-grafite-600 border border-linha text-slate-300 hover:text-white text-[11px] font-semibold transition-colors disabled:opacity-60 disabled:cursor-wait"
+              >
+                <History size={12} className={buscandoHistorico ? "animate-spin" : undefined} />
+                {buscandoHistorico
+                  ? 'Procurando no WhatsApp...'
+                  : buscaSemNovidade
+                    ? 'Buscar no WhatsApp de novo'
+                    : 'Buscar no WhatsApp'}
+              </button>
+            )}
           </div>
         )}
         {/* Chave pelo ID da mensagem (nao pelo indice): com indice, ao trocar a
@@ -4383,7 +4391,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               'marcado como "Histórico do WhatsApp". Use "Ver mensagens antigas" para chegar até lá.'
             : 'As mensagens que o aparelho guardou já estavam nesta conversa, então não há um ' +
               'trecho antigo separado para trazer.') +
-          '\n\nEste botão não vai mais oferecer a busca nesta conversa. Recarregue a página para tentar de novo.',
+          '\n\nO botão continua aí: se o aparelho for pareado de novo, o WhatsApp pode entregar outro recorte do histórico.',
           { titulo: 'Nada de novo para importar', tipo: 'info' }
         );
         return;
@@ -5322,7 +5330,14 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               // O botão de "ver mensagens antigas" só continua depois do fim do
               // histórico local se houver a chance de existir algo no WhatsApp:
               // Administrador, e esta conversa ainda não respondeu "não tem nada".
-              podeBuscarHistorico={ehAdmin && !historicoVazio.has(conversa.id)}
+              // O botao NAO some depois de um "nada de novo". Sumir foi a
+              // primeira ideia -- poupar o clique inutil --, mas some tambem
+              // a unica forma de tentar de novo, e o histórico do WhatsApp
+              // muda: um novo pareamento traz outro recorte. O aviso ja diz
+              // que nao ha novidade; a resposta a isso e um rotulo diferente,
+              // nao um botao ausente.
+              podeBuscarHistorico={ehAdmin}
+              buscaSemNovidade={historicoVazio.has(conversa.id)}
               buscandoHistorico={importandoHistorico === conversa.id}
               onBuscarHistorico={importarHistorico}
               onAbrirContato={conversarComContatoRecebido}
