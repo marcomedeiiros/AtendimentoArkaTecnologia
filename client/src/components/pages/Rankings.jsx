@@ -765,8 +765,8 @@ export default function Rankings() {
               premiação já registrada continua apontando para a posição antiga. */}
           <p className="text-[10px] text-espera-400 leading-relaxed border border-espera/30 bg-espera/10 rounded-xl p-2.5">
             O ranking é recalculado a cada consulta, então mudar os pesos muda também os
-            <strong> meses já passados</strong>. Premiações já registradas continuam como estão.
-            {' '}Esta é a mesma conta do <strong>Modo TV</strong>.
+            <strong> meses já passados</strong> premiações já registradas continuam como estão
+            {' '}Esta é a mesma conta do <strong>Modo TV</strong>
           </p>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -814,7 +814,7 @@ export default function Rankings() {
             <p className="text-[10px] text-texto-fraco mt-1 leading-relaxed">
               Quantos atendimentos <strong>fechados e avaliados no mês</strong> valem os
               {' '}{rascunho.pesos?.atendimentos ?? 35} pontos cheios desta parcela. Os degraus abaixo
-              acompanham sozinhos. Ponha aqui o que um mês <strong>muito bom</strong> tem — se for
+              acompanham sozinhos. Ponha aqui o que um mês <strong>muito bom</strong> tem se for
               baixo demais, todo mundo empata no topo e o resto do mês deixa de contar.
             </p>
           </div>
@@ -870,7 +870,7 @@ export default function Rankings() {
                 ? 'Mês do calendário: do dia 1 ao último dia, como sempre foi.'
                 : `Cada ciclo vai do dia ${rascunho.ciclo?.dia} de um mês até o dia ${rascunho.ciclo?.dia} do mês seguinte, ` +
                   `às ${String(rascunho.ciclo?.hora ?? 0).padStart(2, '0')}:${String(rascunho.ciclo?.minuto ?? 0).padStart(2, '0')}. ` +
-                  'O dia 28 é o maior permitido — fevereiro não tem 30.'}
+                  'O dia 28 é o maior permitido fevereiro não tem 30.'}
             </p>
             <p className="text-[10px] text-espera-400 leading-relaxed border border-espera/30 bg-espera/10 rounded-xl p-2.5">
               Diferente dos pesos, o dia de fechamento <strong>não mexe no passado</strong>. Os meses
@@ -915,7 +915,7 @@ export default function Rankings() {
               </div>
             </div>
             <p className="text-[10px] text-texto-fraco leading-relaxed">
-              <strong>Um campeão em cada competição</strong> é o padrão — o prêmio é do primeiro
+              <strong>Um campeão em cada competição</strong> é o padrão o prêmio é do primeiro
               lugar. Aumente aqui se um pódio maior fizer sentido; nunca mais do que existe no
               ranking. Em branco volta a 1.
             </p>
@@ -1046,8 +1046,8 @@ export default function Rankings() {
               ) : (
                 <>
                   Pontuação de 0 a 100: mapeamentos aprovados (25), relatório completo (25), entrega no
-                  prazo (20), evidências por visita (15) e ausência de retorno para correção (15).
-                  {' '}As três parcelas de qualidade só contam a partir de 3 relatórios entregues.
+                  prazo (20), evidências por visita (15) e ausência de retorno para correção (15)
+                  {' '}as três parcelas de qualidade só contam a partir de 3 relatórios entregues
                 </>
               )}
             </p>

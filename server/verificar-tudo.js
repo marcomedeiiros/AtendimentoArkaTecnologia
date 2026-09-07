@@ -247,6 +247,11 @@ const VERIFICACOES = [
     resumo: "a recusa que fala, e o webhook conferido ao subir",
   },
   {
+    arquivo: "verificar-avisos-mensagem.js",
+    titulo: "Aviso de mensagem nova",
+    resumo: "som e notificacao do sistema, e o corte de quem nao esta olhando",
+  },
+  {
     arquivo: "verificar-checklist-configuravel.js",
     titulo: "Checklist configuravel",
     resumo: "adicionar/remover itens sem perder vocabulario nem historico",

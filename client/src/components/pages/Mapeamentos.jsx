@@ -1007,7 +1007,7 @@ function Configuracao() {
             premiação já registrada continua apontando para a posição antiga. */}
         <p className="text-[10px] text-espera-400 leading-relaxed border border-espera/30 bg-espera/10 rounded-xl p-2.5">
           O ranking é recalculado a cada consulta, então mudar os pesos muda também os
-          <strong> meses já passados</strong>. Premiações já registradas continuam como estão.
+          <strong> meses já passados</strong> premiações já registradas continuam como estão
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {Object.entries(rascunho.pesos).map(([chave, valor]) => (
@@ -1047,10 +1047,10 @@ function Configuracao() {
           <FileText size={13} /> Leitura do PDF
         </p>
         <p className="text-[10px] text-texto-fraco leading-relaxed">
-          Cada linha é um item do checklist da visita. Ele é dado como coberto quando o relatório
-          traz alguma das palavras ao lado — cada empresa escreve com o vocabulário dela, e um item
-          que nunca casa vira completude perdida sem ninguém entender por quê. Separe as palavras
-          por vírgula.
+          Cada linha é um item do checklist da visita ele é dado como coberto quando o relatório
+          traz alguma das palavras ao lado cada empresa escreve com o vocabulário dela, e um item
+          que nunca casa vira completude perdida sem ninguém entender por quê separe as palavras
+          por vírgula
         </p>
 
         {/* MEXER NO CHECKLIST MUDA O PASSADO, e isso precisa estar escrito.
@@ -1060,9 +1060,9 @@ function Configuracao() {
             baixa a nota de TODOS os relatórios já entregues, que não têm o
             campo novo. É o mesmo efeito dos pesos, e o aviso é o mesmo. */}
         <p className="text-[10px] text-espera-400 leading-relaxed border border-espera/30 bg-espera/10 rounded-xl p-2.5">
-          Acrescentar um item <strong>baixa a completude dos relatórios já entregues</strong> — eles não
-          têm o campo novo, e a conta é sobre o total de itens. Remover faz o contrário. O texto já
-          escrito num item removido <strong>não é apagado</strong>: ele deixa de contar, e continua lá.
+          Acrescentar um item <strong>baixa a completude dos relatórios já entregues</strong> eles não
+          têm o campo novo, e a conta é sobre o total de itens remover faz o contrário o texto já
+          escrito num item removido <strong>não é apagado</strong> ele deixa de contar, e continua lá
         </p>
 
         <div className="space-y-2">
