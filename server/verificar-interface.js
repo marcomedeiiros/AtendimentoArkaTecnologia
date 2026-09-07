@@ -426,6 +426,56 @@ titulo("7. Imagem no PDF nao pode ter largura E altura cravadas");
   check("addImage calcula o tamanho a partir da imagem", esticadas);
 }
 
+// ---------------------------------------------------------------------------
+titulo("8. O menu da mensagem abre DENTRO da conversa");
+
+/**
+ * FOI UM DEFEITO DE DUAS PARTES QUE ANDARAM SEPARADAS.
+ *
+ * O botao do menu ficava FORA da bolha (a esquerda das enviadas, a direita das
+ * recebidas), e o alinhamento seguia essa posicao. Quando a seta foi movida
+ * para DENTRO da bolha -- canto de cima, nos dois casos --, o ponto de
+ * ancoragem mudou e a conta ficou como estava.
+ *
+ * O resultado, medido: numa mensagem RECEBIDA o menu abria 80px para dentro da
+ * LISTA DE CONVERSAS, por cima dela. Ele cabia na TELA (o limite era a janela),
+ * mas nao no lugar a que pertence.
+ *
+ * As duas coisas travadas aqui:
+ *
+ *   ALINHAMENTO  recebida cresce para a direita, enviada para a esquerda --
+ *                sempre para DENTRO da conversa, a partir da seta.
+ *   LIMITE       a area de conversa (`.wp-chat`), e nao `window.innerWidth`.
+ *                Prender na janela e o que deixava o menu invadir a lista.
+ */
+{
+  const alvo = arquivos.find((f) => f.endsWith("AtendimentoView.jsx"));
+  const fonte = alvo ? fs.readFileSync(alvo, "utf8") : "";
+  const corpo = /const alternar = \(e\) => \{([\s\S]*?)\n  \};/.exec(fonte)?.[1] || "";
+
+  check("achei o posicionamento do menu", corpo ? [] : ["nao achei `alternar` em AtendimentoView.jsx"]);
+
+  if (corpo) {
+    const problemas = [];
+
+    // O alinhamento CERTO. Invertido, o menu volta a sair pela esquerda.
+    if (!/let left = ehPropria \? r\.right - LARGURA : r\.left/.test(corpo)) {
+      problemas.push("o alinhamento nao e `ehPropria ? r.right - LARGURA : r.left` -- invertido, o menu sai da conversa");
+    }
+    check("recebida abre para a direita, enviada para a esquerda", problemas);
+
+    const doLimite = [];
+    // O limite tem de ser a AREA, e nao a janela.
+    if (!/closest\(["'']\.wp-chat["'']\)/.test(corpo)) {
+      doLimite.push("o limite nao sai de `.wp-chat` -- sem isso o menu cobre a lista de conversas");
+    }
+    if (/window\.innerWidth - LARGURA/.test(corpo)) {
+      doLimite.push("ainda prende o menu na JANELA (window.innerWidth), e nao na area de conversa");
+    }
+    check("o menu e preso a area de conversa, nao a janela", doLimite);
+  }
+}
+
 console.log(
   "\n" + (erros.length
     ? `FALHAS (${erros.length}):\n  ` + erros.join("\n  ")

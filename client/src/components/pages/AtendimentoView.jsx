@@ -1198,10 +1198,40 @@ function MenuMensagem({ m, ehPropria, onResponder, onEncaminhar, onEditar, onApa
         const r = botaoRef.current.getBoundingClientRect();
         const espacoAbaixo = window.innerHeight - r.bottom;
         const paraBaixo = espacoAbaixo >= ALTURA + MARGEM || espacoAbaixo >= r.top;
-        // Alinha pela borda do botao (propria = esquerda, senao direita) e
-        // mantem o menu dentro da tela.
-        let left = ehPropria ? r.left : r.right - LARGURA;
-        left = Math.min(Math.max(MARGEM, left), window.innerWidth - LARGURA - MARGEM);
+
+        /**
+         * PARA QUE LADO O MENU ABRE.
+         *
+         * A conta estava INVERTIDA, e o motivo tem historia: ela foi escrita
+         * quando o botao ficava FORA da bolha -- a esquerda das enviadas, a
+         * direita das recebidas. Mover a seta para DENTRO (canto de cima, nos
+         * dois casos) mudou o ponto de ancoragem e ninguem mexeu na conta.
+         *
+         * O sintoma: numa mensagem RECEBIDA a seta fica perto da esquerda da
+         * conversa, e o menu -- alinhado pela borda DIREITA dele -- crescia para
+         * fora, por cima da lista de conversas.
+         *
+         * Agora o menu abre para o lado que tem espaco, contado a partir da
+         * seta: recebida cresce para a DIREITA (para dentro da conversa),
+         * enviada cresce para a ESQUERDA (idem). E o que o WhatsApp faz.
+         */
+        let left = ehPropria ? r.right - LARGURA : r.left;
+
+        /**
+         * E O LIMITE E A AREA DE CONVERSA, nao a janela.
+         *
+         * Prender na janela deixava o menu passar por cima da lista de conversas
+         * e da barra lateral -- ele cabia na TELA, mas nao no lugar a que
+         * pertence. `.wp-chat` e o proprio painel de mensagens; sem ele
+         * (montagem isolada, teste), cai na janela como antes.
+         */
+        const area = botaoRef.current.closest(".wp-chat")?.getBoundingClientRect();
+        const minX = (area?.left ?? 0) + MARGEM;
+        const maxX = (area?.right ?? window.innerWidth) - LARGURA - MARGEM;
+        // `max` depois de `min`: numa area mais estreita que o menu, o limite da
+        // esquerda vence -- melhor encostar na borda de dentro do que sair pelo
+        // outro lado.
+        left = Math.max(minX, Math.min(left, maxX));
         // Abrindo para cima, ancoramos pela BASE (bottom) junto ao topo do botao:
         // assim o menu fica colado, sem depender da altura estimada (o que deixava
         // um vao grande quando o menu real era mais baixo que ALTURA).
