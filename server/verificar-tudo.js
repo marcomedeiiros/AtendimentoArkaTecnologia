@@ -247,6 +247,11 @@ const VERIFICACOES = [
     resumo: "a recusa que fala, e o webhook conferido ao subir",
   },
   {
+    arquivo: "verificar-stream-vivo.js",
+    titulo: "Stream vivo",
+    resumo: "batimento visivel, vigia da conexao muda e volta de outro programa",
+  },
+  {
     arquivo: "verificar-avisos-mensagem.js",
     titulo: "Aviso de mensagem nova",
     resumo: "som e notificacao do sistema, e o corte de quem nao esta olhando",

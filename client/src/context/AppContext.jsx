@@ -274,6 +274,8 @@ export function AppProvider({ children }) {
     let es = null;
     let reconnectTimer = null;
     let parado = false;
+    // Quando chegou o último sinal do servidor -- evento OU batimento.
+    let ultimoSinal = Date.now();
 
     const agendarReconexao = () => {
       if (parado || reconnectTimer) return;
@@ -292,9 +294,14 @@ export function AppProvider({ children }) {
         if (parado || !ticket) return agendarReconexao();
         es = new EventSource(`/api/conversas/stream?ticket=${encodeURIComponent(ticket)}`);
         es.onmessage = (e) => {
-          try { aplicarEvento(JSON.parse(e.data)); } catch { /* heartbeat/evento nao-json */ }
+          // QUALQUER coisa vinda do servidor conta como sinal de vida --
+          // inclusive o batimento, que é justamente o sinal dos períodos sem
+          // novidade. Marcar só em evento útil faria o vigia derrubar uma
+          // conexão saudável numa hora de pouco movimento.
+          ultimoSinal = Date.now();
+          try { aplicarEvento(JSON.parse(e.data)); } catch { /* evento nao-json */ }
         };
-        es.onopen = () => setApiOffline(false);
+        es.onopen = () => { ultimoSinal = Date.now(); setApiOffline(false); };
         es.onerror = () => {
           if (es) { es.close(); es = null; }
           agendarReconexao();
@@ -304,9 +311,32 @@ export function AppProvider({ children }) {
       }
     };
 
+    /**
+     * VIGIA DO STREAM -- para a conexão que morre CALADA.
+     *
+     * `onerror` cobre a queda que o navegador percebe. Não cobre as outras
+     * duas, que são as que doem: a aba congelada pelo navegador em segundo
+     * plano (volta a rodar achando que está conectada) e o proxy que corta o
+     * stream sem avisar ninguém. Nos dois casos o painel ficava parado até
+     * alguém voltar para a aba -- que é exatamente o relato de "só move quando
+     * eu volto para o navegador".
+     *
+     * O servidor manda batimento a cada 20s. Três perdidos seguidos é silêncio
+     * demais para ser normal: reconecta e reconcilia. O próprio `setInterval`
+     * daqui pode ser estrangulado em aba oculta -- e tudo bem: ele roda assim
+     * que a aba volta a ter fôlego, que é quando o conserto importa.
+     */
+    const vigia = setInterval(() => {
+      if (parado || reconnectTimer) return;
+      if (Date.now() - ultimoSinal < 70000) return;
+      if (es) { es.close(); es = null; }
+      agendarReconexao();
+    }, 15000);
+
     conectar();
     return () => {
       parado = true;
+      clearInterval(vigia);
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (es) es.close();
     };
@@ -341,9 +371,15 @@ export function AppProvider({ children }) {
     const id = setInterval(reconciliar, 300000);
     const aoVoltar = () => { if (document.visibilityState === 'visible') reconciliar(); };
     document.addEventListener('visibilitychange', aoVoltar);
+    // `focus` TAMBÉM, e não é redundante: ao voltar de outro programa a aba
+    // muitas vezes nunca ficou "oculta" -- a janela só perdeu o foco --, então
+    // `visibilitychange` não dispara. Era o caso relatado: o operador sai para
+    // outro aplicativo e, ao voltar, a lista ainda estava velha.
+    window.addEventListener('focus', reconciliar);
     return () => {
       clearInterval(id);
       document.removeEventListener('visibilitychange', aoVoltar);
+      window.removeEventListener('focus', reconciliar);
     };
   }, [recarregarConversas]);
 

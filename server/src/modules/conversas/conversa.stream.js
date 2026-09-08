@@ -107,8 +107,28 @@ class ConversaStreamController {
     };
     bus.on("conversa", onConversa);
 
+    // ── BATIMENTO VISÍVEL PARA O JAVASCRIPT ──────────────────────────────
+    //
+    // Era um COMENTÁRIO (`: ping`). Ele mantém a conexão viva contra proxy e
+    // firewall, e para isso bastava -- mas o `EventSource` NÃO entrega
+    // comentário ao código: só linhas `data:` viram `onmessage`.
+    //
+    // O efeito era o painel não ter como saber a diferença entre "o stream
+    // está de pé e não houve novidade" e "o stream morreu calado". Sem essa
+    // distinção não dá para haver vigia nenhum do lado do cliente, e uma
+    // conexão que morre sem disparar `onerror` -- aba congelada pelo
+    // navegador, proxy que corta em silêncio -- ficava parada até alguém
+    // voltar para a aba.
+    //
+    // Como `data:`, ele continua fazendo o trabalho de manter a conexão viva E
+    // passa a ser o pulso que o cliente mede. O tipo `ping` não casa com nada
+    // em `aplicarEvento`, então não mexe em estado nenhum.
     const heartbeat = setInterval(() => {
-      res.write(": ping\n\n");
+      try {
+        res.write(`data: ${JSON.stringify({ type: "ping", em: Date.now() })}\n\n`);
+      } catch (err) {
+        logger.warn("Falha no batimento do stream SSE", { message: err.message });
+      }
     }, HEARTBEAT_MS);
 
     req.on("close", () => {
