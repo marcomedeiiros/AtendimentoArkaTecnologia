@@ -6,7 +6,7 @@ da automação de fluxos (ver §5).
 
 Este documento existe porque a pergunta "o bot está quebrado?" não tinha onde ser
 respondida: o comportamento automático nasce em seis arquivos, e o sintoma que
-chega — *"o bot não responde"* — é o mesmo para causas muito diferentes. Aqui está
+chega *"o bot não responde"* é o mesmo para causas muito diferentes. Aqui está
 o mapa do que roda sozinho, o que foi encontrado quebrado, o que foi corrigido e o
 que ficou registrado como fragilidade sem alteração.
 
@@ -26,7 +26,7 @@ Tudo o que está marcado como **medido** foi reproduzido contra o motor real
 | `server/src/infrastructure/repositories/fluxo.repository.js` | **As ligações entre blocos.** Quem salva, importa e apaga passo remapeia os destinos. |
 | `server/src/modules/chatbot/chatbot.simulador.js` | **A tela "Testar".** Roda o motor real com repositórios falsos. |
 
-As **quatro automações de relógio** — e elas são independentes, com prazos e textos
+As **quatro automações de relógio** e elas são independentes, com prazos e textos
 próprios:
 
 1. **cliente não responde ao bot** (`semResposta`, 5 min): há pergunta em aberto;
@@ -42,11 +42,11 @@ vivem em blocos separados do fluxo.
 ## 2. O que estava quebrado
 
 Onze defeitos. Os cinco primeiros (A1–A4 e A10) produzem o mesmo sintoma na ponta
-— **um bot mudo, com tudo verde na tela** — e é por isso que pareciam "tudo
+**um bot mudo, com tudo verde na tela** e é por isso que pareciam "tudo
 quebrando ao mesmo tempo". A11 é o oposto e não menos grave: o bot fala, e o que
 ele fala se contradiz.
 
-### A1 · CRÍTICO — a palavra do cliente virava comando, e a primeira mensagem era a mais exposta
+### A1 · CRÍTICO a palavra do cliente virava comando, e a primeira mensagem era a mais exposta
 
 `detectarComando` casa a palavra-chave em **qualquer posição da frase**. Isso é
 adequado para `atendente` ("quero falar com um atendente"), e é errado para `sair`
@@ -54,7 +54,7 @@ e `menu`, cujas palavras são o vocabulário normal do problema que o cliente es
 contando: *cancelar, encerrar, parar, tchau, voltar, início*.
 
 O motor já protegia os estados `opcao` e `texto` (`respostaEhDoFluxo`). O que não
-estava protegido — e não podia estar, do jeito que a condição era escrita — é o caso
+estava protegido e não podia estar, do jeito que a condição era escrita é o caso
 em que **não há sessão nenhuma: a primeira mensagem de toda conversa.**
 
 **Medido** contra o motor, com um fluxo de menu comum:
@@ -69,16 +69,16 @@ em que **não há sessão nenhuma: a primeira mensagem de toda conversa.**
 
 As três primeiras pessoas estavam **abrindo um chamado**. Receberam um bot que
 nunca respondeu, e a equipe recebeu a OS na fila sem setor, sem CNPJ e sem
-descrição — porque a triagem que preenche isso não rodou.
+descrição porque a triagem que preenche isso não rodou.
 
 **Correção:** `sair` e `menu` passam a exigir que a mensagem **seja** o comando
 (`detectarComandoExato`: igualdade com o termo, tolerando pontuação final e um "por
-favor" colado). `atendente` continua casando dentro da frase — ali o falso positivo
+favor" colado). `atendente` continua casando dentro da frase ali o falso positivo
 não existe. E, dentro de um menu, a **opção do fluxo vence o atalho do motor**
 ("voltar" como rótulo de menu continua voltando ao menu); só quando a mensagem não
 casa com opção nenhuma o comando volta a valer.
 
-### A2 · CRÍTICO — "sair" não encerrava nada
+### A2 · CRÍTICO "sair" não encerrava nada
 
 `encerrarSessao` desligava a sessão e devolvia `encerrado: true`. Nada mais:
 nenhuma mensagem para o cliente, e a **conversa continuava `pendente`, com a OS
@@ -86,16 +86,16 @@ aberta na fila**, como se ela esperasse atendimento. A mensagem seguinte, com a
 sessão morta, reexecutava o fluxo do zero.
 
 Agrava: `verificar-fluxo-arka.js` afirma, com todas as letras, que o menu principal
-não precisa de uma opção "encerrar" porque *"o mecanismo global cobre isso"* — e o
+não precisa de uma opção "encerrar" porque *"o mecanismo global cobre isso"* e o
 mecanismo global não cobria.
 
 **Correção:** "sair" manda a despedida que o **fluxo** declarou
 (`farewellMessage`, o mesmo texto da opção `acao: "encerrar"`) e fecha conversa e OS
 pelo caminho normal. **Sem pesquisa de satisfação**, de propósito: quem pede para
-sair está interrompendo, não concluindo — perguntar a nota ali é insistir com quem
+sair está interrompendo, não concluindo perguntar a nota ali é insistir com quem
 pediu para parar, e contamina o CSAT. Mesmo critério do fechamento por abandono.
 
-### A3 · CRÍTICO — o comando "menu" jogava o cliente na fila, calado
+### A3 · CRÍTICO o comando "menu" jogava o cliente na fila, calado
 
 O ramo lia `fluxoRepository.findAtivos()`, **descartava o resultado** e chamava
 `enviarMenu`, que é `transferirParaHumano` com `avisar: false`. O cliente pedia o
@@ -105,7 +105,7 @@ menu e recebia silêncio, com a conversa empurrada para Pendentes sem triagem.
 (gatilho `*`) desde o primeiro passo. Sem fluxo padrão cadastrado não há menu a
 mostrar, e só nesse caso a conversa vai para um atendente.
 
-### A4 · CRÍTICO — o fim do fluxo num bloco sem opções não entregava a conversa
+### A4 · CRÍTICO o fim do fluxo num bloco sem opções não entregava a conversa
 
 `_entregarNoFimDoFluxo` existe exatamente para isto, mas o sinal que o aciona
 (`fimDoFluxo`) só era levantado no ramo que tem `config.opcoes`. E o bloco de
@@ -121,21 +121,21 @@ turno 3  "alguma novidade?" ->  "Descreva sua solicitacao"      <-- a triagem in
 ```
 
 Sem `garantirAtendimentoAberto`, sem setor gravado na OS, sem `aguardando:
-"humano"` — e por isso o guard que impede o bot de reiniciar quem está na fila
+"humano"` e por isso o guard que impede o bot de reiniciar quem está na fila
 (`naFilaDoAtendente`) não tinha o que reconhecer. O cliente pedia notícia do
 chamado e recebia a triagem desde o início.
 
 **Correção:** um bloco que **falou**, não espera nada e não tem para onde ir é fim
-de fluxo — mesmo critério do outro ramo, com a exigência extra de ter falado (um
+de fluxo mesmo critério do outro ramo, com a exigência extra de ter falado (um
 bloco mudo e sem saída não é o fim do roteiro, e um handoff ali seria invenção do
 motor).
 
-### A10 · CRÍTICO — a legenda da mídia era jogada no lixo
+### A10 · CRÍTICO a legenda da mídia era jogada no lixo
 
 *Relatado depois da primeira rodada da auditoria, e reproduzido.*
 
 O portão da mídia olhava só o **tipo** da mensagem. Com a automação em curso e
-fora da resposta livre, ele devolvia `midia_recebida` e voltava — e a **legenda**,
+fora da resposta livre, ele devolvia `midia_recebida` e voltava e a **legenda**,
 que é texto que o cliente escreveu, nunca era lida.
 
 **Medido** contra o fluxo da ARKA:
@@ -148,24 +148,24 @@ que é texto que o cliente escreveu, nunca era lida.
 | o mesmo "1" **em texto puro** | segue para o Técnico, normalmente |
 
 E cinco minutos depois a varredura encerrava com *"Não entendemos a sua demanda"*
-— em cima de uma pessoa que **respondeu certo**. Mandar o print do erro junto com
+em cima de uma pessoa que **respondeu certo**. Mandar o print do erro junto com
 a resposta é o jeito natural de usar o WhatsApp, e é assim que boa parte dos
 chamados de suporte começa.
 
 O raciocínio original do portão continua valendo, e vale **só para mídia muda**:
-uma foto sem legenda no meio de um menu não é "resposta errada" — tratar como
+uma foto sem legenda no meio de um menu não é "resposta errada" tratar como
 erro gastaria as tentativas do cliente e poderia encerrar o atendimento dele.
 Uma foto **com** legenda não é "outra coisa": é uma mensagem de texto que veio
 acompanhada de um anexo.
 
 **Correção:** a legenda destrava todos os estados (menu, CNPJ, confirmação,
-pesquisa); mídia sem legenda mantém o comportamento de antes. Nada mais mudou —
+pesquisa); mídia sem legenda mantém o comportamento de antes. Nada mais mudou 
 o que o fluxo enxerga (`textoParaFluxo`), o comando global, o gatilho e a
 validação de CNPJ **já** liam a legenda; eles simplesmente nunca eram
 alcançados. O rótulo inventado pelo motor ("[Imagem]") continua fora dessas
 decisões, e é por isso que a condição é `textoLimpo` e não `textoParaFluxo`.
 
-### A11 · CRÍTICO — o bot dizia que não entendeu e, em seguida, confirmava o chamado
+### A11 · CRÍTICO o bot dizia que não entendeu e, em seguida, confirmava o chamado
 
 *Relatado com print da conversa, depois do primeiro deploy.*
 
@@ -178,18 +178,18 @@ bot:      Não consegui entender sua solicitação, pode responder novamente?
 cliente:  nao
 bot:      Não consegui entender sua solicitação, pode responder novamente?
 cliente:  nao
-bot:      ✅ Solicitação registrada — encaminhamos sua solicitação para a nossa equipe.
+bot:      ✅ Solicitação registrada encaminhamos sua solicitação para a nossa equipe.
 ```
 
 O bot afirma que **não** entendeu e, na linha seguinte, confirma um chamado como
-se tivesse entendido. E a equipe recebe na fila uma OS cuja triagem fracassou —
+se tivesse entendido. E a equipe recebe na fila uma OS cuja triagem fracassou 
 sem setor, sem CNPJ e sem descrição, que é exatamente o tipo de chamado que
 ninguém consegue atender.
 
 O agravante: **o fluxo já declarava a mensagem certa.** O `fluxo-arka.json` tem
 `configuracoesGlobais.semResposta.mensagem` e um bloco `espera` (`modo:
 `sem_resposta`, `acao: "encerrar"`) com *"Não entendemos a sua demanda. Por favor,
-abra um chamado novamente."* — e esse texto **nunca era lido por este caminho**,
+abra um chamado novamente."* e esse texto **nunca era lido por este caminho**,
 porque só o relógio do silêncio passava por ele. A configuração estava correta e
 não fazia efeito.
 
@@ -204,7 +204,7 @@ desfecho (`_desistirDaEtapa`), lido do bloco de espera do fluxo:
 
 Nos três casos **sem pesquisa de satisfação**: não houve atendimento para avaliar,
 e perguntar a nota a quem acabou de não ser entendido é a pior hora possível.
-Quem preferir o comportamento antigo põe `acao: "fila"` no bloco — aí a mensagem
+Quem preferir o comportamento antigo põe `acao: "fila"` no bloco aí a mensagem
 sai e a conversa vai para a equipe, sem a confirmação contraditória.
 
 Dois ajustes que vieram junto, porque o defeito os expôs:
@@ -213,14 +213,14 @@ Dois ajustes que vieram junto, porque o defeito os expôs:
   então mexer no número de chances do cliente exigia deploy e não aparecia em tela
   nenhuma. Agora é `maxTentativas` no bloco de espera, com o valor do ambiente como
   padrão. A contagem é de **tentativas, não de avisos**: com 3, o cliente lê a
-  repergunta duas vezes e na terceira falha o fluxo desiste — quem quiser três
+  repergunta duas vezes e na terceira falha o fluxo desiste quem quiser três
   avisos configura 4.
 - **rótulo próprio na taxonomia:** `Encerrado sem entender o cliente`. Somar isso a
   "inatividade" mentiria (ninguém ficou inativo: ele respondeu três vezes) e somar
   a "Encerrado pelo fluxo" chamaria de sucesso do robô o caso em que a triagem
   falhou. É o número que manda melhorar o menu, e ele precisa aparecer separado.
 
-### A5 · ALTO — a tela "Testar" reportava `erro_interno` em todo fluxo que encerra
+### A5 · ALTO a tela "Testar" reportava `erro_interno` em todo fluxo que encerra
 
 O simulador roda o motor real com repositórios falsos escritos à mão. Quando
 `fecharConversa` passou a gravar o motivo do ciclo (`definirMotivoAtualSeVazio`) e a
@@ -230,26 +230,26 @@ contrato do repositório e não um recurso opcional.
 
 Resultado: `TypeError`, engolido pelo `catch` geral de `_processarMensagemEntrada`,
 que transfere para humano. **Medido** no fluxo mínimo "menu → 1 → Tchau!": a
-simulação terminava `transferido / erro_interno` em vez de encerrada — e não havia
+simulação terminava `transferido / erro_interno` em vez de encerrada e não havia
 como distinguir um fluxo com defeito de um fluxo correto rodando num simulador com
 defeito.
 
 **Correção:** os stubs faltantes (`definirMotivoAtualSeVazio`,
 `definirMotivoSeVazio`, `ultimaMensagemBotComErro`, `findMensagemPorWaId`,
-`sendPoll`) e — mais importante — **`verificar-simulador-contrato.js`**, que lê o
+`sendPoll`) e mais importante **`verificar-simulador-contrato.js`**, que lê o
 motor, extrai toda chamada `this.deps.<dep>.<metodo>()` não guardada e exige que o
 ambiente ofereça cada uma. A classe de falha deixa de depender de alguém lembrar.
 
-### A6 · ALTO — apagar um bloco deixava as ramificações apontando para o vazio
+### A6 · ALTO apagar um bloco deixava as ramificações apontando para o vazio
 
 O cabeçalho de `fluxo.repository.js` diz *"TODA LIGAÇÃO ENTRE BLOCOS PRECISA SER
-REMAPEADA. TODA."* — e `removerPasso` limpava só a coluna `targetId`. As
+REMAPEADA. TODA."* e `removerPasso` limpava só a coluna `targetId`. As
 ramificações moram em `config.opcoes[].targetId`, e a saída alternativa do CNPJ em
 `config.targetIdNaoCadastrado`: apagar um bloco pelo painel de propriedades deixava
 cada uma delas apontando para um id que não existe mais.
 
-O defeito não aparece no editor — o fio desaparece da tela porque o bloco
-desapareceu — e sim na conversa do cliente: `aplicarOpcao` não acha o destino e cai
+O defeito não aparece no editor o fio desaparece da tela porque o bloco
+desapareceu e sim na conversa do cliente: `aplicarOpcao` não acha o destino e cai
 em `ramificacao_sem_destino`, ou seja, **a opção do menu passa a jogar o cliente na
 fila**. Pior: `decidirEsperaDoPasso` conta a ramificação morta como saída válida,
 então o bloco continua estacionando a conversa como se houvesse para onde ir.
@@ -257,7 +257,7 @@ então o bloco continua estacionando a conversa como se houvesse para onde ir.
 **Correção:** a limpeza das ligações do `config` acontece na mesma transação da
 remoção, e só nos blocos que realmente citam o id removido.
 
-### A7 · MÉDIO — enquete: bolha duplicada, e invisível para a equipe
+### A7 · MÉDIO enquete: bolha duplicada, e invisível para a equipe
 
 No fallback, `_enviarMenuEnquete` chamava `enviarBot`, que **cria outra mensagem**.
 A bolha da enquete ficava para sempre em `status: "enviando"` e o mesmo texto
@@ -268,7 +268,7 @@ seguinte.
 **Correção:** o fallback carimba a bolha existente com o desfecho (mesmo tratamento
 do menu interativo) e o método emite a conversa no fim.
 
-### A8 · MÉDIO — a flag global atropelava a exibição declarada no bloco
+### A8 · MÉDIO a flag global atropelava a exibição declarada no bloco
 
 `WHATSAPP_MENU_ENQUETE=true` transformava em enquete **qualquer** menu, inclusive um
 bloco que declara `exibicao: "buttons"` ou `"list"`. Quem monta o fluxo escolhia
@@ -276,10 +276,10 @@ botões na tela e o cliente recebia uma votação, sem nada no log dizendo que a
 escolha do desenho havia sido descartada. Contradiz a regra do resto do sistema
 ("o bloco vence").
 
-**Correção:** a flag decide apenas em `exibicao: "auto"` — que é justamente o valor
+**Correção:** a flag decide apenas em `exibicao: "auto"` que é justamente o valor
 que diz "não declarei nada".
 
-### A9 · MÉDIO — o painel "Automações do BOT" mostrava meia verdade
+### A9 · MÉDIO o painel "Automações do BOT" mostrava meia verdade
 
 O painel é a superfície de auditoria: é onde alguém responde "o que o bot faz" sem
 ler código. Dois furos:
@@ -287,7 +287,7 @@ ler código. Dois furos:
 - só o **primeiro** bloco de CNPJ e o **primeiro** de avaliação eram listados
   (`passos.find`), então um fluxo com dois caminhos de identificação escondia as
   regras de um deles;
-- `memoriaCnpj: "fluxo"` aparecia como **"Ligado"**, igual a `true` — mas são
+- `memoriaCnpj: "fluxo"` aparecia como **"Ligado"**, igual a `true` mas são
   comportamentos diferentes (com `"fluxo"` o motor adota o documento e quem
   confirma é um bloco do desenho). Quem investigasse "por que o bot não pediu
   confirmação?" leria no painel que a confirmação estava ligada.
@@ -304,12 +304,12 @@ Não são defeitos observados. São fragilidades que a auditoria encontrou e que
 escritas para não serem redescobertas do zero.
 
 - **O1 · `AGUARDANDO.MENU` é estado morto.** Nada grava `aguardando: "menu"` nem
-  `contexto.menuOpcoes` — `enviarMenu` virou handoff. O ramo que o trata continua
+  `contexto.menuOpcoes` `enviarMenu` virou handoff. O ramo que o trata continua
   no motor e está na allowlist de inatividade sem efeito; e, se algum dia fosse
   alcançado, `interpretarEscolhaMenu` devolve o **objeto** da opção onde o ramo
   espera um `fluxoId`. Remover pede uma passada própria.
 - **O2 · O prazo da avaliação corre sobre `sessao.atualizadoEm`.** É um
-  `@updatedAt` da linha — o padrão que o resto do motor abandonou em favor de
+  `@updatedAt` da linha o padrão que o resto do motor abandonou em favor de
   `aguardandoDesde` justamente porque qualquer escrita o reinicia. Hoje não há
   escrita alheia à sessão durante a pesquisa, e nenhum defeito foi observado; a
   fragilidade é a de sempre: uma escrita nova em outro caminho estica o prazo em
@@ -331,7 +331,7 @@ matriz do fluxo (ele prova que a ferramenta de teste está de pé; sem isso a ma
 falharia sem nada estar errado com o fluxo). Ele confere:
 
 1. toda chamada `this.deps.<dep>.<metodo>()` não guardada do motor existe no
-   ambiente do simulador — 33 chamadas hoje;
+   ambiente do simulador 33 chamadas hoje;
 2. um fluxo com opção `encerrar` termina **encerrado**, com a despedida do fluxo;
 3. o fim de fluxo num bloco sem saída **entrega** a conversa, e o bot não reabre a
    triagem no turno seguinte;
@@ -343,14 +343,14 @@ script falha em 3 pontos e aponta o método.
 
 `verificar-fluxo-arka.js` ganhou o cenário do §A11, contra o fluxo real: errar a
 opção até esgotar as tentativas tem de produzir o aviso **do bloco de espera**, o
-chamado **fechado**, e **nenhuma** confirmação de encaminhamento — as três
+chamado **fechado**, e **nenhuma** confirmação de encaminhamento as três
 afirmações juntas, porque o defeito era a combinação delas. O `4c` de
 `verificar-midia-e-pontuacao.js` foi atualizado no mesmo sentido.
 
 `verificar-midia-e-pontuacao.js` ganhou os cenários do §A10: legenda `"1"` / `"2"`
 / `"tecnico"` em imagem, vídeo e PDF escolhendo no menu; o CNPJ na legenda de um
 PDF respondendo a etapa de identificação; o pedido de atendente na legenda; e a
-contraprova — mídia **sem** legenda continua sem atropelar menu e CNPJ. Provado
+contraprova mídia **sem** legenda continua sem atropelar menu e CNPJ. Provado
 que pega a regressão: sem a correção no motor, falha nos 5 cenários novos.
 
 E `verificar-fluxos-crud.js` ganhou o cenário do §A6: um bloco que aponta para
@@ -379,15 +379,15 @@ e blocos, sessão órfã, reentrada de horário.
 
 ## 6. Como investigar "o bot não respondeu"
 
-A ordem importa — a primeira pergunta é a mais barata e é a que mais explica.
+A ordem importa a primeira pergunta é a mais barata e é a que mais explica.
 
 1. **O fluxo está ATIVO?** Fluxo pausado = nenhuma automação, em todos os caminhos.
 2. **O gatilho casa?** Palavra-chave vence, e o fluxo de boas-vindas precisa do
    gatilho `*` para abrir em qualquer mensagem.
 3. **O painel "Automações do BOT"** mostra o valor **efetivo** de cada parâmetro
    (§A9 corrigiu o que ele escondia).
-4. **A sessão está em `humano`?** Então o bot está calado de propósito — a conversa
+4. **A sessão está em `humano`?** Então o bot está calado de propósito a conversa
    espera uma pessoa.
 5. **`diagnosticar-instalacao.js`** confere o motor que subiu contra o fluxo que
-   está no banco daquela VM. `verificar-tudo.js` prova o código do repositório —
+   está no banco daquela VM. `verificar-tudo.js` prova o código do repositório 
    são perguntas diferentes.
