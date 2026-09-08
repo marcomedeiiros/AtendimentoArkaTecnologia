@@ -437,19 +437,27 @@ console.log("=== Entrada do webhook ===");
 
     check("a busca do contextInfo é estrutural e não estoura", pEstrutural);
 
-    // ── TOQUE EM BOTÃO NÃO É CITAÇÃO ────────────────────────────────────────
+    // ── TOQUE EM BOTÃO É CITAÇÃO -- E ESTA ASSERTIVA FOI INVERTIDA ──────────
     //
-    // Medido no banco da instalação: das 188.250 mensagens, 793 têm
-    // `contextInfo.stanzaId` -- e NENHUMA é o "responder" do WhatsApp. São
-    // `buttonsResponseMessage`, `listResponseMessage` e
-    // `templateButtonReplyMessage`: o toque em botão chega como uma resposta que
-    // REFERENCIA a mensagem onde os botões estavam, com `stanzaId` e
-    // `quotedMessage` iguaizinhos aos de uma citação de verdade.
+    // Aqui estava travado o oposto: `buttonsResponseMessage`,
+    // `listResponseMessage` e `templateButtonReplyMessage` NÃO podiam virar
+    // citação. O argumento estava medido e era bom -- das 188.250 mensagens da
+    // instalação, 793 tinham `contextInfo.stanzaId` e nenhuma era o "responder"
+    // do WhatsApp, então cada escolha de menu ganharia uma caixa citando o texto
+    // do menu do bot.
     //
-    // Tratar isso como citação faz cada escolha de menu aparecer com uma caixa
-    // citando o texto do menu do bot -- ruído em cima da conversa inteira. A
-    // lista fixa de nós que existia antes escapava por acidente; a varredura
-    // estrutural precisa recusar explicitamente, e é isso que está travado aqui.
+    // O que derrubou o argumento foi ver a conversa nas DUAS telas, lado a lado:
+    // no WhatsApp, tocar em "Técnico" produz uma bolha que CITA o menu, e na
+    // Central aparecia "🔧 Técnico" solto. Quem atende lê a mesma conversa que o
+    // cliente está lendo, e as duas discordavam -- num fio com três menus
+    // (principal, técnico, contrato) não há como saber a qual pergunta aquele
+    // "Técnico" responde sem contar as bolhas para cima.
+    //
+    // Decisão do dono do produto, tomada olhando o print das duas telas. O que
+    // esta assertiva trava agora é o novo contrato -- e ela continua exigindo o
+    // que já exigia antes: o toque segue sendo LIDO como escolha (rótulo e id),
+    // porque citação e roteamento são coisas independentes e quebrar o segundo
+    // para ganhar o primeiro seria uma troca ruim.
     const pBotao = [];
     const toque = (no, conteudo) => ({
       data: {
@@ -475,16 +483,36 @@ console.log("=== Entrada do webhook ===");
     ]) {
       const p = toque(no, conteudo);
       const c = svc.extrairCitacao(p);
-      if (c !== null) pBotao.push(`${no}: virou citação (${JSON.stringify(c)})`);
-      // E o toque continua sendo lido normalmente -- o rótulo e o id do botão.
+      if (!c) {
+        pBotao.push(`${no}: não virou citação, e agora tem de virar`);
+      } else {
+        // O `stanzaId` é a ligação com a mensagem do bot: é por ele que
+        // `respondendoAId` acha a original no banco.
+        if (c.stanzaId !== "3EB086B334146292B0FD37") {
+          pBotao.push(`${no}: stanzaId errado (${c.stanzaId})`);
+        }
+        // E o RETRATO do menu citado, que é o plano B quando a original não
+        // está na janela carregada na tela.
+        if (!String(c.texto || "").includes("Escolha uma opção")) {
+          pBotao.push(`${no}: perdeu o retrato do menu citado (${JSON.stringify(c.texto)})`);
+        }
+      }
+      // O toque continua sendo lido normalmente -- o rótulo e o id do botão.
+      // Citação e roteamento são independentes: ganhar um não pode custar o outro.
       if (svc.extrairTexto(p) !== "Técnico") {
         pBotao.push(`${no}: perdeu o rótulo do botão (${svc.extrairTexto(p)})`);
       }
       if (svc.extrairBotaoId(p) !== "1") {
         pBotao.push(`${no}: perdeu o id do botão (${svc.extrairBotaoId(p)})`);
       }
+      // E NÃO pode virar selo de encaminhamento: o contextInfo do toque não tem
+      // `isForwarded` nem `forwardingScore`, e era esse o único outro leitor da
+      // lista de exclusão que saiu.
+      if (svc.extrairEncaminhada(p)) {
+        pBotao.push(`${no}: virou encaminhamento (${JSON.stringify(svc.extrairEncaminhada(p))})`);
+      }
     }
-    check("toque em botão/lista não vira citação (mas segue sendo lido)", pBotao);
+    check("toque em botão/lista vira citação, sem perder o roteamento nem virar encaminhamento", pBotao);
 
     // O RETRATO SOBREVIVE ATÉ A TELA. O mapper é a última ponte: `citacao` com
     // só o tipo não pode ser descartada ali (era o `meta.citacao?.texto` que

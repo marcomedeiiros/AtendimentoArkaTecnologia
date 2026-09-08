@@ -535,6 +535,118 @@ const TEXTO_MENU =
     `corte no meio de emoji nao deixa surrogado solto (veio ${soEmoji.length} unidades)`
   );
 
+  // ══════════════════════════════════════════════════════════════════════════
+  titulo("13. O TOQUE VOLTA CITANDO O MENU -- ida e volta, contra o motor");
+  // ══════════════════════════════════════════════════════════════════════════
+  //
+  // O RELATO, com print das duas telas: no WhatsApp, tocar em "Técnico" produz
+  // uma bolha que CITA o menu do bot; na Central aparecia "🔧 Técnico" solto.
+  // Quem atende lê a mesma conversa que o cliente está lendo, e as duas
+  // discordavam -- num fio com três menus não há como saber a qual pergunta
+  // aquele "Técnico" responde.
+  //
+  // A causa era uma lista em `whatsapp.service` que recusava a citação de
+  // `buttonsResponseMessage` e companhia (ver o comentário que sobrou lá, com a
+  // história da decisão). O que este teste trava é o CICLO INTEIRO, e não só a
+  // extração -- porque ele depende de três elos e qualquer um derruba o
+  // recurso em silêncio:
+  //
+  //   1. a mensagem do bot precisa gravar o `waMessageId` que a Evolution
+  //      devolveu (sem ele não há o que casar);
+  //   2. `extrairCitacao` precisa achar o `contextInfo` dentro do nó do toque;
+  //   3. o motor precisa resolver o `stanzaId` em `respondendoAId`.
+  const FLUXO_CIT = { id: "f-cit", nome: "Cit", gatilho: "*", ativo: true, passos: [
+    { id: "p1", tipo: "mensagem", titulo: "Menu", texto: "Escolha uma opção:\n1 - Técnico", ordem: 0,
+      config: { exibicao: "buttons", opcoes: [
+        { id: "mp_1", palavrasChave: ["1"], esperaEscolha: true, acao: "transferir", setor: "Técnico", botao: "Técnico" },
+      ] } },
+  ] };
+
+  const convCit = { id: "c1", instanciaId: "i1", cliente: "F", telefone: "5527999999999",
+    statusAtendimento: "pendente", setor: "Geral", atendimentoAtualId: "os1", cnpj: null,
+    cnpjVerificado: false, mensagens: [], atendimentos: [{ id: "os1" }] };
+  let sessaoCit = null;
+  let seqCit = 0;
+
+  const motorCit = new ChatbotEngine({
+    fluxoRepository: { findAtivos: async () => [FLUXO_CIT], findById: async () => FLUXO_CIT, findByGatilho: async () => null, createLog: async () => {} },
+    conversaRepository: {
+      findById: async () => convCit, findByIdParaEvento: async () => convCit,
+      findByTelefone: async () => convCit, findByTelefoneParaMotor: async () => convCit,
+      create: async () => convCit, existeMensagemWa: async () => false,
+      addMensagem: async (_i, origem, texto, meta, waId, extra) => {
+        const m = { id: "m" + (++seqCit), origem, texto, metadata: meta || null, waMessageId: waId || null, ...(extra || {}) };
+        convCit.mensagens.push(m); return m;
+      },
+      // ELO 3: é esta consulta que traduz o `stanzaId` do WhatsApp no id local.
+      findMensagemPorWaId: async (waId) => convCit.mensagens.find((m) => m.waMessageId === waId) || null,
+      respondeuDepoisDe: async () => false,
+      // ELO 1: a mensagem do bot guarda o id que a Evolution devolveu.
+      vincularWaMessageId: async (id, waId) => { const m = convCit.mensagens.find((x) => x.id === id); if (m) m.waMessageId = waId; },
+      update: async (_i, d) => Object.assign(convCit, d),
+      garantirAtendimento: async () => null, garantirAtendimentoAberto: async () => ({ atendimento: null }),
+      atualizarAtendimentoAtual: async () => null, atualizarAtendimento: async () => null,
+      definirMotivoAtualSeVazio: async () => null, definirMotivoSeVazio: async () => null,
+      ultimoCnpjDoTelefone: async () => null, ultimaMensagemBotComErro: async () => null,
+    },
+    sessaoRepository: {
+      findByTelefone: async () => sessaoCit, findByConversa: async () => sessaoCit,
+      upsert: async (a, b, c, d) => { sessaoCit = { id: "s1", instanciaId: a, conversaId: b, telefone: c, ...(sessaoCit || {}), ...d, atualizadoEm: new Date() }; return sessaoCit; },
+      update: async (_i, d) => { sessaoCit = { ...sessaoCit, ...d, atualizadoEm: new Date() }; return sessaoCit; },
+      reivindicarInatividade: async () => ({ count: 0 }),
+    },
+    parceiroRepository: { findAtivoByCnpj: async () => null, findAtivoByTelefone: async () => null },
+    evolutionApi: {
+      sendText: async () => ({ key: { id: "WA_TXT" } }),
+      sendButtons: async () => ({ key: { id: "WA_MENU" } }),
+      sendList: async () => ({ key: { id: "WA_MENU" } }),
+      sendPoll: async () => ({ key: { id: "WA_MENU" } }),
+      fetchProfilePictureUrl: async () => null, getBase64FromMediaMessage: async () => null,
+    },
+    n8nClient: { encaminharMensagem: async () => ({ encaminhado: false }) },
+    configuracaoService: { modoAtendimento: async () => "local", horarioAtendimento: async () => ({ ativo: false }), filasParaSetor: async () => ({}), pesquisaSatisfacao: async () => ({ ativo: false }) },
+    bus: { emitConversa: () => {} },
+  });
+
+  const receberCit = async (message, id) => {
+    const body = { data: { key: { remoteJid: "5527999999999@s.whatsapp.net", fromMe: false, id }, pushName: "F", message } };
+    return motorCit.processarMensagemEntrada({
+      instanciaId: "i1", instanceName: "v", telefone: convCit.telefone,
+      texto: whats.extrairTexto(body), botaoId: whats.extrairBotaoId(body),
+      nomeCliente: "F", waMessageId: id, midia: whats.extrairMidia(body),
+      citacao: whats.extrairCitacao(body), encaminhada: whats.extrairEncaminhada(body),
+    });
+  };
+
+  const antesBotoes = process.env.WHATSAPP_BOTOES_INTERATIVOS;
+  process.env.WHATSAPP_BOTOES_INTERATIVOS = "true";
+  await receberCit({ conversation: "oi" }, "W1");
+  const msgMenu = convCit.mensagens.find((m) => m.origem === "bot");
+  check(
+    msgMenu?.waMessageId === "WA_MENU",
+    `elo 1: a mensagem do menu tinha de guardar o waMessageId da Evolution (veio ${msgMenu?.waMessageId})`
+  );
+
+  await receberCit({ buttonsResponseMessage: {
+    selectedButtonId: "mp_1", selectedDisplayText: "Técnico",
+    contextInfo: { stanzaId: "WA_MENU", participant: "x@s.whatsapp.net",
+      quotedMessage: { conversation: "Escolha uma opção:\n1 - Técnico" } },
+  } }, "W2");
+  process.env.WHATSAPP_BOTOES_INTERATIVOS = antesBotoes;
+
+  const doCliente = convCit.mensagens.filter((m) => m.origem === "cliente").pop();
+  check(
+    doCliente?.respondendoAId === msgMenu?.id,
+    `elo 3: o toque tinha de apontar para a mensagem do menu (respondendoAId=${doCliente?.respondendoAId}, menu=${msgMenu?.id})`
+  );
+  // O RETRATO é o plano B: a original pode estar fora da janela carregada na
+  // tela, e sem ele a bolha voltaria a aparecer solta nesses casos.
+  check(
+    String(doCliente?.metadata?.citacao?.texto || "").includes("Escolha uma opção"),
+    `o retrato do menu citado tinha de ir no metadata (veio ${JSON.stringify(doCliente?.metadata?.citacao)})`
+  );
+  // E o toque continua roteando: citação e escolha são independentes.
+  check(convCit.setor === "Técnico", `o toque tinha de definir o setor (veio ${convCit.setor})`);
   console.log(
     "\n" + (erros.length ? `FALHAS (${erros.length}):\n  ` + erros.join("\n  ") : "BOTOES: TUDO CONFERE")
   );

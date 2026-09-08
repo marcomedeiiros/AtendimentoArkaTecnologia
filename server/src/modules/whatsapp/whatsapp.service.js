@@ -19,36 +19,33 @@ const { motivoParaIgnorarJid } = require("../../shared/helpers/jid.helper");
 // WhatsApp ja limita perto disso.
 const MAX_MIDIA_RECEBIDA = 20 * 1024 * 1024;
 
-// ── NOS CUJO `contextInfo` NAO E CITACAO DO CLIENTE ──────────────────────────
+// ── TOQUE EM BOTAO TAMBEM E CITACAO -- E A DECISAO MUDOU AQUI ───────────────
 //
-// Um toque em BOTAO (ou em linha de lista) chega do WhatsApp como uma resposta
-// que REFERENCIA a mensagem onde os botoes estavam -- e por isso traz
-// `contextInfo.stanzaId` e `contextInfo.quotedMessage` iguaizinhos aos de uma
-// citacao de verdade. No banco desta instalacao sao 793 mensagens assim, e
-// NENHUMA e o "responder" do WhatsApp: sao `buttonsResponseMessage`,
-// `listResponseMessage` e `templateButtonReplyMessage`, todas apontando para o
-// menu do proprio bot.
+// Aqui vivia `NOS_SEM_CITACAO`, uma lista que RECUSAVA a citacao de
+// `buttonsResponseMessage`, `listResponseMessage` e
+// `templateButtonReplyMessage`. O argumento estava medido e era bom: das
+// 188.250 mensagens da instalacao, 793 tinham `contextInfo.stanzaId` e NENHUMA
+// era o "responder" do WhatsApp -- eram todas toques em menu do proprio bot,
+// e mostrar uma caixa de citacao com o texto do menu embaixo de cada escolha e
+// ruido em cima da conversa inteira.
 //
-// Tratar isso como citacao faz cada escolha de menu aparecer na Central com uma
-// caixa de citacao mostrando o texto do menu -- ruido em cima da conversa
-// inteira. A lista fixa de nos que existia antes escapava disso por acidente
-// (ela nao incluia esses tipos); a varredura estrutural, que procura pela
-// assinatura do objeto, precisa recusar explicitamente.
+// O que derrubou o argumento foi ver a conversa nas duas telas, lado a lado. No
+// WhatsApp, tocar em "Tecnico" produz uma bolha que CITA o menu -- e o cliente
+// ve isso. Na Central aparecia "🔧 Tecnico" solto. Quem atende le a mesma
+// conversa que o cliente esta lendo, e as duas discordavam: num fio com tres
+// menus (principal, tecnico, contrato) nao ha como saber a qual pergunta aquele
+// "Tecnico" responde sem contar as bolhas para cima.
 //
-// `quotedMessage` de dentro deles tambem nao interessa: quem tocou num botao
-// nao citou nada, escolheu uma opcao.
-const NOS_SEM_CITACAO = new Set([
-  "buttonsResponseMessage",
-  "listResponseMessage",
-  "templateButtonReplyMessage",
-  "interactiveResponseMessage",
-  // A reacao e um evento SOBRE outra mensagem e sai do webhook antes daqui (ver
-  // extrairReacao); fica na lista para o dia em que essa ordem mudar.
-  "reactionMessage",
-  // Voto de enquete: mesma natureza do botao -- referencia a enquete, nao cita.
-  "pollUpdateMessage",
-  "pollCreationMessage",
-]);
+// "Ruido" e "informacao" aqui e a mesma coisa vista de dois lugares, e quem
+// decide e quem atende todo dia. Decisao do dono do produto, tomada olhando o
+// print das duas telas: a Central passa a mostrar o que o WhatsApp mostra.
+//
+// O SELO DE ENCAMINHAMENTO NAO E AFETADO, e vale dizer por que a lista nao
+// precisa sobreviver so para ele: `extrairEncaminhada` exige `isForwarded` ou
+// `forwardingScore` no contextInfo, e o contextInfo de um toque em botao nao
+// carrega nenhum dos dois -- ele tem `stanzaId`, `participant` e
+// `quotedMessage`. Entao incluir esses nos na varredura devolve citacao e
+// continua nao devolvendo encaminhamento.
 
 class WhatsAppService {
   constructor() {
@@ -276,7 +273,6 @@ class WhatsAppService {
     if (this._ehContexto(no.contextInfo)) achados.push(no.contextInfo);
     for (const [chave, valor] of Object.entries(no)) {
       if (chave === "contextInfo" || chave === "quotedMessage") continue;
-      if (NOS_SEM_CITACAO.has(chave)) continue;
       if (!valor || typeof valor !== "object") continue;
       this._coletarContextos(valor, achados, profundidade + 1);
     }
