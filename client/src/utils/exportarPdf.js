@@ -343,40 +343,36 @@ export async function exportarRelatorioPdf({ elemento, metricas = [], filtros = 
     y += 4;
   }
 
-  // ---------- Graficos: UM POR LINHA, cada um na largura da pagina ----------
+  // ---------- Graficos: um embaixo do outro, e NA MESMA FOLHA ----------
   //
   // Antes era UMA captura do container inteiro. Na tela os dois gráficos ficam
   // lado a lado (`md:grid-cols-2`), e essa imagem larga era reduzida para caber
-  // na largura do papel -- cada gráfico terminava com metade da largura útil, e
+  // na largura do papel -- cada gráfico terminava com METADE da largura útil, e
   // as legendas ficavam pequenas demais para serem lidas impressas.
   //
-  // Capturando CADA cartão em separado, os dois empilham e cada um ocupa a
-  // largura toda: mesma área de papel, letra do dobro do tamanho.
+  // Empilhados na largura cheia eles ficaram legíveis, mas o segundo passou a
+  // cair numa segunda folha quase vazia. Por isso a captura acontece ANTES do
+  // desenho: sabendo a altura de todos, dá para escolher UMA escala que faça o
+  // conjunto caber no que sobrou da página.
   //
-  // O corte é pelos FILHOS DIRETOS do container, e não por um seletor de classe:
-  // a captura não deve saber como o painel está estilizado hoje. Com um filho
-  // só, o comportamento é o de antes.
+  // A escala é a MESMA para todos. Encolher só o último faria dois gráficos de
+  // tamanhos diferentes lado a lado na vertical, e o menor pareceria menos
+  // importante -- uma hierarquia que os dados não têm.
   if (elemento) {
     const { html2canvas } = await libs();
+    // O corte é pelos FILHOS DIRETOS do container, e não por um seletor de
+    // classe: a geração do PDF não deve saber como o painel está estilizado.
     const cartoes = elemento.children?.length > 1 ? [...elemento.children] : [elemento];
     const larguraImg = larguraPg - margem * 2;
+    const ESPACO = 6;
 
-    // O título vai ANTES do laço: repetido a cada cartão, viraria "Gráficos"
-    // três vezes na mesma página.
-    if (y + 12 > alturaPg - margem) { pdf.addPage(); y = margem; }
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(10);
-    pdf.setTextColor(...TINTA);
-    pdf.text('Gráficos', margem, y);
-    y += 5;
-
+    // ── 1. Capturar tudo, medindo ──────────────────────────────────────────
+    //
+    // Um cartão que falha não pode levar os outros junto: com um `try` só, do
+    // lado de fora, o relatório saía com o primeiro gráfico e sem os demais --
+    // sem erro nenhum na tela.
+    const imagens = [];
     for (const cartao of cartoes) {
-      // TRY POR CARTÃO, e não um só em volta do laço.
-      //
-      // Com o `try` do lado de fora, uma captura que falha aborta as seguintes:
-      // o relatório sai com o primeiro gráfico e sem os outros, sem erro nenhum.
-      // Foi exatamente o que a primeira medição desta mudança mostrou -- um
-      // cartão entrou, o outro sumiu em silêncio.
       try {
         const canvas = await html2canvas(cartao, {
           backgroundColor: '#0F1219',
@@ -385,37 +381,67 @@ export async function exportarRelatorioPdf({ elemento, metricas = [], filtros = 
           useCORS: true,
         });
         if (!canvas.width || !canvas.height) continue;
-
-        const img = canvas.toDataURL('image/png');
-        let l = larguraImg;
-        let alturaImg = (canvas.height * l) / canvas.width;
-
-        // TETO DE ALTURA: uma página inteira menos as margens.
-        //
-        // Sem isto, um cartão alto seria desenhado maior que o papel e o que
-        // sobra some -- sem erro, só um gráfico cortado pela metade. O
-        // fatiamento entre páginas que existia aqui foi trocado por este teto:
-        // gráfico partido em duas folhas não se lê, e reduzir a escala mantém o
-        // desenho inteiro.
-        const alturaMax = alturaPg - margem * 2;
-        if (alturaImg > alturaMax) {
-          l = (l * alturaMax) / alturaImg;
-          alturaImg = alturaMax;
-        }
-
-        if (y + alturaImg > alturaPg - margem) {
-          pdf.addPage();
-          y = margem;
-        }
-        // Centralizado quando a redução por altura deixou o cartão estreito.
-        const x = margem + (larguraImg - l) / 2;
-        pdf.addImage(img, 'PNG', x, y, l, alturaImg, undefined, 'FAST');
-        y += alturaImg + 6;
+        imagens.push({
+          dados: canvas.toDataURL('image/png'),
+          proporcao: canvas.height / canvas.width,
+        });
       } catch (err) {
-        // Um cartão que não captura não pode levar os outros junto.
         if (typeof console !== 'undefined') {
           console.warn('Gráfico não capturado no PDF:', err && err.message);
         }
+      }
+    }
+
+    if (imagens.length) {
+      if (y + 12 > alturaPg - margem) { pdf.addPage(); y = margem; }
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(10);
+      pdf.setTextColor(...TINTA);
+      pdf.text('Gráficos', margem, y);
+      y += 5;
+
+      // ── 2. Uma escala que faça o conjunto caber ─────────────────────────
+      // O ESPACO ENTRE OS CARTOES NAO ENCOLHE, entao ele sai da conta ANTES de
+      // calcular a escala. Incluindo-o no total a ser reduzido, a escala sai
+      // generosa demais: medido, o conjunto ficava 0,8 mm mais alto que a pagina
+      // e o segundo grafico quebrava para a folha seguinte por um fio -- o
+      // defeito que esta mudanca existia para resolver.
+      //
+      // A folga de meio milimetro e contra o arredondamento: sem ela, o caso que
+      // cabe EXATAMENTE fica na mao do ultimo digito do ponto flutuante.
+      const ESPACOS = ESPACO * (imagens.length - 1);
+      const disponivel = alturaPg - margem - y - ESPACOS - 0.5;
+      const alturaNatural = imagens.reduce((t, im) => t + larguraImg * im.proporcao, 0);
+
+      // ATÉ ONDE VALE ENCOLHER.
+      //
+      // O ponto de encolher é caber numa folha só; abaixo de certo tamanho isso
+      // deixa de ser um ganho -- volta a ser o gráfico ilegível que motivou toda
+      // esta mudança. Em 0.6 os dois cartões ainda saem bem maiores do que eram
+      // lado a lado; abaixo disso, a segunda folha é o mal menor.
+      const MENOR_ESCALA_UTIL = 0.6;
+      const precisa = alturaNatural > disponivel ? disponivel / alturaNatural : 1;
+      const escala = precisa >= MENOR_ESCALA_UTIL ? precisa : 1;
+
+      for (const im of imagens) {
+        const l = larguraImg * escala;
+        const alturaImg = l * im.proporcao;
+
+        // Com a escala em 1 (não coube nem encolhendo), volta a valer a quebra
+        // de página -- e o teto de altura, para nenhum cartão passar da borda.
+        const alturaMax = alturaPg - margem * 2;
+        const aFinal = Math.min(alturaImg, alturaMax);
+        const lFinal = aFinal < alturaImg ? l * (aFinal / alturaImg) : l;
+
+        if (y + aFinal > alturaPg - margem) {
+          pdf.addPage();
+          y = margem;
+        }
+        // Centralizado: com a escala reduzida o cartão fica mais estreito que a
+        // caixa de texto, e encostado à esquerda pareceria desalinhado.
+        const x = margem + (larguraImg - lFinal) / 2;
+        pdf.addImage(im.dados, 'PNG', x, y, lFinal, aFinal, undefined, 'FAST');
+        y += aFinal + ESPACO;
       }
     }
   }

@@ -69,6 +69,37 @@ console.log("=== Graficos do PDF ===");
   ]);
 }
 
+// ── OS DOIS GRAFICOS CABEM NUMA FOLHA SO ────────────────────────────────────
+//
+// Empilhados na largura cheia eles ficaram legiveis, mas o segundo caia numa
+// segunda folha quase vazia. A captura acontece ANTES do desenho justamente
+// para saber a altura de todos e escolher UMA escala que faca o conjunto caber.
+//
+// O ESPACO ENTRE OS CARTOES NAO ENCOLHE. Incluindo-o no total a ser reduzido, a
+// escala sai generosa demais: medido, o conjunto ficava 0,8 mm mais alto que a
+// pagina e quebrava por um fio -- exatamente o defeito que a mudanca resolvia.
+{
+  const problemas = [];
+  // Comparacoes por TEXTO: o que se quer travar aqui sao trechos exatos, e
+  // regex sobre codigo so acrescenta escape (foi assim que esta secao nasceu
+  // quebrada na primeira tentativa).
+  if (!fonte.includes("const imagens = [];")) {
+    problemas.push("nao captura tudo antes de desenhar: sem as alturas nao da para escolher a escala");
+  }
+  if (!fonte.includes("const ESPACOS = ESPACO * (imagens.length - 1);")) {
+    problemas.push("o espaco entre cartoes nao e descontado antes da escala -- volta a quebrar por um fio");
+  }
+  // A linha do total NAO pode somar o espaco de volta.
+  const linhaTotal = /const alturaNatural = [^\n]*\n?[^\n]*/.exec(fonte)?.[0] || "";
+  if (linhaTotal.includes("ESPACO")) {
+    problemas.push("o espaco voltou para dentro do total que e reduzido");
+  }
+  if (!fonte.includes("const MENOR_ESCALA_UTIL = 0.6;")) {
+    problemas.push("sem piso de escala: encolher demais devolve o grafico ilegivel que motivou a mudanca");
+  }
+  check("os graficos cabem numa folha so, sem virar miniatura", problemas);
+}
+
 // ── Gráfico não pode sair maior que o papel ─────────────────────────────────
 //
 // Sem teto, o desenho passa da borda e o que sobra some -- sem erro, só um
@@ -76,11 +107,17 @@ console.log("=== Graficos do PDF ===");
 // páginas (o que havia antes) parte o gráfico ao meio, e assim não se lê.
 {
   const problemas = [];
-  if (!/const alturaMax = alturaPg - margem \* 2;/.test(fonte)) {
+  if (!fonte.includes("const alturaMax = alturaPg - margem * 2;")) {
     problemas.push("nao ha teto de altura: cartao alto sai cortado pela borda do papel");
   }
-  if (!/l = \(l \* alturaMax\) \/ alturaImg;/.test(fonte)) {
-    problemas.push("o teto nao preserva a proporcao -- o grafico sairia esticado");
+  if (!fonte.includes("const aFinal = Math.min(alturaImg, alturaMax);")) {
+    problemas.push("a altura nao e limitada ao papel");
+  }
+  // A largura tem de acompanhar o corte da altura NA MESMA RAZAO. Limitar so a
+  // altura desenharia o grafico achatado -- e achatado ainda "cabe", entao o
+  // erro passaria despercebido.
+  if (!fonte.includes("const lFinal = aFinal < alturaImg ? l * (aFinal / alturaImg) : l;")) {
+    problemas.push("o teto nao preserva a proporcao -- o grafico sairia achatado");
   }
   check("cartao alto e reduzido, e nao cortado", problemas);
 }
