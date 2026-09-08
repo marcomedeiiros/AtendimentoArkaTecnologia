@@ -76,6 +76,15 @@ const VERIFICACOES = [
     resumo: "quem escreveu antes de abrir volta a ser triado, e quem espera o técnico segue calado",
   },
   {
+    // Vizinho do anterior de propósito: os dois defeitos moram no MESMO portão
+    // (`aguardando: "humano"`) e se corrigem em direções opostas -- um manda
+    // reentrar no fluxo, o outro manda continuar calado. A regressão de cada um
+    // é o caso principal do outro, então eles andam juntos.
+    arquivo: "verificar-sessao-orfa.js",
+    titulo: "Ciclo novo sobre sessão órfã",
+    resumo: "atendimento fechado na Central deixava sessão viva, e o chamado seguinte não era triado",
+  },
+  {
     arquivo: "verificar-fluxo-arka.js",
     titulo: "Fluxo da ARKA",
     resumo: "botões x texto livre, Técnico/Comercial/Financeiro, CNPJ, timeout e horário",

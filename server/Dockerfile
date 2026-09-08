@@ -19,6 +19,14 @@ RUN npx prisma generate
 
 COPY src ./src
 COPY docker-entrypoint.sh ./
+# ── SCRIPTS DE CONSERTO DE DADOS ────────────────────────────────────────────
+#
+# Os `verificar-*.js` da raiz do server/ NAO entram aqui de proposito: sao
+# testes, e o lugar deles e o checkout do repo. Um script de CONSERTO e outra
+# coisa -- ele precisa estar onde o BANCO esta, e o banco vive no volume deste
+# container. Sem isto, a unica forma de rodar um era colar o codigo inteiro num
+# `node -e` -- que e exatamente o tipo de coisa que se digita errado as 23h.
+COPY corrigir-sessoes-orfas.js ./
 # O projeto e editado no Windows; se o arquivo chegar com CRLF o shell reclama
 # de "bad interpreter". Normaliza antes de tornar executavel.
 RUN sed -i 's/\r$//' docker-entrypoint.sh && chmod +x docker-entrypoint.sh

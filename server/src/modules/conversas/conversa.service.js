@@ -26,6 +26,9 @@ const { JANELA_ONLINE_MS } = require("../equipe/equipe.service");
 // revista sem deploy, entao quem valida a escolha precisa consultá-la.
 const configuracaoService = require("../configuracoes/configuracao.service");
 const parceiroRepository = require("../../infrastructure/repositories/parceiro.repository");
+// A sessao do chatbot e desligada quando o ciclo fecha: ela pertence ao
+// atendimento, nao ao fio do cliente. Ver _desligarSessaoDoCiclo.
+const sessaoRepository = require("../../infrastructure/repositories/sessao.repository");
 const usuarioRepository = require("../../infrastructure/repositories/usuario.repository");
 const bus = require("../../shared/events/event-bus");
 const AppError = require("../../shared/errors/AppError");
@@ -1328,12 +1331,136 @@ class ConversaService {
     // `semPesquisa` e a saida do atendente: fecha calado, sem perguntar nada ao
     // cliente.
     if (status === "fechada" && mudouStatus && !semPesquisa) {
-      this._dispararPesquisaSatisfacao(recarregada).catch((e) =>
-        logger.warn("Falha ao iniciar pesquisa de satisfacao", { id, message: e.message })
-      );
+      this._dispararPesquisaSatisfacao(recarregada)
+        // A PESQUISA QUE NAO SAIU TAMBEM PRECISA DE UM DESFECHO.
+        //
+        // `iniciarPesquisaSatisfacao` devolve null quando ela nao se aplica --
+        // conversa ja avaliada, nenhum fluxo ativo com passo de avaliacao, ou
+        // modo != local. Nesses casos ninguem mais vai usar a sessao, e era
+        // justamente por aqui que as sessoes orfas em `humano` nasciam: o
+        // fechamento nao as desligava e a pesquisa, que seria a proxima dona
+        // delas, nunca assumia. Ver _desligarSessaoDoCiclo.
+        .then((iniciada) => {
+          if (!iniciada) return this._desligarSessaoDoCiclo(id, "pesquisa_nao_se_aplica");
+        })
+        .catch((e) =>
+          logger.warn("Falha ao iniciar pesquisa de satisfacao", { id, message: e.message })
+        );
+    }
+
+    // ── FECHAR O ATENDIMENTO TAMBEM DESLIGA A SESSAO DO CHATBOT ─────────────
+    //
+    // Este metodo nao tocava em `sessaoChatbot`, e o modulo inteiro nao tocava:
+    // a sessao ficava viva depois do fechamento, apontando para uma conversa que
+    // nao existia mais como atendimento. Medido em producao: 11 sessoes
+    // `ativo: true`, TODAS com a conversa em `fechada`.
+    //
+    // O preco disso era pago pelo CLIENTE, no proximo contato dele. A mensagem
+    // abria um ciclo novo (OS emitida, conversa em `pendente`) e em seguida
+    // batia na sessao morta do ciclo anterior: quem estava em `humano` recebia
+    // silencio por ate 240 min, quem estava em `opcao` recebia a retomada de um
+    // passo de um chamado ja encerrado. Em nenhum dos dois casos a triagem
+    // rodava, e a OS chegava na fila sem setor, sem CNPJ e sem descricao.
+    //
+    // A sessao e do CICLO, nao do fio. O ciclo acabou, ela acaba com ele.
+    //
+    // ── POR QUE `semPesquisa` DECIDE ────────────────────────────────────────
+    //
+    // Fechando COM pesquisa, quem manda na sessao a partir daqui e a pesquisa:
+    // `_dispararPesquisaSatisfacao` acabou de ser chamado e vai gravar
+    // `aguardando: "avaliacao_nota"` para receber a nota do cliente. Desligar a
+    // sessao aqui competiria com ele -- e a nota do cliente nao teria onde cair.
+    // Ela roda em segundo plano e na MESMA fila `instancia:telefone`, entao a
+    // ordem entre as duas escritas nao e garantida; nao disputar e mais simples
+    // e mais seguro do que sequenciar.
+    //
+    // Fechando SEM pesquisa (o atendente escolheu fechar calado) nada mais vai
+    // usar a sessao, e e exatamente aqui que ela precisa morrer.
+    //
+    // Fechando SEM pesquisa (o atendente escolheu fechar calado) nada mais vai
+    // usar a sessao, e ela morre aqui, direto. Fechando COM pesquisa a limpeza
+    // fica pendurada no resultado dela, logo acima.
+    if (status === "fechada" && mudouStatus && semPesquisa) {
+      await this._desligarSessaoDoCiclo(id, "fechado_sem_pesquisa");
     }
 
     return dto;
+  }
+
+  /**
+   * DESLIGA A SESSAO DO CHATBOT DO CICLO QUE ACABOU DE FECHAR.
+   *
+   * A sessao pertence ao CICLO (o atendimento/OS), nao ao fio do cliente. Quando
+   * o ciclo fecha ela nao tem mais o que conduzir -- e, viva, ela ATIVAMENTE
+   * atrapalha o ciclo seguinte: `chatbot.engine` le o estado dela para decidir o
+   * que fazer com a proxima mensagem do cliente, e uma sessao em `humano` de um
+   * atendimento ja encerrado fazia o bot devolver silencio a um chamado novo.
+   *
+   * Best-effort de proposito, e o `catch` e largo: o fechamento pedido pelo
+   * atendente ja aconteceu quando isto roda, e ele nunca pode ser desfeito nem
+   * reportado como falha por causa da limpeza de uma sessao de bot.
+   *
+   * ── A FILA E A RECONFERENCIA, E POR QUE AS DUAS SAO NECESSARIAS ───────────
+   *
+   * No caminho da pesquisa isto roda em SEGUNDO PLANO, depois de
+   * `_dispararPesquisaSatisfacao` ter soltado o lock `instancia:telefone`. Sem
+   * protecao existe uma janela real: o cliente escreve nesse intervalo, o
+   * webhook abre um ciclo NOVO e inicia o fluxo (sessao em `opcao`, esperando a
+   * escolha do menu) -- e esta limpeza, chegando atrasada, mataria essa sessao
+   * recem-criada. O cliente ficaria no menu que nunca mais seria lido: o mesmo
+   * silencio que este conserto veio eliminar, so por outro caminho.
+   *
+   * A fila serializa contra o webhook. Dentro dela, a RECONFERENCIA do status da
+   * conversa e o que decide: se ela nao esta mais `fechada`, um ciclo novo
+   * comecou e a sessao pertence a ele -- nao se toca. E o mesmo raciocinio de
+   * `sessaoRepository.reivindicarInatividade`: quem decide e o estado no banco no
+   * instante da escrita, nao um `if` avaliado antes.
+   */
+  async _desligarSessaoDoCiclo(conversaId, motivo) {
+    // `comLock` NAO e reentrante: pedir a mesma chave duas vezes trava a
+    // conversa para sempre. Isto e seguro porque `atualizarStatus` so e chamado
+    // pelo controller HTTP (nunca de dentro da fila), e no caminho da pesquisa a
+    // fila ja foi liberada antes deste `.then()`.
+    const { comLock } = require("../../shared/helpers/lock.helper");
+    try {
+      const conversa = await conversaRepository.findById(conversaId);
+      if (!conversa) return;
+      await comLock(`${conversa.instanciaId}:${conversa.telefone}`, async () => {
+        // Releitura DENTRO da fila: o retrato de fora dela pode ter envelhecido
+        // enquanto se esperava a vez.
+        const atual = await conversaRepository.findById(conversaId);
+        if (atual?.statusAtendimento !== "fechada") {
+          logger.info("Sessao do chatbot preservada: um ciclo novo comecou no meio da limpeza", {
+            conversaId,
+            motivo,
+            statusAgora: atual?.statusAtendimento ?? null,
+          });
+          return;
+        }
+        const sessao = await sessaoRepository.findByConversa(conversaId);
+        if (!sessao?.ativo) return;
+        await sessaoRepository.update(sessao.id, {
+          ativo: false,
+          aguardando: null,
+          fluxoAtualId: null,
+          passoAtualId: null,
+          aguardandoDesde: null,
+          inatividadeEm: null,
+          contexto: {},
+        });
+        logger.info("Sessao do chatbot desligada com o fechamento do ciclo", {
+          conversaId,
+          motivo,
+          aguardavaAntes: sessao.aguardando,
+        });
+      });
+    } catch (e) {
+      logger.warn("Falha ao desligar a sessao do chatbot no fechamento", {
+        conversaId,
+        motivo,
+        message: e.message,
+      });
+    }
   }
 
   // Ponte para o motor do chatbot: require tardio para evitar ciclo de import
@@ -1352,7 +1479,10 @@ class ConversaService {
     // A fila e tomada AQUI e nao dentro do engine porque o caminho do fluxo
     // (encerrarAtendimento) ja roda dentro dela: pedir a mesma chave duas vezes
     // travaria a conversa para sempre.
-    await comLock(`${conversa.instanciaId}:${conversa.telefone}`, () =>
+    // O RESULTADO E DEVOLVIDO, e nao descartado: `null` significa "a pesquisa
+    // nao se aplica", e quem chamou usa isso para desligar a sessao do ciclo --
+    // sem esse retorno a sessao ficava viva sem dono. Ver atualizarStatus.
+    return await comLock(`${conversa.instanciaId}:${conversa.telefone}`, () =>
       // instanceName fica null de proposito: o engine cai no env.evolutionApi.instance,
       // mesma instancia usada por _enviarWhatsApp neste service (setup single-instance).
       chatbotEngine.iniciarPesquisaSatisfacao({

@@ -4240,6 +4240,50 @@ class ChatbotEngine {
       sessao = null;
     }
 
+    // ── CICLO NOVO SOBRE A SESSAO DO CICLO QUE JA FECHOU ─────────────────────
+    //
+    // A sessao NAO era desligada quando o atendimento fechava, entao toda
+    // conversa encerrada deixava uma sessao viva para tras. Medido em producao:
+    // 11 sessoes `ativo: true`, TODAS apontando para conversa `fechada` -- tres
+    // delas dentro do TTL humano de 240 min e, por isso, ativas de verdade.
+    //
+    // Para essas tres, cada mensagem do cliente abria uma OS nova (o bloco de
+    // ciclo reaberto, la em cima, faz isso antes de chegar aqui) e em seguida
+    // batia num dos portoes de sessao -- `aguardando_atendente` para as de
+    // `humano`, `continuarSessao` para as de `opcao` -- e o cliente recebia
+    // silencio, ou a retomada de um passo de um atendimento que ja tinha sido
+    // fechado. A OS ia para a fila sem setor, sem CNPJ e sem descricao, porque a
+    // triagem que preenche isso nunca rodava. Depois das 4 h o TTL expirava e o
+    // mesmo cliente voltava a ser atendido -- o que fazia a falha parecer
+    // intermitente e sem causa.
+    //
+    // A causa foi tratada no fechamento (ver conversa.service:atualizarStatus),
+    // mas o guard fica: as sessoes orfas JA GRAVADAS continuam no banco, e uma
+    // sessao viva de um ciclo fechado nao pode conduzir o ciclo seguinte -- venha
+    // ela de onde vier.
+    //
+    // Fica ANTES do `ctx` de proposito: o contexto do ciclo passado (tentativas
+    // de menu, CNPJ em confirmacao, fluxo de origem) nao pode vazar para o
+    // chamado novo, e os comandos globais logo abaixo leem o estado da sessao
+    // para decidir se podem atropelar uma etapa obrigatoria que nao existe mais.
+    if (sessao?.ativo && cicloReaberto) {
+      logger.info("Ciclo novo sobre sessao orfa: bot retoma a triagem desde o inicio", {
+        conversaId: conversa.id,
+        telefone,
+        aguardavaAntes: sessao.aguardando,
+      });
+      await this.deps.sessaoRepository.update(sessao.id, {
+        ativo: false,
+        aguardando: null,
+        fluxoAtualId: null,
+        passoAtualId: null,
+        aguardandoDesde: null,
+        inatividadeEm: null,
+        contexto: {},
+      });
+      sessao = null;
+    }
+
     const ctx = {
       conversa,
       telefone,
@@ -4337,13 +4381,51 @@ class ChatbotEngine {
       }
 
       // Transferida para humano e ainda ninguem assumiu: o bot so registra.
-      if (sessao?.ativo && sessao.aguardando === AGUARDANDO.HUMANO) {
+      //
+      // ── MAS UM CICLO NOVO NAO ESPERA O ATENDENTE DO CICLO ANTERIOR ────────
+      //
+      // `!cicloReaberto` faltava aqui, e faltava so aqui: o guard equivalente
+      // dentro de `sessaoExpirada` (ver naFilaDoAtendente, acima) sempre teve.
+      // O efeito medido em producao, com 11 sessoes ativas e TODAS apontando
+      // para conversa `fechada`:
+      //
+      //   1. o atendente fecha o atendimento -- e o fechamento nao desligava a
+      //      sessao (ver conversa.service:atualizarStatus), entao ela ficava
+      //      viva em `humano`;
+      //   2. o cliente escreve de novo dentro do TTL humano (240 min);
+      //   3. o bloco de ciclo reaberto, la em cima, abre uma OS NOVA e devolve a
+      //      conversa para `pendente` -- o numero e emitido, a conversa entra na
+      //      fila;
+      //   4. e este `return` respondia SILENCIO, porque a sessao morta do ciclo
+      //      passado ainda dizia "esperando atendente".
+      //
+      // Resultado para o cliente: chamado aberto, nenhuma pergunta, nenhum menu.
+      // Resultado para a equipe: uma OS na fila sem setor, sem CNPJ e sem
+      // descricao -- porque a triagem que preenche isso nunca rodou. Passadas as
+      // 4 h o TTL expirava e o mesmo cliente voltava a ser atendido, o que fazia
+      // a falha parecer intermitente.
+      //
+      // `cicloReaberto` e exatamente a distincao que faltava: ele so e verdadeiro
+      // quando ESTA mensagem encontrou a conversa fechada e abriu ciclo novo. Quem
+      // continua na fila do ciclo em curso (conversa `pendente`, sem reabertura)
+      // segue recebendo silencio, que e o certo -- a mensagem dele ja esta na tela
+      // do atendente.
+      if (sessao?.ativo && sessao.aguardando === AGUARDANDO.HUMANO && !cicloReaberto) {
+        // `debug` e nao `info`: este e o caminho NORMAL de quem espera na fila e
+        // manda tres mensagens seguidas, e no nivel info ele afogaria o log. Mas
+        // existir, ele precisa -- o que fez esta falha demorar a aparecer foi
+        // exatamente um `return` de silencio sem nenhum rastro.
+        logger.debug("Mensagem registrada sem acionar o bot: conversa na fila do atendente", {
+          conversaId: conversa.id,
+          telefone,
+        });
         return {
           processado: false,
           motivo: "aguardando_atendente",
           conversaId: conversa.id,
         };
       }
+
 
       // Sessao esperando escolha do menu.
       if (sessao?.ativo && sessao.aguardando === AGUARDANDO.MENU) {
