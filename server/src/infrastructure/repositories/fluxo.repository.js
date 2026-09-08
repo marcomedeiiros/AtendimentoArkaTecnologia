@@ -251,6 +251,58 @@ class FluxoRepository {
         where: { fluxoId, targetId: passoId },
         data: { targetId: null },
       });
+
+      // ── E AS LIGACOES QUE MORAM NO `config` TAMBEM ─────────────────────────
+      //
+      // O cabecalho deste arquivo diz "TODA LIGACAO ENTRE BLOCOS PRECISA SER
+      // REMAPEADA. TODA." -- e aqui so a coluna `targetId` era limpa. As
+      // ramificacoes vivem em `config.opcoes[].targetId`, e a saida alternativa
+      // do CNPJ em `config.targetIdNaoCadastrado`: apagar um bloco pela rota
+      // por passo (o "excluir" do painel de propriedades) deixava cada uma
+      // delas apontando para um id que nao existe mais.
+      //
+      // O defeito nao aparece no editor -- o fio some da tela porque o bloco
+      // sumiu -- e sim na conversa do cliente: `aplicarOpcao` nao acha o
+      // destino e cai em `ramificacao_sem_destino`, ou seja, a opcao do menu
+      // passa a jogar o cliente na fila. E `decidirEsperaDoPasso` conta essa
+      // ramificacao morta como saida valida, entao o bloco continua estacionando
+      // a conversa como se houvesse para onde ir.
+      //
+      // Nulo, e nao "aponta para o vazio": e o mesmo criterio de `resolverIds`.
+      // `config` e JSON no banco, entao a limpeza e em memoria, bloco a bloco --
+      // e so os que realmente citam o id removido sao regravados.
+      const comConfig = await tx.passoFluxo.findMany({
+        where: { fluxoId },
+        select: { id: true, config: true },
+      });
+      for (const passo of comConfig) {
+        const cfg = passo.config;
+        if (!cfg || typeof cfg !== "object" || Array.isArray(cfg)) continue;
+
+        let mexeu = false;
+        const novo = { ...cfg };
+
+        if (Array.isArray(cfg.opcoes)) {
+          novo.opcoes = cfg.opcoes.map((op) => {
+            if (op && typeof op === "object" && op.targetId === passoId) {
+              mexeu = true;
+              return { ...op, targetId: null };
+            }
+            return op;
+          });
+        }
+        for (const campo of LIGACOES_NO_CONFIG) {
+          if (cfg[campo] === passoId) {
+            novo[campo] = null;
+            mexeu = true;
+          }
+        }
+
+        if (mexeu) {
+          await tx.passoFluxo.update({ where: { id: passo.id }, data: { config: novo } });
+        }
+      }
+
       return tx.fluxo.findUnique({ where: { id: fluxoId }, include: INCLUI_PASSOS });
     });
   }

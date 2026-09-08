@@ -249,12 +249,51 @@ async function main() {
   // ─────────────────────────────────────────────────────────────────────────
   titulo("11. CRUD de BLOCO -- apagar");
 
+  // ── AS LIGACOES DO `config` TAMBEM APONTAVAM PARA O BLOCO REMOVIDO ────────
+  //
+  // `removerPasso` limpava so a COLUNA `targetId`. As ramificacoes de menu
+  // moram em `config.opcoes[].targetId`, e a saida alternativa do CNPJ em
+  // `config.targetIdNaoCadastrado` -- as duas ficavam apontando para um id que
+  // nao existe mais. Nada aparece no editor (o fio some porque o bloco sumiu);
+  // o defeito aparece na conversa: `aplicarOpcao` nao acha o destino e cai em
+  // `ramificacao_sem_destino`, ou seja, a opcao do menu passa a jogar o
+  // cliente na fila. Pior, `decidirEsperaDoPasso` conta a ramificacao morta
+  // como saida valida e o bloco continua estacionando a conversa.
+  //
+  // Por isso o cenario e montado ANTES de apagar: um bloco que aponta para
+  // `novo.id` pelos dois caminhos do config.
+  const primeiroId = releituraOrdem.passos.find((p) => p.id !== novo.id).id;
+  await fluxoService.atualizarPasso(criado.id, primeiroId, {
+    config: {
+      opcoes: [
+        { id: "op-morre", palavrasChave: ["1"], esperaEscolha: true, targetId: novo.id },
+        { id: "op-fica", palavrasChave: ["2"], esperaEscolha: true, targetId: primeiroId },
+      ],
+      targetIdNaoCadastrado: novo.id,
+    },
+  });
+
   const semNovo = await fluxoService.removerPasso(criado.id, novo.id);
   check(semNovo.passos.length === 3, "o bloco saiu do fluxo");
   check(!semNovo.passos.some((p) => p.id === novo.id), "e nao volta na releitura");
   check(
     !semNovo.passos.some((p) => p.targetId === novo.id),
     "quem apontava para o bloco removido ficou sem destino, e nao com um fio morto"
+  );
+
+  const comLigacoes = semNovo.passos.find((p) => p.id === primeiroId);
+  const opcoesRestantes = comLigacoes?.config?.opcoes || [];
+  check(
+    opcoesRestantes.find((o) => o.id === "op-morre")?.targetId === null,
+    "a ramificacao (config.opcoes[].targetId) que apontava para o bloco removido ficou nula"
+  );
+  check(
+    opcoesRestantes.find((o) => o.id === "op-fica")?.targetId === primeiroId,
+    "e as OUTRAS ramificacoes do mesmo bloco nao foram tocadas"
+  );
+  check(
+    comLigacoes?.config?.targetIdNaoCadastrado === null,
+    "a saida alternativa do CNPJ (config.targetIdNaoCadastrado) tambem ficou nula"
   );
 
   // ─────────────────────────────────────────────────────────────────────────
