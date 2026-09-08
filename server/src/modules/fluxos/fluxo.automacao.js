@@ -344,8 +344,13 @@ function resumoAutomacoes(fluxo) {
   const passos = fluxo.passos || [];
   const itens = [];
 
-  const passoCnpj = passos.find((p) => p.tipo === "condicao");
-  if (passoCnpj) {
+  // TODOS os blocos de identificacao, e nao so o primeiro.
+  //
+  // Era `passos.find(...)`: um fluxo com dois blocos de CNPJ -- o caminho de
+  // quem tem contrato e o de quem informa outro documento -- mostrava as regras
+  // de UM e escondia as do outro. O painel existe para responder "o que o bot
+  // faz", e meia resposta e pior que nenhuma: quem investiga confia no que le.
+  for (const passoCnpj of passos.filter((p) => p.tipo === "condicao")) {
     const cfg = paramsCnpj(passoCnpj);
     itens.push({
       grupo: "Identificação por CPF/CNPJ",
@@ -361,7 +366,21 @@ function resumoAutomacoes(fluxo) {
         { rotulo: "Última tentativa", valor: cfg.mensagemUltimaTentativa },
         { rotulo: "Documento válido, não cadastrado", valor: cfg.mensagemNaoCadastrado },
         { rotulo: "Resposta fora do esperado", valor: cfg.mensagemRespostaInvalida },
-        { rotulo: "Confirmar documento anterior", valor: cfg.memoria ? "Ligado" : "Desligado" },
+        {
+          rotulo: "Confirmar documento anterior",
+          // TRES VALORES, e o painel mostrava dois. `memoria: "fluxo"` e um
+          // comportamento DIFERENTE de `true` -- o motor adota o documento e
+          // quem confirma e o bloco seguinte do desenho -- e aparecia como
+          // "Ligado", igual ao caso em que o proprio motor pergunta. Quem
+          // investigasse "por que o bot nao pediu confirmacao?" leria no painel
+          // que a confirmacao estava ligada. Ver paramsCnpj.
+          valor:
+            cfg.memoria === "fluxo"
+              ? "Ligado, confirmado por um bloco do fluxo"
+              : cfg.memoria
+                ? "Ligado, confirmado pelo bot"
+                : "Desligado",
+        },
       ],
     });
   }
@@ -493,8 +512,9 @@ function resumoAutomacoes(fluxo) {
     });
   }
 
-  const passoAval = passos.find((p) => p.tipo === "avaliacao");
-  if (passoAval) {
+  // Mesma razao do bloco de CNPJ acima: um fluxo pode ter mais de um bloco de
+  // pesquisa (um por caminho), e o painel mostrava so o primeiro.
+  for (const passoAval of passos.filter((p) => p.tipo === "avaliacao")) {
     const cfg = paramsAvaliacao(passoAval);
     itens.push({
       grupo: "Pesquisa de satisfação",
