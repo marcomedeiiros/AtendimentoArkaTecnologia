@@ -343,50 +343,82 @@ export async function exportarRelatorioPdf({ elemento, metricas = [], filtros = 
     y += 4;
   }
 
-  // ---------- Graficos (captura da tela) ----------
+  // ---------- Graficos: UM POR LINHA, cada um na largura da pagina ----------
+  //
+  // Antes era UMA captura do container inteiro. Na tela os dois gráficos ficam
+  // lado a lado (`md:grid-cols-2`), e essa imagem larga era reduzida para caber
+  // na largura do papel -- cada gráfico terminava com metade da largura útil, e
+  // as legendas ficavam pequenas demais para serem lidas impressas.
+  //
+  // Capturando CADA cartão em separado, os dois empilham e cada um ocupa a
+  // largura toda: mesma área de papel, letra do dobro do tamanho.
+  //
+  // O corte é pelos FILHOS DIRETOS do container, e não por um seletor de classe:
+  // a captura não deve saber como o painel está estilizado hoje. Com um filho
+  // só, o comportamento é o de antes.
   if (elemento) {
-    try {
-      const { html2canvas } = await libs();
-      const canvas = await html2canvas(elemento, {
-        backgroundColor: '#0F1219',
-        scale: 2,
-        logging: false,
-        useCORS: true,
-      });
-      const img = canvas.toDataURL('image/png');
-      const larguraImg = larguraPg - margem * 2;
-      const alturaImg = (canvas.height * larguraImg) / canvas.width;
+    const { html2canvas } = await libs();
+    const cartoes = elemento.children?.length > 1 ? [...elemento.children] : [elemento];
+    const larguraImg = larguraPg - margem * 2;
 
-      // Cabe no espaco restante? Senao vai para a proxima pagina.
-      if (y + alturaImg > alturaPg - margem) {
-        pdf.addPage();
-        y = margem;
-      }
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(10);
-      pdf.setTextColor(...TINTA);
-      pdf.text('Gráficos', margem, y);
-      y += 5;
+    // O título vai ANTES do laço: repetido a cada cartão, viraria "Gráficos"
+    // três vezes na mesma página.
+    if (y + 12 > alturaPg - margem) { pdf.addPage(); y = margem; }
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(10);
+    pdf.setTextColor(...TINTA);
+    pdf.text('Gráficos', margem, y);
+    y += 5;
 
-      // Imagem muito alta: fatia entre paginas para nao cortar conteudo.
-      let restante = alturaImg;
-      let deslocamento = 0;
-      while (restante > 0) {
-        const disponivel = alturaPg - y - margem;
-        const fatia = Math.min(restante, disponivel);
-        pdf.addImage(img, 'PNG', margem, y - deslocamento, larguraImg, alturaImg, undefined, 'FAST');
-        restante -= fatia;
-        deslocamento += fatia;
-        if (restante > 0) {
+    for (const cartao of cartoes) {
+      // TRY POR CARTÃO, e não um só em volta do laço.
+      //
+      // Com o `try` do lado de fora, uma captura que falha aborta as seguintes:
+      // o relatório sai com o primeiro gráfico e sem os outros, sem erro nenhum.
+      // Foi exatamente o que a primeira medição desta mudança mostrou -- um
+      // cartão entrou, o outro sumiu em silêncio.
+      try {
+        const canvas = await html2canvas(cartao, {
+          backgroundColor: '#0F1219',
+          scale: 2,
+          logging: false,
+          useCORS: true,
+        });
+        if (!canvas.width || !canvas.height) continue;
+
+        const img = canvas.toDataURL('image/png');
+        let l = larguraImg;
+        let alturaImg = (canvas.height * l) / canvas.width;
+
+        // TETO DE ALTURA: uma página inteira menos as margens.
+        //
+        // Sem isto, um cartão alto seria desenhado maior que o papel e o que
+        // sobra some -- sem erro, só um gráfico cortado pela metade. O
+        // fatiamento entre páginas que existia aqui foi trocado por este teto:
+        // gráfico partido em duas folhas não se lê, e reduzir a escala mantém o
+        // desenho inteiro.
+        const alturaMax = alturaPg - margem * 2;
+        if (alturaImg > alturaMax) {
+          l = (l * alturaMax) / alturaImg;
+          alturaImg = alturaMax;
+        }
+
+        if (y + alturaImg > alturaPg - margem) {
           pdf.addPage();
           y = margem;
         }
+        // Centralizado quando a redução por altura deixou o cartão estreito.
+        const x = margem + (larguraImg - l) / 2;
+        pdf.addImage(img, 'PNG', x, y, l, alturaImg, undefined, 'FAST');
+        y += alturaImg + 6;
+      } catch (err) {
+        // Um cartão que não captura não pode levar os outros junto.
+        if (typeof console !== 'undefined') {
+          console.warn('Gráfico não capturado no PDF:', err && err.message);
+        }
       }
-    } catch {
-      // Falha na captura nao invalida o relatorio: segue sem os graficos.
     }
   }
-
   rodapePdf(pdf, { legenda: 'Arka Tecnologia · Central de Atendimento', margem });
   pdf.save(`relatorio-arka-${hojeISO()}.pdf`);
 }

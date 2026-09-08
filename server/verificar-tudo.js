@@ -247,6 +247,11 @@ const VERIFICACOES = [
     resumo: "a recusa que fala, e o webhook conferido ao subir",
   },
   {
+    arquivo: "verificar-pdf-graficos.js",
+    titulo: "Graficos do PDF",
+    resumo: "um por linha, largura cheia e falha isolada por cartao",
+  },
+  {
     arquivo: "verificar-stream-vivo.js",
     titulo: "Stream vivo",
     resumo: "batimento visivel, vigia da conexao muda e volta de outro programa",
