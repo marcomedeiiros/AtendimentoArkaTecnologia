@@ -183,7 +183,7 @@ function titulo(t) {
       avisos.push(`"${p.titulo}" não tem saída nem opção: o fluxo morre nele`);
     }
 
-    const destino = p.targetId ? porId.get(p.targetId)?.titulo || "(id morto)" : "—";
+    const destino = p.targetId ? porId.get(p.targetId)?.titulo || "(id morto)" : "-";
     console.log(`  ${String(p.ordem).padStart(2)} ${String(p.titulo).slice(0, 26).padEnd(26)} ${veredito}`);
     console.log(`     ${" ".repeat(26)} segue para: ${destino}`);
 

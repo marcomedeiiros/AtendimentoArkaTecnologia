@@ -50,7 +50,7 @@ function prazoSugerido(dataVisita, dias = 3) {
 
 // "1,2 MB" -- o tamanho do PDF, para a pessoa saber o que está mandando.
 function tamanho(bytes) {
-  if (!bytes) return '—';
+  if (!bytes) return '-';
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
@@ -68,7 +68,7 @@ function tamanho(bytes) {
  * hora (o que vem do banco) continua no caminho de sempre, que aí está certo.
  */
 const data = (iso) => {
-  if (!iso) return '—';
+  if (!iso) return '-';
   const puro = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso));
   if (puro) return `${puro[3]}/${puro[2]}/${puro[1]}`;
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: FUSO_BR });
@@ -973,13 +973,13 @@ function Configuracao() {
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Campo rotulo="Prazo de entrega (dias após a visita)"
-            dica="É o prazo de cada relatório. Ele decide a parcela “no prazo” da pontuação.">
+            dica="É o prazo de cada relatório ele decide a parcela “no prazo” da pontuação">
             <input type="number" min={1} max={90} className={ENTRADA}
               value={rascunho.prazoDias}
               onChange={(e) => mexer('prazoDias', Number(e.target.value))} />
           </Campo>
           <Campo rotulo="Vencimento mensal (dia do mês seguinte)"
-            dica="Todos os relatórios de um mês precisam estar entregues até esse dia do mês seguinte. Vazio = a empresa não usa essa regra. Valendo as duas, vale a mais apertada.">
+            dica="Todos os relatórios de um mês precisam estar entregues até esse dia do mês seguinte Vazio = a empresa não usa essa regra valendo as duas, vale a mais apertada">
             <input type="number" min={1} max={28} placeholder="não usar" className={ENTRADA}
               value={rascunho.vencimentoDiaDoMes ?? ''}
               onChange={(e) => mexer('vencimentoDiaDoMes', e.target.value === '' ? null : Number(e.target.value))} />
@@ -1028,7 +1028,7 @@ function Configuracao() {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Campo rotulo="Mínimo de relatórios no mês"
-            dica="Abaixo disso, as parcelas de qualidade (completude, prazo e evidências) não contam. Impede que uma única visita perfeita lidere o mês.">
+            dica="Abaixo disso, as parcelas de qualidade (completude, prazo e evidências) não contam impede que uma única visita perfeita lidere o mês">
             <input type="number" min={1} max={20} className={ENTRADA}
               value={rascunho.minimoRelatorios}
               onChange={(e) => mexer('minimoRelatorios', Number(e.target.value))} />

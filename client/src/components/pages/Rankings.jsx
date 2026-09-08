@@ -113,9 +113,9 @@ function valorCriterio(c) {
   if (c.conta === false) {
     return { texto: `${c.amostra ?? 0} de ${c.minimo ?? 3}`, fraco: true };
   }
-  if (c.valor == null) return { texto: '—', fraco: true };
+  if (c.valor == null) return { texto: '-', fraco: true };
   if (c.chave === 'nota') return { texto: c.valor.toFixed(1).replace('.', ','), fraco: false };
-  if (c.chave === 'agilidade') return { texto: duracao(c.valor) || '—', fraco: false };
+  if (c.chave === 'agilidade') return { texto: duracao(c.valor) || '-', fraco: false };
   return { texto: `${c.valor}${c.sufixo || ''}`, fraco: false };
 }
 
@@ -309,8 +309,8 @@ function LinhaTabela({ p, aberta, onAlternar, premiados = 1, temGeral = false })
                 : undefined
             }>
             {p.geralDeDoisLados
-              ? <span className="font-display font-extrabold text-acao-200">{p.geral ?? '—'}</span>
-              : <span className="text-texto-fraco">—</span>}
+              ? <span className="font-display font-extrabold text-acao-200">{p.geral ?? '-'}</span>
+              : <span className="text-texto-fraco">-</span>}
           </td>
 )}
         <td className="py-2.5 px-3 text-right tabular-nums text-texto-suave text-xs hidden lg:table-cell">{p.registros}</td>
@@ -326,7 +326,7 @@ function LinhaTabela({ p, aberta, onAlternar, premiados = 1, temGeral = false })
           {p.ultimo ? (
             <div className="flex items-baseline gap-1.5 min-w-0">
               <span className="text-texto truncate max-w-[16rem]" title={p.ultimo.empresa || p.ultimo.cliente || ''}>
-                {p.ultimo.empresa || p.ultimo.cliente || '—'}
+                {p.ultimo.empresa || p.ultimo.cliente || '-'}
               </span>
               <span className="text-texto-fraco shrink-0">
                 {p.ultimo.quando
@@ -335,7 +335,7 @@ function LinhaTabela({ p, aberta, onAlternar, premiados = 1, temGeral = false })
               </span>
             </div>
           ) : (
-            <span className="text-texto-fraco">—</span>
+            <span className="text-texto-fraco">-</span>
           )}
         </td>
         <td className="py-2.5 px-3 hidden sm:table-cell"><Evolucao estado={p.evolucao} anterior={p.anterior} /></td>
@@ -408,7 +408,7 @@ function Historico({ dados }) {
                           <span className="text-texto-fraco text-[10px] ml-1">{m.posicao}º</span>
                         </>
                       ) : (
-                        <span className="text-texto-fraco">—</span>
+                        <span className="text-texto-fraco">-</span>
                       )}
                     </td>
                   );

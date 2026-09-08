@@ -59,7 +59,7 @@ export default function LoginPage() {
   return (
     <AcessoLayout
       titulo="Entrar"
-      subtitulo="Assuma os atendimentos que estão na fila."
+      subtitulo="Assuma os atendimentos que estão na fila"
       rodape={<>Ainda não tem conta? <LinkAcesso to="/cadastrar">Criar conta</LinkAcesso></>}
     >
       <form onSubmit={enviar} className="space-y-4" noValidate>
@@ -67,7 +67,7 @@ export default function LoginPage() {
           <div role="status" className="flex items-start gap-2 rounded-xl border border-acao/40 bg-acao/10 p-3">
             <CheckCircle2 size={15} className="mt-px shrink-0 text-acao-200" />
             <p className="text-xs leading-relaxed text-texto">
-              <strong className="text-acao-200">Conta criada.</strong> Entre com a senha que você acabou de escolher.
+              <strong className="text-acao-200">Conta criada</strong> Entre com a senha que você acabou de escolher
             </p>
           </div>
         )}

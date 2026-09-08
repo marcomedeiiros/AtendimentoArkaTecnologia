@@ -96,7 +96,7 @@ const AVATAR_POSICAO = 'clamp(1.9rem, 4.6vh, 3rem)';
 
 // Duracao curta e legivel de longe: "4 min", "2 h 10", "18 s".
 function duracao(segundos) {
-  if (segundos == null || segundos < 1) return '—';
+  if (segundos == null || segundos < 1) return '-';
   if (segundos < 60) return `${Math.round(segundos)} s`;
   const min = Math.round(segundos / 60);
   if (min < 60) return `${min} min`;
@@ -760,8 +760,8 @@ export default function ModoTv({ onFechar, fila = [] }) {
                   <AlertCircle size={32} className="text-espera-400 mx-auto" />
                   <p className="font-display text-lg text-white">Não foi possível carregar os indicadores</p>
                   <p className="text-sm text-slate-400">
-                    Tentando de novo a cada 30 segundos. Se não voltar, seu perfil pode não ter
-                    acesso ao módulo de indicadores. A fila ao lado continua valendo.
+                    Tentando de novo a cada 30 segundos se não voltar, seu perfil pode não ter
+                    acesso ao módulo de indicadores a fila ao lado continua valendo
                   </p>
                 </div>
               ) : (
@@ -809,7 +809,7 @@ export default function ModoTv({ onFechar, fila = [] }) {
                 <Kpi
                   icon={Star}
                   rotulo="Satisfação do mês"
-                  valor={dados.csat.media != null ? nota1(dados.csat.media) : '—'}
+                  valor={dados.csat.media != null ? nota1(dados.csat.media) : '-'}
                   apoio={dados.csat.total
                     ? `${dados.csat.total} ${dados.csat.total === 1 ? 'avaliação' : 'avaliações'}`
                     : 'sem avaliações ainda'}

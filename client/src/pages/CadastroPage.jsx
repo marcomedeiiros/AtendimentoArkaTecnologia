@@ -100,7 +100,7 @@ export default function CadastroPage() {
   return (
     <AcessoLayout
       titulo="Criar conta"
-      subtitulo="Sua conta dá acesso à fila e ao histórico dos clientes."
+      subtitulo="Sua conta dá acesso à fila e ao histórico dos clientes"
       rodape={<>Já tem conta? <LinkAcesso to="/login">Entrar</LinkAcesso></>}
     >
       <form onSubmit={enviar} className="space-y-4" noValidate>
