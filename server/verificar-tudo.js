@@ -85,6 +85,15 @@ const VERIFICACOES = [
     resumo: "atendimento fechado na Central deixava sessão viva, e o chamado seguinte não era triado",
   },
   {
+    // VEM ANTES da matriz do fluxo de proposito: ele prova que a FERRAMENTA de
+    // teste esta de pe. Enquanto o ambiente do simulador nao cumpria o contrato
+    // do motor, todo fluxo que encerra terminava em "erro_interno" -- e a matriz
+    // logo abaixo teria falhado sem que nada estivesse errado com o fluxo.
+    arquivo: "verificar-simulador-contrato.js",
+    titulo: "Contrato entre o motor e o simulador",
+    resumo: "a tela \"Testar\" reportava erro_interno em todo fluxo que encerra",
+  },
+  {
     arquivo: "verificar-fluxo-arka.js",
     titulo: "Fluxo da ARKA",
     resumo: "botões x texto livre, Técnico/Comercial/Financeiro, CNPJ, timeout e horário",

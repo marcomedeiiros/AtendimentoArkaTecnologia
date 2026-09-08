@@ -384,8 +384,61 @@ class ChatbotEngine {
     return null;
   }
 
+  /**
+   * O MESMO VOCABULARIO, MAS SO QUANDO A MENSAGEM E O COMANDO.
+   *
+   * `detectarComando` procura o termo DENTRO da frase, e para `atendente` isso
+   * esta certo. Para `sair` e `menu` esta errado, e o erro nao era teorico:
+   * "preciso cancelar meu boleto" era lido como pedido de encerramento e o
+   * cliente recebia silencio absoluto na primeira mensagem do chamado.
+   *
+   * Aqui a comparacao e por IGUALDADE com o texto normalizado inteiro. Aceita
+   * o enfeite que uma mensagem de comando costuma ter -- pontuacao no fim
+   * ("sair!", "menu?") e a saudacao curta antes dele NAO entra: "menu" e
+   * "menu por favor" contam, "quero voltar a usar o sistema antigo" nao.
+   */
+  detectarComandoExato(texto) {
+    const normalizado = this.normalizarTexto(texto)
+      // Pontuacao de fecho e enfeite, nao conteudo: "sair!" e "sair".
+      .replace(/[!?.,;:]+$/u, "")
+      .trim();
+    if (!normalizado) return null;
+    // Cortesia colada no comando -- e so ela. Tudo o mais faz da mensagem uma
+    // frase, e frase nao e comando.
+    let enxuto = normalizado;
+    for (const cortesia of ["por favor", "pf", "pfv"]) {
+      if (enxuto.startsWith(cortesia + " ")) enxuto = enxuto.slice(cortesia.length + 1).trim();
+      if (enxuto.endsWith(" " + cortesia)) enxuto = enxuto.slice(0, -(cortesia.length + 1)).trim();
+    }
+    for (const [comando, termos] of Object.entries(palavrasChave)) {
+      if (termos.some((t) => this.normalizarTexto(t) === enxuto)) return comando;
+    }
+    return null;
+  }
+
   ordenarPassos(passos) {
     return [...passos].sort((a, b) => a.ordem - b.ordem);
+  }
+
+  /**
+   * O PASSO EM QUE A SESSAO ESTA PARADA -- leitura, sem efeito nenhum.
+   *
+   * Existe porque o bloco de comandos globais precisa saber se a mensagem casa
+   * com alguma opcao do menu ANTES de decidir se o atalho vale (ver o
+   * `opcaoCasou` em _processarMensagemEntrada). Devolve null quando nao ha
+   * fluxo, passo ou sessao -- quem chama trata a ausencia como "nao casou".
+   */
+  async _passoDaSessao(sessao) {
+    if (!sessao?.fluxoAtualId) return null;
+    try {
+      const fluxo = await this.deps.fluxoRepository.findById(sessao.fluxoAtualId);
+      if (!fluxo) return null;
+      const passos = this.ordenarPassos(fluxo.passos || []);
+      return (sessao.passoAtualId ? passos.find((p) => p.id === sessao.passoAtualId) : passos[0]) || null;
+    } catch (error) {
+      logger.warn("Falha ao ler o passo atual da sessao", { message: error.message });
+      return null;
+    }
   }
 
   // ------------------------------------------------- opcoes (ramificacoes) ---
@@ -1330,8 +1383,35 @@ class ChatbotEngine {
         conversaId,
         message: error.message,
       });
-      await this.enviarBot(conversaId, telefone, texto, instanceName);
+      // ── O FALLBACK REAPROVEITA A BOLHA QUE JA FOI CRIADA ──────────────────
+      //
+      // Aqui se chamava `enviarBot`, que CRIA outra mensagem. A bolha da
+      // enquete (`msg`, gravada acima) ficava para sempre em
+      // `status: "enviando"` e o mesmo texto aparecia DUAS vezes no historico
+      // da Central -- uma pendurada em "enviando" e outra enviada. Do lado do
+      // cliente chegava uma; do lado de quem atende, duas, e uma delas nunca
+      // saia do estado de envio.
+      //
+      // Mesmo tratamento do menu interativo (ver o catch de
+      // `enviarBotComOpcoes`): tenta o texto e CARIMBA a bolha existente com o
+      // desfecho, em vez de empilhar uma nova.
+      try {
+        const rTexto = await this.deps.evolutionApi.sendText(telefone, texto, inst);
+        await this.deps.conversaRepository.vincularWaMessageId(
+          msg.id,
+          rTexto?.key?.id || null,
+          "enviada"
+        );
+      } catch {
+        await this.deps.conversaRepository.vincularWaMessageId(msg.id, null, "erro");
+      }
     }
+    // A ENQUETE TAMBEM PRECISA APARECER NA CENTRAL NA HORA.
+    //
+    // Este era o unico caminho de envio do bot sem `_emitirConversa`: a bolha
+    // ficava no banco e a tela de quem atende so a mostrava no F5 seguinte --
+    // exatamente o menu que o cliente esta vendo, invisivel para a equipe.
+    await this._emitirConversa(conversaId);
     return texto;
   }
 
@@ -1346,13 +1426,23 @@ class ChatbotEngine {
       return this.enviarBot(conversaId, telefone, texto, instanceName);
     }
 
-    // 2. Se o passo pede enquete explicitamente, ou se a flag global estiver ativa:
-    // REMOVIDA a verificação de > 3 opções, pois agora o padrão é sempre usar botões divididos em mensagens
-    if (
-      exibicao === "enquete" ||
-      exibicao === "poll" ||
-      process.env.WHATSAPP_MENU_ENQUETE === "true"
-    ) {
+    // 2. ENQUETE: pedida pelo bloco, ou o padrao da instalacao.
+    //
+    // ── A FLAG GLOBAL NAO PODE ATROPELAR O QUE O BLOCO DECLAROU ─────────────
+    //
+    // A condicao era `exibicao === "enquete" || WHATSAPP_MENU_ENQUETE === "true"`,
+    // sem olhar o que o bloco havia pedido. Com a flag ligada na instalacao, um
+    // bloco que declara `exibicao: "buttons"` (ou `"list"`) saia como ENQUETE:
+    // quem monta o fluxo escolhia botoes na tela, o cliente recebia uma votacao,
+    // e nao havia nada no log dizendo que a escolha do desenho tinha sido
+    // descartada.
+    //
+    // A regra do resto do sistema e a mesma em todo lugar (ver paramsTempos, e o
+    // "o bloco vence" do fluxo.automacao): quem tem de mandar e o desenho, e a
+    // flag global e o PADRAO de quem nao declarou nada. `auto` e justamente o
+    // valor que diz "nao declarei" -- e so nele a flag decide.
+    const pedeEnquete = exibicao === "enquete" || exibicao === "poll";
+    if (pedeEnquete || (exibicao === "auto" && process.env.WHATSAPP_MENU_ENQUETE === "true")) {
       return this._enviarMenuEnquete(conversaId, telefone, texto, opcoes, instanceName);
     }
 
@@ -2652,18 +2742,55 @@ class ChatbotEngine {
     return { processado: true, conversaId: conversa.id, encerrado: true, avaliado: true };
   }
 
+  /**
+   * O COMANDO "SAIR" -- e ele precisa ENCERRAR, nao apenas esquecer a sessao.
+   *
+   * Este metodo desligava a sessao e devolvia `encerrado: true`. Nada mais:
+   * nenhuma mensagem para o cliente, e a CONVERSA continuava `pendente`, com a
+   * OS aberta na fila. O cliente que escrevia "sair" recebia silencio absoluto
+   * e ainda ficava na fila de Pendentes como se esperasse atendimento; a
+   * proxima mensagem dele, com a sessao morta, reexecutava o fluxo do zero.
+   *
+   * E o `verificar-fluxo-arka` afirma, com todas as letras, que o menu
+   * principal nao precisa de uma opcao "encerrar" porque "o mecanismo global
+   * cobre isso" -- cobrindo com um caminho que nao encerrava nada.
+   *
+   * Agora "sair" faz o que a palavra diz: manda a despedida que o FLUXO
+   * declarou (`farewellMessage`, o mesmo texto da opcao `acao: "encerrar"`) e
+   * fecha a conversa e a OS pelo caminho normal de fechamento.
+   *
+   * SEM PESQUISA DE SATISFACAO, de proposito. Quem pede para sair esta
+   * interrompendo, e nao concluindo um atendimento -- perguntar "de 1 a 5, que
+   * nota voce da?" a quem acabou de dizer "cancelar" e insistir com quem pediu
+   * para parar, e ainda contamina o CSAT. O mesmo criterio do fechamento por
+   * abandono (ver aplicarInatividade).
+   */
   async encerrarSessao(ctx) {
-    const { conversa, telefone, instanciaId, instanceName } = ctx;
-    await this.deps.sessaoRepository.upsert(instanciaId, conversa.id, telefone, {
-      fluxoAtualId: null,
-      passoAtualId: null,
-      aguardando: null,
-      ativo: false,
-      ...this._marcasDeEspera(null, { concluido: true }),
-      contexto: {},
-    });
+    const { conversa } = ctx;
 
-    return { processado: true, conversaId: conversa.id, encerrado: true };
+    // O texto da despedida e do FLUXO. Ele vem do fluxo que estava conduzindo
+    // (a sessao sabe qual) e, na falta dele, do fluxo padrao -- nunca de um
+    // texto embutido aqui: o motor nao inventa mensagem.
+    let fluxo = ctx.fluxo || null;
+    if (!fluxo) {
+      try {
+        const sessaoAtual = await this.deps.sessaoRepository.findByConversa?.(conversa.id);
+        const id = sessaoAtual?.fluxoAtualId || sessaoAtual?.contexto?.fluxoOrigemId || null;
+        fluxo = id ? await this.deps.fluxoRepository.findById(id) : null;
+        if (!fluxo) fluxo = this.fluxoPadrao((await this.deps.fluxoRepository.findAtivos()) || []);
+      } catch (error) {
+        logger.warn("Falha ao ler o fluxo para a despedida do comando 'sair'", {
+          message: error.message,
+        });
+      }
+    }
+
+    const despedida = this.configuracoesGlobais(fluxo)?.farewellMessage?.message || null;
+    return this.encerrarAtendimento(
+      { ...ctx, fluxo },
+      despedida ? this.interpolar(despedida, { ...ctx, fluxo }) : null,
+      { pesquisa: false, motivo: "pedido_do_cliente" }
+    );
   }
 
   // ------------------------------------------------------------- passos ---
@@ -2867,6 +2994,33 @@ class ChatbotEngine {
 
       default:
         proximo = this.proximoPasso(fluxo.passos, passo);
+    }
+
+    // ── O BLOCO FALOU, NAO ESPERA NADA E NAO TEM PARA ONDE IR ────────────────
+    //
+    // `fimDoFluxo` so era levantado no ramo que tem `config.opcoes` -- e a
+    // maioria dos blocos de confirmacao nao tem opcao NENHUMA: e um bloco de
+    // mensagem, com o texto "Chamado aberto com sucesso", ligado a nada. Para
+    // esse desenho o motor devolvia `{ proximo: null, aguardando: null }`, e
+    // `executarFluxo` gravava a sessao como CONCLUIDA sem passar por
+    // `_entregarNoFimDoFluxo`. Reproduzido contra o motor:
+    //
+    //   turno 1  "oi"               -> "Descreva sua solicitacao"
+    //   turno 2  "meu pc nao liga"  -> "Chamado aberto com sucesso!"
+    //   turno 3  "alguma novidade?" -> "Descreva sua solicitacao"   <-- do zero
+    //
+    // Ou seja: nada de `garantirAtendimentoAberto`, nada de setor gravado na
+    // OS, nenhum `aguardando: "humano"` -- e por isso o guard que impede o bot
+    // de reiniciar quem esta na fila (naFilaDoAtendente) nao tinha o que
+    // reconhecer. O cliente pedia noticia do chamado e recebia a triagem inteira
+    // de novo; a equipe recebia a OS sem triagem.
+    //
+    // O criterio e o mesmo do outro ramo -- nao ha saida --, com a exigencia
+    // extra de que o bloco TENHA FALADO: um bloco muda e sem saida nao e o fim
+    // do roteiro, e um handoff ali seria invencao do motor.
+    if (!aguardando && !proximo && !fimDoFluxo && resposta) {
+      fimDoFluxo = true;
+      opcaoFinal = null;
     }
 
     if (resposta) {
@@ -4084,8 +4238,36 @@ class ChatbotEngine {
       const automacaoEmCurso = !!sessaoMidia?.ativo && !this.sessaoExpirada(sessaoMidia);
       const ehRespostaLivre = automacaoEmCurso && sessaoMidia.aguardando === AGUARDANDO.TEXTO;
 
-      if (automacaoEmCurso && !ehRespostaLivre) {
-        logger.info("Midia recebida durante etapa que espera outro tipo de resposta", {
+      // ── A LEGENDA E TEXTO QUE O CLIENTE ESCREVEU ────────────────────────────
+      //
+      // O portao acima olhava so o TIPO da mensagem, e a legenda nao entrava na
+      // conta. Consequencia medida contra o fluxo da ARKA:
+      //
+      //   "oi" -> menu; foto com a legenda "1"          -> midia_recebida, SILENCIO
+      //   ...  -> pede o CNPJ; PDF com o CNPJ na legenda -> midia_recebida, SILENCIO
+      //
+      // e o MESMO "1" em texto puro seguia para o Tecnico normalmente. A sessao
+      // ficava parada em `opcao`/`cnpj` como se o cliente nao tivesse
+      // respondido, e cinco minutos depois a varredura encerrava com "Nao
+      // entendemos a sua demanda" -- em cima de uma pessoa que respondeu certo.
+      //
+      // O raciocinio original do portao continua valendo, e vale so para midia
+      // MUDA: uma foto sem legenda no meio de um menu nao e "resposta errada", e
+      // outra coisa -- tratar como erro gastaria as tentativas do cliente. Mas
+      // uma foto COM legenda nao e "outra coisa": e uma mensagem de texto que
+      // veio acompanhada de um anexo. Quem manda o print do erro escrevendo "1"
+      // esta escolhendo a opcao 1, e e assim que o WhatsApp ensina a mandar as
+      // duas coisas de uma vez.
+      //
+      // Entao a legenda destrava todos os estados. Nada mais muda: o que o fluxo
+      // enxerga (`textoParaFluxo`), o comando global, o gatilho e a validacao de
+      // CNPJ ja liam a legenda -- eles simplesmente nunca eram alcancados. E o
+      // rotulo inventado pelo motor ("[Imagem]") continua fora dessas decisoes,
+      // por isso a condicao e `textoLimpo` e nao `textoParaFluxo`.
+      const temLegenda = !!textoLimpo;
+
+      if (automacaoEmCurso && !ehRespostaLivre && !temLegenda) {
+        logger.info("Midia sem legenda durante etapa que espera outro tipo de resposta", {
           conversaId: conversa.id,
           tipo: midia.tipo,
           aguardando: sessaoMidia.aguardando,
@@ -4096,9 +4278,14 @@ class ChatbotEngine {
         conversaId: conversa.id,
         tipo: midia.tipo,
         mimetype: midia.mimetype || null,
-        // Diz QUAL dos dois caminhos foi tomado, sem precisar deduzir do resto.
-        caminho: ehRespostaLivre ? "resposta_livre" : "abre_o_fluxo",
-        temLegenda: !!textoLimpo,
+        // Diz QUAL dos tres caminhos foi tomado, sem precisar deduzir do resto.
+        caminho: temLegenda && automacaoEmCurso && !ehRespostaLivre
+          ? "legenda_responde_a_etapa"
+          : ehRespostaLivre
+            ? "resposta_livre"
+            : "abre_o_fluxo",
+        temLegenda,
+        aguardando: sessaoMidia?.aguardando || null,
       });
     }
 
@@ -4360,11 +4547,58 @@ class ChatbotEngine {
         permiteAtalhos = paramsTempos(fluxoAtual).permitirComandosGlobais;
       }
 
-      const comando = !permiteAtalhos
-        ? null
-        : respostaEhDoFluxo && comandoBruto !== "atendente"
-          ? null
-          : comandoBruto;
+      // ── "SAIR" E "MENU" SO VALEM COMO COMANDO DELIBERADO ─────────────────
+      //
+      // `detectarComando` casa por palavra inteira em QUALQUER posicao da frase,
+      // e isso e adequado para "quero falar com um atendente" -- um pedido que
+      // vem escrito em portugues corrido. Nao e adequado para `sair` e `menu`,
+      // cujas palavras ("cancelar", "encerrar", "parar", "tchau", "voltar",
+      // "inicio") sao vocabulario comum do PROBLEMA que o cliente esta
+      // contando. Medido contra o motor, na PRIMEIRA mensagem da conversa:
+      //
+      //   "Bom dia, preciso cancelar meu boleto"      -> sair -> silencio total
+      //   "Preciso encerrar meu contrato de internet" -> sair -> silencio total
+      //   "quero voltar a usar o sistema antigo"      -> menu -> fila, calado
+      //   "Tchau, era so isso"                        -> sair -> silencio total
+      //
+      // Nenhuma dessas pessoas pediu para sair de nada: as tres primeiras
+      // estavam ABRINDO um chamado, e receberam um bot mudo -- sem triagem, sem
+      // setor e sem CNPJ. `respostaEhDoFluxo` (acima) protegia os estados
+      // `opcao` e `texto`, mas nao protegia -- nao podia proteger -- o caso em
+      // que NAO HA SESSAO: a primeira mensagem de toda conversa, que e
+      // exatamente onde o estrago e total.
+      //
+      // O criterio e a DELIBERACAO: um comando e uma mensagem curta e INTEIRA
+      // ("sair", "menu"), e nao uma palavra encontrada dentro de uma frase.
+      // Entao `sair` e `menu` passam a exigir igualdade com o termo.
+      // `atendente` continua casando na frase, porque ali o falso positivo nao
+      // existe -- ninguem escreve "atendente" sem querer um atendente.
+      const comandoDeliberado =
+        comandoBruto === "atendente" ? comandoBruto : this.detectarComandoExato(textoLimpo);
+
+      // NO MENU, A OPCAO DO FLUXO GANHA DO ATALHO DO MOTOR.
+      //
+      // Um menu tipico traz "voltar" e "menu inicial" como rotulos, e quem
+      // digita "voltar" quer o menu do DESENHO, nao o atalho. Mas quando a
+      // mensagem nao casa com opcao nenhuma o comando volta a valer -- antes ele
+      // era descartado sempre, e "sair" no meio do menu virava "nao entendi"
+      // tres vezes seguidas ate a conversa cair na fila calada.
+      let opcaoCasou = false;
+      if (respostaEhDoFluxo && sessao.aguardando === AGUARDANDO.OPCAO && comandoDeliberado) {
+        const passoDaVez = await this._passoDaSessao(sessao);
+        opcaoCasou = !!this.casarOpcao(textoLimpo, this.opcoesDoPasso(passoDaVez));
+      }
+
+      // A PRECEDENCIA, EM TRES LINHAS -- e nesta ordem:
+      //
+      //   1. o FLUXO pode desligar os atalhos numa etapa obrigatoria
+      //      (permitirComandosGlobais);
+      //   2. dentro de um menu, a OPCAO do desenho vence o atalho;
+      //   3. "atendente" vence os dois -- quem pede uma pessoa consegue uma
+      //      pessoa, e nenhum menu deve poder prender o cliente.
+      let comando = comandoDeliberado;
+      if (!permiteAtalhos) comando = null;
+      else if (respostaEhDoFluxo && comando !== "atendente" && opcaoCasou) comando = null;
 
       if (comando === "atendente") {
         return await this.transferirParaHumano(ctx, { motivo: "pedido_do_cliente" });
@@ -4374,10 +4608,54 @@ class ChatbotEngine {
         return await this.encerrarSessao(ctx);
       }
 
+      // ── "MENU" REABRE O FLUXO. ANTES ELE JOGAVA NA FILA, CALADO ──────────
+      //
+      // Este ramo lia `findAtivos()` (e descartava o resultado, sem nunca
+      // usa-lo) e chamava `enviarMenu`, que e `transferirParaHumano` com
+      // `avisar: false`. Ou seja: o cliente pedia o menu e recebia SILENCIO,
+      // com a conversa empurrada para Pendentes sem setor, sem CNPJ e sem
+      // triagem -- o oposto exato do que ele pediu. Na primeira mensagem da
+      // conversa ("menu", "inicio") isso significava um bot que nunca respondia.
+      //
+      // O que "menu" quer dizer e "me mostre o inicio de novo": desliga a sessao
+      // em curso e roda o fluxo de boas-vindas (gatilho "*") desde o primeiro
+      // passo. Sem fluxo padrao cadastrado nao ha menu a mostrar, e so ai a
+      // conversa vai para um atendente -- que continua sendo melhor que silencio.
       if (comando === "menu") {
         const fluxos = await this.deps.fluxoRepository.findAtivos();
-        ctx.contexto = { ...ctx.contexto, tentativasMenu: 0 };
-        return await this.enviarMenu(ctx);
+        const padrao = this.fluxoPadrao(fluxos || []);
+        if (!padrao) {
+          logger.info("Comando 'menu' sem fluxo padrao cadastrado: entregando para a fila", {
+            conversaId: conversa.id,
+          });
+          return await this.enviarMenu(ctx);
+        }
+        if (sessao?.ativo) {
+          // A sessao do meio do caminho nao pode sobreviver ao recomeco: sem
+          // isto, o contexto antigo (tentativas, CNPJ em confirmacao) viajaria
+          // para dentro do fluxo reaberto.
+          await this.deps.sessaoRepository.update(sessao.id, {
+            ativo: false,
+            aguardando: null,
+            fluxoAtualId: null,
+            passoAtualId: null,
+            aguardandoDesde: null,
+            inatividadeEm: null,
+            contexto: {},
+          });
+        }
+        logger.info("Comando 'menu': fluxo padrao reaberto desde o inicio", {
+          conversaId: conversa.id,
+          fluxoId: padrao.id,
+        });
+        const result = await this.executarFluxo(
+          padrao,
+          conversa,
+          telefone,
+          instanciaId,
+          instanceName
+        );
+        return { processado: true, conversaId: conversa.id, fluxoId: padrao.id, ...result };
       }
 
       // Transferida para humano e ainda ninguem assumiu: o bot so registra.

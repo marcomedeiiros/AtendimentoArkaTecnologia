@@ -85,6 +85,32 @@ function criarAmbiente({ fluxo, nomeCliente, horario, filas, agora, pesquisaAtiv
       // Memoria de contato recorrente: no teste nao ha atendimento anterior
       // (a nao ser que o operador passe `cnpjAnterior` nas opcoes).
       ultimoCnpjDoTelefone: async () => (cnpjAnterior ? { cnpj: cnpjAnterior } : null),
+      // ── O QUE FALTAVA AQUI DERRUBAVA O "TESTAR" INTEIRO ────────────────────
+      //
+      // `fecharConversa` chama `definirMotivoAtualSeVazio` e
+      // `iniciarPesquisaSatisfacao` chama `definirMotivoSeVazio` -- os dois
+      // gravam o rotulo do motivo automatico no ciclo. Nenhum dos dois existia
+      // neste ambiente, e como o motor chama SEM guarda (e o contrato do
+      // repositorio, nao um recurso opcional), a simulacao estourava
+      // `TypeError: definirMotivoAtualSeVazio is not a function`.
+      //
+      // O `catch` geral de `_processarMensagemEntrada` engolia o erro e
+      // transferia para humano. Efeito na tela "Testar": TODO fluxo que encerra
+      // -- ou que passa pela pesquisa de satisfacao -- terminava com
+      // "transferido para atendente / erro_interno" em vez da despedida, e nao
+      // havia como distinguir um fluxo com defeito de um fluxo correto rodando
+      // num simulador com defeito. Medido no fluxo minimo "menu -> 1 -> Tchau!".
+      //
+      // Aqui nao ha relatorio nem taxonomia para manter, entao gravar nada e o
+      // comportamento certo -- o que importa e o METODO EXISTIR com o contrato
+      // que o motor usa. Ver verificar-simulador-contrato.js, que passou a
+      // conferir essa lista em vez de esperar que alguem lembre.
+      definirMotivoAtualSeVazio: async () => null,
+      definirMotivoSeVazio: async () => null,
+      // Retentativa do aviso de espera na fila e citacao de mensagem: nao ha
+      // bolha com erro nem historico no simulador, mas o motor consulta os dois.
+      ultimaMensagemBotComErro: async () => null,
+      findMensagemPorWaId: async () => null,
     },
     sessaoRepository: {
       findByTelefone: async () => estado.sessao,
@@ -158,6 +184,11 @@ function criarAmbiente({ fluxo, nomeCliente, horario, filas, agora, pesquisaAtiv
       sendText: async () => ({ key: { id: "sim" } }),
       sendButtons: async () => ({ key: { id: "sim" } }),
       sendList: async () => ({ key: { id: "sim" } }),
+      // A ENQUETE tambem e um caminho de envio do motor (WHATSAPP_MENU_ENQUETE,
+      // ou `exibicao: "enquete"` no bloco). Sem este stub, testar um fluxo com
+      // a enquete ligada estourava no simulador -- e o operador leria isso como
+      // defeito do fluxo dele.
+      sendPoll: async () => ({ key: { id: "sim" } }),
       fetchProfilePictureUrl: async () => null,
     },
     n8nClient: { encaminharMensagem: async () => ({ encaminhado: false }) },

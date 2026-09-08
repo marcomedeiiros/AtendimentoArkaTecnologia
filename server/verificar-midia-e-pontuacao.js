@@ -209,6 +209,9 @@ const txt = (s) => ({ conversation: s });
 // O caminho ate a pergunta de resposta livre no fluxo da ARKA:
 // menu -> Tecnico -> avulso -> "Seus dados".
 const ATE_RESPOSTA_LIVRE = [txt("oi"), txt("1"), txt("2"), txt("1")];
+// E o caminho ate a etapa que pede o CPF/CNPJ: menu -> Tecnico -> tenho
+// contrato. E a outra etapa que descartava a legenda do cliente.
+const ATE_CNPJ = [txt("oi"), txt("1"), txt("1")];
 
 (async () => {
   console.log("\n══ TEXTO ═══════════════════════════════════════════════════════");
@@ -257,11 +260,39 @@ const ATE_RESPOSTA_LIVRE = [txt("oi"), txt("1"), txt("2"), txt("1")];
   await cenario("12c", "imagem com legenda responde", [...ATE_RESPOSTA_LIVRE, { imageMessage: { mimetype: "image/jpeg", caption: "David / TI" } }], { tipo: "imagem", legenda: "David / TI", transferido: true, aguardando: "humano" });
 
   console.log("\n══ MIDIA NAO ATROPELA ETAPA QUE ESPERA OUTRA COISA ═════════════");
-  // No MENU o bot espera uma escolha. Uma foto ali nao e "resposta errada" --
-  // tratar como erro gastaria as tentativas do cliente. Fica registrada, e o
-  // atendente ve; o bot nao repergunta nem transfere.
-  await cenario("13a", "imagem no menu", [txt("oi"), { imageMessage: { mimetype: "image/jpeg" } }], { tipo: "imagem", transferido: false, aguardando: "opcao", respondeu: false });
-  await cenario("13b", "PDF no menu", [txt("oi"), { documentMessage: { mimetype: "application/pdf" } }], { tipo: "documento", transferido: false, aguardando: "opcao", respondeu: false });
+  // No MENU o bot espera uma escolha. Uma foto SEM LEGENDA ali nao e "resposta
+  // errada" -- tratar como erro gastaria as tentativas do cliente. Fica
+  // registrada, e o atendente ve; o bot nao repergunta nem transfere.
+  await cenario("13a", "imagem SEM legenda no menu", [txt("oi"), { imageMessage: { mimetype: "image/jpeg" } }], { tipo: "imagem", transferido: false, aguardando: "opcao", respondeu: false });
+  await cenario("13b", "PDF SEM legenda no menu", [txt("oi"), { documentMessage: { mimetype: "application/pdf" } }], { tipo: "documento", transferido: false, aguardando: "opcao", respondeu: false });
+  await cenario("13c", "imagem SEM legenda no passo do CNPJ", [...ATE_CNPJ, { imageMessage: { mimetype: "image/jpeg" } }], { tipo: "imagem", transferido: false, aguardando: "cnpj", respondeu: false });
+
+  console.log("\n══ A LEGENDA E TEXTO DO CLIENTE, E RESPONDE A ETAPA ════════════");
+  // ── O DEFEITO RELATADO ──────────────────────────────────────────────────
+  //
+  // O portao da midia olhava so o TIPO da mensagem. Com a automacao em curso e
+  // fora da resposta livre ele devolvia `midia_recebida` -- e a LEGENDA, que e
+  // texto que o cliente escreveu, ia para o lixo. Medido contra este fluxo:
+  //
+  //   "oi" -> menu; foto com legenda "1"           -> SILENCIO, sessao em opcao
+  //   ...  -> pede CNPJ; PDF com o CNPJ na legenda -> SILENCIO, sessao em cnpj
+  //
+  // e o MESMO texto sem anexo seguia normalmente. Cinco minutos depois a
+  // varredura encerrava com "Nao entendemos a sua demanda", em cima de uma
+  // pessoa que havia respondido certo.
+  //
+  // Mandar o print do erro junto com a resposta e o jeito natural de usar o
+  // WhatsApp, e e assim que metade dos chamados de suporte comeca. A legenda
+  // destrava TODOS os estados; a midia MUDA continua no bloco acima.
+  const MENU = [txt("oi")];
+  await cenario("13d", "imagem com legenda 1 escolhe no menu", [...MENU, { imageMessage: { mimetype: "image/jpeg", caption: "1" } }], { tipo: "imagem", legenda: "1", transferido: false, aguardando: "opcao", respondeu: true });
+  await cenario("13e", "video com legenda 2 escolhe no menu", [...MENU, { videoMessage: { mimetype: "video/mp4", caption: "2" } }], { tipo: "video", legenda: "2", transferido: false, respondeu: true });
+  await cenario("13f", "PDF com legenda tecnico escolhe no menu", [...MENU, { documentWithCaptionMessage: { message: { documentMessage: { mimetype: "application/pdf", fileName: "erro.pdf", caption: "tecnico" } } } }], { tipo: "documento", legenda: "tecnico", transferido: false, aguardando: "opcao", respondeu: true });
+  // E no passo do CNPJ: o documento com o numero na legenda tem de ser
+  // validado, exatamente como o numero digitado.
+  await cenario("13g", "PDF com o CNPJ na legenda responde o passo do CNPJ", [...ATE_CNPJ, { documentWithCaptionMessage: { message: { documentMessage: { mimetype: "application/pdf", fileName: "contrato.pdf", caption: "12.345.678/0001-95" } } } }], { tipo: "documento", legenda: "12.345.678/0001-95", respondeu: true });
+  // O pedido explicito de atendente na legenda vale como valeria em texto.
+  await cenario("13h", "imagem com legenda pedindo atendente", [...MENU, { imageMessage: { mimetype: "image/jpeg", caption: "quero falar com um atendente" } }], { tipo: "imagem", transferido: true, aguardando: "humano", respondeu: true });
 
   console.log("\n══ BORDA ═══════════════════════════════════════════════════════");
   await cenario(14, "PDF sem nome de arquivo", [{ documentMessage: { mimetype: "application/pdf" } }], { tipo: "documento", transferido: false, aguardando: "opcao" });
