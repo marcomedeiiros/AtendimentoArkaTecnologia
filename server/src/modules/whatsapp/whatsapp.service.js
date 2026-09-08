@@ -192,42 +192,80 @@ class WhatsAppService {
    * e citacao), e com a lista duplicada bastava alguem adicionar um tipo novo em
    * uma das duas para os recursos discordarem sobre a mesma mensagem.
    */
+  /** Isto tem cara de `contextInfo`? E a assinatura, e nao a posicao. */
+  _ehContexto(o) {
+    if (!o || typeof o !== "object" || Array.isArray(o)) return false;
+    return (
+      "stanzaId" in o ||
+      "quotedMessageId" in o ||
+      "quotedMessage" in o ||
+      "isForwarded" in o ||
+      "forwardingScore" in o
+    );
+  }
+
+  /**
+   * Varre um no procurando `contextInfo`, em profundidade limitada.
+   *
+   * DUAS REGRAS que nao sao detalhe:
+   *
+   *   - NAO entra em `quotedMessage`. Ela contem a mensagem CITADA, que pode
+   *     ela mesma ter sido uma resposta -- e dali sairia o `contextInfo` da
+   *     citacao ANTERIOR. A bolha mostraria o trecho errado: aquilo que o
+   *     cliente citou na mensagem passada, nao nesta.
+   *   - NAO entra em string. `base64` de midia chega aqui com megabytes; nao ha
+   *     `contextInfo` dentro de texto, e percorrer isso seria trabalho a cada
+   *     mensagem recebida.
+   */
+  _coletarContextos(no, achados, profundidade = 0) {
+    if (!no || typeof no !== "object" || profundidade > 6) return;
+    if (Array.isArray(no)) {
+      for (const item of no) this._coletarContextos(item, achados, profundidade + 1);
+      return;
+    }
+    if (this._ehContexto(no.contextInfo)) achados.push(no.contextInfo);
+    for (const [chave, valor] of Object.entries(no)) {
+      if (chave === "contextInfo" || chave === "quotedMessage") continue;
+      if (!valor || typeof valor !== "object") continue;
+      this._coletarContextos(valor, achados, profundidade + 1);
+    }
+  }
+
   _contextos(payload) {
-    const msg = payload?.data?.message || payload?.message;
-
-    // ── O `contextInfo` ACHATADO, AO LADO DE `message` ─────────────────────
+    // ── POR QUE A BUSCA E ESTRUTURAL, E NAO UMA LISTA DE LUGARES ────────────
     //
-    // Este era o buraco: varriamos so os nos DENTRO de `message`, e a Evolution
-    // tambem entrega o `contextInfo` um nivel ACIMA, como irmao de `message`
-    // (`data.contextInfo`). Nao e uma variante exotica -- e a forma que a v2
-    // monta no `messages.upsert`, junto de `messageType` e `pushName`, e ela
-    // convive com a outra conforme a versao e o tipo da mensagem. E o mesmo
-    // problema que o base64 da midia ja tinha (ver o comentario no webhook: "a
-    // Evolution acomoda o base64 em lugares diferentes conforme a versao").
+    // Aqui havia uma lista fixa de nos DENTRO de `message` (extendedTextMessage,
+    // imageMessage, ...). Duas coisas a derrubavam, e as duas aconteceram:
     //
-    // O efeito era a citacao RECEBIDA nao existir: o cliente respondia citando,
-    // ninguem achava o `stanzaId` nem o `quotedMessage`, e a resposta dele
-    // aparecia solta na Central -- enquanto a NOSSA resposta citada aparecia
-    // certinha, porque aquela vem do `respondendoAId` da propria tela e nunca
-    // passou por aqui. Era exatamente a assimetria relatada.
+    //   1. A Evolution v2 NORMALIZA a mensagem no `messages.upsert`: uma
+    //      resposta de texto, que o Baileys entrega como `extendedTextMessage`
+    //      com o `contextInfo` dentro, chega achatada -- `message:
+    //      {conversation}` e o `contextInfo` um nivel ACIMA, irmao de `message`,
+    //      ao lado de `messageType` e `pushName`. A lista nunca olhava ali.
+    //   2. Tipo novo (ou renomeado) entra na Evolution e a lista nao sabe dele.
     //
-    // `encaminhada` sai do MESMO objeto, entao o selo "Encaminhada" tinha o
-    // mesmo ponto cego pela mesma razao.
-    const achatados = [payload?.data?.contextInfo, payload?.contextInfo];
+    // O efeito era a citacao RECEBIDA nao existir: o cliente respondia citando e
+    // a mensagem dele aparecia solta na Central -- enquanto a NOSSA resposta
+    // citada aparecia certinha, porque aquela vem do `respondendoAId` gravado
+    // pela propria tela e nunca passa por aqui. Era exatamente a assimetria
+    // relatada, e o selo "Encaminhada" tinha o mesmo ponto cego, porque sai do
+    // MESMO objeto.
+    //
+    // Trocar "onde eu espero que esteja" por "o que eu estou procurando" fecha a
+    // CLASSE do problema em vez de um caso: a varredura acha o `contextInfo`
+    // onde ele estiver, e uma mudanca de forma na Evolution deixa de ser um
+    // recurso quebrado em silencio. O custo e desprezivel -- objetos pequenos,
+    // profundidade limitada, sem entrar em string.
+    const achados = [];
+    // A SUBARVORE DE `message` PRIMEIRO: quando as duas formas chegam no mesmo
+    // payload, a que esta dentro do no do tipo e a mais especifica e deve vencer.
+    this._coletarContextos(payload?.data?.message || payload?.message, achados);
+    this._coletarContextos(payload?.data || payload, achados);
 
-    const dosNos = !msg || typeof msg !== "object"
-      ? []
-      : [
-          msg.extendedTextMessage, msg.imageMessage, msg.videoMessage, msg.audioMessage,
-          msg.documentMessage, msg.documentWithCaptionMessage?.message?.documentMessage,
-          msg.stickerMessage, msg.locationMessage, msg.contactMessage, msg.contextInfo && msg,
-        ]
-          .filter(Boolean)
-          .map((no) => no.contextInfo);
-
-    // Os nos vem PRIMEIRO: quando as duas formas chegam no mesmo payload, a que
-    // esta dentro do tipo e a mais especifica.
-    return [...dosNos, ...achatados].filter((c) => c && typeof c === "object");
+    // Dedupe por identidade: as duas varreduras se sobrepoem de proposito (a
+    // segunda cobre a arvore inteira), e sem isto o mesmo objeto entraria duas
+    // vezes na lista.
+    return achados.filter((c, i) => achados.indexOf(c) === i);
   }
 
   /**
@@ -627,6 +665,36 @@ class WhatsAppService {
         waMessageId: key?.id || null,
         // A ESTRUTURA, e so ela: e o que diz onde procurar na proxima versao.
         chaves: contextos.map((c) => Object.keys(c).sort()),
+      });
+    }
+
+    // ── O INTERRUPTOR DE DIAGNOSTICO: `WHATSAPP_LOG_PAYLOAD=1` ──────────────
+    //
+    // A pergunta que custou caro responder foi "a Evolution esta MANDANDO o
+    // `contextInfo`?". Sem o payload na mao, "a citacao nao aparece" tem duas
+    // causas indistinguiveis -- ela nao manda, ou manda num lugar que nao
+    // procuramos -- e as duas pedem conserto oposto. O log acima cobre a
+    // segunda; a primeira nao deixa rastro nenhum, porque nao ha o que registrar.
+    //
+    // Ligado, isto imprime a ESTRUTURA de cada mensagem recebida: os nomes dos
+    // campos e onde ha `contextInfo`. Nunca os valores -- `quotedMessage` e
+    // `conversation` carregam a conversa do cliente, e log nao e lugar para
+    // isso. Desligado por padrao: e para ficar aceso cinco minutos, nao sempre.
+    if (process.env.WHATSAPP_LOG_PAYLOAD === "1") {
+      const forma = (o, p = 0) => {
+        if (!o || typeof o !== "object" || p > 4) return typeof o;
+        if (Array.isArray(o)) return `[${o.length}]`;
+        const out = {};
+        for (const [k, v] of Object.entries(o)) {
+          out[k] = v && typeof v === "object" ? forma(v, p + 1) : typeof v;
+        }
+        return out;
+      };
+      logger.info("[diagnostico] forma do payload recebido", {
+        waMessageId: key?.id || null,
+        contextosAchados: contextos.length,
+        citacaoReconhecida: !!citacao,
+        forma: forma(body),
       });
     }
     let midia = this.extrairMidia(body);

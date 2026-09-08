@@ -346,6 +346,97 @@ console.log("=== Entrada do webhook ===");
 
     check("o contextInfo achatado (data.contextInfo) também é lido", pAchatado);
 
+    // ── A BUSCA É ESTRUTURAL: ACHA ONDE ESTIVER ─────────────────────────────
+    //
+    // A varredura procura pela ASSINATURA do `contextInfo`, não por uma lista de
+    // lugares. É o que fecha a classe do problema: a Evolution move esse objeto
+    // entre versões (foi assim que a forma achatada passou batida), e um tipo
+    // novo de mensagem não pode voltar a quebrar a citação em silêncio.
+    const pEstrutural = [];
+
+    // Um tipo que NINGUÉM enumerou -- é o caso "versão nova da Evolution".
+    const tipoDesconhecido = svc.extrairCitacao({
+      data: {
+        key: { id: "3DDD" },
+        message: {
+          algumTipoNovoMessage: {
+            text: "responde isso",
+            contextInfo: { stanzaId: "BAE9", quotedMessage: { conversation: "o original" } },
+          },
+        },
+      },
+    });
+    if (tipoDesconhecido?.texto !== "o original") {
+      pEstrutural.push(`tipo não enumerado ficou invisível: ${JSON.stringify(tipoDesconhecido)}`);
+    }
+
+    // ── RESPOSTA DE UMA RESPOSTA: mostra a citação DESTA mensagem ───────────
+    //
+    // `quotedMessage` carrega a mensagem citada, que pode ela mesma ter sido uma
+    // resposta -- e traz o `contextInfo` da citação ANTERIOR dentro. Entrar ali
+    // faria a bolha mostrar o trecho errado: o que o cliente citou na mensagem
+    // passada, e não nesta. A varredura não entra em `quotedMessage`.
+    const respostaDeResposta = svc.extrairCitacao({
+      data: {
+        key: { id: "3EEE" },
+        message: {
+          extendedTextMessage: {
+            text: "e isso?",
+            contextInfo: {
+              stanzaId: "AGORA",
+              quotedMessage: {
+                extendedTextMessage: {
+                  text: "a citada",
+                  contextInfo: { stanzaId: "ANTES", quotedMessage: { conversation: "a de trás" } },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (respostaDeResposta?.stanzaId !== "AGORA") {
+      pEstrutural.push(`pegou a citação de trás: ${JSON.stringify(respostaDeResposta)}`);
+    }
+    if (respostaDeResposta?.texto === "a de trás") {
+      pEstrutural.push("mostrou o trecho da citação anterior, não o desta mensagem");
+    }
+
+    // BASE64 GIGANTE não pode ser percorrido nem atrapalhar: mídia recebida
+    // chega com megabytes de string no mesmo payload.
+    const inicio = Date.now();
+    const comBase64 = svc.extrairCitacao({
+      data: {
+        key: { id: "3FFF" },
+        base64: "A".repeat(2 * 1024 * 1024),
+        message: {
+          imageMessage: {
+            mimetype: "image/jpeg",
+            base64: "B".repeat(2 * 1024 * 1024),
+            contextInfo: { stanzaId: "BAE10", quotedMessage: { conversation: "o print" } },
+          },
+        },
+      },
+    });
+    const gastou = Date.now() - inicio;
+    if (comBase64?.texto !== "o print") {
+      pEstrutural.push(`payload com base64 perdeu a citação: ${JSON.stringify(comBase64)}`);
+    }
+    if (gastou > 200) pEstrutural.push(`a varredura demorou ${gastou}ms num payload com base64`);
+
+    // Payload torto não pode estourar: a entrada vem de fora.
+    for (const torto of [null, undefined, {}, { data: null }, { data: { message: "texto" } },
+      { data: { message: { conversation: "oi" } } }, { data: [] }]) {
+      try {
+        svc.extrairCitacao(torto);
+        svc.extrairEncaminhada(torto);
+      } catch (e) {
+        pEstrutural.push(`estourou em ${JSON.stringify(torto)}: ${e.message}`);
+      }
+    }
+
+    check("a busca do contextInfo é estrutural e não estoura", pEstrutural);
+
     // O RETRATO SOBREVIVE ATÉ A TELA. O mapper é a última ponte: `citacao` com
     // só o tipo não pode ser descartada ali (era o `meta.citacao?.texto` que
     // decidia sozinho se o campo existia).
