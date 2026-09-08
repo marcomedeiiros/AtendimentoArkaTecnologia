@@ -3283,6 +3283,61 @@ class ChatbotEngine {
     if (sessao.aguardando === AGUARDANDO.TEXTO) {
       const resposta = String(textoEntrada || "").trim();
 
+      // ── "." NAO E UMA RESPOSTA ──────────────────────────────────────────────
+      //
+      // Este ramo aceitava QUALQUER texto nao vazio como resposta legitima --
+      // era a causa do relato "um simples ponto joga o atendimento para o
+      // atendente". Reproduzido: em "informe seu nome e setor", um unico "."
+      // percorria o resto do fluxo e caia em `_entregarNoFimDoFluxo`, ou seja
+      // handoff imediato, com o chamado chegando na fila com "." no lugar do
+      // nome. Um toque acidental na tecla, ou o cliente testando se alguem
+      // responde, encerrava a triagem.
+      //
+      // O CRITERIO E CONTEUDO, nao tamanho nem lista de proibidos: a resposta
+      // precisa ter ao menos uma letra ou um digito. `\p{L}` e `\p{N}` valem
+      // para qualquer alfabeto, entao isto nao rejeita acento, cirilico nem
+      // ideograma -- e aceita "5", "ok", "TI" e um nome de uma letra. So recusa
+      // o que nao carrega informacao nenhuma: ".", "...", "!?", "---".
+      //
+      // NAO recusa midia: uma foto sem legenda entra como "[Imagem]" (ver
+      // `textoParaFluxo` no recebimento), que tem letras e passa.
+      //
+      // O desfecho e o MESMO do menu que nao casa -- repergunta e conta a
+      // tentativa, com o teto que ja existe. Nao inventei um limite novo nem um
+      // caminho novo de handoff: quem insiste em nao responder acaba na fila
+      // pela regra que ja valia para o menu, e nao por causa do primeiro ponto.
+      const temConteudo = /[\p{L}\p{N}]/u.test(resposta);
+      if (!temConteudo) {
+        const tentativas = (sessao.contexto?.tentativasTexto || 0) + 1;
+        if (tentativas >= limites.maxTentativasOpcao) {
+          logger.info("Resposta livre sem conteudo nas tentativas permitidas: entregando para a fila", {
+            conversaId: conversa.id,
+            passoId: passoAtual?.id || null,
+            tentativas,
+          });
+          return this.transferirParaHumano(contexto, { motivo: "resposta_livre_sem_conteudo" });
+        }
+
+        // REPETE A PERGUNTA DO PROPRIO PASSO, e nao um "nao entendi" do motor.
+        // O texto do bloco e o que o operador escreveu e o que o cliente acabou
+        // de ler; repetir a pergunta e mais claro do que anunciar o erro dele.
+        const pergunta = passoAtual ? this.textoDoPasso(passoAtual, contexto) : null;
+        if (pergunta) {
+          await this.enviarBot(conversa.id, telefone, this.interpolar(pergunta, contexto), instanceName);
+        }
+        await this.deps.sessaoRepository.update(sessao.id, {
+          contexto: { ...(sessao.contexto || {}), tentativasTexto: tentativas },
+          // O bot acabou de reperguntar: o prazo de inatividade recomeca daqui.
+          ...this._marcasDeReperguntar(),
+        });
+        logger.info("Resposta livre sem letra nem digito: pergunta repetida", {
+          conversaId: conversa.id,
+          passoId: passoAtual?.id || null,
+          tentativas,
+        });
+        return { fluxoId: fluxo.id, conversaId: conversa.id, aguardando: AGUARDANDO.TEXTO };
+      }
+
       // A resposta guardada com o nome que o passo declarou (`config.variavel`).
       // Fica em `contexto.respostas` para os textos seguintes poderem cita-la
       // ({{resposta.nome_setor}}) -- ver interpolar.
@@ -3601,6 +3656,23 @@ class ChatbotEngine {
     // Texto exibido na bolha/preview + metadata da midia (quando houver).
     const rotulos = { imagem: "[Imagem]", figurinha: "[Figurinha]", video: "[Vídeo]", documento: "[Documento]", audio: "[Áudio]", localizacao: "[Localização]", contato: "[Contato]" };
     let textoMsg = ehMidia ? (textoLimpo || rotulos[midia.tipo] || "[Mídia]") : (textoLimpo || botaoId);
+
+    // ── O TEXTO QUE O FLUXO ENXERGA ─────────────────────────────────────────
+    //
+    // Para texto puro e exatamente `textoLimpo` -- nada muda. Para MIDIA, a
+    // legenda quando houver, e o rotulo do tipo quando nao houver.
+    //
+    // O rotulo importa num lugar so: a etapa de RESPOSTA LIVRE. Sem ele, uma
+    // foto sem legenda entraria como string vazia e o chamado chegaria na fila
+    // com a descricao em branco -- a foto esta na conversa, mas o campo que o
+    // atendente le ficaria vazio. Com ele, le-se "[Imagem]" e a bolha ao lado
+    // mostra a foto.
+    //
+    // Deliberadamente NAO usado em `detectarComando`, `detectarGatilho` nem na
+    // validacao de CNPJ, que continuam recebendo `textoLimpo`: um rotulo
+    // inventado pelo motor nao pode casar com palavra-chave de fluxo nem virar
+    // comando global. Uma foto nunca deve disparar "atendente" ou "sair".
+    const textoParaFluxo = ehMidia ? textoMsg : textoLimpo;
 
     // RESPOSTA DA PESQUISA DE SATISFACAO: a conversa avaliada JA ESTA FECHADA, e
     // findByTelefone (de proposito) so olha pendente/aberta. Sem este desvio, a
@@ -3978,10 +4050,56 @@ class ChatbotEngine {
       }
     }
 
-    // Midia nao dispara o fluxo do bot: registramos e notificamos o atendente.
-    // (Dentro do expediente. Fora dele, o aviso ja saiu no bloco acima.)
+    // ── O PORTAO DA MIDIA ───────────────────────────────────────────────────
+    //
+    // Aqui havia `if (ehMidia) return "midia_recebida"` -- sem condicao nenhuma.
+    // A mensagem era gravada e a automacao PARAVA, para qualquer midia. A
+    // classificacao nunca foi o problema (`extrairMidia` reconhece PDF, imagem,
+    // video, audio e figurinha, por no e por mimetype); o problema era o
+    // ROTEAMENTO. Duas consequencias medidas:
+    //
+    //   1. quem ABRE a conversa com uma foto -- metade dos chamados de suporte
+    //      comeca assim -- nao recebia menu nenhum e ficava parado na fila;
+    //   2. quem respondia "descreva sua solicitacao" com uma foto deixava o bot
+    //      esperando, e cinco minutos depois a varredura de inatividade
+    //      encerrava com "Nao entendemos a sua demanda".
+    //
+    // Agora a midia PARTICIPA do fluxo nos dois casos em que ela e, de fato, a
+    // mensagem do cliente:
+    //
+    //   - NAO HA AUTOMACAO EM CURSO  -> a midia abre o fluxo, como um texto
+    //     abriria (o cliente recebe o menu em vez de silencio);
+    //   - O BOT ESPERA TEXTO LIVRE   -> a foto/PDF E a resposta.
+    //
+    // E ela continua NAO participando onde nao poderia ser resposta: menu
+    // (`opcao`), CNPJ, confirmacao e pesquisa de satisfacao esperam um valor
+    // especifico, e uma foto ali nao e "resposta errada", e outra coisa --
+    // tratar como erro gastaria as tentativas do cliente e poderia encerrar o
+    // atendimento dele. Fila (`humano`) tambem fica de fora: quem ja espera uma
+    // pessoa nao volta para o inicio do bot.
+    //
+    // A consulta extra a sessao roda SO em mensagem de midia, que e minoria.
     if (ehMidia) {
-      return { processado: true, motivo: "midia_recebida", conversaId: conversa.id };
+      const sessaoMidia = await this.deps.sessaoRepository.findByTelefone(instanciaId, telefone);
+      const automacaoEmCurso = !!sessaoMidia?.ativo && !this.sessaoExpirada(sessaoMidia);
+      const ehRespostaLivre = automacaoEmCurso && sessaoMidia.aguardando === AGUARDANDO.TEXTO;
+
+      if (automacaoEmCurso && !ehRespostaLivre) {
+        logger.info("Midia recebida durante etapa que espera outro tipo de resposta", {
+          conversaId: conversa.id,
+          tipo: midia.tipo,
+          aguardando: sessaoMidia.aguardando,
+        });
+        return { processado: true, motivo: "midia_recebida", conversaId: conversa.id };
+      }
+      logger.info("Midia recebida entra no fluxo", {
+        conversaId: conversa.id,
+        tipo: midia.tipo,
+        mimetype: midia.mimetype || null,
+        // Diz QUAL dos dois caminhos foi tomado, sem precisar deduzir do resto.
+        caminho: ehRespostaLivre ? "resposta_livre" : "abre_o_fluxo",
+        temLegenda: !!textoLimpo,
+      });
     }
 
     // Atendente humano assumiu: o bot nao interfere.
@@ -4250,7 +4368,10 @@ class ChatbotEngine {
 
       // Sessao em andamento dentro de um fluxo.
       if (sessao?.ativo && sessao.fluxoAtualId) {
-        const result = await this.continuarSessao(sessao, ctx, textoLimpo);
+        // `textoParaFluxo` e igual a `textoLimpo` para texto puro; em midia ele
+        // carrega a legenda (ou o rotulo do tipo) para a etapa de resposta livre
+        // ter conteudo. Ver a definicao dele acima.
+        const result = await this.continuarSessao(sessao, ctx, textoParaFluxo);
         return { processado: true, conversaId: conversa.id, ...result };
       }
 
