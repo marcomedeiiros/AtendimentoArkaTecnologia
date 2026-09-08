@@ -26,6 +26,7 @@
 //   verificar-contrato-api.js      as duas pontas de cada chamada da tela (só leitura)
 //   verificar-horario.js           a regra de expediente, caso a caso (módulo puro)
 //   verificar-reentrada-horario.js o bot volta a triar quem chegou fora do horário
+//   verificar-midia-e-pontuacao.js mídia entra no fluxo; "." não é resposta livre
 //   verificar-fluxo-arka.js        a matriz do fluxo, conversando com o motor real
 //   verificar-visual-whatsapp.js   o payload que chega ao WhatsApp (botão x texto)
 //   verificar-inatividade.js       os dois relógios do bot (Parte B exige o dev.db)
@@ -78,6 +79,13 @@ const VERIFICACOES = [
     arquivo: "verificar-fluxo-arka.js",
     titulo: "Fluxo da ARKA",
     resumo: "botões x texto livre, Técnico/Comercial/Financeiro, CNPJ, timeout e horário",
+  },
+  {
+    // Começa no PAYLOAD, e não em texto pronto: metade destes defeitos vivia em
+    // `extrairMidia`/`extrairTexto`, que o simulador não exercita.
+    arquivo: "verificar-midia-e-pontuacao.js",
+    titulo: "Mídia no fluxo, e a resposta sem conteúdo",
+    resumo: "PDF/imagem/vídeo/áudio abrem e respondem o fluxo; \".\" não vira resposta",
   },
   {
     arquivo: "verificar-visual-whatsapp.js",
