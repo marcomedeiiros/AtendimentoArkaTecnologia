@@ -647,6 +647,62 @@ const TEXTO_MENU =
   );
   // E o toque continua roteando: citação e escolha são independentes.
   check(convCit.setor === "Técnico", `o toque tinha de definir o setor (veio ${convCit.setor})`);
+
+  // ── A CITACAO NAO PODE DEPENDER DO QUE ESTA CARREGADO NA TELA ────────────
+  //
+  // O RELATO: "a citacao aparece so numa parte da conversa". Nao era
+  // intermitencia -- era a JANELA. A bolha procurava a mensagem original entre
+  // as que estao na tela (`respondendoAId`) e so depois caia no retrato
+  // gravado; e a tela nunca tem o fio inteiro (o SSE manda a cauda de 30 e o
+  // historico antigo e paginado). Somado a isso, o retrato so existia quando a
+  // Evolution mandava `quotedMessage` -- e na forma normalizada da v2 ela manda
+  // `stanzaId` sozinho. Resultado: citacao na parte recente, nada no resto.
+  //
+  // Estes dois casos travam a correcao: o servidor consulta o BANCO (nao uma
+  // janela), e o retrato e gravado junto da mensagem.
+  const semQuoted = (texto, stanzaId) => ({
+    extendedTextMessage: { text: texto, contextInfo: { stanzaId, participant: "x@s.whatsapp.net" } },
+  });
+
+  // 1. Original CONHECIDA e payload SEM retrato: o retrato sai do banco.
+  await receberCit(semQuoted("isso mesmo", "WA_MENU"), "W3");
+  const semRetrato = convCit.mensagens.filter((m) => m.origem === "cliente").pop();
+  check(
+    semRetrato?.respondendoAId === msgMenu?.id,
+    `sem quotedMessage, o stanzaId ainda tem de achar a original (veio ${semRetrato?.respondendoAId})`
+  );
+  check(
+    String(semRetrato?.metadata?.citacao?.texto || "").includes("Escolha uma opção"),
+    "o retrato tinha de ser montado a partir da original do BANCO -- sem ele a bolha " +
+      `depende da janela carregada na tela (veio ${JSON.stringify(semRetrato?.metadata?.citacao)})`
+  );
+
+  // 2. Original DESCONHECIDA (anterior a integracao, ou saida do celular fora
+  //    da Central): nao ha conteudo a mostrar, mas ha um FATO. Antes as duas
+  //    situacoes eram indistinguiveis -- silencio --, e um "isso" solto na tela
+  //    e incompreensivel.
+  await receberCit(semQuoted("isso", "WA_NUNCA_VISTA"), "W4");
+  const orfa = convCit.mensagens.filter((m) => m.origem === "cliente").pop();
+  check(
+    orfa?.respondendoAId == null && orfa?.metadata?.citacao?.desconhecida === true,
+    "citacao para original desconhecida tem de ser marcada, e nao virar ausencia " +
+      `(veio respondendoAId=${orfa?.respondendoAId} citacao=${JSON.stringify(orfa?.metadata?.citacao)})`
+  );
+  // E o mapper leva a marca ate a tela -- e o terceiro estado do campo.
+  const mapMens = require("./src/shared/helpers/mapper.helper").mapMensagem;
+  check(
+    mapMens(orfa).citacao?.desconhecida === true,
+    `o mapper tinha de carregar a marca (veio ${JSON.stringify(mapMens(orfa).citacao)})`
+  );
+  // Mensagem que NAO e resposta continua sem citacao nenhuma: a marca nao pode
+  // vazar para a conversa inteira.
+  await receberCit({ conversation: "so uma pergunta" }, "W5");
+  const semCitacao = convCit.mensagens.filter((m) => m.origem === "cliente").pop();
+  check(
+    !semCitacao?.metadata?.citacao,
+    `mensagem que nao responde nada nao pode ganhar citacao (veio ${JSON.stringify(semCitacao?.metadata)})`
+  );
+
   console.log(
     "\n" + (erros.length ? `FALHAS (${erros.length}):\n  ` + erros.join("\n  ") : "BOTOES: TUDO CONFERE")
   );

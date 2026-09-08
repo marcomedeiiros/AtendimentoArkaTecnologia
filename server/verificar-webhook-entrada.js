@@ -517,10 +517,19 @@ console.log("=== Entrada do webhook ===");
     // O RETRATO SOBREVIVE ATÉ A TELA. O mapper é a última ponte: `citacao` com
     // só o tipo não pode ser descartada ali (era o `meta.citacao?.texto` que
     // decidia sozinho se o campo existia).
+    //
+    // TRÊS ESTADOS, e o terceiro é novo: `desconhecida` marca "o cliente
+    // respondeu algo que não temos" (mensagem anterior à integração, ou saída
+    // do celular fora da Central). Sem ele, essa situação chegava na tela como
+    // ausência -- exatamente igual a "não respondeu nada" -- e a bolha aparecia
+    // solta. Um "isso" solto é incompreensível para quem atende.
     const mapper = require(path.join(__dirname, "src/shared/helpers/mapper.helper"));
     const mapeadas = [
-      [{ citacao: { tipo: "imagem" } }, { texto: null, tipo: "imagem" }],
-      [{ citacao: { texto: "oi" } }, { texto: "oi", tipo: null }],
+      [{ citacao: { tipo: "imagem" } }, { texto: null, tipo: "imagem", desconhecida: false }],
+      [{ citacao: { texto: "oi" } }, { texto: "oi", tipo: null, desconhecida: false }],
+      [{ citacao: { desconhecida: true } }, { texto: null, tipo: null, desconhecida: true }],
+      // E o campo continua NULO quando não houve citação nenhuma: a marca não
+      // pode vazar para a conversa inteira.
       [{}, null],
     ];
     const pMapper = [];

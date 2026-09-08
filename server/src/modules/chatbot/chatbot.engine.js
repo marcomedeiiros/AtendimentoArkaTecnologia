@@ -4098,19 +4098,76 @@ class ChatbotEngine {
       // `metadata.citacao`; a mensagem nunca deixa de ser gravada por causa
       // disto. O `?.` cobre stubs de teste que nao implementam o metodo.
       let respondendoAId = null;
+      // O RETRATO PODE VIR DE DOIS LUGARES, e ele precisa dos dois.
+      //
+      // ── POR QUE A CITACAO SUMIA EM PARTE DA CONVERSA ──────────────────────
+      //
+      // A bolha desenha o trecho citado assim (AtendimentoView): primeiro
+      // procura a mensagem ORIGINAL entre as que estao carregadas na tela
+      // (`respondendoAId`), e so depois cai no retrato gravado
+      // (`metadata.citacao`). Duas coisas conspiram contra isso:
+      //
+      //   1. a tela NUNCA tem o fio inteiro -- o SSE manda a cauda de 30
+      //      mensagens e o historico antigo e paginado (ver findByIdParaEvento
+      //      e a busca de mensagens antigas). Uma resposta a algo mais velho do
+      //      que a janela nao acha a original;
+      //   2. o retrato so existia quando a Evolution mandava `quotedMessage` no
+      //      payload -- e ela NAO manda sempre. Na forma normalizada da v2 o
+      //      contextInfo chega com `stanzaId` e sem retrato nenhum.
+      //
+      // Juntas, elas produzem exatamente o relato: a citacao aparece na parte
+      // recente da conversa (onde a original esta carregada) e desaparece no
+      // resto. Nao e intermitencia nem sorte -- e a janela.
+      //
+      // A correcao e tornar a citacao AUTOSSUFICIENTE: quando o servidor
+      // resolve o `stanzaId` numa mensagem do banco -- e ele consulta o banco
+      // inteiro, nao uma janela --, o retrato e montado a partir DELA e gravado
+      // junto. Dali em diante a bolha nao depende mais do que esta na tela.
+      //
+      // O retrato do WhatsApp continua vencendo quando existe: ele e o que o
+      // cliente viu no aparelho, no instante em que respondeu.
+      let retrato = citacaoResumo;
       if (citacao?.stanzaId) {
         const original = await this.deps.conversaRepository.findMensagemPorWaId?.(
           citacao.stanzaId,
           conversa.id
         );
         respondendoAId = original?.id || null;
+
+        if (!retrato && original) {
+          const textoOriginal = String(original.texto || "").trim();
+          const tipoOriginal = original.metadata?.tipo || null;
+          if (textoOriginal) retrato = { texto: textoOriginal.slice(0, 500) };
+          else if (tipoOriginal && tipoOriginal !== "texto") retrato = { tipo: String(tipoOriginal) };
+        }
+
+        // ── ERA RESPOSTA, E NAO SABEMOS A QUE ────────────────────────────────
+        //
+        // Sem retrato e sem original: o cliente respondeu algo anterior a
+        // integracao, ou uma mensagem que saiu do celular fora da Central. Nao
+        // ha conteudo a mostrar -- mas ha um FATO a mostrar, e ele muda a
+        // leitura: um "isso" solto e incompreensivel, enquanto "isso"
+        // marcado como resposta a algo diz ao atendente que falta contexto e
+        // que a pergunta esta acima. Antes as duas situacoes eram
+        // indistinguiveis: silencio.
+        if (!retrato && !original) retrato = { desconhecida: true };
       }
 
+      // `metadata` foi montado antes de consultarmos o banco (ele e usado
+      // tambem no caminho da conversa NOVA, onde nao ha original possivel).
+      // Aqui o retrato final entra -- e pode ser o do banco ou a marca de
+      // "era resposta e nao sabemos a que".
+      const metadataFinal =
+        retrato && retrato !== citacaoResumo
+          ? { ...(metadata || {}), citacao: retrato }
+          : metadata;
       await this.deps.conversaRepository.addMensagem(
         conversa.id,
         "cliente",
         textoMsg,
-        respondendoPesquisa ? { ...(metadata || {}), respostaPesquisa: true } : metadata,
+        respondendoPesquisa
+          ? { ...(metadataFinal || {}), respostaPesquisa: true }
+          : metadataFinal,
         waMessageId,
         respondendoAId ? { respondendoAId } : {}
       );

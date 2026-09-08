@@ -3366,8 +3366,21 @@ function PainelChat({
                     documento: '📄 Documento', audio: '🎤 Áudio',
                     localizacao: '📍 Localização', contato: '👤 Contato',
                   };
+                  /* ERA RESPOSTA, E NÃO SABEMOS A QUE.
+
+                     O cliente respondeu uma mensagem anterior à integração, ou
+                     uma que saiu do celular fora da Central: não há retrato
+                     nem original para mostrar. Antes esse caso caía no
+                     `return null` e a bolha aparecia solta -- indistinguível de
+                     uma mensagem que não responde nada. Um "isso" solto é
+                     incompreensível; o mesmo "isso" marcado como resposta diz
+                     ao atendente que falta contexto e que a pergunta está
+                     acima. É pouca informação, mas é a informação certa. */
                   const textoCitado =
-                    orig?.texto || m.citacao?.texto || ROTULO_CITADO[m.citacao?.tipo] || null;
+                    orig?.texto
+                    || m.citacao?.texto
+                    || ROTULO_CITADO[m.citacao?.tipo]
+                    || (m.citacao?.desconhecida ? '↩ Em resposta a uma mensagem anterior' : null);
                   if (!textoCitado) return null;
                   return (
                     <div className={`text-[10px] px-2 py-1 rounded-lg border-l-2 mb-1 truncate ${

@@ -67,9 +67,16 @@ function mapMensagem(m) {
     // anterior a integracao) ou nao esta na janela carregada na tela.
     // `tipo` vai junto: mídia citada raramente tem legenda, e sem ele o retrato
     // de uma foto citada chegava vazio na tela -- ver whatsapp.extrairCitacao.
+    // `desconhecida` e o terceiro estado, e ele precisava existir: sem ele,
+    // "o cliente respondeu algo que nao temos" era indistinguivel de "o
+    // cliente nao respondeu nada" -- as duas chegavam na tela como ausencia.
     citacao:
-      meta.citacao?.texto || meta.citacao?.tipo
-        ? { texto: meta.citacao.texto || null, tipo: meta.citacao.tipo || null }
+      meta.citacao?.texto || meta.citacao?.tipo || meta.citacao?.desconhecida
+        ? {
+            texto: meta.citacao.texto || null,
+            tipo: meta.citacao.tipo || null,
+            desconhecida: !!meta.citacao.desconhecida,
+          }
         : null,
     editada: !!m.editadaEm,
     // Marcada por "Apagar para todos": some do WhatsApp do cliente e vira aviso
