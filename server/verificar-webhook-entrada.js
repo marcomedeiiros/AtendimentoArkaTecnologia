@@ -437,6 +437,55 @@ console.log("=== Entrada do webhook ===");
 
     check("a busca do contextInfo é estrutural e não estoura", pEstrutural);
 
+    // ── TOQUE EM BOTÃO NÃO É CITAÇÃO ────────────────────────────────────────
+    //
+    // Medido no banco da instalação: das 188.250 mensagens, 793 têm
+    // `contextInfo.stanzaId` -- e NENHUMA é o "responder" do WhatsApp. São
+    // `buttonsResponseMessage`, `listResponseMessage` e
+    // `templateButtonReplyMessage`: o toque em botão chega como uma resposta que
+    // REFERENCIA a mensagem onde os botões estavam, com `stanzaId` e
+    // `quotedMessage` iguaizinhos aos de uma citação de verdade.
+    //
+    // Tratar isso como citação faz cada escolha de menu aparecer com uma caixa
+    // citando o texto do menu do bot -- ruído em cima da conversa inteira. A
+    // lista fixa de nós que existia antes escapava por acidente; a varredura
+    // estrutural precisa recusar explicitamente, e é isso que está travado aqui.
+    const pBotao = [];
+    const toque = (no, conteudo) => ({
+      data: {
+        key: { remoteJid: "5527999999999@s.whatsapp.net", fromMe: false, id: "3AAA" },
+        messageType: no,
+        message: {
+          messageContextInfo: { deviceListMetadata: {}, messageSecret: "x" },
+          [no]: {
+            ...conteudo,
+            contextInfo: {
+              stanzaId: "3EB086B334146292B0FD37",
+              participant: "552721030070@s.whatsapp.net",
+              quotedMessage: { conversation: "Escolha uma opção:\n1 - Técnico" },
+            },
+          },
+        },
+      },
+    });
+    for (const [no, conteudo] of [
+      ["templateButtonReplyMessage", { selectedDisplayText: "Técnico", selectedId: "1" }],
+      ["buttonsResponseMessage", { selectedDisplayText: "Técnico", selectedButtonId: "1" }],
+      ["listResponseMessage", { title: "Técnico", singleSelectReply: { selectedRowId: "1" } }],
+    ]) {
+      const p = toque(no, conteudo);
+      const c = svc.extrairCitacao(p);
+      if (c !== null) pBotao.push(`${no}: virou citação (${JSON.stringify(c)})`);
+      // E o toque continua sendo lido normalmente -- o rótulo e o id do botão.
+      if (svc.extrairTexto(p) !== "Técnico") {
+        pBotao.push(`${no}: perdeu o rótulo do botão (${svc.extrairTexto(p)})`);
+      }
+      if (svc.extrairBotaoId(p) !== "1") {
+        pBotao.push(`${no}: perdeu o id do botão (${svc.extrairBotaoId(p)})`);
+      }
+    }
+    check("toque em botão/lista não vira citação (mas segue sendo lido)", pBotao);
+
     // O RETRATO SOBREVIVE ATÉ A TELA. O mapper é a última ponte: `citacao` com
     // só o tipo não pode ser descartada ali (era o `meta.citacao?.texto` que
     // decidia sozinho se o campo existia).

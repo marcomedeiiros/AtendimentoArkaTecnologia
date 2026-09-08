@@ -19,6 +19,37 @@ const { motivoParaIgnorarJid } = require("../../shared/helpers/jid.helper");
 // WhatsApp ja limita perto disso.
 const MAX_MIDIA_RECEBIDA = 20 * 1024 * 1024;
 
+// ── NOS CUJO `contextInfo` NAO E CITACAO DO CLIENTE ──────────────────────────
+//
+// Um toque em BOTAO (ou em linha de lista) chega do WhatsApp como uma resposta
+// que REFERENCIA a mensagem onde os botoes estavam -- e por isso traz
+// `contextInfo.stanzaId` e `contextInfo.quotedMessage` iguaizinhos aos de uma
+// citacao de verdade. No banco desta instalacao sao 793 mensagens assim, e
+// NENHUMA e o "responder" do WhatsApp: sao `buttonsResponseMessage`,
+// `listResponseMessage` e `templateButtonReplyMessage`, todas apontando para o
+// menu do proprio bot.
+//
+// Tratar isso como citacao faz cada escolha de menu aparecer na Central com uma
+// caixa de citacao mostrando o texto do menu -- ruido em cima da conversa
+// inteira. A lista fixa de nos que existia antes escapava disso por acidente
+// (ela nao incluia esses tipos); a varredura estrutural, que procura pela
+// assinatura do objeto, precisa recusar explicitamente.
+//
+// `quotedMessage` de dentro deles tambem nao interessa: quem tocou num botao
+// nao citou nada, escolheu uma opcao.
+const NOS_SEM_CITACAO = new Set([
+  "buttonsResponseMessage",
+  "listResponseMessage",
+  "templateButtonReplyMessage",
+  "interactiveResponseMessage",
+  // A reacao e um evento SOBRE outra mensagem e sai do webhook antes daqui (ver
+  // extrairReacao); fica na lista para o dia em que essa ordem mudar.
+  "reactionMessage",
+  // Voto de enquete: mesma natureza do botao -- referencia a enquete, nao cita.
+  "pollUpdateMessage",
+  "pollCreationMessage",
+]);
+
 class WhatsAppService {
   constructor() {
     // instancia -> timestamp em que a vimos conectar (para "tempo online").
@@ -226,6 +257,7 @@ class WhatsAppService {
     if (this._ehContexto(no.contextInfo)) achados.push(no.contextInfo);
     for (const [chave, valor] of Object.entries(no)) {
       if (chave === "contextInfo" || chave === "quotedMessage") continue;
+      if (NOS_SEM_CITACAO.has(chave)) continue;
       if (!valor || typeof valor !== "object") continue;
       this._coletarContextos(valor, achados, profundidade + 1);
     }
