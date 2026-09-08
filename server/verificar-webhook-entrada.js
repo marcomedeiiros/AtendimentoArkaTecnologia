@@ -295,6 +295,57 @@ console.log("=== Entrada do webhook ===");
 
     check("a citação recebida é lida do contextInfo, em qualquer tipo", problemas);
 
+    // ── A FORMA ACHATADA: `contextInfo` AO LADO DE `message` ────────────────
+    //
+    // Era ESTE o ponto cego. `_contextos` varria só os nós dentro de `message`,
+    // e a Evolution v2 também entrega o `contextInfo` um nível acima, irmão de
+    // `message` (`data.contextInfo`) -- junto de `messageType` e `pushName`. A
+    // citação recebida simplesmente não existia nesse formato: o cliente
+    // respondia citando e a mensagem dele aparecia solta, enquanto a NOSSA
+    // resposta citada aparecia certinha (aquela vem do `respondendoAId` da tela
+    // e nunca passa por aqui). Era a assimetria relatada.
+    //
+    // `encaminhada` sai do MESMO objeto, então o selo tinha o mesmo ponto cego.
+    const pAchatado = [];
+    const achatado = (ctx, message = { conversation: "tem como?" }) => ({
+      event: "messages.upsert",
+      data: {
+        key: { remoteJid: "5527999999999@s.whatsapp.net", fromMe: false, id: "3AAA" },
+        pushName: "Rangel",
+        messageType: "conversation",
+        message,
+        contextInfo: ctx,
+      },
+    });
+
+    const cAchatada = svc.extrairCitacao(
+      achatado({ stanzaId: "BAE5F1", quotedMessage: { conversation: "alo" } })
+    );
+    if (cAchatada?.texto !== "alo" || cAchatada?.stanzaId !== "BAE5F1") {
+      pAchatado.push(`data.contextInfo ignorado: ${JSON.stringify(cAchatada)}`);
+    }
+
+    const eAchatada = svc.extrairEncaminhada(achatado({ isForwarded: true, forwardingScore: 7 }));
+    if (eAchatada?.encaminhadaVezes !== 7) {
+      pAchatado.push(`selo Encaminhada perdido na forma achatada: ${JSON.stringify(eAchatada)}`);
+    }
+    // Encaminhada achatada NÃO é citação (o objeto é o mesmo).
+    if (svc.extrairCitacao(achatado({ isForwarded: true, forwardingScore: 7 })) !== null) {
+      pAchatado.push("encaminhada achatada virou citação");
+    }
+
+    // AS DUAS FORMAS no mesmo payload: a de dentro do nó é a mais específica.
+    const duas = achatado(
+      { stanzaId: "ACHATADO", quotedMessage: { conversation: "o outro" } },
+      { extendedTextMessage: { text: "tem como?", contextInfo: { stanzaId: "DO_NO", quotedMessage: { conversation: "o certo" } } } }
+    );
+    const cDuas = svc.extrairCitacao(duas);
+    if (cDuas?.stanzaId !== "DO_NO") {
+      pAchatado.push(`com as duas formas, a do nó deveria vencer: ${JSON.stringify(cDuas)}`);
+    }
+
+    check("o contextInfo achatado (data.contextInfo) também é lido", pAchatado);
+
     // O RETRATO SOBREVIVE ATÉ A TELA. O mapper é a última ponte: `citacao` com
     // só o tipo não pode ser descartada ali (era o `meta.citacao?.texto` que
     // decidia sozinho se o campo existia).

@@ -194,16 +194,40 @@ class WhatsAppService {
    */
   _contextos(payload) {
     const msg = payload?.data?.message || payload?.message;
-    if (!msg || typeof msg !== "object") return [];
 
-    return [
-      msg.extendedTextMessage, msg.imageMessage, msg.videoMessage, msg.audioMessage,
-      msg.documentMessage, msg.documentWithCaptionMessage?.message?.documentMessage,
-      msg.stickerMessage, msg.locationMessage, msg.contactMessage, msg.contextInfo && msg,
-    ]
-      .filter(Boolean)
-      .map((no) => no.contextInfo)
-      .filter(Boolean);
+    // ── O `contextInfo` ACHATADO, AO LADO DE `message` ─────────────────────
+    //
+    // Este era o buraco: varriamos so os nos DENTRO de `message`, e a Evolution
+    // tambem entrega o `contextInfo` um nivel ACIMA, como irmao de `message`
+    // (`data.contextInfo`). Nao e uma variante exotica -- e a forma que a v2
+    // monta no `messages.upsert`, junto de `messageType` e `pushName`, e ela
+    // convive com a outra conforme a versao e o tipo da mensagem. E o mesmo
+    // problema que o base64 da midia ja tinha (ver o comentario no webhook: "a
+    // Evolution acomoda o base64 em lugares diferentes conforme a versao").
+    //
+    // O efeito era a citacao RECEBIDA nao existir: o cliente respondia citando,
+    // ninguem achava o `stanzaId` nem o `quotedMessage`, e a resposta dele
+    // aparecia solta na Central -- enquanto a NOSSA resposta citada aparecia
+    // certinha, porque aquela vem do `respondendoAId` da propria tela e nunca
+    // passou por aqui. Era exatamente a assimetria relatada.
+    //
+    // `encaminhada` sai do MESMO objeto, entao o selo "Encaminhada" tinha o
+    // mesmo ponto cego pela mesma razao.
+    const achatados = [payload?.data?.contextInfo, payload?.contextInfo];
+
+    const dosNos = !msg || typeof msg !== "object"
+      ? []
+      : [
+          msg.extendedTextMessage, msg.imageMessage, msg.videoMessage, msg.audioMessage,
+          msg.documentMessage, msg.documentWithCaptionMessage?.message?.documentMessage,
+          msg.stickerMessage, msg.locationMessage, msg.contactMessage, msg.contextInfo && msg,
+        ]
+          .filter(Boolean)
+          .map((no) => no.contextInfo);
+
+    // Os nos vem PRIMEIRO: quando as duas formas chegam no mesmo payload, a que
+    // esta dentro do tipo e a mais especifica.
+    return [...dosNos, ...achatados].filter((c) => c && typeof c === "object");
   }
 
   /**
@@ -586,6 +610,25 @@ class WhatsAppService {
     // Citação ("responder"): mesma história do encaminhamento -- vale para
     // qualquer tipo e mora no mesmo `contextInfo`.
     const citacao = this.extrairCitacao(body);
+    // ── QUANDO HAVIA `contextInfo` E NAO SAIU CITACAO NENHUMA ───────────────
+    //
+    // A citacao recebida vive ou morre na forma do payload, e a Evolution muda
+    // essa forma entre versoes. Descobrir isso custou caro justamente porque a
+    // falha era MUDA: a mensagem entrava normalmente, so sem o trecho citado, e
+    // nao havia nada no log para distinguir "a Evolution nao mandou" de "mandou
+    // num lugar que nao procuramos".
+    //
+    // So as CHAVES vao para o log, nunca os valores: `quotedMessage` carrega o
+    // conteudo da mensagem citada, e log nao e lugar para conversa de cliente.
+    const contextos = this._contextos(body);
+    if (contextos.length && !citacao) {
+      logger.info("contextInfo recebido sem citacao reconhecida", {
+        instance: instanceName,
+        waMessageId: key?.id || null,
+        // A ESTRUTURA, e so ela: e o que diz onde procurar na proxima versao.
+        chaves: contextos.map((c) => Object.keys(c).sort()),
+      });
+    }
     let midia = this.extrairMidia(body);
     // Para tipos com arquivo, tenta obter os bytes (base64 no payload quando o
     // "Webhook Base64" está ligado, senão baixa via getBase64FromMediaMessage).
