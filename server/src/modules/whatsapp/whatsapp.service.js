@@ -241,12 +241,28 @@ class WhatsAppService {
       // a mesma forma de uma mensagem (conversation, extendedTextMessage, ...).
       const texto = citada ? this.extrairTexto({ message: citada }) : null;
 
+      // ── MIDIA CITADA SEM LEGENDA: O RETRATO PRECISA DIZER O QUE ERA ────────
+      //
+      // `extrairTexto` devolve a LEGENDA da midia, e a maioria das fotos, audios
+      // e PDFs nao tem legenda nenhuma -- ali o retrato saia inteiro vazio. A
+      // bolha entao dependia SO do `stanzaId` casar com uma mensagem que
+      // estivesse no banco E na janela carregada na tela; falhando qualquer uma
+      // dessas, a resposta do cliente aparecia solta outra vez, sem pista do que
+      // ele estava respondendo -- o mesmo sintoma que a citacao veio corrigir,
+      // por outra porta.
+      //
+      // Reaproveita `extrairMidia`, que ja sabe reconhecer cada tipo: assim o
+      // retrato guarda "era uma imagem" mesmo quando nao ha uma palavra para
+      // mostrar, e a bolha tem sempre o que dizer.
+      const midiaCitada = !texto && citada ? this.extrairMidia({ message: citada }) : null;
+
       return {
         stanzaId: stanzaId ? String(stanzaId) : null,
-        // Texto do trecho citado quando houver; para midia citada o
-        // `extrairTexto` devolve a legenda, e sem legenda fica null (a bolha
-        // cai no lookup pelo id, que resolve a original de verdade).
+        // Texto do trecho citado quando houver.
         texto: texto || null,
+        // O TIPO da midia citada, quando nao ha texto. `null` para citacao de
+        // texto (o `texto` acima ja diz tudo) e para o que nao reconhecemos.
+        tipo: midiaCitada?.tipo || null,
       };
     }
     return null;

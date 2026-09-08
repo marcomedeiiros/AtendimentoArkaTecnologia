@@ -1113,6 +1113,40 @@ function conferirUmaPerguntaPorTurno(rotulo, r) {
   );
   console.log("  OK    encerramento -> nota -> comentário -> agradecimento");
 
+  // ── QUEM RESPONDE COM PALAVRA, E NÃO COM NÚMERO ─────────────────────────
+  //
+  // "Que nota você dá?" é uma pergunta que muita gente responde com "ótimo",
+  // "excelente", "valeu", "muito bom" -- e não com um algarismo. Esgotadas as
+  // tentativas, `continuarPesquisaSatisfacao` chamava `finalizarPesquisa` SEM
+  // enviar nada: a pesquisa terminava em silêncio absoluto e a última coisa que
+  // o cliente lia era "responda apenas com um número de 1 a 5". Do lado dele, o
+  // atendimento acabou com uma reclamação.
+  //
+  // O mesmo método JÁ enviava o agradecimento quando o cliente RECUSAVA avaliar
+  // -- a mesma situação ("terminou sem nota"), com dois desfechos diferentes. É
+  // o texto de FECHAMENTO configurado no bloco (no fluxo da ARKA ele leva o site
+  // e o Instagram), então faltar aqui é faltar justamente na despedida.
+  r = await simulador.simular(fluxo, ["oi", "1", "2", "2", "ótimo", "valeu"], { filas: FILAS });
+  mostrar("nota respondida com palavra, duas vezes", r);
+  check(
+    /1 a 5/.test(r.turnos[4]?.respostas.join("\n") || ""),
+    `a primeira resposta inválida deveria repetir a pergunta: ${r.turnos[4]?.respostas.map(linha1).join(" | ")}`
+  );
+  check(
+    /avaliação foi registrada/i.test(r.turnos[5]?.respostas.join("\n") || ""),
+    `esgotadas as tentativas, a pesquisa terminou CALADA: ${JSON.stringify(r.turnos[5]?.respostas || [])}`
+  );
+  console.log("  OK    esgotar as tentativas de nota ainda se despede do cliente");
+
+  // A RECUSA continua se despedindo (é o caminho que já funcionava, e a
+  // correção acima não pode tê-lo mexido).
+  r = await simulador.simular(fluxo, ["oi", "1", "2", "2", "não quero avaliar"], { filas: FILAS });
+  check(
+    /avaliação foi registrada/i.test(r.turnos[4]?.respostas.join("\n") || ""),
+    `quem recusa avaliar deveria receber a despedida: ${JSON.stringify(r.turnos[4]?.respostas || [])}`
+  );
+  console.log("  OK    recusar avaliar também se despede");
+
   // A PESQUISA NÃO ATRAPALHA O ATENDIMENTO HUMANO: quem foi ENTREGUE à fila não
   // recebe pesquisa (não houve atendimento para avaliar ainda -- ela vem quando
   // o atendente encerrar).

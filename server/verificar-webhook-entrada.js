@@ -196,6 +196,124 @@ console.log("=== Entrada do webhook ===");
     ]);
   }
 
+  // ── A CITAÇÃO RECEBIDA (o "responder" do WhatsApp) ────────────────────────
+  //
+  // Quando o cliente responde citando, a bolha precisa mostrar O QUE ele citou.
+  // Isso depende inteiramente de LER o `contextInfo` do payload -- e essa
+  // ingestão nunca tinha sido exercitada por nenhum teste. O que se prova aqui
+  // é que ela reconhece o `contextInfo` em cada nó de tipo onde o Baileys o
+  // pendura, e que o retrato nunca sai vazio.
+  //
+  // O caso que faltava: MÍDIA CITADA SEM LEGENDA. `extrairTexto` devolve a
+  // legenda, e foto/áudio/PDF quase nunca têm uma -- o retrato saía vazio e a
+  // bolha voltava a mostrar a resposta solta, sem pista do que era. Agora o
+  // retrato guarda o TIPO quando não há texto.
+  {
+    const svc = require(path.join(__dirname, "src/modules/whatsapp/whatsapp.service"));
+
+    // O payload como a Evolution entrega: `contextInfo` DENTRO do nó do tipo.
+    const comCitacao = (no, conteudo, ctxExtra = {}) => ({
+      data: {
+        key: { remoteJid: "5527999999999@s.whatsapp.net", fromMe: false, id: "3AAA" },
+        message: {
+          [no]: { ...conteudo, contextInfo: { stanzaId: "BAE5F1", ...ctxExtra } },
+        },
+      },
+    });
+
+    const problemas = [];
+    const conferir = (rotulo, payload, esperado) => {
+      const c = svc.extrairCitacao(payload);
+      const veio = { texto: c?.texto ?? null, tipo: c?.tipo ?? null };
+      if (JSON.stringify(veio) !== JSON.stringify(esperado)) {
+        problemas.push(`${rotulo}: esperado ${JSON.stringify(esperado)}, veio ${JSON.stringify(veio)}`);
+      }
+      if (c && c.stanzaId !== "BAE5F1") problemas.push(`${rotulo}: stanzaId perdido (${c.stanzaId})`);
+    };
+
+    // Resposta de TEXTO citando TEXTO -- o caso comum, que já funcionava.
+    conferir(
+      "texto citando texto",
+      comCitacao("extendedTextMessage", { text: "sim, é esse" }, {
+        quotedMessage: { conversation: "Podemos agendar para amanhã?" },
+      }),
+      { texto: "Podemos agendar para amanhã?", tipo: null }
+    );
+
+    // Resposta de MÍDIA citando texto: o `contextInfo` vem no nó da imagem.
+    conferir(
+      "imagem citando texto",
+      comCitacao("imageMessage", { caption: "olha o erro", mimetype: "image/jpeg" }, {
+        quotedMessage: { conversation: "manda um print" },
+      }),
+      { texto: "manda um print", tipo: null }
+    );
+
+    // Citando IMAGEM SEM LEGENDA -- era aqui que o retrato saía vazio.
+    conferir(
+      "citando imagem sem legenda",
+      comCitacao("extendedTextMessage", { text: "é essa" }, {
+        quotedMessage: { imageMessage: { mimetype: "image/jpeg" } },
+      }),
+      { texto: null, tipo: "imagem" }
+    );
+    conferir(
+      "citando áudio",
+      comCitacao("extendedTextMessage", { text: "não deu pra ouvir" }, {
+        quotedMessage: { audioMessage: { mimetype: "audio/ogg", ptt: true } },
+      }),
+      { texto: null, tipo: "audio" }
+    );
+    conferir(
+      "citando documento",
+      comCitacao("extendedTextMessage", { text: "recebi" }, {
+        quotedMessage: { documentMessage: { mimetype: "application/pdf", fileName: "nota.pdf" } },
+      }),
+      { texto: null, tipo: "documento" }
+    );
+    // Legenda VENCE o tipo: havendo texto, é ele que a bolha mostra.
+    conferir(
+      "citando imagem COM legenda",
+      comCitacao("extendedTextMessage", { text: "essa mesma" }, {
+        quotedMessage: { imageMessage: { mimetype: "image/jpeg", caption: "print do erro" } },
+      }),
+      { texto: "print do erro", tipo: null }
+    );
+
+    // Mensagem que NÃO é resposta não pode virar citação de nada.
+    const semCtx = svc.extrairCitacao({
+      data: { key: { id: "1" }, message: { conversation: "oi" } },
+    });
+    if (semCtx !== null) problemas.push(`mensagem sem contextInfo virou citação: ${JSON.stringify(semCtx)}`);
+
+    // ENCAMINHADA não é citação: o `contextInfo` é o mesmo objeto, e confundir
+    // os dois faria toda mensagem encaminhada aparecer citando algo.
+    const encaminhada = svc.extrairCitacao(
+      comCitacao("extendedTextMessage", { text: "olha isso" }, { isForwarded: true, stanzaId: undefined })
+    );
+    if (encaminhada) problemas.push(`encaminhada sem citação virou citação: ${JSON.stringify(encaminhada)}`);
+
+    check("a citação recebida é lida do contextInfo, em qualquer tipo", problemas);
+
+    // O RETRATO SOBREVIVE ATÉ A TELA. O mapper é a última ponte: `citacao` com
+    // só o tipo não pode ser descartada ali (era o `meta.citacao?.texto` que
+    // decidia sozinho se o campo existia).
+    const mapper = require(path.join(__dirname, "src/shared/helpers/mapper.helper"));
+    const mapeadas = [
+      [{ citacao: { tipo: "imagem" } }, { texto: null, tipo: "imagem" }],
+      [{ citacao: { texto: "oi" } }, { texto: "oi", tipo: null }],
+      [{}, null],
+    ];
+    const pMapper = [];
+    for (const [meta, esperado] of mapeadas) {
+      const c = mapper.mapMensagem({ id: "m1", origem: "cliente", texto: "x", metadata: meta }).citacao;
+      if (JSON.stringify(c) !== JSON.stringify(esperado)) {
+        pMapper.push(`metadata ${JSON.stringify(meta)}: esperado ${JSON.stringify(esperado)}, veio ${JSON.stringify(c)}`);
+      }
+    }
+    check("o retrato da citação chega à tela (mapper)", pMapper);
+  }
+
   console.log(
     "\n" +
       (erros.length

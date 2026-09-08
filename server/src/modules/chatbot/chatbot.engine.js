@@ -2322,6 +2322,24 @@ class ChatbotEngine {
         // limite vem do FLUXO (antes era o `maxTentativasOpcao` global do .env).
         if (tentativas >= (cfg.maxTentativas || 2)) {
           await this.registrarStatusAvaliacao(alvoId, osAvaliada, "sem_nota");
+          // ── O ENCERRAMENTO EM SILENCIO ABSOLUTO ──────────────────────────
+          //
+          // Aqui o `finalizarPesquisa` era chamado SEM enviar nada, e era o
+          // defeito relatado ("a mensagem de agradecimento nao esta sendo
+          // enviada"). O caminho e comum: "que nota voce da?" e uma pergunta
+          // que muita gente responde com palavra em vez de numero -- "otimo",
+          // "excelente", "valeu", "muito bom". Duas dessas e a pesquisa
+          // terminava sem o bot dizer mais nada, e a ultima coisa que o cliente
+          // via era "responda apenas com um numero de 1 a 5". Do lado dele, o
+          // atendimento acabou com uma reclamacao.
+          //
+          // O texto e o MESMO que o `recusouAvaliar` logo acima ja enviava --
+          // esta e a mesma situacao ("a pesquisa terminou sem nota"), e o
+          // codigo discordava de si mesmo sobre o que fazer nela. E o texto de
+          // FECHAMENTO da pesquisa, configurado no bloco de avaliacao: no fluxo
+          // da ARKA ele leva o site e o Instagram, que e justamente o que nao
+          // pode faltar na despedida.
+          await this.enviarBot(conversa.id, telefone, cfg.mensagemAgradecimento, instanceName);
           return this.finalizarPesquisa(ctx, sessao);
         }
         // Repergunta COM os botoes: se a primeira nota nao veio no formato, o
@@ -3640,7 +3658,16 @@ class ChatbotEngine {
     // casos voltariam a mostrar a resposta solta -- sem nenhuma pista do que o
     // cliente estava respondendo. Com ele, a Central exibe o trecho citado
     // mesmo sem conseguir apontar para a mensagem.
-    const citacaoResumo = citacao?.texto ? { texto: String(citacao.texto).slice(0, 500) } : null;
+    // `tipo` entra ao lado do texto porque MIDIA CITADA quase nunca tem legenda:
+    // exigir `texto` aqui descartava o retrato de toda foto, audio e PDF citado,
+    // e a bolha voltava a nao ter o que mostrar. Ver extrairCitacao.
+    const citacaoResumo =
+      citacao?.texto || citacao?.tipo
+        ? {
+            ...(citacao.texto ? { texto: String(citacao.texto).slice(0, 500) } : {}),
+            ...(citacao.tipo ? { tipo: String(citacao.tipo) } : {}),
+          }
+        : null;
 
     // A marca de encaminhamento, o botaoId e o trecho citado entram no metadata.
     const metadata =

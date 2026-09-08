@@ -3355,7 +3355,19 @@ function PainelChat({
                   const orig = m.respondendoAId
                     ? conversa.mensagens.find(x => x.id === m.respondendoAId)
                     : null;
-                  const textoCitado = orig?.texto || m.citacao?.texto || null;
+                  /* MÍDIA CITADA NÃO TEM TEXTO PARA MOSTRAR, e ficava sem nada.
+                     Foto, áudio e PDF quase nunca têm legenda: `textoCitado`
+                     saía vazio, o `return null` abaixo era alcançado e a
+                     resposta do cliente aparecia solta -- exatamente o que a
+                     citação existe para evitar. O rótulo do tipo é o que a
+                     bolha do WhatsApp também mostra nesse caso. */
+                  const ROTULO_CITADO = {
+                    imagem: '📷 Imagem', figurinha: '😀 Figurinha', video: '🎬 Vídeo',
+                    documento: '📄 Documento', audio: '🎤 Áudio',
+                    localizacao: '📍 Localização', contato: '👤 Contato',
+                  };
+                  const textoCitado =
+                    orig?.texto || m.citacao?.texto || ROTULO_CITADO[m.citacao?.tipo] || null;
                   if (!textoCitado) return null;
                   return (
                     <div className={`text-[10px] px-2 py-1 rounded-lg border-l-2 mb-1 truncate ${

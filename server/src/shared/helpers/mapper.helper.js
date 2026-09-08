@@ -65,7 +65,12 @@ function mapMensagem(m) {
     // cliente). E o plano B do `respondendoAId`: com ele a bolha mostra o que
     // foi citado mesmo quando a mensagem original nao esta no banco (citou algo
     // anterior a integracao) ou nao esta na janela carregada na tela.
-    citacao: meta.citacao?.texto ? { texto: meta.citacao.texto } : null,
+    // `tipo` vai junto: mídia citada raramente tem legenda, e sem ele o retrato
+    // de uma foto citada chegava vazio na tela -- ver whatsapp.extrairCitacao.
+    citacao:
+      meta.citacao?.texto || meta.citacao?.tipo
+        ? { texto: meta.citacao.texto || null, tipo: meta.citacao.tipo || null }
+        : null,
     editada: !!m.editadaEm,
     // Marcada por "Apagar para todos": some do WhatsApp do cliente e vira aviso
     // no chat ao vivo, mas segue no Registro (o texto original continua aqui).
