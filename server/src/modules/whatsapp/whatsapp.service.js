@@ -69,7 +69,26 @@ class WhatsAppService {
     if (typeof msg === "string") return msg.trim();
     if (msg.conversation) return msg.conversation.trim();
     if (msg.extendedTextMessage?.text) return msg.extendedTextMessage.text.trim();
-    if (msg.imageMessage?.caption) return msg.imageMessage.caption.trim();
+    // ── A LEGENDA DE QUALQUER MIDIA, E NAO SO DA IMAGEM ─────────────────────
+    //
+    // So `imageMessage.caption` era lida. Vídeo e documento tambem carregam
+    // legenda, e ela era descartada: o cliente mandava o video escrevendo "o
+    // sistema travou assim" e chegava aqui uma mensagem sem texto nenhum.
+    //
+    // Passou a importar mais desde que a MIDIA alimenta o fluxo (ver o portao de
+    // midia no motor): a legenda e a resposta do cliente, e sem ela a etapa de
+    // resposta livre recebia o rotulo "[Vídeo]" em vez do que ele escreveu.
+    //
+    // `documentWithCaptionMessage` e o empacotamento que o WhatsApp usa quando o
+    // documento vai COM legenda -- o documento fica um nivel abaixo. Mesma forma
+    // que `extrairMidia` ja tratava para achar o arquivo.
+    const legenda =
+      msg.imageMessage?.caption ||
+      msg.videoMessage?.caption ||
+      msg.documentMessage?.caption ||
+      msg.documentWithCaptionMessage?.message?.documentMessage?.caption ||
+      null;
+    if (legenda) return String(legenda).trim();
 
     // Resposta de BOTAO: o texto visivel (selectedDisplayText) e o que o cliente
     // viu e tocou (ex.: "Comercial", "Produtos"). Vem antes do id para a bolha no
@@ -409,6 +428,47 @@ class WhatsAppService {
       const c = msg.contactMessage || msg.contactsArrayMessage?.contacts?.[0] || {};
       return { tipo: "contato", displayName: c.displayName || null, vcard: c.vcard || null };
     }
+
+    // ── MIDIA QUE NAO ESTA NA LISTA ACIMA ───────────────────────────────────
+    //
+    // Aqui devolvia `null`, e `null` nao significa "nao e midia": significa "nao
+    // reconheci". A diferenca custava a mensagem INTEIRA -- sem midia e sem
+    // texto, o webhook responde `dados_incompletos` e ela nunca entra no
+    // sistema. Do lado do cliente: ele mandou o arquivo e ninguem nunca viu.
+    // Foi o mesmo sintoma que a figurinha teve antes de ganhar o ramo dela.
+    //
+    // O CRITERIO E O MIMETYPE, e nao o nome do no. Um `mimetype` string e o
+    // sinal forte de que ali ha arquivo, e ele nao depende de a Evolution
+    // renomear o tipo entre versoes nem de nos adivinharmos a lista completa.
+    // Nada de extensao de arquivo: o provedor informa o mimetype e ele manda.
+    //
+    // O tipo sai do PREFIXO do mimetype, reaproveitando os tipos que ja existem
+    // (imagem/video/audio/documento) -- assim a Central, o histórico e a
+    // exportacao continuam funcionando sem conhecer nenhum tipo novo. Qualquer
+    // coisa que nao seja imagem, video ou audio e tratada como documento, que e
+    // o que ela e: um arquivo para baixar.
+    for (const [chave, no] of Object.entries(msg)) {
+      if (!chave.endsWith("Message") || !no || typeof no !== "object") continue;
+      const mimetype = typeof no.mimetype === "string" ? no.mimetype.trim() : "";
+      if (!mimetype) continue;
+      const familia = mimetype.split("/")[0].toLowerCase();
+      const tipo =
+        familia === "image" ? "imagem" : familia === "video" ? "video" : familia === "audio" ? "audio" : "documento";
+      logger.info("Midia de tipo nao mapeado recebida; classificada pelo mimetype", {
+        no: chave,
+        mimetype,
+        tipo,
+      });
+      return {
+        tipo,
+        mimetype,
+        caption: typeof no.caption === "string" ? no.caption : null,
+        // Só faz sentido em documento, e é o que a Central usa como nome do
+        // arquivo para baixar.
+        ...(tipo === "documento" ? { fileName: no.fileName || no.title || "arquivo" } : {}),
+      };
+    }
+
     return null;
   }
 
