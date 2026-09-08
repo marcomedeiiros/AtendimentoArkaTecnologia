@@ -1041,26 +1041,59 @@ class ChatbotEngine {
       aguardava: sessao.aguardando,
     });
 
-    // "encerrar" fecha a OS -- e o que combina com "abra um chamado novamente":
-    // a proxima mensagem do cliente abre um atendimento novo.
-    //
-    // SEM PESQUISA DE SATISFACAO: este e o fechamento por ABANDONO. O cliente
-    // parou de responder ao BOT, ninguem o atendeu, e nao existe atendimento
-    // para ele avaliar.
+    // O DESFECHO E COMPARTILHADO com quem responde sem acertar o que foi
+    // pedido: as duas coisas sao o cliente nao respondendo a etapa, e a regra
+    // sai do mesmo bloco do fluxo. Ver _desistirDaEtapa.
+    return this._desistirDaEtapa(ctx, { motivo: "sem_resposta" });
+  }
+
+  /**
+   * O FLUXO DESISTE DA ETAPA -- e existem DUAS maneiras de chegar aqui.
+   *
+   * O cliente não respondeu o que foi pedido. Isso acontece de dois jeitos, e
+   * o motor os tratava como assuntos diferentes:
+   *
+   *   1. ele SUMIU  -- a varredura de inatividade cobra o prazo do bloco de
+   *      espera, manda a mensagem dele e encerra (ou devolve para a fila);
+   *   2. ele RESPONDEU, mas nunca o que foi pedido -- errou a opção do menu N
+   *      vezes, ou insistiu em "." na resposta livre.
+   *
+   * O caso 2 caía direto em `transferirParaHumano`, e o efeito na tela do
+   * cliente era o relato: ele lia "Não consegui entender sua solicitação, pode
+   * responder novamente?" duas vezes e, na terceira, recebia
+   * "✅ Solicitação registrada -- encaminhamos para a nossa equipe". Ou seja: o
+   * bot dizia que NÃO havia entendido e, em seguida, confirmava um chamado como
+   * se tivesse entendido. A equipe recebia na fila uma OS cuja triagem
+   * fracassou -- sem setor, sem CNPJ e sem descrição.
+   *
+   * As duas maneiras são a MESMA coisa do ponto de vista de quem configura o
+   * bot, então o desfecho passa a ser um só, e sai do lugar onde já morava: o
+   * bloco de espera `sem_resposta` do fluxo (mensagem, ação e agora também
+   * quantas chances). Configurar em um lugar vale para os dois caminhos.
+   *
+   * SEM PESQUISA DE SATISFAÇÃO, nos dois casos: não houve atendimento para
+   * avaliar, e perguntar a nota a quem acabou de não ser entendido é a pior
+   * hora possível.
+   */
+  async _desistirDaEtapa(contexto, { motivo }) {
+    const { conversa, telefone, instanceName, fluxo } = contexto;
+    const cfg = paramsTempos(fluxo).semResposta;
+    const texto = cfg.mensagem ? this.interpolar(cfg.mensagem, contexto) : null;
+
+    // "encerrar" fecha a OS -- e é o que combina com o texto padrão do bloco
+    // ("abra um chamado novamente"): a próxima mensagem do cliente abre um
+    // atendimento novo, com a triagem rodando desde o início.
     if (cfg.acao === "encerrar") {
-      return this.encerrarAtendimento(ctx, texto, {
-        pesquisa: false,
-        motivo: "sem_resposta",
-      });
+      return this.encerrarAtendimento(contexto, texto, { pesquisa: false, motivo });
     }
 
     // `acao: "fila"` -- devolve para um atendente em vez de fechar. A mensagem
-    // do bloco de espera JA explica o que aconteceu, entao a confirmacao de
-    // encaminhamento so entra quando o bloco nao tem texto: duas mensagens
-    // seguidas dizendo coisas diferentes ("nao entendemos a sua demanda" +
-    // "solicitacao registrada") confundem mais do que uma.
-    if (texto) await this.enviarBot(conversa.id, sessao.telefone, texto, instanceName);
-    return this.transferirParaHumano(ctx, { avisar: !texto, motivo: "sem_resposta" });
+    // do bloco JÁ explica o que aconteceu, então a confirmação de encaminhamento
+    // só entra quando o bloco não tem texto: duas mensagens seguidas dizendo
+    // coisas diferentes ("não entendemos a sua demanda" + "solicitação
+    // registrada") são exatamente o que confundia o cliente no relato.
+    if (texto) await this.enviarBot(conversa.id, telefone, texto, instanceName);
+    return this.transferirParaHumano(contexto, { avisar: !texto, motivo });
   }
 
   sessaoExpirada(sessao) {
@@ -2130,6 +2163,15 @@ class ChatbotEngine {
     const { MOTIVOS_AUTOMATICOS } = require("../configuracoes/configuracao.service");
     if (motivoInterno === "sem_resposta") return MOTIVOS_AUTOMATICOS.INATIVIDADE;
     if (motivoInterno === "fora_do_horario") return MOTIVOS_AUTOMATICOS.FORA_HORARIO;
+    // O CLIENTE ESTAVA ALI, e o bot nao o entendeu -- rotulo proprio.
+    //
+    // Somar isto a "inatividade" seria mentir sobre o que aconteceu (ninguem
+    // ficou inativo: ele respondeu, tres vezes) e somar a "Encerrado pelo
+    // fluxo" chamaria de sucesso do robo o caso em que a triagem falhou. E o
+    // numero que manda melhorar o menu, e ele precisa aparecer separado.
+    if (motivoInterno === "opcao_invalida" || motivoInterno === "resposta_livre_sem_conteudo") {
+      return MOTIVOS_AUTOMATICOS.NAO_ENTENDIDO;
+    }
     return MOTIVOS_AUTOMATICOS.FLUXO;
   }
 
@@ -3462,14 +3504,19 @@ class ChatbotEngine {
       // pela regra que ja valia para o menu, e nao por causa do primeiro ponto.
       const temConteudo = /[\p{L}\p{N}]/u.test(resposta);
       if (!temConteudo) {
+        // Mesmo teto e mesmo desfecho do menu: quem insiste em nao responder
+        // ("." , "...", "!?") esta no mesmo caso de quem erra a opcao N vezes.
+        const cfgEtapa = paramsTempos(fluxo).semResposta;
         const tentativas = (sessao.contexto?.tentativasTexto || 0) + 1;
-        if (tentativas >= limites.maxTentativasOpcao) {
-          logger.info("Resposta livre sem conteudo nas tentativas permitidas: entregando para a fila", {
+        if (tentativas >= cfgEtapa.maxTentativas) {
+          logger.info("Fluxo desistiu da etapa: resposta livre sem conteudo", {
             conversaId: conversa.id,
             passoId: passoAtual?.id || null,
             tentativas,
+            maxTentativas: cfgEtapa.maxTentativas,
+            acao: cfgEtapa.acao,
           });
-          return this.transferirParaHumano(contexto, { motivo: "resposta_livre_sem_conteudo" });
+          return this._desistirDaEtapa(contexto, { motivo: "resposta_livre_sem_conteudo" });
         }
 
         // REPETE A PERGUNTA DO PROPRIO PASSO, e nao um "nao entendi" do motor.
@@ -3554,9 +3601,37 @@ class ChatbotEngine {
         // como continuar de onde parou.
         if (!opcoes.length) return this.transferirParaHumano(contexto, { motivo: "passo_sem_opcoes" });
 
+        // AS CHANCES SAEM DO FLUXO, e nao do `.env`.
+        //
+        // O teto vivia so em `CHATBOT_MAX_TENTATIVAS_OPCAO`, entao mexer no
+        // numero de chances do cliente exigia deploy e nao aparecia em tela
+        // nenhuma. Agora ele mora no bloco de espera, junto da mensagem e do
+        // desfecho que ele aciona -- e o valor do ambiente segue como padrao de
+        // quem nao declarou nada.
+        const cfgEtapa = paramsTempos(fluxo).semResposta;
         const tentativas = (sessao.contexto?.tentativasOpcao || 0) + 1;
-        if (tentativas >= limites.maxTentativasOpcao) {
-          return this.transferirParaHumano(contexto, { motivo: "opcao_invalida" });
+        if (tentativas >= cfgEtapa.maxTentativas) {
+          // ── AQUI ESTAVA O RELATO ────────────────────────────────────────
+          //
+          // Era `transferirParaHumano`, que envia a confirmacao de
+          // encaminhamento. O cliente lia "Nao consegui entender sua
+          // solicitacao" duas vezes e, na terceira, "✅ Solicitacao registrada
+          // -- encaminhamos para a nossa equipe": o bot dizia que NAO entendeu
+          // e em seguida confirmava o chamado como se tivesse entendido. E a
+          // equipe recebia na fila uma OS cuja triagem fracassou -- sem setor,
+          // sem CNPJ e sem descricao.
+          //
+          // Agora vale o desfecho do bloco de espera do fluxo, o mesmo de quem
+          // simplesmente sumiu: a mensagem que o operador escreveu e, por
+          // padrao, o encerramento do chamado.
+          logger.info("Fluxo desistiu da etapa: o cliente nao acertou a opcao", {
+            conversaId: conversa.id,
+            passoId: passoAtual?.id || null,
+            tentativas,
+            maxTentativas: cfgEtapa.maxTentativas,
+            acao: cfgEtapa.acao,
+          });
+          return this._desistirDaEtapa(contexto, { motivo: "opcao_invalida" });
         }
 
         // Texto do proprio fluxo importado, nao do motor.

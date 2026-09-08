@@ -41,9 +41,10 @@ vivem em blocos separados do fluxo.
 
 ## 2. O que estava quebrado
 
-Dez defeitos. Os cinco primeiros (A1–A4 e A10) produzem o mesmo sintoma na ponta
+Onze defeitos. Os cinco primeiros (A1–A4 e A10) produzem o mesmo sintoma na ponta
 — **um bot mudo, com tudo verde na tela** — e é por isso que pareciam "tudo
-quebrando ao mesmo tempo".
+quebrando ao mesmo tempo". A11 é o oposto e não menos grave: o bot fala, e o que
+ele fala se contradiz.
 
 ### A1 · CRÍTICO — a palavra do cliente virava comando, e a primeira mensagem era a mais exposta
 
@@ -163,6 +164,61 @@ o que o fluxo enxerga (`textoParaFluxo`), o comando global, o gatilho e a
 validação de CNPJ **já** liam a legenda; eles simplesmente nunca eram
 alcançados. O rótulo inventado pelo motor ("[Imagem]") continua fora dessas
 decisões, e é por isso que a condição é `textoLimpo` e não `textoParaFluxo`.
+
+### A11 · CRÍTICO — o bot dizia que não entendeu e, em seguida, confirmava o chamado
+
+*Relatado com print da conversa, depois do primeiro deploy.*
+
+Esgotar as tentativas de resposta caía direto em `transferirParaHumano`, que
+envia a confirmação de encaminhamento. Do lado do cliente:
+
+```
+cliente:  (link do YouTube)
+bot:      Não consegui entender sua solicitação, pode responder novamente?
+cliente:  nao
+bot:      Não consegui entender sua solicitação, pode responder novamente?
+cliente:  nao
+bot:      ✅ Solicitação registrada — encaminhamos sua solicitação para a nossa equipe.
+```
+
+O bot afirma que **não** entendeu e, na linha seguinte, confirma um chamado como
+se tivesse entendido. E a equipe recebe na fila uma OS cuja triagem fracassou —
+sem setor, sem CNPJ e sem descrição, que é exatamente o tipo de chamado que
+ninguém consegue atender.
+
+O agravante: **o fluxo já declarava a mensagem certa.** O `fluxo-arka.json` tem
+`configuracoesGlobais.semResposta.mensagem` e um bloco `espera` (`modo:
+`sem_resposta`, `acao: "encerrar"`) com *"Não entendemos a sua demanda. Por favor,
+abra um chamado novamente."* — e esse texto **nunca era lido por este caminho**,
+porque só o relógio do silêncio passava por ele. A configuração estava correta e
+não fazia efeito.
+
+**Correção:** as duas maneiras de não responder passam a compartilhar um único
+desfecho (`_desistirDaEtapa`), lido do bloco de espera do fluxo:
+
+| Como o cliente falha | Antes | Agora |
+| --- | --- | --- |
+| sumiu (relógio de 5 min) | mensagem do bloco + encerra | igual |
+| errou a opção N vezes | `✅ Solicitação registrada` + fila | mensagem do bloco + encerra |
+| insistiu em `"."` na resposta livre | `✅ Solicitação registrada` + fila | mensagem do bloco + encerra |
+
+Nos três casos **sem pesquisa de satisfação**: não houve atendimento para avaliar,
+e perguntar a nota a quem acabou de não ser entendido é a pior hora possível.
+Quem preferir o comportamento antigo põe `acao: "fila"` no bloco — aí a mensagem
+sai e a conversa vai para a equipe, sem a confirmação contraditória.
+
+Dois ajustes que vieram junto, porque o defeito os expôs:
+
+- **as chances saem do fluxo.** O teto vivia só em `CHATBOT_MAX_TENTATIVAS_OPCAO`,
+  então mexer no número de chances do cliente exigia deploy e não aparecia em tela
+  nenhuma. Agora é `maxTentativas` no bloco de espera, com o valor do ambiente como
+  padrão. A contagem é de **tentativas, não de avisos**: com 3, o cliente lê a
+  repergunta duas vezes e na terceira falha o fluxo desiste — quem quiser três
+  avisos configura 4.
+- **rótulo próprio na taxonomia:** `Encerrado sem entender o cliente`. Somar isso a
+  "inatividade" mentiria (ninguém ficou inativo: ele respondeu três vezes) e somar
+  a "Encerrado pelo fluxo" chamaria de sucesso do robô o caso em que a triagem
+  falhou. É o número que manda melhorar o menu, e ele precisa aparecer separado.
 
 ### A5 · ALTO — a tela "Testar" reportava `erro_interno` em todo fluxo que encerra
 
@@ -284,6 +340,12 @@ falharia sem nada estar errado com o fluxo). Ele confere:
 
 Provado que pega a regressão: removendo o stub de `definirMotivoAtualSeVazio`, o
 script falha em 3 pontos e aponta o método.
+
+`verificar-fluxo-arka.js` ganhou o cenário do §A11, contra o fluxo real: errar a
+opção até esgotar as tentativas tem de produzir o aviso **do bloco de espera**, o
+chamado **fechado**, e **nenhuma** confirmação de encaminhamento — as três
+afirmações juntas, porque o defeito era a combinação delas. O `4c` de
+`verificar-midia-e-pontuacao.js` foi atualizado no mesmo sentido.
 
 `verificar-midia-e-pontuacao.js` ganhou os cenários do §A10: legenda `"1"` / `"2"`
 / `"tecnico"` em imagem, vídeo e PDF escolhendo no menu; o CNPJ na legenda de um

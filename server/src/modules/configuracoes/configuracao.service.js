@@ -48,6 +48,12 @@ const MOTIVOS_AUTOMATICOS = {
   // ninguem para atender. Se esse numero for grande, a decisao nao e melhorar o
   // bot -- e esticar o expediente ou colocar plantao.
   FORA_HORARIO: "Encerrado fora do horário",
+  // Linha própria pela mesma razão de FORA_HORARIO: ela responde uma pergunta
+  // de NEGÓCIO que nenhuma outra responde -- "quantos chamados morrem porque o
+  // cliente não conseguiu passar pela triagem?". Somar isso a "inatividade"
+  // esconderia justamente o número que manda melhorar o menu, e somar a
+  // "Encerrado pelo fluxo" o chamaria de sucesso do robô.
+  NAO_ENTENDIDO: "Encerrado sem entender o cliente",
 };
 
 // Chaves suportadas e de onde vem o valor padrao (.env) quando o banco esta vazio.

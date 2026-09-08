@@ -196,6 +196,10 @@ async function cenario(n, nome, mensagens, esperado) {
     respondeu: (r.enviadas || []).length > 0,
   };
   if (esperado.legenda !== undefined) real.legenda = r.legenda;
+  // O desfecho de desistir da etapa deixou de ser handoff e passou a ser
+  // encerramento (ver _desistirDaEtapa no motor), entao o cenario precisa
+  // conseguir afirmar isso -- antes so dava para olhar `transferido`.
+  if (esperado.encerrado !== undefined) real.encerrado = !!r.encerrado;
   const ok = Object.entries(esperado).every(([k, v]) => String(real[k]) === String(v));
   if (!ok) erros.push(`${n}. ${nome}: esperado ${JSON.stringify(esperado)}, veio ${JSON.stringify(real)}`);
   console.log(
@@ -227,8 +231,13 @@ const ATE_CNPJ = [txt("oi"), txt("1"), txt("1")];
   // ANTES: um unico "." concluia o fluxo -> transferido=SIM. AGORA: repergunta.
   await cenario("4a", '"." uma vez', [...ATE_RESPOSTA_LIVRE, txt(".")], { transferido: false, aguardando: "texto", respondeu: true });
   await cenario("4b", '"." duas vezes', [...ATE_RESPOSTA_LIVRE, txt("."), txt("..")], { transferido: false, aguardando: "texto", respondeu: true });
-  // O teto que ja existia para o menu vale aqui: quem insiste cai na fila.
-  await cenario("4c", '"." tres vezes -> fila', [...ATE_RESPOSTA_LIVRE, txt("."), txt(".."), txt("...")], { transferido: true, aguardando: "humano" });
+  // O teto que ja existia para o menu vale aqui -- e o DESFECHO tambem mudou.
+  //
+  // Antes quem insistia caia na fila, e a ultima coisa que ele lia era
+  // "✅ Solicitacao registrada": o bot dizia que nao entendeu e, em seguida,
+  // confirmava um chamado. Agora vale o bloco de espera do fluxo -- a mensagem
+  // que o operador escreveu e, por padrao, o encerramento. Ver _desistirDaEtapa.
+  await cenario("4c", '"." tres vezes -> avisa e encerra', [...ATE_RESPOSTA_LIVRE, txt("."), txt(".."), txt("...")], { encerrado: true, transferido: false, aguardando: null, respondeu: true });
   // ── A RESPOSTA DE VERDADE CONCLUI O FLUXO, e isso E o certo ─────────────
   //
   // "Seus dados" e a ULTIMA etapa livre do fluxo da ARKA: responder ali fecha a

@@ -591,6 +591,48 @@ function conferirUmaPerguntaPorTurno(rotulo, r) {
     "selecao invalida nao pode tirar o cliente do menu"
   );
 
+  // ── ESGOTAR AS TENTATIVAS: AVISA E ENCERRA, e nao entrega na fila ────────
+  //
+  // O relato, com print da conversa: o cliente errava a opcao, lia
+  // "Nao consegui entender sua solicitacao, pode responder novamente?" DUAS
+  // vezes e, na terceira, recebia "✅ Solicitacao registrada -- encaminhamos
+  // sua solicitacao para a nossa equipe". O bot dizia que NAO havia entendido
+  // e em seguida confirmava um chamado como se tivesse entendido; a equipe
+  // recebia na fila uma OS cuja triagem fracassou, sem setor, sem CNPJ e sem
+  // descricao.
+  //
+  // E o fluxo JA declarava a mensagem certa ("Nao entendemos a sua demanda.
+  // Por favor, abra um chamado novamente.") no bloco de espera -- ela so nunca
+  // era lida por este caminho, porque o desfecho dele era outro. Agora os dois
+  // jeitos de nao responder (sumir, e responder sem acertar) compartilham o
+  // desfecho do bloco. Ver _desistirDaEtapa no motor.
+  r = await simulador.simular(fluxo, ["oi", "9", "nao", "nao"], { filas: FILAS, pesquisaSatisfacao: false });
+  mostrar("esgotar as tentativas no menu", r);
+  const desistiu = r.turnos[r.turnos.length - 1];
+  check(
+    r.turnos.length === 4,
+    `deveria dar 2 reperguntas antes de desistir, a conversa teve ${r.turnos.length} turnos`
+  );
+  check(
+    /não entendemos a sua demanda/i.test(desistiu.respostas.join(String.fromCharCode(10))),
+    `esgotadas as tentativas, o cliente deveria ler o aviso do bloco de espera: ${desistiu.respostas.map(linha1).join(" | ")}`
+  );
+  check(
+    !/solicita[çc][ãa]o registrada|encaminhamos/i.test(desistiu.respostas.join(String.fromCharCode(10))),
+    "o bot nao pode confirmar um chamado logo depois de dizer que nao entendeu"
+  );
+  check(
+    desistiu.encerrado === true || desistiu.status === "fechada",
+    `depois do aviso o chamado tem de ser fechado, veio status=${desistiu.status} encerrado=${desistiu.encerrado}`
+  );
+  check(
+    !desistiu.transferido,
+    "esgotar as tentativas nao pode jogar a OS sem triagem na fila da equipe"
+  );
+  console.log(
+    "  OK    esgotar as tentativas avisa com o texto do fluxo e encerra o chamado"
+  );
+
   // ══════════════════════════════════════════════════════════════════════════
   console.log("\n╔══ 3. TÉCNICO AVULSO ════════════════════════════════════════");
   // ══════════════════════════════════════════════════════════════════════════

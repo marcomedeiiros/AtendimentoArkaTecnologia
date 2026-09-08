@@ -95,6 +95,21 @@ const PADROES = {
   semResposta: {
     minutos: 5,
     mensagem: "Não entendemos a sua demanda. Por favor, abra um chamado novamente.",
+    // QUANTAS CHANCES o cliente tem de responder o que foi pedido antes de o
+    // fluxo desistir da etapa.
+    //
+    // Este parâmetro mora aqui, e não só no `.env`, porque ele governa o
+    // MESMO desfecho que os campos vizinhos -- e porque o operador precisava
+    // de deploy para mexer num número que muda o que o cliente vive. O valor
+    // do ambiente (`CHATBOT_MAX_TENTATIVAS_OPCAO`) continua sendo o padrão de
+    // quem não declarou nada, então nenhuma instalação muda de comportamento
+    // por causa desta linha.
+    //
+    // A contagem é de TENTATIVAS, não de avisos: com 3, o cliente erra e é
+    // reperguntado (1), erra e é reperguntado (2), erra a terceira e o fluxo
+    // desiste. Ou seja, ele lê o "não entendi" duas vezes. Quem quiser três
+    // avisos configura 4.
+    maxTentativas: Number(process.env.CHATBOT_MAX_TENTATIVAS_OPCAO) || 3,
     // "encerrar" fecha a OS (a proxima mensagem do cliente abre um chamado
     // novo, que e o que a mensagem promete); "fila" devolve para um atendente.
     acao: "encerrar", // "encerrar" | "fila"
@@ -302,6 +317,8 @@ function paramsTempos(fluxo) {
         1,
         24 * 60
       ),
+      // O teto de tentativas do MESMO desfecho: ver PADROES.semResposta.
+      maxTentativas: inteiro(sr.maxTentativas, p.semResposta.maxTentativas, 1, 10),
       mensagem: texto(
         sr.mensagem,
         temLegado && typeof legado.message === "string" && legado.message.trim()
@@ -549,7 +566,21 @@ function resumoAutomacoes(fluxo) {
       passoId: t.semResposta.passoId || passoGlobais?.id || "sem-resposta",
       passoTitulo: tituloDe(t.semResposta.passoId, passoGlobais?.titulo || "Sem resposta"),
       regras: [
+        {
+          // AS DUAS MANEIRAS DE NÃO RESPONDER, no mesmo grupo do painel.
+          //
+          // Elas eram tratadas como coisas diferentes, e não são: em uma o
+          // cliente some, na outra ele responde qualquer coisa menos o que foi
+          // pedido. O desfecho é o mesmo e sai daqui.
+          rotulo: "Quando vale",
+          valor:
+            "O cliente sumiu no meio de uma etapa, OU respondeu sem acertar o que foi pedido",
+        },
         { rotulo: "Esperar a resposta por", valor: `${t.semResposta.minutos} min` },
+        {
+          rotulo: "Chances de responder",
+          valor: `${t.semResposta.maxTentativas} tentativa(s) -- o cliente lê a repergunta ${Math.max(0, t.semResposta.maxTentativas - 1)}x`,
+        },
         { rotulo: "Mensagem", valor: t.semResposta.mensagem },
         {
           rotulo: "Depois disso",
