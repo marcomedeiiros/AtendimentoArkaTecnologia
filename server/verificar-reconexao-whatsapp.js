@@ -42,7 +42,14 @@ function montarDubles(alvoCofre = cofre) {
   };
   cliente.diagnosticoConexao = async () => {
     chamadas.push("diagnostico");
-    return { conhecido: true, motivoCodigo: cenario.motivoCodigo ?? null };
+    // `motivoEm` e a DATA do `disconnectionReasonCode`. Ela existe no retorno
+    // real desde sempre e o vigia nao a lia -- era por isso que um 401 de uma
+    // queda ja resolvida continuava valendo como evidencia. Ver secao 18.
+    return {
+      conhecido: true,
+      motivoCodigo: cenario.motivoCodigo ?? null,
+      motivoEm: cenario.motivoEm ?? null,
+    };
   };
   cliente.connect = async () => {
     chamadas.push("connect");
@@ -74,7 +81,13 @@ function montarDubles(alvoCofre = cofre) {
     cenario.credencial = true;
     return { restaurado: true };
   };
-  alvoCofre.estado = () => ({ disponivel: true, temCofre: !!cenario.temCofre });
+  // `salvoEm` e a ancora que SOBREVIVE ao restart do container: a credencial de
+  // um pareamento novo sempre e gravada no cofre. Ver secao 18.
+  alvoCofre.estado = () => ({
+    disponivel: true,
+    temCofre: !!cenario.temCofre,
+    salvoEm: cenario.cofreSalvoEm ?? null,
+  });
   alvoCofre.disponivel = () => true;
   alvoCofre.porqueIndisponivel = () => null;
 }
@@ -617,6 +630,203 @@ function liberarBackoff(vigia) {
   fsMod.rmSync(dirCofre2, { recursive: true, force: true });
   delete require.cache[require.resolve("pg")];
   delete process.env.EVOLUTION_DB_URL;
+
+  // ── 18. O 401 QUE SOBROU DE UMA QUEDA JA RESOLVIDA ────────────────────────
+  //
+  // O defeito relatado: "fica caindo direto" e o painel mandando reescanear o
+  // QR toda hora, com o mesmo `401 (logout real)` aparecendo AO LADO de
+  // `CONNECTED`.
+  //
+  // A Evolution GRAVA `disconnectionReasonCode` quando o socket cai e NUNCA o
+  // apaga quando a instancia volta. O vigia lia aquele numero como evidencia da
+  // queda atual, entao um logout ja resolvido com um QR novo condenava a
+  // instancia para sempre: na primeira oscilacao seguinte, o 401 velho virava
+  // LOGGED_OUT, a reconexao automatica parava, o operador reescaneava, e o
+  // ciclo recomecava.
+  //
+  // A regra agora e simples: o codigo so vale se a queda que ele descreve for
+  // POSTERIOR a ultima vez que vimos a sessao de pe.
+  console.log("\n=== 18. o 401 que sobrou de uma queda ja resolvida ===");
+
+  // As secoes 16 e 17 trocaram o MODULO do cofre (require.cache) por instancias
+  // com pastas e Postgres de mentira. Um vigia requerido agora carregaria
+  // aquele cofre, e nao o dublê desta secao -- entao o cofre volta a ser o
+  // modulo de sempre, com os dubles remontados sobre ele.
+  delete require.cache[require.resolve(CAMINHO_COFRE)];
+  delete process.env.WHATSAPP_COFRE_DIR;
+  const cofre18 = require(CAMINHO_COFRE);
+  montarDubles(cofre18);
+
+  const T = (iso) => new Date(iso).toISOString();
+  const LOGOUT_ANTIGO = T("2026-09-08T07:00:00Z");
+  const PAREOU_DEPOIS = T("2026-09-08T09:00:00Z");
+
+  // (a) 401 ANTERIOR AO PAREAMENTO -> lixo. Reconecta sozinho.
+  const vigia18a = novoVigia({
+    state: "close",
+    motivoCodigo: 401,
+    motivoEm: LOGOUT_ANTIGO,
+    cofreSalvoEm: PAREOU_DEPOIS, // a credencial nova entrou no cofre depois
+    credencial: true,
+  });
+  await vigia18a.verificar();
+  const e18a = vigia18a.estado();
+  // O VEREDITO e `classificacao`; `situacao` ja avancou para RECONNECTING
+  // porque o religamento foi disparado na mesma passada. Ver o comentario das
+  // duas variaveis no vigia -- confundi-las e o que fazia "RECONNECTING"
+  // responder "isto foi queda ou logout?".
+  check(
+    e18a.classificacao === vigia18a.ESTADOS.TEMPORARIO,
+    "401 anterior ao pareamento no cofre -> queda TEMPORARIA, nao logout"
+  );
+  check(e18a.precisaParear === false, "e o vigia NAO manda reescanear o QR");
+  check(chamadas.includes("connect"), "e continua reconectando sozinho");
+  check(e18a.ultimoMotivoVigente === false, "o motivo e marcado como NAO vigente");
+
+  // (b) 401 POSTERIOR -> logout de verdade. O QR volta a ser legitimo.
+  const vigia18b = novoVigia({
+    state: "close",
+    motivoCodigo: 401,
+    motivoEm: T("2026-09-08T10:00:00Z"),
+    cofreSalvoEm: PAREOU_DEPOIS,
+    credencial: true,
+  });
+  await vigia18b.verificar();
+  const e18b = vigia18b.estado();
+  check(e18b.precisaParear === true, "401 POSTERIOR ao pareamento -> logout real, como antes");
+  check(e18b.ultimoMotivoVigente === true, "e o motivo e vigente");
+  check(!chamadas.includes("connect"), "e o vigia para de tentar reconectar");
+
+  // (c) ONLINE nao pode exibir motivo VIGENTE -- era o print do painel.
+  const vigia18c = novoVigia({
+    state: "open",
+    motivoCodigo: 401,
+    motivoEm: LOGOUT_ANTIGO,
+    cofreSalvoEm: PAREOU_DEPOIS,
+  });
+  await vigia18c.verificar();
+  const e18c = vigia18c.estado();
+  check(e18c.situacao === vigia18c.ESTADOS.CONNECTED, "socket aberto -> CONNECTED");
+  check(
+    e18c.ultimoMotivoVigente === false,
+    "instancia ONLINE nunca reporta motivo vigente (o painel dizia `401 (logout real)` com CONNECTED)"
+  );
+
+  // (d) A ANCORA DE MEMORIA: vimos `open`, caiu depois, e o 401 e mais velho
+  // que o `open`. Mesmo sem cofre datado, o codigo nao vale.
+  const vigia18d = novoVigia({
+    state: "open",
+    motivoCodigo: 401,
+    motivoEm: LOGOUT_ANTIGO,
+    credencial: true,
+  });
+  await vigia18d.verificar(); // marca `ultimoOpenEm` = agora
+  cenario.state = "close";
+  chamadas = [];
+  await vigia18d.verificar();
+  check(
+    vigia18d.estado().precisaParear === false,
+    "401 mais velho que o ultimo `open` observado -> ignorado tambem sem cofre datado"
+  );
+
+  // (e) SEM DATA no motivo: comportamento antigo preservado. Uma instalacao
+  // nova, em que o 401 provavelmente e mesmo real, nao pode deixar de pedir QR.
+  const vigia18e = novoVigia({
+    state: "close",
+    motivoCodigo: 401,
+    motivoEm: null,
+    credencial: true,
+  });
+  await vigia18e.verificar();
+  check(
+    vigia18e.estado().precisaParear === true,
+    "motivo sem data -> continua valendo como logout (comportamento antigo)"
+  );
+
+  // ── 19. A INSTANCIA NAO EXISTE MAIS NA EVOLUTION (404) ────────────────────
+  //
+  // O relato: "dava erro 404, ficava caindo, tive que desconectar todo o
+  // WhatsApp e conectar do zero".
+  //
+  // O cliente HTTP JA distinguia o caso (`INSTANCIA_INEXISTENTE`, desde o
+  // incidente de 01/09/2026), mas o `catch` do ciclo do vigia era CEGO:
+  // qualquer excecao virava `state: "unavailable"`, ou seja "a Evolution nao
+  // respondeu". As consequencias, todas visiveis na tela:
+  //
+  //   - o painel dizia "Evolution API indisponivel" -- mandando investigar um
+  //     container que estava perfeitamente de pe;
+  //   - `podeMostrarQr` exige `evolutionOnline`, entao o botao do QR NAO
+  //     aparecia -- e com ele sumia o unico caminho de volta, que o painel ja
+  //     tinha implementado dentro de `gerarQr`;
+  //   - o vigia insistia a cada 15s em `/instance/connect` num nome
+  //     inexistente, que devolve 404 para sempre.
+  //
+  // Sem saida pela tela, so restava fazer na mao o que o operador fez.
+  console.log("\n=== 19. a instancia nao existe mais na Evolution (404) ===");
+
+  // O erro exatamente como `evolution-api.client.request` o levanta no 404.
+  // `AppError` ja esta no escopo desde a secao 13.
+  const erro404 = () =>
+    new AppError(
+      "A instancia nao existe mais na Evolution (The instance does not exist).",
+      404,
+      "INSTANCIA_INEXISTENTE",
+      { endpoint: "/instance/connectionState/x", httpStatus: 404 }
+    );
+
+  // O dublê passa a honrar as DUAS falhas, para o teste poder provar que elas
+  // continuam distintas -- era justamente a distincao que o `catch` cego
+  // apagava. `instanciaSumiu` e o 404; `evolutionForaDoAr` e a rede.
+  cliente.getConnectionState = async () => {
+    chamadas.push("getConnectionState");
+    if (cenario.evolutionForaDoAr) throw new Error("ECONNREFUSED");
+    if (cenario.instanciaSumiu) throw erro404();
+    return { instance: { state: cenario.state } };
+  };
+
+  const vigia19 = novoVigia({ state: "close", credencial: true, instanciaSumiu: true });
+  const r19 = await vigia19.verificar();
+  const e19 = vigia19.estado();
+  check(r19.state === "missing", "o 404 tem estado proprio (`missing`), e nao `unavailable`");
+  check(
+    e19.situacao === vigia19.ESTADOS.INEXISTENTE,
+    "situacao INSTANCE_MISSING -- nem UNKNOWN nem LOGGED_OUT"
+  );
+  check(
+    e19.precisaParear === true,
+    "precisaParear: e verdade, so recriar + escanear resolve (e e o flag que libera o QR na tela)"
+  );
+  check(
+    !chamadas.includes("connect") && !chamadas.includes("restart"),
+    "e o vigia PARA de martelar uma rota que nunca vai funcionar"
+  );
+
+  // A DIFERENCA QUE O DEFEITO APAGAVA: Evolution fora do ar continua sendo
+  // outra coisa, e nao pode virar "instancia inexistente".
+  const vigia19b = novoVigia({ state: "close", credencial: true, evolutionForaDoAr: true });
+  const r19b = await vigia19b.verificar();
+  check(r19b.state === "unavailable", "Evolution fora do ar segue `unavailable`");
+  check(
+    vigia19b.estado().situacao === vigia19b.ESTADOS.DESCONHECIDO,
+    "e segue UNKNOWN -- nao virou INSTANCE_MISSING"
+  );
+  check(
+    vigia19b.estado().precisaParear === false,
+    "e NAO manda reescanear o QR (a sessao continua guardada)"
+  );
+
+  // Depois de recriar e parear, o vigia volta ao normal sozinho.
+  const vigia19c = novoVigia({ state: "close", credencial: true, instanciaSumiu: true });
+  await vigia19c.verificar();
+  check(vigia19c.estado().precisaParear === true, "some a instancia -> pede recriar");
+  cenario.instanciaSumiu = false;
+  cenario.state = "open";
+  await vigia19c.verificar();
+  const e19c = vigia19c.estado();
+  check(e19c.situacao === vigia19c.ESTADOS.CONNECTED, "recriada e pareada -> CONNECTED");
+  check(e19c.precisaParear === false, "e o vigia se rearma sozinho, sem intervencao");
+
+  montarDubles(cofre18); // devolve os dubles padrao para quem vier depois
 
   // ── RESUMO ────────────────────────────────────────────────────────────────
   console.log("\n" + "=".repeat(70));

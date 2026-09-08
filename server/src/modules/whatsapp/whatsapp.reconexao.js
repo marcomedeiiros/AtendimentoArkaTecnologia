@@ -71,7 +71,31 @@ const ESTADOS = {
   TEMPORARIO: "DISCONNECTED_TEMPORARY",
   DESLOGADO: "LOGGED_OUT",
   DESCONHECIDO: "UNKNOWN", // a Evolution nao respondeu -- nao e queda do WhatsApp
+  // ── A INSTANCIA NAO EXISTE MAIS NA EVOLUTION (HTTP 404) ───────────────────
+  //
+  // Sexto estado porque nenhum dos cinco descreve o que acontece, e tratar isto
+  // como um deles foi o que produziu o beco sem saida relatado:
+  //
+  //   - a Evolution RESPONDEU (nao e UNKNOWN);
+  //   - o WhatsApp nao derrubou pareamento nenhum (nao e LOGGED_OUT);
+  //   - nao ha socket para religar (nao e TEMPORARY): `/instance/connect` num
+  //     nome que nao existe devolve 404 para sempre.
+  //
+  // O `catch` do ciclo era cego e virava `state: "unavailable"` -- entao o
+  // painel dizia "Evolution indisponivel", NAO oferecia o QR (porque
+  // `podeMostrarQr` exige `evolutionOnline`) e o vigia tentava a cada 15s uma
+  // rota que nunca ia funcionar. Sem saida pela tela, so restava desconectar
+  // tudo e parear do zero na mao -- foi exatamente o que aconteceu.
+  //
+  // Com estado proprio, a tela pode oferecer o unico caminho que resolve:
+  // recriar a instancia e escanear o QR.
+  INEXISTENTE: "INSTANCE_MISSING",
 };
+
+// O `code` do AppError que o cliente HTTP levanta no 404 de `/instance/...`.
+// Ver evolution-api.client.request -- ele ja distinguia o caso; era o vigia que
+// jogava a distincao no lixo.
+const CODIGO_INSTANCIA_INEXISTENTE = "INSTANCIA_INEXISTENTE";
 
 // A INSTANCIA VIGIADA VEM DA CONFIGURACAO EFETIVA (banco > .env), nao do .env
 // direto. Trocar o nome da instancia na tela de Configuracoes deixava o vigia
@@ -117,8 +141,19 @@ let tentativa = 0;
 let proximaTentativaEm = 0;
 let connectingDesde = null;
 let ultimoMotivoCodigo = null;
+// QUANDO aquele codigo foi registrado (`disconnectionAt` da Evolution). Sem a
+// data, o numero nao diz de QUAL queda ele fala -- ver `_motivoEhDaQuedaAtual`.
+let ultimoMotivoEm = null;
+// O codigo acima descreve a queda de AGORA, ou sobrou de uma anterior?
+let ultimoMotivoVigente = false;
 let ultimaAcao = null;
 let precisaParear = false;
+
+// A ULTIMA VEZ QUE VIMOS O SOCKET ABERTO NESTE PROCESSO.
+//
+// E a ancora que separa "o WhatsApp acabou de invalidar a sessao" de "isto e
+// lixo de um logout que ja foi resolvido". Ver `_motivoEhDaQuedaAtual`.
+let ultimoOpenEm = null;
 
 function _esperaMs(n) {
   const base = ESCADA_MS[Math.min(n, ESCADA_MS.length) - 1];
@@ -190,13 +225,82 @@ function notificarQueda(state) {
  * valida. Errar para o lado de tentar reconectar custa algumas chamadas; errar
  * para o outro lado custa um QR que nao era necessario.
  */
+/**
+ * ESTE `disconnectionReasonCode` FALA DA QUEDA DE AGORA, OU SOBROU DE ANTES?
+ *
+ * ── O DEFEITO QUE ISTO FECHA ───────────────────────────────────────────────
+ *
+ * A Evolution ESCREVE `disconnectionReasonCode` quando o socket cai e NUNCA o
+ * apaga quando a instancia volta. O numero fica gravado na linha para sempre.
+ *
+ * `_classificar` lia esse campo como evidencia da queda ATUAL, e por isso um
+ * logout que ja tinha sido resolvido continuava condenando a instancia:
+ *
+ *   1. o WhatsApp invalida a sessao -> a Evolution grava 401;
+ *   2. o operador reescaneia o QR e o WhatsApp volta -- mas a linha SEGUE com
+ *      401, porque nada limpa aquele campo;
+ *   3. na primeira oscilacao de rede depois disso, o vigia le o 401 velho,
+ *      declara LOGOUT REAL, para de reconectar sozinho e o painel manda
+ *      reescanear o QR de novo;
+ *   4. o operador reescaneia, funciona um tempo, cai, e o painel manda
+ *      reescanear outra vez.
+ *
+ * Era o "fica caindo direto" relatado -- e o painel mostrando `CONNECTED` ao
+ * lado de "401 (logout real)" era o mesmo defeito a olho nu: o motivo nao podia
+ * ser o da queda atual, porque nao havia queda nenhuma.
+ *
+ * ── A ANCORA ───────────────────────────────────────────────────────────────
+ *
+ * O codigo so e evidencia se a queda que ele descreve for POSTERIOR a ultima
+ * vez que a sessao esteve de pe. Duas marcas respondem isso, e vale a mais
+ * recente das duas:
+ *
+ *   `ultimoOpenEm`    preciso, mas morre no restart do container;
+ *   `cofre.salvoEm`   sobrevive ao restart -- a credencial nova de um
+ *                     pareamento e sempre gravada no cofre (hash diferente).
+ *
+ * Sem data no motivo, ou sem ancora nenhuma (nunca vimos a sessao de pe e nao
+ * ha cofre), mantemos o comportamento antigo e confiamos no codigo: e o cenario
+ * de instalacao nova, em que um 401 provavelmente e mesmo real.
+ */
+function _motivoEhDaQuedaAtual(motivoEm, instancia) {
+  if (!motivoEm) return true;
+  const quando = new Date(motivoEm).getTime();
+  if (Number.isNaN(quando)) return true;
+
+  const salvoEm = new Date(cofre.estado(instancia)?.salvoEm || 0).getTime() || null;
+  const ancora = Math.max(ultimoOpenEm || 0, salvoEm || 0);
+  if (!ancora) return true;
+
+  return quando > ancora;
+}
+
 async function _classificar(instancia) {
   const diag = await evolutionApi.diagnosticoConexao(instancia);
   const codigo = diag?.motivoCodigo ?? null;
   ultimoMotivoCodigo = codigo;
+  ultimoMotivoEm = diag?.motivoEm ?? null;
+  // `motivoEm` ja vinha de `diagnosticoConexao` e nao era lido por ninguem.
+  // E ele que datava a evidencia -- sem a data, o codigo nao tinha validade.
+  ultimoMotivoVigente = codigo == null ? false : _motivoEhDaQuedaAtual(ultimoMotivoEm, instancia);
 
   if (codigo != null && CODIGOS_LOGOUT_REAL.includes(codigo)) {
-    return { tipo: ESTADOS.DESLOGADO, codigo, motivo: `Baileys statusCode ${codigo}` };
+    if (ultimoMotivoVigente) {
+      return { tipo: ESTADOS.DESLOGADO, codigo, motivo: `Baileys statusCode ${codigo}` };
+    }
+    // NAO devolve veredito: segue para a checagem da CREDENCIAL, que e
+    // evidencia de agora. Se o pareamento tiver caido de verdade outra vez, e
+    // ela que vai dizer -- e ai o QR volta a ser pedido com razao.
+    logger.warn(
+      "[WhatsApp] disconnectionReasonCode de logout IGNORADO: e anterior a sessao que vimos de pe",
+      {
+        instance: instancia,
+        motivoCodigo: codigo,
+        motivoEm: ultimoMotivoEm,
+        ultimoOpenEm: ultimoOpenEm ? new Date(ultimoOpenEm).toISOString() : null,
+        cofreSalvoEm: cofre.estado(instancia)?.salvoEm || null,
+      }
+    );
   }
 
   const presente = await cofre.credencialPresente(instancia);
@@ -251,7 +355,36 @@ async function _verificar() {
   try {
     const estadoEvo = await evolutionApi.getConnectionState(instancia);
     state = estadoEvo?.instance?.state || estadoEvo?.state || "close";
-  } catch {
+  } catch (error) {
+    // ── DUAS FALHAS DIFERENTES, E O `catch` CEGO AS CONFUNDIA ──────────────
+    //
+    // "A Evolution nao respondeu" pede olhar o container. "A instancia nao
+    // existe mais" pede recriar e parear -- e nenhuma reconexao do mundo
+    // resolve. Tratar as duas como a primeira era o beco sem saida: o painel
+    // mandava olhar a Evolution (que estava de pe), nao oferecia o QR e o vigia
+    // insistia a cada 15s num nome inexistente.
+    if (error?.code === CODIGO_INSTANCIA_INEXISTENTE) {
+      situacao = ESTADOS.INEXISTENTE;
+      classificacao = ESTADOS.INEXISTENTE;
+      // `precisaParear` porque e verdade: so o QR (depois de recriar) resolve.
+      // E o mesmo flag que autoriza o QR no /status, entao a tela deixa de ser
+      // um beco. Nao passa por `marcarPrecisaParear`: aquele metodo grava
+      // `situacao = LOGGED_OUT`, e este caso NAO e o WhatsApp ter derrubado a
+      // sessao -- confundir os dois manda o operador procurar o problema no
+      // celular em vez de na Evolution.
+      if (!precisaParear) {
+        precisaParear = true;
+        logger.error("[WhatsApp] A INSTANCIA NAO EXISTE MAIS NA EVOLUTION", {
+          instance: instancia,
+          detalhe: error.message,
+          acao: "recriar a instancia e escanear o QR -- reconectar nao resolve",
+        });
+      }
+      // Sem backoff a cumprir: nao ha religamento pendente, ha uma decisao
+      // humana pendente.
+      proximaTentativaEm = 0;
+      return { situacao, classificacao, state: "missing", acao: "nenhuma" };
+    }
     // A Evolution pode estar subindo ou fora do ar. Isso nao e queda do
     // WhatsApp, e nao ha o que religar enquanto ela nao responde.
     situacao = ESTADOS.DESCONHECIDO;
@@ -262,6 +395,15 @@ async function _verificar() {
   if (state === "open") {
     const voltou = situacao !== ESTADOS.CONNECTED;
     situacao = ESTADOS.CONNECTED;
+    // A ANCORA, atualizada a cada passada em que o socket esta aberto. E o que
+    // faz o `disconnectionReasonCode` gravado antes daqui perder validade --
+    // ver `_motivoEhDaQuedaAtual`.
+    ultimoOpenEm = Date.now();
+    // O motivo da ultima queda continua legivel no painel (ele responde "por
+    // que caiu da ultima vez?"), mas deixa de ser VIGENTE: nao ha queda em
+    // curso, e era isso que fazia a tela mostrar "401 (logout real)" ao lado de
+    // `CONNECTED`.
+    ultimoMotivoVigente = false;
     if (voltou || tentativa > 0) {
       logger.info("[WhatsApp] Online", {
         instance: instancia,
@@ -459,6 +601,12 @@ function estado() {
     tentativa,
     proximaTentativaEm: proximaTentativaEm || null,
     ultimoMotivoCodigo,
+    // A DATA e a VALIDADE do codigo acima. Sem as duas, o painel nao tinha como
+    // distinguir "o WhatsApp derrubou a sessao agora" de "isto sobrou de um
+    // logout que ja foi resolvido" -- e mostrava "401 (logout real)" com a
+    // instancia perfeitamente online.
+    ultimoMotivoEm,
+    ultimoMotivoVigente,
     ultimaAcao,
     cofre: cofre.estado(instancia),
   };

@@ -662,12 +662,19 @@ class WhatsAppService {
     let evolutionState = null;
     try {
       evolutionState = await evolutionApi.getConnectionState(nome);
-    } catch {
-      evolutionState = { state: "unavailable" };
+    } catch (error) {
+      // MESMA DISTINCAO DO VIGIA, e pela mesma razao. Este `catch` era cego e
+      // devolvia "unavailable" para os dois casos -- e com `evolutionOnline:
+      // false` a tela mostrava "Evolution indisponivel" e escondia o botao do
+      // QR, que era o unico caminho de volta. Ver ESTADOS.INEXISTENTE.
+      evolutionState = {
+        state: error?.code === "INSTANCIA_INEXISTENTE" ? "missing" : "unavailable",
+      };
     }
 
     // Estados da Evolution: open (online) | connecting | close (desconectado).
-    // "unavailable" e nosso: a Evolution nao respondeu.
+    // "unavailable" e "missing" sao nossos: ela nao respondeu, ou respondeu que
+    // a instancia nao existe mais.
     const state = evolutionState?.instance?.state || evolutionState?.state || "close";
     const conectado = state === "open";
 
@@ -695,18 +702,31 @@ class WhatsAppService {
     // consegui falar com ela" -- nunca vem da Evolution.
     const evolutionOnline = state !== "unavailable";
 
+    // ── A INSTANCIA NAO EXISTE MAIS ────────────────────────────────────────
+    //
+    // Note que `evolutionOnline` acima e TRUE aqui, e isso e o ponto: ela
+    // respondeu, e o que ela respondeu foi "esse nome nao existe". Enquanto os
+    // dois casos compartilhavam `unavailable`, a tela dizia "Evolution
+    // indisponivel" (mandando olhar o container, que estava de pe) e o
+    // `podeMostrarQr` abaixo ficava falso -- sem QR, sem recriar, sem saida.
+    const instanciaInexistente = state === "missing";
+
     // O UNICO LUGAR QUE AUTORIZA O QR. A tela nao decide isso sozinha.
     //
     // Duas situacoes legitimas, as duas com evidencia:
     //   - LOGOUT REAL confirmado pelo vigia (401/403 do Baileys, ou credencial
     //     ausente no banco da Evolution sem copia no cofre);
     //   - NUNCA PAREOU: instalacao nova, o QR e o caminho normal.
+    //   - A INSTANCIA NAO EXISTE: recriar + escanear e o UNICO caminho, e a
+    //     tela precisa poder oferecer os dois. `gerarQr` no painel ja sabe
+    //     tratar o 404 (ele pergunta antes de recriar); o que faltava era
+    //     chegar ate ele -- sem esta parcela o botao nem aparecia.
     //
     // Fora disso -- caiu, esta subindo, esta em backoff, a Evolution nao
     // respondeu -- o QR e proibido: a sessao esta viva e o vigia esta cuidando.
     const nuncaPareou = !vigia.cofre?.temCofre;
     const podeMostrarQr =
-      evolutionOnline && !conectado && (precisaParear || nuncaPareou);
+      evolutionOnline && !conectado && (precisaParear || nuncaPareou || instanciaInexistente);
 
     return {
       instancia: nome,
@@ -714,6 +734,9 @@ class WhatsAppService {
       state,
       statusLabel: this._rotuloStatus(state, perdeuPareamento, vigia.situacao),
       evolutionOnline,
+      // A tela precisa do fato separado: "a Evolution nao respondeu" e "a
+      // instancia nao existe" pedem acoes opostas de quem esta olhando.
+      instanciaInexistente,
       podeMostrarQr,
       nuncaPareou,
       precisaParear,
@@ -727,6 +750,12 @@ class WhatsAppService {
       // `statusCode` do Baileys que fechou o socket, direto da Evolution. E o
       // numero que responde "por que caiu?" sem depender de log.
       motivoDesconexao: vigia.ultimoMotivoCodigo,
+      // O codigo sozinho nao diz de QUAL queda ele fala: a Evolution grava
+      // `disconnectionReasonCode` e nunca o apaga na volta. Estes dois campos
+      // datam a evidencia, e e `vigente` que autoriza a tela a chamar aquilo de
+      // logout real -- ver whatsapp.reconexao._motivoEhDaQuedaAtual.
+      motivoDesconexaoEm: vigia.ultimoMotivoEm,
+      motivoDesconexaoVigente: !!vigia.ultimoMotivoVigente,
       proximaTentativaEm: vigia.proximaTentativaEm,
       cofreSessao: vigia.cofre,
       conectadoDesde: this._conectadoDesde[nome] || null,
@@ -750,6 +779,10 @@ class WhatsAppService {
     // A Evolution nao respondeu. Isso NAO e o WhatsApp caido, e nao se resolve
     // com QR nenhum -- se resolve olhando o container.
     if (state === "unavailable") return "Evolution indisponível";
+    // Ela RESPONDEU, e a resposta foi 404. Rotulo proprio porque a acao e outra
+    // (recriar a instancia), e porque "Evolution indisponível" aqui mandava o
+    // operador investigar um container que estava perfeitamente de pe.
+    if (state === "missing") return "Instância não existe";
     // So quem JA esteve online muda de rotulo: numa instalacao nova pedir QR e
     // o caminho normal, e "Reescaneie" ali soaria como defeito.
     if (perdeuPareamento) return "Reescaneie o QR";
