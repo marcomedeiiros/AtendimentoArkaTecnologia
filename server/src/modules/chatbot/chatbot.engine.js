@@ -3930,6 +3930,21 @@ class ChatbotEngine {
             // veria "nunca avisado" e o aviso voltaria a repetir.
             contextoExtra: {
               foraHorarioEm: avisar && texto ? this.agora().toISOString() : avisadoEm,
+              // ── O FLUXO DE ORIGEM SOBREVIVE AO HANDOFF DE EXPEDIENTE ──────
+              //
+              // `transferirParaHumano` monta o contexto com
+              // `fluxoOrigemId: ctx.fluxo?.id`, e o ctx daqui NAO tem fluxo (o
+              // bot nao conduziu nada -- a empresa estava fechada). Resultado:
+              // a marca ia a null, e `varrerEsperaNaFila` -- que descobre por
+              // ela de QUAL fluxo vem a regra de espera -- so conseguia agir
+              // pelo atalho de "existe um unico fluxo ativo". Com dois fluxos
+              // ativos o aviso de espera na fila silenciava sem motivo visivel.
+              //
+              // O que este cliente tinha antes e a melhor pista disponivel:
+              // preservada quando existe, e null nao sobrescreve nada.
+              ...(sessaoEmCurso?.contexto?.fluxoOrigemId
+                ? { fluxoOrigemId: sessaoEmCurso.contexto.fluxoOrigemId }
+                : {}),
             },
           }
         );
@@ -3948,6 +3963,71 @@ class ChatbotEngine {
     }
 
     let sessao = await this.deps.sessaoRepository.findByTelefone(instanciaId, telefone);
+
+    // ── O EXPEDIENTE ABRIU, E ESTE CLIENTE NUNCA PASSOU PELA TRIAGEM ─────────
+    //
+    // Aqui estava o defeito relatado: "o fluxo nao funciona, so as automacoes".
+    //
+    // `aguardando: "humano"` era um ALCAPAO DE MAO UNICA. Quem escreve fora do
+    // horario recebe o aviso 🌙 e e entregue a fila pelo bloco acima -- e dali
+    // em diante os dois `return aguardando_atendente` abaixo devolvem SILENCIO a
+    // toda mensagem seguinte. O `executarFluxo` nunca mais era alcancado: sem
+    // menu, sem CNPJ, sem setor. As unicas mensagens que ainda saiam eram as
+    // duas automacoes de relogio, que e exatamente o que o cliente via.
+    //
+    // A saida existente era a conversa ser FECHADA (`cicloReaberto` libera o
+    // fluxo). Mas `varrerForaDoHorario` -- que cumpre o "encerrado em 5 minutos"
+    // do aviso -- se recusa a fechar DENTRO do expediente, e com razao: nao se
+    // fecha na cara de quem madrugou na fila. Consequencia: quem escreve nos
+    // minutos finais antes de abrir (07:57, ou 16:58 numa sexta que fecha as
+    // 17:00) atravessa para o expediente sem ser encerrado e fica preso para
+    // sempre -- pendente, sem triagem e sem bot.
+    //
+    // A correcao nao e fechar essa conversa, e sim REENTRAR no fluxo. As quatro
+    // condicoes sao todas afirmativas, e juntas dizem "esta pessoa esta na fila
+    // APENAS porque escreveu fora de hora, e ninguem cuidou dela ainda":
+    //
+    //   1. a sessao esta parada em `humano`;
+    //   2. a marca do handoff de fora do horario esta la (`foraHorarioEm`) --
+    //      e a prova de que quem a colocou na fila foi o expediente, e nao um
+    //      fluxo concluido nem um pedido de atendente;
+    //   3. estamos AGORA dentro do expediente;
+    //   4. ninguem assumiu (`pendente` + sem `atendenteId`).
+    //
+    // A conversa CONTINUA em Pendentes -- ela nao sai da tela de ninguem. O que
+    // muda e que o bot volta a conduzir: essa pessoa nao tem setor, nao tem CNPJ
+    // e nao tem descricao, e e para isso que a triagem existe. O fluxo entrega
+    // de volta a fila no fim, agora com o chamado preenchido.
+    const presoNoForaDoHorario =
+      sessao?.ativo &&
+      sessao.aguardando === AGUARDANDO.HUMANO &&
+      !!sessao.contexto?.foraHorarioEm &&
+      !this.foraDoHorario(horario) &&
+      conversa.statusAtendimento === "pendente" &&
+      !conversa.atendenteId;
+
+    if (presoNoForaDoHorario) {
+      await this.deps.sessaoRepository.update(sessao.id, {
+        ativo: false,
+        aguardando: null,
+        fluxoAtualId: null,
+        passoAtualId: null,
+        aguardandoDesde: null,
+        inatividadeEm: null,
+        // `foraHorarioEm` VAI COM O RESTO, de proposito. A marca e o que autoriza
+        // `varrerForaDoHorario` a encerrar a conversa; deixa-la aqui faria o
+        // varredor fechar, na noite seguinte, um atendimento que hoje foi
+        // triado e entregue a equipe dentro do expediente.
+        contexto: {},
+      });
+      logger.info("Expediente aberto: bot retoma a triagem de quem chegou fora do horario", {
+        conversaId: conversa.id,
+        telefone,
+        avisadoEm: sessao.contexto.foraHorarioEm,
+      });
+      sessao = null;
+    }
+
     if (sessao && this.sessaoExpirada(sessao)) {
       // ── QUEM ESTA NA FILA DO TECNICO NAO VOLTA PARA O INICIO DO BOT ────────
       //

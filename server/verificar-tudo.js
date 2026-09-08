@@ -25,6 +25,7 @@
 //
 //   verificar-contrato-api.js      as duas pontas de cada chamada da tela (só leitura)
 //   verificar-horario.js           a regra de expediente, caso a caso (módulo puro)
+//   verificar-reentrada-horario.js o bot volta a triar quem chegou fora do horário
 //   verificar-fluxo-arka.js        a matriz do fluxo, conversando com o motor real
 //   verificar-visual-whatsapp.js   o payload que chega ao WhatsApp (botão x texto)
 //   verificar-inatividade.js       os dois relógios do bot (Parte B exige o dev.db)
@@ -64,6 +65,14 @@ const VERIFICACOES = [
     arquivo: "verificar-horario.js",
     titulo: "Horário de atendimento",
     resumo: "dias, períodos, fuso, feriados, mensagem e a não-repetição do aviso",
+  },
+  {
+    // Vem logo depois do horário porque é o caso que ele NÃO pega: a regra de
+    // expediente estava certa, e o bot ficava mudo de todo jeito. Ver o
+    // cabeçalho do script -- `aguardando: "humano"` era um alçapão de mão única.
+    arquivo: "verificar-reentrada-horario.js",
+    titulo: "Reentrada no fluxo depois do fora do horário",
+    resumo: "quem escreveu antes de abrir volta a ser triado, e quem espera o técnico segue calado",
   },
   {
     arquivo: "verificar-fluxo-arka.js",
