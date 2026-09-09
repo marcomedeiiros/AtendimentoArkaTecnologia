@@ -260,7 +260,12 @@ async function main() {
   check(antesDeLimpar.periodo.zeradoEm === null, "antes: sem marco de zeramento");
 
   const totalOsAntes = await prisma.atendimento.count();
-  await painelService.limparPainel({ nome: "teste" });
+  // `limparPainel(qual, autor)` -- a assinatura ganhou o QUAL quando a limpeza
+  // passou a separar sede de externo, e este era o unico ponto que ainda
+  // chamava com um argumento so. O autor caia no lugar do ranking e o servico
+  // recusava, corretamente, com "Ranking desconhecido". Ver
+  // `verificar-rankings.js`, que ja usa a forma nova.
+  await painelService.limparPainel("sede", { nome: "teste" });
   const depois = await painelService.obter(null);
 
   check(depois.ranking.classificacao.length === 0, "depois: a classificacao zera");
@@ -291,7 +296,8 @@ async function main() {
 
   // RESTAURAR: so e possivel porque nada foi apagado. E o que torna o botao
   // seguro -- um clique errado nao custa um mes de historico.
-  await painelService.restaurarPainel({ nome: "teste" });
+  // Mesma correcao de assinatura do `limparPainel` acima: `(qual, autor)`.
+  await painelService.restaurarPainel("sede", { nome: "teste" });
   const restaurado = await painelService.obter(null);
   check(restaurado.ranking.classificacao.length > 0, "restaurar traz a classificacao de volta");
   check(restaurado.csat.total === antesDeLimpar.csat.total, "e o CSAT volta ao mesmo numero");

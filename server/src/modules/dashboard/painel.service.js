@@ -493,7 +493,7 @@ class PainelService {
     return sedeRegras.salvar(entrada, this.regrasPadrao(), autor);
   }
 
-  _ranking(atendimentos, { limite = TOP, incluirZerados = false, equipe = null, regras = null } = {}) {
+  _ranking(atendimentos, { limite = TOP, incluirZerados = false, semearVistos = false, equipe = null, regras = null } = {}) {
     /**
      * AS FAIXAS ESCALAM COM O PESO CONFIGURADO.
      *
@@ -512,6 +512,8 @@ class PainelService {
     const escalar = (pontos, tetoPadrao, tetoAtual) =>
       tetoPadrao === tetoAtual ? pontos : Math.round((pontos / tetoPadrao) * tetoAtual);
     const porPessoa = new Map();
+    // Todo atendente REAL que aparece no periodo, pontuando ou nao.
+    const vistosNoMes = new Set();
     for (const a of atendimentos) {
       // SO GENTE ENTRA NO RANKING DE GENTE.
       //
@@ -535,6 +537,13 @@ class PainelService {
       // Conjunto VAZIO nao filtra nada -- e antes de alguem marcar a equipe em
       // Gestao da Equipe, um filtro vazio apagaria a parede inteira.
       if (equipe && equipe.size && !equipe.has(nome)) continue;
+      // QUEM APARECEU NO MES, apareceu -- mesmo que nada dele pontue.
+      //
+      // Registrado AQUI, antes do corte de "fechada + avaliada" logo abaixo:
+      // depois daquele corte, quem so tem OS aberta some sem deixar rastro, e a
+      // Visao Geral perde a pessoa em vez de mostra-la com zero. Ver a semeadura
+      // de zerados mais abaixo, e o porque de nao bastar a equipe configurada.
+      vistosNoMes.add(nome);
       // SO PONTUA O QUE O CLIENTE AVALIOU (ver o cabecalho deste metodo).
       //
       // O corte tambem e na ENTRADA, e nao em cada parcela, para que as tres
@@ -564,9 +573,32 @@ class PainelService {
      * Semeando a equipe, o zero passa a ser um ponto de partida com nome. So faz
      * sentido com `incluirZerados`: no modo de podio, uma linha "0 pts" e
      * exatamente o que nao se quer expor.
+     *
+     * ── E QUEM TRABALHOU NO MES SEM PONTUAR TAMBEM ENTRA ─────────────────────
+     *
+     * A semeadura olhava so a equipe CONFIGURADA, e isso deixava um buraco: quem
+     * tem atendimento no mes mas nada fechado-e-avaliado nao vinha de lugar
+     * nenhum. Some quem acabou de entrar, quem so tem OS em curso, e quem fechou
+     * sem o cliente avaliar -- gente que a Visao Geral deveria mostrar com ZERO,
+     * e nao esconder.
+     *
+     * Pior: sem `equipe` configurada (o estado de antes de alguem marcar a
+     * equipe em Gestao da Equipe) a semeadura nao acontecia de jeito nenhum, e a
+     * lista virava "so quem pontuou".
+     *
+     * `vistosNoMes` ja respeita o filtro de equipe -- ele e preenchido depois do
+     * corte la em cima --, entao unir os dois nao traz ninguem de fora da
+     * competicao.
+     *
+     * NAO vale para a PAREDE, e por isso e uma opcao propria (`semearVistos`) em
+     * vez de vir junto com `incluirZerados`. Ali o zero da equipe configurada e
+     * bem-vindo -- ele evita a caixa "em aberto" no comeco do mes --, mas somar
+     * quem so passou pelo mes encheria o podio de gente com 0 pt, que e
+     * exatamente a exposicao publica que a parede evita.
      */
-    if (incluirZerados && equipe?.size) {
-      for (const nome of equipe) {
+    if (incluirZerados) {
+      const semear = semearVistos ? [...(equipe || []), ...vistosNoMes] : [...(equipe || [])];
+      for (const nome of semear) {
         if (!porPessoa.has(nome)) porPessoa.set(nome, { nome, fechados: 0, notas: [], assumir: [] });
       }
     }
@@ -700,6 +732,13 @@ class PainelService {
     const { classificacao, minimoAvaliacoes, pesos } = this._ranking(doMes, {
       limite: Number.MAX_SAFE_INTEGER,
       incluirZerados: true,
+      // AQUI ENTRA TODO MUNDO QUE TRABALHOU NO MES, pontuando ou nao. Esta e a
+      // lista de gestao, nao o podio: quem so tem OS em curso, quem acabou de
+      // entrar e quem fechou sem o cliente avaliar precisam aparecer -- com
+      // zero. Sumir e pior do que aparecer com 0, porque some tambem a pergunta
+      // "por que essa pessoa esta zerada?". A parede nao recebe isto de
+      // proposito; ver a semeadura em `_ranking`.
+      semearVistos: true,
       // O mesmo recorte da parede, pelo mesmo motivo: e o ranking de
       // atendimento da SEDE, e nao "todo mundo que ja fechou uma OS".
       equipe: await nomesDaEquipe(prisma, "sede"),
