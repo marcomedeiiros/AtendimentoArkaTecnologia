@@ -18,6 +18,7 @@ const conversaRepository = require("./src/infrastructure/repositories/conversa.r
 const whatsappService = require("./src/modules/whatsapp/whatsapp.service");
 const bus = require("./src/shared/events/event-bus");
 const { mapConversa } = require("./src/shared/helpers/mapper.helper");
+const { ChatbotEngine } = require("./src/modules/chatbot/chatbot.engine");
 
 const prisma = new PrismaClient();
 
@@ -270,6 +271,174 @@ async function main() {
       },
     }) === null
   );
+
+  console.log("\n7. Citacao DERIVADA: a resposta digitada cita a pergunta do bot");
+
+  // O cenario real: o bot manda o menu e fica esperando. O cliente DIGITA "1"
+  // em vez de tocar no botao -- e o WhatsApp nao manda contextInfo nenhum.
+  const menu = "*Atendimento Tecnico* Como podemos ajudar?";
+  const perguntaBot = await prisma.mensagem.create({
+    data: { conversaId: conversa.id, origem: "bot", texto: menu, status: "enviada" },
+  });
+
+  const ultima = await conversaRepository.ultimaPerguntaDoBot(conversa.id);
+  conferir("a pergunta em aberto e a ultima fala do bot", ultima?.id === perguntaBot.id);
+  conferir("e ela traz o texto para montar o retrato", ultima?.texto === menu);
+
+  await prisma.mensagem.update({
+    where: { id: perguntaBot.id },
+    data: { metadata: { deletada: true } },
+  });
+  conferir(
+    "pergunta apagada nao vira citacao (a bolha ficaria vazia)",
+    (await conversaRepository.ultimaPerguntaDoBot(conversa.id)) === null
+  );
+  await prisma.mensagem.update({ where: { id: perguntaBot.id }, data: { metadata: {} } });
+
+  // Mensagem da EQUIPE nao conta: nao ha estado dizendo que houve pergunta.
+  await prisma.mensagem.create({
+    data: { conversaId: conversa.id, origem: "equipe", texto: "qual o nome de usuario?" },
+  });
+  conferir(
+    "pergunta do atendente NAO vira citacao derivada",
+    (await conversaRepository.ultimaPerguntaDoBot(conversa.id))?.id === perguntaBot.id
+  );
+
+  // E o retrato derivado atravessa o mapper com a marca de origem.
+  const comDerivada = await prisma.mensagem.create({
+    data: {
+      conversaId: conversa.id,
+      origem: "cliente",
+      texto: "1",
+      respondendoAId: perguntaBot.id,
+      metadata: { citacao: { texto: menu, derivada: true } },
+    },
+  });
+  const bolha = mapConversa(await conversaRepository.findById(conversa.id)).mensagens.find(
+    (m) => m.id === comDerivada.id
+  );
+  conferir("a bolha recebe o texto citado", bolha.citacao?.texto === menu);
+  conferir("e a marca de que o retrato foi derivado", bolha.citacao?.derivada === true);
+  conferir("a ligacao por id tambem vai junto", bolha.respondendoAId === perguntaBot.id);
+
+  console.log("\n8. E o ciclo inteiro no motor: o cliente DIGITA a resposta");
+
+  // O caso que o relato pedia. Tocar no botao ja citava o menu (o WhatsApp manda
+  // o contextInfo junto); digitar "1" chega como texto puro, sem contexto
+  // nenhum -- e a mesma conversa ficava com metade das respostas citando e a
+  // outra metade solta. Aqui a ligacao sai do NOSSO estado: a sessao diz que ha
+  // pergunta em aberto, e a pergunta e a ultima fala do bot.
+  const FLUXO = {
+    id: "f1", nome: "Menu", gatilho: "*", ativo: true,
+    passos: [
+      {
+        id: "p1", tipo: "mensagem", titulo: "Menu", ordem: 0,
+        texto: "*Atendimento Tecnico* Como podemos ajudar?",
+        config: {
+          exibicao: "text",
+          opcoes: [
+            { id: "mp_1", palavrasChave: ["1"], esperaEscolha: true, acao: "transferir", setor: "Tecnico", botao: "Tenho contrato" },
+          ],
+        },
+      },
+    ],
+  };
+
+  const conv = {
+    id: "c-derivada", instanciaId: "i1", cliente: "F", telefone: "5527911112222",
+    statusAtendimento: "pendente", setor: "Geral", atendimentoAtualId: "os1",
+    cnpj: null, cnpjVerificado: false, mensagens: [], atendimentos: [{ id: "os1" }],
+  };
+  let sessao = null;
+  let seq = 0;
+
+  const motor = new ChatbotEngine({
+    fluxoRepository: {
+      findAtivos: async () => [FLUXO], findById: async () => FLUXO,
+      findByGatilho: async () => null, createLog: async () => {},
+    },
+    conversaRepository: {
+      findById: async () => conv, findByIdParaEvento: async () => conv,
+      findByTelefone: async () => conv, findByTelefoneParaMotor: async () => conv,
+      create: async () => conv, existeMensagemWa: async () => false,
+      addMensagem: async (_i, origem, texto, meta, waId, extra) => {
+        const m = { id: "m" + ++seq, origem, texto, metadata: meta || null, waMessageId: waId || null, ...(extra || {}) };
+        conv.mensagens.push(m);
+        return m;
+      },
+      findMensagemPorWaId: async (waId) => conv.mensagens.find((m) => m.waMessageId === waId) || null,
+      // A consulta nova: a ultima fala do bot neste fio.
+      ultimaPerguntaDoBot: async () => {
+        const m = [...conv.mensagens].reverse().find((x) => x.origem === "bot");
+        return m && !m.metadata?.deletada ? { id: m.id, texto: m.texto } : null;
+      },
+      respondeuDepoisDe: async () => false,
+      vincularWaMessageId: async (id, waId) => {
+        const m = conv.mensagens.find((x) => x.id === id);
+        if (m) m.waMessageId = waId;
+      },
+      update: async (_i, d) => Object.assign(conv, d),
+      garantirAtendimento: async () => null,
+      garantirAtendimentoAberto: async () => ({ atendimento: null }),
+      atualizarAtendimentoAtual: async () => null, atualizarAtendimento: async () => null,
+      definirMotivoAtualSeVazio: async () => null, definirMotivoSeVazio: async () => null,
+      ultimoCnpjDoTelefone: async () => null, ultimaMensagemBotComErro: async () => null,
+    },
+    sessaoRepository: {
+      findByTelefone: async () => sessao, findByConversa: async () => sessao,
+      upsert: async (a, b, c, d) => {
+        sessao = { id: "s1", instanciaId: a, conversaId: b, telefone: c, ...(sessao || {}), ...d, atualizadoEm: new Date() };
+        return sessao;
+      },
+      update: async (_i, d) => { sessao = { ...sessao, ...d, atualizadoEm: new Date() }; return sessao; },
+      reivindicarInatividade: async () => ({ count: 0 }),
+    },
+    parceiroRepository: { findAtivoByCnpj: async () => null, findAtivoByTelefone: async () => null },
+    evolutionApi: {
+      sendText: async () => ({ key: { id: "WA_MENU" } }),
+      sendButtons: async () => ({ key: { id: "WA_MENU" } }),
+      sendList: async () => ({ key: { id: "WA_MENU" } }),
+      sendPoll: async () => ({ key: { id: "WA_MENU" } }),
+      fetchProfilePictureUrl: async () => null, getBase64FromMediaMessage: async () => null,
+    },
+    n8nClient: { encaminharMensagem: async () => ({ encaminhado: false }) },
+    configuracaoService: {
+      modoAtendimento: async () => "local",
+      horarioAtendimento: async () => ({ ativo: false }),
+      filasParaSetor: async () => ({}),
+      pesquisaSatisfacao: async () => ({ ativo: false }),
+    },
+    bus: { emitConversa: () => {} },
+  });
+
+  const receber = (texto, id) =>
+    motor.processarMensagemEntrada({
+      instanciaId: "i1", instanceName: "v", telefone: conv.telefone,
+      texto, nomeCliente: "F", waMessageId: id,
+      // Texto puro: NENHUM contexto vem do WhatsApp.
+      botaoId: null, midia: null, citacao: null, encaminhada: null,
+    });
+
+  await receber("oi", "W1");
+  const doBot = conv.mensagens.find((m) => m.origem === "bot");
+  conferir("o bot fez a pergunta e ficou esperando", !!doBot && !!sessao?.aguardando);
+
+  await receber("1", "W2");
+  const digitada = conv.mensagens.filter((m) => m.origem === "cliente").pop();
+  conferir(
+    "a resposta digitada aponta para a pergunta do bot",
+    digitada?.respondendoAId === doBot?.id,
+    `respondendoAId=${digitada?.respondendoAId} pergunta=${doBot?.id}`
+  );
+  conferir(
+    "e leva o retrato, marcado como derivado",
+    digitada?.metadata?.citacao?.derivada === true &&
+      String(digitada?.metadata?.citacao?.texto || "").includes("Como podemos ajudar"),
+    JSON.stringify(digitada?.metadata?.citacao)
+  );
+  // O setor volta canonizado ("Tecnico" -> "Técnico", ver setor.helper): citar e
+  // rotear sao independentes, e a citacao derivada nao pode atrapalhar a escolha.
+  conferir("a escolha continua roteando normalmente", conv.setor === "Técnico", conv.setor);
 
   await prisma.mensagem.deleteMany({ where: { conversaId: conversa.id } });
   await prisma.conversa.delete({ where: { id: conversa.id } });

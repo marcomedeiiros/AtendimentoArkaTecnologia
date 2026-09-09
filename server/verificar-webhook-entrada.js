@@ -524,10 +524,18 @@ console.log("=== Entrada do webhook ===");
     // ausência -- exatamente igual a "não respondeu nada" -- e a bolha aparecia
     // solta. Um "isso" solto é incompreensível para quem atende.
     const mapper = require(path.join(__dirname, "src/shared/helpers/mapper.helper"));
+    // `derivada` distingue o retrato que veio do APARELHO daquele que a Central
+    // montou a partir da pergunta que o bot deixou em aberto -- a bolha desenha
+    // os dois iguais, e é justamente por isso que a origem precisa sobreviver no
+    // dado. Falso em tudo que veio do WhatsApp.
     const mapeadas = [
-      [{ citacao: { tipo: "imagem" } }, { texto: null, tipo: "imagem", desconhecida: false }],
-      [{ citacao: { texto: "oi" } }, { texto: "oi", tipo: null, desconhecida: false }],
-      [{ citacao: { desconhecida: true } }, { texto: null, tipo: null, desconhecida: true }],
+      [{ citacao: { tipo: "imagem" } }, { texto: null, tipo: "imagem", desconhecida: false, derivada: false }],
+      [{ citacao: { texto: "oi" } }, { texto: "oi", tipo: null, desconhecida: false, derivada: false }],
+      [{ citacao: { desconhecida: true } }, { texto: null, tipo: null, desconhecida: true, derivada: false }],
+      [
+        { citacao: { texto: "Como podemos ajudar?", derivada: true } },
+        { texto: "Como podemos ajudar?", tipo: null, desconhecida: false, derivada: true },
+      ],
       // E o campo continua NULO quando não houve citação nenhuma: a marca não
       // pode vazar para a conversa inteira.
       [{}, null],
