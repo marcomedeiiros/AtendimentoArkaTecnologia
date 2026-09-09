@@ -272,17 +272,17 @@ async function main() {
     }) === null
   );
 
-  console.log("\n7. Citacao DERIVADA: a resposta digitada cita a pergunta do bot");
+  console.log("\n7. Citacao DERIVADA: aponta para o que o cliente acabou de receber");
 
-  // O cenario real: o bot manda o menu e fica esperando. O cliente DIGITA "1"
-  // em vez de tocar no botao -- e o WhatsApp nao manda contextInfo nenhum.
+  // O cenario real: o bot manda o menu e fica esperando. O cliente DIGITA a
+  // resposta em vez de tocar no botao -- e o WhatsApp nao manda contextInfo.
   const menu = "*Atendimento Tecnico* Como podemos ajudar?";
   const perguntaBot = await prisma.mensagem.create({
     data: { conversaId: conversa.id, origem: "bot", texto: menu, status: "enviada" },
   });
 
-  const ultima = await conversaRepository.ultimaPerguntaDoBot(conversa.id);
-  conferir("a pergunta em aberto e a ultima fala do bot", ultima?.id === perguntaBot.id);
+  const ultima = await conversaRepository.ultimaMensagemNossa(conversa.id);
+  conferir("com o bot conduzindo, e a fala dele", ultima?.id === perguntaBot.id);
   conferir("e ela traz o texto para montar o retrato", ultima?.texto === menu);
 
   await prisma.mensagem.update({
@@ -290,18 +290,36 @@ async function main() {
     data: { metadata: { deletada: true } },
   });
   conferir(
-    "pergunta apagada nao vira citacao (a bolha ficaria vazia)",
-    (await conversaRepository.ultimaPerguntaDoBot(conversa.id)) === null
+    "mensagem apagada nao vira citacao (a bolha ficaria vazia)",
+    (await conversaRepository.ultimaMensagemNossa(conversa.id)) === null
   );
   await prisma.mensagem.update({ where: { id: perguntaBot.id }, data: { metadata: {} } });
 
-  // Mensagem da EQUIPE nao conta: nao ha estado dizendo que houve pergunta.
-  await prisma.mensagem.create({
-    data: { conversaId: conversa.id, origem: "equipe", texto: "qual o nome de usuario?" },
+  // ── O DEFEITO DE PRODUCAO (#OS00217, 18:56) ─────────────────────────────
+  //
+  // O atendente assume e fala. A partir dai o cliente responde a ELE -- era
+  // aqui que a Central seguia citando a ultima fala do robo, tres turnos atras,
+  // enquanto o WhatsApp do cliente mostrava a citacao do atendente.
+  const doAtendente = await prisma.mensagem.create({
+    data: { conversaId: conversa.id, origem: "equipe", texto: "opaaa" },
   });
   conferir(
-    "pergunta do atendente NAO vira citacao derivada",
-    (await conversaRepository.ultimaPerguntaDoBot(conversa.id))?.id === perguntaBot.id
+    "com o atendente na conversa, e a fala DELE (nao a do bot)",
+    (await conversaRepository.ultimaMensagemNossa(conversa.id))?.id === doAtendente.id,
+    `veio ${(await conversaRepository.ultimaMensagemNossa(conversa.id))?.texto}`
+  );
+
+  // Nota interna nunca sai daqui: cita-la faria parecer que o cliente leu o que
+  // a equipe escreveu em segredo. Mensagem de sistema tambem nao e fala.
+  await prisma.mensagem.create({
+    data: { conversaId: conversa.id, origem: "nota", texto: "cliente ja deu calote" },
+  });
+  await prisma.mensagem.create({
+    data: { conversaId: conversa.id, origem: "sistema", texto: "Marco assumiu a conversa" },
+  });
+  conferir(
+    "nota interna e aviso de sistema nao viram citacao",
+    (await conversaRepository.ultimaMensagemNossa(conversa.id))?.id === doAtendente.id
   );
 
   // E o retrato derivado atravessa o mapper com a marca de origem.
@@ -367,9 +385,11 @@ async function main() {
         return m;
       },
       findMensagemPorWaId: async (waId) => conv.mensagens.find((m) => m.waMessageId === waId) || null,
-      // A consulta nova: a ultima fala do bot neste fio.
-      ultimaPerguntaDoBot: async () => {
-        const m = [...conv.mensagens].reverse().find((x) => x.origem === "bot");
+      // A consulta nova: a ultima mensagem que saiu daqui (bot OU atendente).
+      ultimaMensagemNossa: async () => {
+        const m = [...conv.mensagens]
+          .reverse()
+          .find((x) => x.origem === "bot" || x.origem === "equipe");
         return m && !m.metadata?.deletada ? { id: m.id, texto: m.texto } : null;
       },
       respondeuDepoisDe: async () => false,
@@ -439,6 +459,35 @@ async function main() {
   // O setor volta canonizado ("Tecnico" -> "Técnico", ver setor.helper): citar e
   // rotear sao independentes, e a citacao derivada nao pode atrapalhar a escolha.
   conferir("a escolha continua roteando normalmente", conv.setor === "Técnico", conv.setor);
+
+  // ── E AGORA O TURNO HUMANO, que e onde estava o defeito ─────────────────
+  //
+  // A escolha acima transferiu para a equipe, e isso grava
+  // `aguardando: "humano"` na sessao -- verdadeiro, e nao e pergunta nenhuma.
+  // Era exatamente aqui que a citacao congelava na ultima fala do robo.
+  conferir(
+    "a transferencia deixou a sessao em 'humano'",
+    sessao?.aguardando === "humano",
+    String(sessao?.aguardando)
+  );
+
+  const opaaa = {
+    id: "m-atendente", origem: "equipe", texto: "opaaa", metadata: null, waMessageId: "WA_ATD",
+  };
+  conv.mensagens.push(opaaa);
+
+  await receber("ajuda eu", "W3");
+  const aoHumano = conv.mensagens.filter((m) => m.origem === "cliente").pop();
+  conferir(
+    "a resposta ao ATENDENTE cita a fala dele, nao a do bot",
+    aoHumano?.respondendoAId === opaaa.id,
+    `respondendoAId=${aoHumano?.respondendoAId} (bot=${doBot?.id}, atendente=${opaaa.id})`
+  );
+  conferir(
+    "e o retrato e o texto do atendente",
+    aoHumano?.metadata?.citacao?.texto === "opaaa",
+    JSON.stringify(aoHumano?.metadata?.citacao)
+  );
 
   await prisma.mensagem.deleteMany({ where: { conversaId: conversa.id } });
   await prisma.conversa.delete({ where: { id: conversa.id } });
