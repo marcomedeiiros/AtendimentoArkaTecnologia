@@ -535,7 +535,33 @@ export default function WhatsAppPage() {
                 <ShieldCheck size={96} />
               </div>
             ) : (
-              <QrCode size={160} />
+              /* NENHUM QR FOI PEDIDO AINDA -- e a tela precisa DIZER isso.
+
+                 Aqui ficava `<QrCode size={160} />`, um ícone da biblioteca.
+                 Debaixo do título "QR Code de Autenticação" e do texto "Escaneie
+                 no app do WhatsApp", ele é indistinguível de um código pronto: o
+                 operador aponta a câmera, o celular não lê nada, e a conclusão
+                 natural é "o QR está com defeito" ou "escaneei e não conectou".
+                 Foi exatamente o que aconteceu em 09/09/2026, no meio de um
+                 repareamento -- minutos perdidos mirando um desenho.
+
+                 O engano JÁ tinha sido reconhecido no ramo de cima (o escudo
+                 substituiu o QR de enfeite quando a sessão está guardada), e o
+                 comentário de lá diz o mesmo: um QR decorativo convida a
+                 escanear. O ramo que sobrou tinha o problema idêntico -- e pior,
+                 porque este aparece justamente quando escanear É o caminho.
+
+                 Um código de verdade é denso e renova a cada ~20s. Este espaço
+                 agora mostra o que falta fazer, em vez de fingir. */
+              <div className="w-40 h-40 flex flex-col items-center justify-center gap-2 px-3 text-center">
+                <QrCode size={48} className="opacity-40" />
+                <span className="text-[11px] font-semibold leading-tight">
+                  Clique em <strong>Gerar QR</strong> para criar o código
+                </span>
+                <span className="text-[10px] opacity-60 leading-tight">
+                  Ele vale cerca de 1 minuto — tenha o celular em mãos
+                </span>
+              </div>
             )}
           </div>
 
