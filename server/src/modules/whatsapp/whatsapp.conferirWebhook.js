@@ -88,10 +88,23 @@ async function conferir() {
     return;
   }
 
+  // OS NOMES, e nao a quantidade.
+  //
+  // Aqui saia `eventos: 4`, e um mapa com quatro eventos certos e um com quatro
+  // eventos errados escrevem a mesma linha. Foi o que deixou passar que
+  // `MESSAGES_DELETE` nunca esteve na lista: o "apagar para todos" do cliente
+  // nao chega, e o log dizia que estava tudo conferido.
+  //
+  // Vale um aviso sobre o alcance disto: nesta topologia quem entrega e o
+  // webhook GLOBAL da Evolution (WEBHOOK_GLOBAL_URL, no compose dela), e ele NAO
+  // aparece em `/webhook/find`. Entao lista vazia aqui e normal, e nao prova
+  // ausencia -- o que prova de verdade quais eventos chegam e o log
+  // "Webhook recebido e nao roteado", do outro lado da porta.
+  const eventos = Array.isArray(config?.events) ? config.events : [];
   logger.info("Webhook da Evolution conferido", {
     instancia,
     url: resumirUrl(url),
-    eventos: Array.isArray(config?.events) ? config.events.length : null,
+    eventos: eventos.length ? eventos : "(por instancia vazio -- provavelmente o global)",
   });
 }
 

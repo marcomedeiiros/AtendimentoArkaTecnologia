@@ -19,6 +19,34 @@ const { motivoParaIgnorarJid } = require("../../shared/helpers/jid.helper");
 // WhatsApp ja limita perto disso.
 const MAX_MIDIA_RECEBIDA = 20 * 1024 * 1024;
 
+/**
+ * A FORMA do payload -- os nomes dos campos e os tipos, nunca os valores.
+ *
+ * `conversation`, `quotedMessage` e `base64` carregam conversa de cliente e
+ * megabytes de midia; log nao e lugar para nenhum dos dois. O que se precisa
+ * saber numa investigacao e ONDE o dado mora, e para isso o tipo basta.
+ */
+function formaDo(o, p = 0) {
+  if (!o || typeof o !== "object" || p > 4) return typeof o;
+  if (Array.isArray(o)) return `[${o.length}]`;
+  const out = {};
+  for (const [k, v] of Object.entries(o)) {
+    out[k] = v && typeof v === "object" ? formaDo(v, p + 1) : typeof v;
+  }
+  return out;
+}
+
+// Mesma condicao que o roteador usa para mandar o evento a `_processarMensagem`.
+// Existe para o diagnostico do topo nao repetir o que o de la ja imprime.
+function ehUpsert(event, body) {
+  return (
+    event === "messages.upsert" ||
+    event === "MESSAGES_UPSERT" ||
+    !!body?.data?.key ||
+    !!body?.key
+  );
+}
+
 // ── TOQUE EM BOTAO TAMBEM E CITACAO -- E A DECISAO MUDOU AQUI ───────────────
 //
 // Aqui vivia `NOS_SEM_CITACAO`, uma lista que RECUSAVA a citacao de
@@ -611,6 +639,22 @@ class WhatsAppService {
     // descartava por um motivo diferente: o ACK saia em "ack_sem_dados" (nao ha
     // status), e a mensagem, em "dados_incompletos" (nao ha texto nem midia).
     // Dois silencios distintos para o mesmo evento perdido.
+    // O DIAGNOSTICO DE PAYLOAD PRECISA VER TODOS OS EVENTOS, e nao so a
+    // mensagem. Ele vivia dentro de `_processarMensagem`, ou seja, so enxergava
+    // `messages.upsert` -- uma EDICAO chegando por `messages.update` nao seria
+    // impressa nem com o interruptor ligado, e "nao chegou" ficava igual a
+    // "chegou numa forma que nao lemos". Aqui cobre o resto; o de la continua,
+    // porque carrega o contexto da citacao que so faz sentido na mensagem.
+    if (process.env.WHATSAPP_LOG_PAYLOAD === "1" && !ehUpsert(event, body)) {
+      logger.info("[diagnostico] forma do evento recebido", {
+        event: event || "(sem nome)",
+        instance,
+        // A ESTRUTURA, nunca os valores: `conversation` e `quotedMessage`
+        // carregam conversa de cliente, e log nao e lugar para isso.
+        forma: formaDo(body),
+      });
+    }
+
     const protocolo = this.extrairProtocolo(body);
     if (protocolo) return this._processarProtocolo(protocolo);
 
@@ -653,7 +697,18 @@ class WhatsAppService {
       return r;
     }
 
-    logger.debug("Webhook ignorado", { event, instance });
+    // ── `info`, E NAO `debug` ────────────────────────────────────────────────
+    //
+    // Em producao o nivel e `info` (config/logger), entao isto era invisivel --
+    // e era o unico rastro de um evento que chega e ninguem trata. O custo de
+    // manter cego ja se pagou: "o cliente apagou e nao apareceu" tem duas causas
+    // que produzem o mesmo silencio (o evento nao e entregue pela Evolution, ou
+    // e entregue com outro nome), e elas pedem consertos opostos.
+    //
+    // Barulho nao e risco aqui: o webhook global entrega uma lista fechada de
+    // eventos, entao esta linha so sai quando aparece um que nao esta no
+    // roteador -- que e exatamente quando alguem precisa saber.
+    logger.info("Webhook recebido e nao roteado", { event, instance });
     return { recebido: true, processado: false, evento: event || "desconhecido" };
   }
 
@@ -917,20 +972,11 @@ class WhatsAppService {
     // `conversation` carregam a conversa do cliente, e log nao e lugar para
     // isso. Desligado por padrao: e para ficar aceso cinco minutos, nao sempre.
     if (process.env.WHATSAPP_LOG_PAYLOAD === "1") {
-      const forma = (o, p = 0) => {
-        if (!o || typeof o !== "object" || p > 4) return typeof o;
-        if (Array.isArray(o)) return `[${o.length}]`;
-        const out = {};
-        for (const [k, v] of Object.entries(o)) {
-          out[k] = v && typeof v === "object" ? forma(v, p + 1) : typeof v;
-        }
-        return out;
-      };
       logger.info("[diagnostico] forma do payload recebido", {
         waMessageId: key?.id || null,
         contextosAchados: contextos.length,
         citacaoReconhecida: !!citacao,
-        forma: forma(body),
+        forma: formaDo(body),
       });
     }
     let midia = this.extrairMidia(body);
