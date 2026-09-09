@@ -854,24 +854,36 @@ class ConversaRepository {
   }
 
   /**
-   * A ULTIMA COISA QUE O BOT DISSE neste fio -- a pergunta que ficou em aberto.
+   * A ULTIMA MENSAGEM QUE SAIU DAQUI -- do bot ou do atendente.
    *
-   * Serve a citacao DERIVADA: quando o cliente digita a resposta (em vez de
-   * tocar no botao), o WhatsApp nao manda `contextInfo` nenhum -- para ele,
-   * digitar "1" e uma mensagem nova, nao uma resposta. Mas a sessao do chatbot
-   * sabe que havia pergunta em aberto (`aguardando`), e a pergunta e isto aqui.
+   * Serve a citacao DERIVADA: quando o cliente responde sem tocar em botao, o
+   * WhatsApp nao manda `contextInfo` nenhum (para ele, digitar "1" e uma
+   * mensagem nova), e o retrato precisa vir de outro lugar. Vem daqui: a ultima
+   * coisa que o cliente recebeu e o que ele estava respondendo.
    *
-   * `origem: "bot"` e nao "equipe": a ligacao so e um FATO quando quem perguntou
-   * foi a automacao, que registra a espera no banco. "O atendente perguntou algo
-   * e o cliente respondeu" nao tem estado nenhum por tras -- seria adivinhacao,
-   * e e justamente o que este projeto nao faz.
+   * ── POR QUE NAO E MAIS SO O BOT ─────────────────────────────────────────
    *
-   * Mensagem apagada fica de fora: citar o que virou "Mensagem apagada" na tela
-   * mostraria uma caixa vazia.
+   * Esta consulta nasceu como `ultimaPerguntaDoBot`, filtrando `origem: "bot"`
+   * -- a ideia era que so a pergunta da automacao fosse um FATO, porque so ela
+   * fica registrada na sessao (`aguardando`). O efeito em producao foi o
+   * oposto do pretendido: assim que o atendente assumia a conversa, toda
+   * resposta do cliente passava a citar a ultima fala do ROBO, tres turnos
+   * atras, enquanto o WhatsApp dele mostrava a citacao do atendente.
+   *
+   * A restricao estava certa sobre a natureza e errada sobre a conclusao. A
+   * citacao nao afirma "ele respondeu a esta pergunta"; afirma "isto chegou
+   * depois daquilo" -- que e verificavel, e e a mesma aposta que o WhatsApp faz
+   * ao desenhar a conversa em ordem. Ver docs/auditoria-citacao-derivada.md.
+   *
+   * FICAM DE FORA, e cada uma por um motivo diferente:
+   *   - `nota`: nunca foi enviada a ninguem. Cita-la na bolha do cliente faria
+   *     parecer que ele leu o que a equipe escreveu em segredo;
+   *   - `sistema`: nao e fala, e aviso da propria Central;
+   *   - apagada: viraria uma caixa vazia na tela.
    */
-  async ultimaPerguntaDoBot(conversaId) {
+  async ultimaMensagemNossa(conversaId) {
     const msg = await prisma.mensagem.findFirst({
-      where: { conversaId, origem: "bot" },
+      where: { conversaId, origem: { in: ["bot", "equipe"] } },
       orderBy: { criadoEm: "desc" },
       select: { id: true, texto: true, metadata: true },
     });

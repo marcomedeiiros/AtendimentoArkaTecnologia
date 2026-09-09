@@ -4153,7 +4153,7 @@ class ChatbotEngine {
         if (!retrato && !original) retrato = { desconhecida: true };
       }
 
-      // ── A RESPOSTA DIGITADA TAMBEM CITA A PERGUNTA ──────────────────────────
+      // ── A RESPOSTA DIGITADA CITA O QUE O CLIENTE ACABOU DE RECEBER ─────────
       //
       // Tocar num botao volta com o menu citado, porque o WhatsApp manda o
       // `contextInfo` junto da resposta de botao. DIGITAR a mesma resposta nao:
@@ -4162,30 +4162,43 @@ class ChatbotEngine {
       // metade das respostas citando e a outra metade solta, sem que nada na
       // tela explicasse a diferenca.
       //
-      // Aqui a ligacao nao e extraida do payload: ela e LIDA DO NOSSO ESTADO. A
-      // sessao do chatbot registra que ha uma pergunta em aberto
-      // (`aguardando`), e a pergunta e a ultima coisa que o bot disse no fio.
-      // "Esta mensagem responde aquela" e fato, e nao deducao pela aparencia --
-      // e a distincao que separa isto da regra que o projeto segue em
-      // `encaminhada` e no retrato citado, onde inventar seria mentir.
+      // A ligacao nao e extraida do payload: ela e a ORDEM da conversa. O
+      // retrato aponta para a ultima mensagem que saiu daqui -- a ultima coisa
+      // que o cliente recebeu antes de escrever.
       //
-      // NUNCA GANHA DA CITACAO REAL: so entra quando o WhatsApp nao mandou nada
-      // (`!respondendoAId && !retrato`). O que o cliente citou de fato, no
-      // aparelho dele, continua sendo o que a bolha mostra.
+      // ── A PRIMEIRA VERSAO OLHAVA SO PARA O BOT, E ISSO DEU ERRADO ──────────
+      //
+      // A condicao era `sessaoAberta.aguardando` (qualquer valor) e a consulta
+      // filtrava `origem: "bot"`. Acontece que entregar a conversa para a equipe
+      // grava `aguardando: "humano"` -- verdadeiro, e nao e pergunta nenhuma.
+      // Resultado medido em producao: enquanto o bot conduzia, acertava; assim
+      // que o atendente assumia, TODA resposta do cliente passava a citar a
+      // ultima fala do robo, tres turnos atras, enquanto o WhatsApp dele
+      // mostrava a citacao da mensagem do atendente.
+      //
+      // Vale registrar o formato do engano, que ja tinha acontecido neste
+      // arquivo: decidir por PRESENCA de um campo de estado que tem quatro
+      // valores, dos quais so tres significam a mesma coisa. Foi por isso que
+      // `AGUARDA_RESPOSTA_DO_CLIENTE` existe (ver a nota dela). Aqui a correcao
+      // nao e usar aquela lista -- e parar de perguntar ao estado: quem responde
+      // "o que ele acabou de receber?" e a propria conversa.
+      //
+      // NUNCA GANHA DA CITACAO REAL: so entra quando o WhatsApp nao mandou nada.
+      // O que o cliente citou de fato, no aparelho dele, e o que a bolha mostra.
+      //
+      // CICLO NOVO NAO CITA: quando o cliente volta depois do atendimento
+      // encerrado, a mensagem dele abre um chamado novo -- citar o "obrigado
+      // pelo contato" da semana passada ligaria duas conversas sem relacao.
       //
       // `derivada` fica gravado no metadata para a origem do retrato nunca se
-      // perder: hoje a bolha desenha os dois iguais (foi a decisao), mas sem a
-      // marca nao haveria como voltar atras nem como auditar depois.
-      //
-      // Escopo estreito de proposito -- `origem: "bot"` em ultimaPerguntaDoBot.
-      // Fazer o mesmo para pergunta de ATENDENTE seria adivinhacao: ali nao ha
-      // estado nenhum dizendo que uma pergunta foi feita.
-      if (!respondendoAId && !retrato && sessaoAberta?.ativo && sessaoAberta.aguardando) {
-        const pergunta = await this.deps.conversaRepository.ultimaPerguntaDoBot?.(conversa.id);
-        const textoPergunta = String(pergunta?.texto || "").trim();
-        if (pergunta?.id && textoPergunta) {
-          respondendoAId = pergunta.id;
-          retrato = { texto: textoPergunta.slice(0, 500), derivada: true };
+      // perder: a bolha desenha os dois iguais (foi a decisao), mas sem a marca
+      // nao haveria como voltar atras nem como auditar depois.
+      if (!respondendoAId && !retrato && !cicloReaberto) {
+        const anterior = await this.deps.conversaRepository.ultimaMensagemNossa?.(conversa.id);
+        const textoAnterior = String(anterior?.texto || "").trim();
+        if (anterior?.id && textoAnterior) {
+          respondendoAId = anterior.id;
+          retrato = { texto: textoAnterior.slice(0, 500), derivada: true };
         }
       }
 
