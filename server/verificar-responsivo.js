@@ -234,11 +234,27 @@ for (const f of arquivos) {
     if (ehComentario(l)) return;
     const vizinhanca = linhas.slice(Math.max(0, i - 4), i + 1).join("\n");
     if (/max-w-full|overflow-x-auto|overflow-auto/.test(vizinhanca)) return;
-    const achados = l.match(/(?:^|[\s"'`:])((?:min-)?w-\[([0-9]+)px\])/g) || [];
+    // ── LARGURA PRESA A UM PONTO DE QUEBRA NÃO É LARGURA TEIMOSA ────────────
+    //
+    // A regex antiga aceitava `:` como separador de entrada, então
+    // `xl:min-w-[330px]` era acusado igual a um `min-w-[330px]` solto. Só que
+    // uma largura prefixada com `xl:` só existe a partir de 1280px -- ali 330px
+    // não estoura nada, e exigir `max-w-full` seria pedir uma classe que não
+    // faz efeito nenhum. Era o caso de `ModoTv.jsx`, e a "correção" teria sido
+    // decorar o código para calar o teste.
+    //
+    // O prefixo agora é capturado e julgado: ponto de quebra (`sm:`…`2xl:`)
+    // isenta; qualquer outro (`hover:`, `group-hover:`) continua valendo, porque
+    // esses não dizem nada sobre o tamanho da tela.
+    const PONTOS_DE_QUEBRA = new Set(["sm", "md", "lg", "xl", "2xl"]);
+    const achados = l.match(/(?:^|[\s"'`])((?:[a-z0-9-]+:)*(?:min-)?w-\[[0-9]+px\])/g) || [];
     for (const a of achados) {
-      const px = Number(a.match(/([0-9]+)px/)[1]);
+      const token = a.trim();
+      const prefixos = token.split(":").slice(0, -1);
+      if (prefixos.some((p) => PONTOS_DE_QUEBRA.has(p))) continue;
+      const px = Number(token.match(/([0-9]+)px/)[1]);
       if (px < 300) continue;              // cabe até no aparelho de 320px
-      larguraTeimosa.push(`${rel(f)}:${i + 1}  ${a.trim()} sem max-w-full`);
+      larguraTeimosa.push(`${rel(f)}:${i + 1}  ${token} sem max-w-full`);
     }
   });
 }

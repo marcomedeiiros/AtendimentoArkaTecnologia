@@ -120,7 +120,18 @@ async function main() {
     path.join(__dirname, "..", "client", "src", "components", "Avatar.jsx"),
     "utf8"
   );
-  check(/onError=\{\(\) => setErroFoto\(true\)\}/.test(avatar),
+  // ── A ASSERÇÃO ERA LITERAL DEMAIS, E FOI ELA QUE QUEBROU ──────────────────
+  //
+  // O padrão exigia exatamente `onError={() => setErroFoto(true)}`. O
+  // comportamento continua lá e ficou MELHOR: o `Avatar` passou a avisar quem o
+  // usa de que a URL morreu (`onErroFoto?.()`), para uma tela não oferecer "ver
+  // a foto" de uma imagem que não existe mais. O corpo virou
+  // `{ setErroFoto(true); onErroFoto?.(); }` e o teste passou a acusar falha num
+  // código que melhorou.
+  //
+  // Um teste que casa o texto exato do handler trava a FORMA, não a garantia.
+  // Aqui a pergunta é a que importa: o `onError` da imagem leva a `erroFoto`?
+  check(/onError=\{[\s\S]{0,160}?setErroFoto\(true\)/.test(avatar),
     "o Avatar cai para o boneco quando o link da foto vence (403)");
 
   titulo("6. O TELEFONE NA LISTA MOSTRA O DDD, NAO O DDI");

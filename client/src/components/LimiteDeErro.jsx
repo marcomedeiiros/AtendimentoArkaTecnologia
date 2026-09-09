@@ -48,8 +48,11 @@ export default class LimiteDeErro extends React.Component {
   render() {
     if (!this.state.erro) return this.props.children;
 
+    // `dvh`, e não `vh`: no celular o `vh` conta a barra do navegador como se
+    // ela não existisse, e a tela de erro nasce mais alta que a área visível --
+    // justamente quando a pessoa precisa ler a mensagem e achar o botão.
     return (
-      <div className="flex h-full min-h-[60vh] flex-col items-center justify-center gap-3 p-6 text-center">
+      <div className="flex h-full min-h-[60dvh] flex-col items-center justify-center gap-3 p-6 text-center">
         <p className="text-sm font-bold text-falha-400">Esta tela encontrou um erro.</p>
         <p className="max-w-lg break-words font-mono text-[11px] text-slate-400">
           {this.state.erro?.message || String(this.state.erro)}
