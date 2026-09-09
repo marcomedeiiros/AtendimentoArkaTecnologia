@@ -440,9 +440,33 @@ export default function WhatsAppPage() {
                 {status.toUpperCase()}
               </span>
             </div>
+            {/* O NÚMERO NÃO PROVA CONEXÃO -- e o rótulo precisa dizer isso.
+
+                Ele vem da linha `Instance` no banco da Evolution
+                (`ownerJid`/`profileName`), que SOBREVIVE ao logout: encerrar a
+                sessão não o apaga, e só "Excluir Instância" apagaria. Ou seja,
+                é o registro do ÚLTIMO pareamento, não sinal de vida.
+
+                Escrito sempre como "Número:", a linha lê como "este número está
+                conectado" -- e em 09/09/2026 deu para ver o estrago em print:
+                "Número: +552721030070" logo ao lado do badge REESCANEIE O QR,
+                com o pareamento perdido havia meia hora. Quem bate o olho não lê
+                o badge; lê o número.
+
+                Escondê-lo seria pior: é justamente esse número que se digita em
+                "Código por telefone". Então ele fica, com o rótulo e a cor
+                dizendo a verdade. */}
             <p className="text-xs text-slate-400 mt-0.5">
               {detalhes?.perfil?.numero
-                ? <>Número: <span className="font-mono text-slate-300">+{detalhes.perfil.numero}</span>{detalhes.perfil.nome ? ` • ${detalhes.perfil.nome}` : ''}</>
+                ? (
+                  <>
+                    {conectado ? 'Número: ' : 'Último número pareado: '}
+                    <span className={`font-mono ${conectado ? 'text-slate-300' : 'text-slate-500'}`}>
+                      +{detalhes.perfil.numero}
+                    </span>
+                    {detalhes.perfil.nome ? ` • ${detalhes.perfil.nome}` : ''}
+                  </>
+                )
                 : 'Nenhum número pareado'}
               {conectado && <> • Online há {formatarDuracao(detalhes?.conectadoDesde)}</>}
             </p>
