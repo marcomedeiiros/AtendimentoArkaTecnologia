@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   MessageCircle, Power, QrCode, Loader2, RefreshCw, RotateCcw,
-  Trash2, Copy, Check, ShieldCheck, KeyRound
+  Trash2, Copy, Check, ShieldCheck, KeyRound, PowerOff
 } from 'lucide-react';
 import { EmojiIcon } from '../components/pages/EmojiIcon';
 import { useAppContext } from '../context/AppContext';
