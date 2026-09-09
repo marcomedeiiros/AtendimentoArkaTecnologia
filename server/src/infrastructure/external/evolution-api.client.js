@@ -80,6 +80,47 @@ function recorte(valor, limite = 800) {
   }
 }
 
+/**
+ * OS EVENTOS QUE A INSTANCIA ASSINA -- e por que a lista cresceu.
+ *
+ * Ela vivia repetida em `createInstance` e `setWebhook`, com tres nomes. Repetir
+ * era o problema: em 09/09/2026 as variaveis `WEBHOOK_EVENTS_MESSAGES_DELETE` e
+ * `..._MESSAGES_EDITED` foram ligadas no conteiner da Evolution -- operacao cara,
+ * que exige recriar o processo -- e mesmo assim o "apagar" do cliente continuaria
+ * sem chegar, porque a assinatura POR INSTANCIA seguia com os tres de sempre.
+ *
+ * A conferencia do boot passou a imprimir os nomes e mostrou isso na primeira
+ * linha:
+ *
+ *   Webhook da Evolution conferido ... eventos:
+ *     ["MESSAGES_UPSERT","MESSAGES_UPDATE","CONNECTION_UPDATE"]
+ *
+ * Sao DOIS filtros em serie, e o mais restritivo manda: o mapa `WEBHOOK_EVENTS_*`
+ * do conteiner e esta lista aqui. Mexer so no primeiro nao muda nada.
+ *
+ * A boa noticia e que este e o filtro BARATO: reaplicar o webhook e uma chamada
+ * HTTP (Painel > Integracao WhatsApp), sem recriar conteiner e sem risco para o
+ * pareamento.
+ *
+ * O que cada um traz:
+ *   MESSAGES_UPSERT    a mensagem em si
+ *   MESSAGES_UPDATE    os ACKs de entrega/leitura (os risquinhos) e, em parte
+ *                      das versoes, a edicao
+ *   MESSAGES_DELETE    "apagar para todos" feito pelo cliente
+ *   MESSAGES_EDITED    a edicao, nas versoes que tem evento proprio para ela
+ *   CONNECTION_UPDATE  queda e volta da sessao
+ *
+ * Nome que a versao instalada nao conhecer e ignorado por ela -- pedir a mais
+ * nao quebra a assinatura.
+ */
+const EVENTOS_PADRAO = [
+  "MESSAGES_UPSERT",
+  "MESSAGES_UPDATE",
+  "MESSAGES_DELETE",
+  "MESSAGES_EDITED",
+  "CONNECTION_UPDATE",
+];
+
 class EvolutionApiClient {
   constructor() {
     // Valores do .env sao apenas o fallback: a config efetiva vem do banco
@@ -311,8 +352,7 @@ class EvolutionApiClient {
         url: webhookUrl,
         byEvents: false,
         base64: true, // envia a midia em base64 junto do evento
-        // MESSAGES_UPDATE traz os ACKs de entrega/leitura (os risquinhos).
-        events: eventos || ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "CONNECTION_UPDATE"],
+        events: eventos || EVENTOS_PADRAO,
       };
     }
     return this.request("POST", "/instance/create", body);
@@ -327,8 +367,7 @@ class EvolutionApiClient {
         url,
         webhookByEvents: false,
         webhookBase64: true,
-        // MESSAGES_UPDATE traz os ACKs de entrega/leitura (os risquinhos).
-        events: eventos || ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "CONNECTION_UPDATE"],
+        events: eventos || EVENTOS_PADRAO,
       },
     });
   }
@@ -721,3 +760,7 @@ class EvolutionApiClient {
 }
 
 module.exports = new EvolutionApiClient();
+// A lista viaja junto para quem CONFERE a assinatura poder comparar com a que
+// deveria estar la -- ver whatsapp.conferirWebhook. Sem isto, "conferido" era so
+// "respondeu": o boot imprimia os eventos e nao sabia dizer se faltava algum.
+module.exports.EVENTOS_PADRAO = EVENTOS_PADRAO;

@@ -101,6 +101,30 @@ async function conferir() {
   // ausencia -- o que prova de verdade quais eventos chegam e o log
   // "Webhook recebido e nao roteado", do outro lado da porta.
   const eventos = Array.isArray(config?.events) ? config.events : [];
+
+  // ── E FALTA ALGUM? ────────────────────────────────────────────────────────
+  //
+  // Imprimir os nomes ja foi um avanco sobre imprimir a quantidade, mas ainda
+  // deixava a conferencia para o olho humano -- e foi assim que a assinatura da
+  // instancia ficou com tres eventos enquanto o conteiner da Evolution era
+  // recriado para autorizar cinco. Sao DOIS filtros em serie, e mexer so num
+  // nao muda nada; ver EVENTOS_PADRAO no cliente.
+  //
+  // Fica em `warn`, e nao em `error`: a mensagem continua entrando (o essencial
+  // funciona), o que se perde e o "apagar"/"editar" do cliente. E o conserto e
+  // barato -- uma chamada HTTP, sem tocar em conteiner.
+  const faltando = evolutionApi.EVENTOS_PADRAO.filter((e) => !eventos.includes(e));
+  if (eventos.length && faltando.length) {
+    logger.warn("Webhook da Evolution assina MENOS eventos do que deveria", {
+      instancia,
+      faltando,
+      assinados: eventos,
+      efeito: "O que o cliente FAZ com a mensagem (apagar, editar) nao chega na Central.",
+      conserto: "Painel > Integracao WhatsApp > configurar webhook (nao precisa recriar conteiner).",
+    });
+    return;
+  }
+
   logger.info("Webhook da Evolution conferido", {
     instancia,
     url: resumirUrl(url),
