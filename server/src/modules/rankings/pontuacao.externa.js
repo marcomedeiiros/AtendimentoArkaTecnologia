@@ -219,7 +219,20 @@ function pontuarExterno(lista, regras = null) {
    */
   const ptsVolume = escalar(faixa(FAIXAS_VOLUME, entregues.length), PESOS.volume, pesos.volume);
 
-  const mediaCompletude = media(entregues.map(completudeDe));
+  // ── A SETA IMPORTA, E A FALTA DELA DERRUBAVA A PAGINA ───────────────────
+  //
+  // Aqui estava `entregues.map(completudeDe)`. `Array.prototype.map` chama a
+  // funcao com TRES argumentos -- (item, indice, array) --, entao o segundo
+  // parametro de `completudeDe` recebia o INDICE em vez do checklist. O valor
+  // padrao nunca entrava (default so vale para `undefined`), e o `itens.filter`
+  // la dentro estourava com `0.filter is not a function` no primeiro relatorio
+  // entregue. O ranking externo caia inteiro.
+  //
+  // E havia um segundo defeito escondido no mesmo lugar: mesmo sem o crash, a
+  // conta usaria a lista de fabrica. `itensEmVigor` -- o checklist que a empresa
+  // configurou, calculado umas linhas acima -- era ignorado, e ele e a razao de
+  // ser da funcionalidade.
+  const mediaCompletude = media(entregues.map((m) => completudeDe(m, itensEmVigor)));
   const ptsCompletude = temAmostra ? Math.round(mediaCompletude * pesos.completude) : 0;
 
   const proporcaoPrazo = entregues.length ? entregues.filter(noPrazo).length / entregues.length : 0;

@@ -35,6 +35,26 @@ const check = (cond, msg) => {
   if (!cond) erros.push(msg);
   console.log(`  ${cond ? "OK   " : "FALHA"} ${msg}`);
 };
+
+/**
+ * SEÇÃO QUE NÃO PÔDE RODAR -- e isso não é o mesmo que defeito.
+ *
+ * A seção do PDF depende de um documento de CLIENTE, que não mora no
+ * repositório. Ela usava `check(false, "PULADO: ...")`, com a intenção certa
+ * (um teste que some sozinho quando o insumo falta é pior do que nenhum teste)
+ * e o efeito errado: o script terminava em vermelho em QUALQUER máquina que não
+ * fosse a de quem tinha o arquivo em Downloads. Ou seja, o baseline nunca podia
+ * ficar verde -- e uma suíte que sempre falha para de responder "a SUA mudança
+ * quebrou algo".
+ *
+ * Aqui o aviso continua alto e visível no fim da execução; ele só não é contado
+ * como falha. Ausência de insumo e defeito de código pedem ações opostas.
+ */
+const pendentes = [];
+const pular = (msg) => {
+  pendentes.push(msg);
+  console.log(`  PULOU ${msg}`);
+};
 const titulo = (t) => console.log(`\n=== ${t} ===\n`);
 
 const MARCA = "teste-rank";
@@ -753,12 +773,21 @@ async function main() {
   titulo("8d. O PDF E QUEM PREENCHE A PONTUACAO");
   {
     const fsPdf = require("fs");
-    const caminhoExemplo = "C:/Users/user/Downloads/Relatorio_Arka_Tecnologia_Mapeamento_Nobreaks.pdf";
+    // Caminho configuravel: o documento e de CLIENTE e nao entra no
+    // repositorio. `RANKINGS_PDF_EXEMPLO` deixa qualquer maquina rodar a secao
+    // apontando para a propria copia, em vez de exigir a pasta Downloads de uma
+    // pessoa so.
+    const caminhoExemplo =
+      process.env.RANKINGS_PDF_EXEMPLO ||
+      "C:/Users/user/Downloads/Relatorio_Arka_Tecnologia_Mapeamento_Nobreaks.pdf";
     // O PDF de exemplo mora fora do repositorio (e documento de cliente). Sem
     // ele, a secao AVISA em vez de passar caladamente -- um teste que some
     // sozinho quando o insumo falta e pior do que nenhum teste.
     if (!fsPdf.existsSync(caminhoExemplo)) {
-      check(false, `PULADO: o PDF de exemplo nao esta em ${caminhoExemplo}`);
+      pular(
+        `secao do PDF nao rodou -- o exemplo nao esta em ${caminhoExemplo} ` +
+          `(aponte outro com RANKINGS_PDF_EXEMPLO=/caminho/do.pdf)`
+      );
     } else {
       const pdf = "data:application/pdf;base64," + fsPdf.readFileSync(caminhoExemplo).toString("base64");
 
@@ -1157,6 +1186,10 @@ main()
   .finally(async () => {
     await limpar().catch(() => {});
     await prisma.$disconnect();
+    if (pendentes.length) {
+      console.log(`\nPENDENTES (${pendentes.length}) -- nao rodaram, e nao sao falhas:`);
+      for (const p of pendentes) console.log(`  ${p}`);
+    }
     if (erros.length) {
       console.log(`\nFALHAS (${erros.length}):`);
       for (const e of erros) console.log(`  ${e}`);
