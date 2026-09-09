@@ -135,3 +135,72 @@ instância fica instável por vários minutos **mesmo quando tudo dá certo**.
 Fica registrado para a próxima vez que alguém precisar tocar naquele contêiner:
 recriar a Evolution é uma operação de janela, e o relógio dela é o da
 sincronização do histórico, não o do `docker compose up`.
+
+---
+
+## 7. SEGUNDO ATO (19:17): o 408 virou 401, e agora o pareamento acabou mesmo
+
+Quatro minutos depois do registro acima, o painel mudou de `RECONNECTING` para
+`LOGGED_OUT`, motivo **401 (logout real)**, e passou a oferecer o QR.
+
+**Isto não é a mesma falha continuando. É outra, causada pela primeira.**
+
+### A cascata, elo por elo
+
+1. **408** — a sincronização inicial estoura (§2);
+2. na 2.4.0, 408 está no ramo destrutivo do Baileys: a Evolution roda
+   `cleaningUp()` e **apaga a credencial** do banco dela;
+3. sem credencial, a instância não tem o que reconectar e começa a **emitir QR**;
+4. o Baileys renova o QR a cada ~20s e `QRCODE_LIMIT` é **3** — cerca de um
+   minuto;
+5. ao estourar o limite, a Evolution chama `client.logout()`
+   (`monitor.service.ts:435`), que **remove o aparelho do lado do WhatsApp**;
+6. logout do lado do WhatsApp = **401**.
+
+O tempo bate: 408 às ~19:11, QR emitido, 401 às ~19:17.
+
+### Por que o cofre não resolve isto
+
+O cofre tem cópia (`guardada 19:13:16`) e **recusa restaurar em 401** — e a
+recusa está certa, não é excesso de zelo. `client.logout()` desfez o pareamento
+**no servidor do WhatsApp**. A credencial local virou papel sem valor: devolvê-la
+ao banco só faria o vigia acreditar que há sessão e adiar para sempre o QR que
+resolve. É exatamente o "cofre envenenado" que `restaurar` já sabia recusar.
+
+**Conclusão: escanear o QR agora é a ação correta.** É o primeiro momento nesta
+sequência em que ela é.
+
+### O que endurecer ANTES de escanear
+
+O risco real é o laço se repetir: parear → ressincronizar o histórico → estourar
+→ 408 → 401 de novo. Duas coisas reduzem isso, e nenhuma exige tocar na
+Evolution:
+
+**1. Dar espaço ao handshake** (só reinicia o `arka-api`). No `.env`:
+
+```
+WHATSAPP_LIMITE_CONNECTING_MS=900000
+```
+
+**2. Escanear com o celular já na mão.** Com `QRCODE_LIMIT: 3` e renovação a
+cada ~20s, a tela de QR dura **cerca de um minuto** antes de a Evolution chamar
+`logout()`. Abrir o QR e ir procurar o telefone é literalmente o que dispara o
+passo 5 da cascata. Se expirar, clique em "Gerar QR" de novo — aí sim sem
+consequência.
+
+O valor `3` continua certo pelo motivo pelo qual foi escolhido (uma tela de QR
+esquecida aberta com `30` provoca logout depois de ~10 minutos). O que este
+incidente mostra é que ele também limita o tempo de uma **reconexão automática
+que passou a emitir QR sozinha** — cenário que não existia quando o número foi
+decidido, porque a reconexão nunca chegava a esse ponto.
+
+### O que isto muda na recomendação sobre recriar o contêiner
+
+Sobe de "operação de janela" para **"operação de janela com risco real de
+perder o pareamento"** — não pelo motivo que a auditoria anterior deu (a
+credencial sobrevive ao `docker compose up`, e sobreviveu), mas pela cascata
+acima, que começa numa ressincronização que não cabe no prazo.
+
+Antes da próxima recriação da Evolution, considerar nesta ordem: subir
+`WHATSAPP_LIMITE_CONNECTING_MS` **antes**, ter o celular à mão, e aceitar que o
+pareamento pode ter de ser refeito.
