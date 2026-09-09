@@ -198,6 +198,22 @@ services:
       WEBHOOK_EVENTS_MESSAGES_UPSERT: "true"
       WEBHOOK_EVENTS_CONNECTION_UPDATE: "true"
       WEBHOOK_EVENTS_MESSAGES_UPDATE: "true"
+      # ── O QUE O CLIENTE FAZ COM UMA MENSAGEM JA ENVIADA ────────────────────
+      #
+      # O webhook GLOBAL entrega exatamente o que este mapa autoriza -- e so ele
+      # vale nesta topologia (o por instancia nao e usado; ver o painel em
+      # Integracao WhatsApp). Sem a linha abaixo, o "apagar para todos" do
+      # cliente NAO SAI da Evolution: nao ha payload, nao ha requisicao, nao ha
+      # log, e nenhuma linha de codigo nossa muda isso. O tratamento do lado de
+      # ca ja existe (whatsapp.service.extrairProtocolo) e ficava ocioso.
+      #
+      # MESSAGES_EDITED vai junto por precaucao: em parte das versoes a edicao
+      # viaja dentro de MESSAGES_UPDATE (ja ligado acima), em outras tem evento
+      # proprio. Variavel que a versao instalada nao conhece e simplesmente
+      # ignorada, entao deixar as duas custa nada e evita uma segunda recriacao
+      # do conteiner -- que aqui NAO e rotina, ver docs/auditoria-eventos-do-cliente.md.
+      WEBHOOK_EVENTS_MESSAGES_DELETE: "true"
+      WEBHOOK_EVENTS_MESSAGES_EDITED: "true"
       # QR emitido sem ninguem ter pedido = o pareamento se perdeu. E o unico
       # aviso confiavel de que so o celular resolve, e sem ele o painel fica
       # eternamente em "Conectando" sem contar a ninguem o que falta.

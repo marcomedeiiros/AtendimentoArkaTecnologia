@@ -58,6 +58,11 @@ services:
       WEBHOOK_EVENTS_CONNECTION_UPDATE: "true"
       # ACK de entrega/leitura -- alimenta os risquinhos das mensagens enviadas.
       WEBHOOK_EVENTS_MESSAGES_UPDATE: "true"
+      # Editar e "apagar para todos" feitos pelo cliente no aparelho. Sem estas,
+      # o evento nao sai da Evolution e o tratamento daqui nunca roda. Mesma
+      # lista do compose de producao -- divergir faz o local mentir sobre a VM.
+      WEBHOOK_EVENTS_MESSAGES_DELETE: "true"
+      WEBHOOK_EVENTS_MESSAGES_EDITED: "true"
       # Manda a midia ja em base64 no evento (imagem/audio chegam prontos).
       WEBHOOK_BASE64: "true"
     volumes:
