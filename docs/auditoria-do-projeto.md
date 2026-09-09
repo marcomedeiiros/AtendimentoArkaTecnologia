@@ -257,3 +257,48 @@ responde "alguma coisa está quebrada" em vez de "a sua mudança quebrou algo" �
 essa diferença é a única coisa que separa uma suíte de testes de uma decoração.
 São quatro correções, três delas triviais, e uma delas é um crash que está em
 produção agora.
+
+---
+
+## 10. Feito — o baseline está verde (2026-09-09)
+
+```
+TUDO PASSOU.      58 scripts · 1.646 checagens
+```
+
+**Pela primeira vez.** O que cada uma das quatro era, de verdade:
+
+| | Diagnóstico | Natureza |
+| --- | --- | --- |
+| `rankings` | `map(completudeDe)` passando o índice como checklist | **defeito de código** — crash em produção |
+| `ranking-equipe` | semeadura de zerados só olhava a equipe configurada | **defeito de código** — regra não cumprida |
+| `responsivo` (1/2) | `min-h-[60vh]` na tela de erro | **defeito de código** — corta no celular |
+| `responsivo` (2/2) | `xl:min-w-[330px]` acusado como largura teimosa | **falso positivo da regra** |
+| `fotos-contatos` | asserção casava o texto exato do `onError` | **falso positivo da asserção** |
+
+Ou seja: **três eram defeitos reais, dois eram os testes acusando errado.** E os
+dois falsos positivos tinham a mesma forma — travavam a **forma** do código em
+vez da **garantia**:
+
+* a regra de responsivo não sabia que uma largura prefixada com `xl:` só existe
+  acima de 1280px, onde 330px não estoura nada. "Corrigir" o `ModoTv` seria
+  decorar o código para calar o teste;
+* a asserção do avatar exigia `onError={() => setErroFoto(true)}` ao pé da letra.
+  O componente melhorou — passou a avisar quem o usa de que a URL morreu — e o
+  teste acusou falha num código melhor.
+
+Duas descobertas de brinde, que a suíte só revelou porque parou de esconder:
+
+* **o `ranking-equipe` chamava `limparPainel`/`restaurarPainel` com a assinatura
+  antiga**, de antes de a limpeza separar sede de externo. O autor caía no lugar
+  do ranking, o serviço recusava com "Ranking desconhecido" — e a exceção
+  abortava a própria limpeza do teste, deixando lixo no banco para a execução
+  seguinte;
+* **a seção do PDF nunca poderia passar em máquina nenhuma.** Ela depende de um
+  documento de cliente que não mora no repositório, e reprovava como falha.
+  Virou `PENDENTES` — visível no fim da execução, sem derrubar a suíte — com
+  `RANKINGS_PDF_EXEMPLO` para quem tiver a cópia. Ausência de insumo e defeito de
+  código pedem ações opostas.
+
+A partir de agora, um vermelho no `verificar-tudo.js` significa **uma coisa só**:
+a última mudança quebrou algo.
