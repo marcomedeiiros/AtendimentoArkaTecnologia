@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   MessageCircle, Power, QrCode, Loader2, RefreshCw, RotateCcw,
-  Trash2, Copy, Check, ShieldCheck, KeyRound, PowerOff
+  Trash2, Copy, Check, ShieldCheck, KeyRound
 } from 'lucide-react';
 import { EmojiIcon } from '../components/pages/EmojiIcon';
 import { useAppContext } from '../context/AppContext';
@@ -73,10 +73,6 @@ export default function WhatsAppPage() {
   // Evolution virar um pedido de reescanear com a sessão intacta no banco.
   const podeMostrarQr = detalhes?.podeMostrarQr === true;
   const evolutionOnline = detalhes ? detalhes.evolutionOnline !== false : null;
-  // A Evolution RESPONDEU, e a resposta foi 404: o nome não existe mais nela.
-  // Fato separado de `evolutionOnline` de propósito -- as duas situações pedem
-  // ações opostas de quem está olhando a tela.
-  const instanciaInexistente = detalhes?.instanciaInexistente === true;
   const reconectando =
     detalhes?.situacao === 'DISCONNECTED_TEMPORARY' ||
     detalhes?.situacao === 'RECONNECTING';
@@ -444,27 +440,9 @@ export default function WhatsAppPage() {
                 {status.toUpperCase()}
               </span>
             </div>
-            {/* O NÚMERO NÃO VEM DA SESSÃO -- vem da linha `Instance` no banco da
-                Evolution (`ownerJid`/`profileName`), que sobrevive ao logout.
-                Ele é o registro do ÚLTIMO pareamento, não prova de conexão viva:
-                encerrar a sessão não o apaga, e só "Excluir Instância" apagaria.
-
-                Escondê-lo seria pior -- é justamente este número que se digita
-                em "Código por telefone". Então ele fica, com o rótulo dizendo a
-                verdade: "Número" quando conectado, "Último número pareado"
-                quando não. Sem isso a tela parecia dizer que o WhatsApp estava
-                de pé enquanto o badge ao lado dizia DESCONECTADO. */}
             <p className="text-xs text-slate-400 mt-0.5">
               {detalhes?.perfil?.numero
-                ? (
-                  <>
-                    {conectado ? 'Número: ' : 'Último número pareado: '}
-                    <span className={`font-mono ${conectado ? 'text-slate-300' : 'text-slate-500'}`}>
-                      +{detalhes.perfil.numero}
-                    </span>
-                    {detalhes.perfil.nome ? ` • ${detalhes.perfil.nome}` : ''}
-                  </>
-                )
+                ? <>Número: <span className="font-mono text-slate-300">+{detalhes.perfil.numero}</span>{detalhes.perfil.nome ? ` • ${detalhes.perfil.nome}` : ''}</>
                 : 'Nenhum número pareado'}
               {conectado && <> • Online há {formatarDuracao(detalhes?.conectadoDesde)}</>}
             </p>
@@ -574,7 +552,7 @@ export default function WhatsAppPage() {
               <p className="text-[10px] text-slate-400 mt-2 leading-relaxed text-left">
                 No celular: <strong>WhatsApp › Aparelhos conectados › Conectar um aparelho ›
                 Conectar com número de telefone</strong> e digite o código. Ele expira em
-                poucos minutos — se vencer, peça outro.
+                poucos minutos se vencer, peça outro.
               </p>
             </div>
           )}
@@ -588,34 +566,6 @@ export default function WhatsAppPage() {
               alguém reparear um número que não precisava ser repareado. */}
           {conectado ? (
             <EmojiIcon name="check" label="WhatsApp Pareado & Sincronizado" size="sm" />
-          ) : instanciaInexistente ? (
-            /* ── A INSTÂNCIA NÃO EXISTE MAIS (404) ────────────────────────────
-               Era daqui que saía o beco sem saída: o servidor tratava o 404 da
-               Evolution como "não consegui falar com ela", então esta tela caía
-               no bloco "Evolution API indisponível" logo abaixo -- mandando
-               verificar um container que estava de pé -- e o botão "Gerar QR"
-               nem aparecia, porque `podeMostrarQr` exige `evolutionOnline`.
-               Sem caminho pela tela, só restava desconectar tudo e parear do
-               zero na mão.
-
-               `gerarQr` já sabe tratar o 404 (pergunta antes de recriar, porque
-               recriar é destrutivo). O que faltava era chegar até ele -- e dizer
-               ao operador o que houve, em vez de deixá-lo descobrir no diálogo
-               de confirmação. */
-            <div className="text-xs max-w-xs">
-              <p className="font-bold text-falha-400 mb-1">A instância não existe mais</p>
-              <p className="text-slate-400 mb-3">
-                A Evolution respondeu, e a resposta foi que
-                {' '}<strong className="font-mono">{detalhes?.instancia || instancia}</strong>{' '}
-                não existe mais nela &mdash; então <strong>reconectar não resolve</strong>.
-                Recriar começa do zero: será preciso escanear o QR Code para parear o
-                WhatsApp outra vez.
-              </p>
-              <button onClick={() => gerarQr()} disabled={carregandoQr}
-                className="px-3 py-2 rounded-xl font-bold text-xs inline-flex items-center gap-2 bg-ativo hover:bg-ativo-400 text-slate-950 transition-all disabled:opacity-60">
-                <QrCode size={14} /> Recriar instância e gerar QR
-              </button>
-            </div>
           ) : podeMostrarQr ? (
             <div className="flex items-center gap-2 flex-wrap justify-center">
               <button onClick={() => gerarQr()} disabled={carregandoQr}
@@ -628,7 +578,7 @@ export default function WhatsAppPage() {
               {/* PAREAR SEM ESTAR NA FRENTE DO CELULAR.
                   O WhatsApp aceita 8 caracteres digitados no aparelho no lugar
                   da câmera. Quem está fora da empresa dita o código por
-                  telefone para quem está lá — era esta a saída que faltava
+                  telefone para quem está lá era esta a saída que faltava
                   quando o pareamento caiu e o telefone ficou longe. */}
               <button onClick={pedirCodigo} disabled={carregandoQr} className={botaoSec}
                 title="Receber um código de 8 caracteres para ditar a quem está com o celular">
@@ -640,7 +590,7 @@ export default function WhatsAppPage() {
               <p className="font-bold mb-1">Evolution API indisponível</p>
               <p className="text-slate-400">
                 O painel não conseguiu falar com a Evolution. Isso <strong>não</strong> é
-                perda de pareamento e não se resolve com QR Code &mdash; verifique o
+                perda de pareamento e não se resolve com QR Code verifique o
                 container e a rede. A sessão do WhatsApp continua guardada.
               </p>
             </div>
@@ -650,7 +600,7 @@ export default function WhatsAppPage() {
                 {reconectando ? 'Reconectando automaticamente' : 'Sessão preservada'}
               </p>
               <p>
-                A sessão do WhatsApp continua válida &mdash; o servidor religa
+                A sessão do WhatsApp continua válida o servidor religa
                 sozinho, sem QR Code.
                 {detalhes?.tentativaReconexao ? ` Tentativa ${detalhes.tentativaReconexao}.` : ''}
               </p>
@@ -742,30 +692,13 @@ export default function WhatsAppPage() {
                 {detalhes?.tentativaReconexao ? `#${detalhes.tentativaReconexao}` : '-'}
               </div>
 
-              {/* ── O MOTIVO TEM DATA, E SEM ELA A LINHA MENTIA ──────────────
-                  A Evolution grava `disconnectionReasonCode` na queda e NUNCA o
-                  apaga quando a instância volta. Esta linha lia só o número, e
-                  por isso anunciava "401 (logout real)" ao lado de `CONNECTED`
-                  -- o motivo de um logout que já tinha sido resolvido com um QR
-                  novo. Quem lia o painel concluía, com razão, que a sessão
-                  estava inválida.
-
-                  `motivoDesconexaoVigente` é quem responde "isso é de agora?".
-                  Não sendo, o número continua visível (ele responde "por que
-                  caiu da última vez?") mas rotulado como histórico. */}
-              <div className="text-slate-500" title="statusCode do Baileys que fechou o socket. 401/403 = logout real; o resto é queda temporária. A Evolution não limpa esse campo na volta, então ele pode ser de uma queda anterior — o rótulo diz qual é o caso.">
+              <div className="text-slate-500" title="statusCode do Baileys que fechou o socket. 401/403 = logout real; o resto é queda temporária.">
                 Motivo da desconexão
               </div>
               <div className="text-slate-200 font-mono">
-                {detalhes?.motivoDesconexao == null
-                  ? '-'
-                  : `${detalhes.motivoDesconexao}${
-                      detalhes.motivoDesconexaoVigente === false
-                        ? ' (queda anterior, já resolvida)'
-                        : [401, 403].includes(detalhes.motivoDesconexao)
-                          ? ' (logout real)'
-                          : ' (temporário)'
-                    }`}
+                {detalhes?.motivoDesconexao != null
+                  ? `${detalhes.motivoDesconexao}${[401, 403].includes(detalhes.motivoDesconexao) ? ' (logout real)' : ' (temporário)'}`
+                  : '-'}
               </div>
 
               <div className="text-slate-500" title="Cópia da credencial do pareamento, usada quando a Evolution a apaga numa queda temporária.">
