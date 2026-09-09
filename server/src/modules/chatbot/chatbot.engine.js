@@ -4153,6 +4153,42 @@ class ChatbotEngine {
         if (!retrato && !original) retrato = { desconhecida: true };
       }
 
+      // ── A RESPOSTA DIGITADA TAMBEM CITA A PERGUNTA ──────────────────────────
+      //
+      // Tocar num botao volta com o menu citado, porque o WhatsApp manda o
+      // `contextInfo` junto da resposta de botao. DIGITAR a mesma resposta nao:
+      // para o WhatsApp, escrever "1" e uma mensagem nova, nao uma resposta a
+      // nada -- nao ha `contextInfo` para extrair. A mesma conversa ficava com
+      // metade das respostas citando e a outra metade solta, sem que nada na
+      // tela explicasse a diferenca.
+      //
+      // Aqui a ligacao nao e extraida do payload: ela e LIDA DO NOSSO ESTADO. A
+      // sessao do chatbot registra que ha uma pergunta em aberto
+      // (`aguardando`), e a pergunta e a ultima coisa que o bot disse no fio.
+      // "Esta mensagem responde aquela" e fato, e nao deducao pela aparencia --
+      // e a distincao que separa isto da regra que o projeto segue em
+      // `encaminhada` e no retrato citado, onde inventar seria mentir.
+      //
+      // NUNCA GANHA DA CITACAO REAL: so entra quando o WhatsApp nao mandou nada
+      // (`!respondendoAId && !retrato`). O que o cliente citou de fato, no
+      // aparelho dele, continua sendo o que a bolha mostra.
+      //
+      // `derivada` fica gravado no metadata para a origem do retrato nunca se
+      // perder: hoje a bolha desenha os dois iguais (foi a decisao), mas sem a
+      // marca nao haveria como voltar atras nem como auditar depois.
+      //
+      // Escopo estreito de proposito -- `origem: "bot"` em ultimaPerguntaDoBot.
+      // Fazer o mesmo para pergunta de ATENDENTE seria adivinhacao: ali nao ha
+      // estado nenhum dizendo que uma pergunta foi feita.
+      if (!respondendoAId && !retrato && sessaoAberta?.ativo && sessaoAberta.aguardando) {
+        const pergunta = await this.deps.conversaRepository.ultimaPerguntaDoBot?.(conversa.id);
+        const textoPergunta = String(pergunta?.texto || "").trim();
+        if (pergunta?.id && textoPergunta) {
+          respondendoAId = pergunta.id;
+          retrato = { texto: textoPergunta.slice(0, 500), derivada: true };
+        }
+      }
+
       // `metadata` foi montado antes de consultarmos o banco (ele e usado
       // tambem no caminho da conversa NOVA, onde nao ha original possivel).
       // Aqui o retrato final entra -- e pode ser o do banco ou a marca de

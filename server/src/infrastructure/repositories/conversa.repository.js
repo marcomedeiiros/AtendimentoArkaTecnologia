@@ -853,6 +853,32 @@ class ConversaRepository {
     });
   }
 
+  /**
+   * A ULTIMA COISA QUE O BOT DISSE neste fio -- a pergunta que ficou em aberto.
+   *
+   * Serve a citacao DERIVADA: quando o cliente digita a resposta (em vez de
+   * tocar no botao), o WhatsApp nao manda `contextInfo` nenhum -- para ele,
+   * digitar "1" e uma mensagem nova, nao uma resposta. Mas a sessao do chatbot
+   * sabe que havia pergunta em aberto (`aguardando`), e a pergunta e isto aqui.
+   *
+   * `origem: "bot"` e nao "equipe": a ligacao so e um FATO quando quem perguntou
+   * foi a automacao, que registra a espera no banco. "O atendente perguntou algo
+   * e o cliente respondeu" nao tem estado nenhum por tras -- seria adivinhacao,
+   * e e justamente o que este projeto nao faz.
+   *
+   * Mensagem apagada fica de fora: citar o que virou "Mensagem apagada" na tela
+   * mostraria uma caixa vazia.
+   */
+  async ultimaPerguntaDoBot(conversaId) {
+    const msg = await prisma.mensagem.findFirst({
+      where: { conversaId, origem: "bot" },
+      orderBy: { criadoEm: "desc" },
+      select: { id: true, texto: true, metadata: true },
+    });
+    if (!msg || msg.metadata?.deletada) return null;
+    return { id: msg.id, texto: msg.texto };
+  }
+
   // Usado para descartar webhooks reentregues pela Evolution API.
   existeMensagemWa(waMessageId) {
     if (!waMessageId) return Promise.resolve(null);

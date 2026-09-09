@@ -70,12 +70,18 @@ function mapMensagem(m) {
     // `desconhecida` e o terceiro estado, e ele precisava existir: sem ele,
     // "o cliente respondeu algo que nao temos" era indistinguivel de "o
     // cliente nao respondeu nada" -- as duas chegavam na tela como ausencia.
+    // `derivada` distingue o retrato que veio do APARELHO daquele que a Central
+    // montou a partir da pergunta que o bot deixou em aberto (ver
+    // ultimaPerguntaDoBot). Hoje a bolha desenha os dois iguais -- foi a decisao
+    // --, mas sem o campo a origem se perderia, e "o cliente citou isto" viraria
+    // indistinguivel de "isto responde a pergunta acima".
     citacao:
       meta.citacao?.texto || meta.citacao?.tipo || meta.citacao?.desconhecida
         ? {
             texto: meta.citacao.texto || null,
             tipo: meta.citacao.tipo || null,
             desconhecida: !!meta.citacao.desconhecida,
+            derivada: !!meta.citacao.derivada,
           }
         : null,
     editada: !!m.editadaEm,
