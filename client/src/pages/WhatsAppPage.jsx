@@ -559,7 +559,7 @@ export default function WhatsAppPage() {
                   Clique em <strong>Gerar QR</strong> para criar o código
                 </span>
                 <span className="text-[10px] opacity-60 leading-tight">
-                  Ele vale cerca de 1 minuto — tenha o celular em mãos
+                  Ele vale cerca de 1 minuto tenha o celular em mãos
                 </span>
               </div>
             )}

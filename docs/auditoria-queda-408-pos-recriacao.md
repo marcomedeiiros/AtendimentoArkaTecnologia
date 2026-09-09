@@ -5,7 +5,7 @@
 **Estado no momento do registro:** `RECONNECTING`, tentativa #3, motivo 408,
 **cofre da sessão guardado às 19:11:16**.
 
-Isto não é um bug novo. É o **custo previsto de recriar o contêiner** — e a
+Isto não é um bug novo. É o **custo previsto de recriar o contêiner**   e a
 parte que eu não previ na auditoria anterior.
 
 ---
@@ -15,7 +15,7 @@ parte que eu não previ na auditoria anterior.
 | Hora | O quê |
 | --- | --- |
 | ~19:09:50 | contêiner da Evolution recriado (as duas variáveis novas entram) |
-| 19:09:56 | `CONNECTED TO WHATSAPP`, wuid `552721030070` — **pareou** |
+| 19:09:56 | `CONNECTED TO WHATSAPP`, wuid `552721030070`   **pareou** |
 | 19:09:56 | `Timeout in AwaitingInitialSync, forcing state to Online and flushing buffer` |
 | 19:09:56 | `timed out waiting for message` |
 | 19:11:16 | o cofre salva a credencial |
@@ -28,7 +28,7 @@ O pareamento **funcionou**. O que não terminou foi a **sincronização inicial*
 ## 2. A causa: recriar o contêiner custa uma ressincronização inteira
 
 O contêiner novo sobe com o Baileys do zero. A credencial está no volume e no
-Postgres — por isso o `CONNECTED` saiu em seis segundos —, mas o **histórico**
+Postgres   por isso o `CONNECTED` saiu em seis segundos  , mas o **histórico**
 não está em memória, e a instância foi criada com `syncFullHistory` ligado
 (`env.js:146`, ligado por padrão; o comentário em `evolution-api.client` já
 avisa que isso "estica bastante o tempo em `connecting`").
@@ -50,7 +50,7 @@ Tudo o que foi construído depois do incidente de 03/09 funcionou:
   (`whatsapp.reconexao.js:66`). O painel escreveu "408 (temporário)" porque essa
   é a leitura correta, não um otimismo;
 * **o cofre guardou a credencial às 19:11:16.** Se a Evolution apagar a
-  credencial no ramo destrutivo, `cofre.restaurar` a devolve — e recusa fazê-lo
+  credencial no ramo destrutivo, `cofre.restaurar` a devolve   e recusa fazê-lo
   em 401/403, para não adiar um QR que fosse legítimo;
 * **o QR não foi oferecido.** Quem decide é o servidor (`podeMostrarQr`), e a
   tela mostrou o escudo com "a sessão continua válida" em vez do código. Era
@@ -73,8 +73,8 @@ vigiada em vez de suposta:
 * o nosso vigia considera `connecting` normal por **3 minutos**
   (`LIMITE_CONNECTING_MS`) e, passado isso, **derruba o socket e religa**.
 
-Se a ressincronização completa demorar mais que três minutos — e depois de uma
-recriação de contêiner ela pode demorar —, o vigia mata o handshake no meio, o
+Se a ressincronização completa demorar mais que três minutos   e depois de uma
+recriação de contêiner ela pode demorar  , o vigia mata o handshake no meio, o
 Baileys reporta 408, e o ciclo recomeça do zero. Cada volta descarta o progresso
 da anterior.
 
@@ -97,7 +97,7 @@ docker compose -f docker-compose.prod.yml logs --since 15m api | grep -iE "hands
 ## 5. Se for o laço: dar mais espaço ao handshake
 
 `LIMITE_CONNECTING_MS` é lido de `process.env` **na API**, não na Evolution.
-Mudá-lo reinicia só o `arka-api` — a Evolution fica intocada, e não há novo
+Mudá-lo reinicia só o `arka-api`   a Evolution fica intocada, e não há novo
 risco de pareamento.
 
 No `.env` da VM:
@@ -111,7 +111,7 @@ docker compose -f docker-compose.prod.yml up -d api
 ```
 
 Quinze minutos de folga para a sincronização terminar. Depois que a instância
-voltar a `open` e ficar estável, o valor pode voltar ao padrão — ou ficar, que
+voltar a `open` e ficar estável, o valor pode voltar ao padrão   ou ficar, que
 o custo dele é só demorar mais para agir num handshake genuinamente travado.
 
 **O que NÃO fazer:** clicar em "Reconectar" repetidamente. Cada clique reinicia
@@ -122,14 +122,14 @@ numa espera infinita.
 
 ## 6. O que ficou faltando na auditoria anterior
 
-`auditoria-eventos-do-cliente.md` §4 avisou do risco de recriar o contêiner —
+`auditoria-eventos-do-cliente.md` §4 avisou do risco de recriar o contêiner  
 mas avisou do risco **errado**. Falou de perda de credencial (que não
 aconteceu: o pareamento sobreviveu e o cofre está de pé) e não falou do custo
 que de fato apareceu: **a ressincronização completa do histórico, e o 408 que
 ela produz.**
 
 A recomendação "faça fora do horário de atendimento" continua certa. A razão
-estava incompleta: não é só pelo risco de precisar de um QR — é porque a
+estava incompleta: não é só pelo risco de precisar de um QR   é porque a
 instância fica instável por vários minutos **mesmo quando tudo dá certo**.
 
 Fica registrado para a próxima vez que alguém precisar tocar naquele contêiner:
@@ -147,11 +147,11 @@ Quatro minutos depois do registro acima, o painel mudou de `RECONNECTING` para
 
 ### A cascata, elo por elo
 
-1. **408** — a sincronização inicial estoura (§2);
+1. **408**   a sincronização inicial estoura (§2);
 2. na 2.4.0, 408 está no ramo destrutivo do Baileys: a Evolution roda
    `cleaningUp()` e **apaga a credencial** do banco dela;
 3. sem credencial, a instância não tem o que reconectar e começa a **emitir QR**;
-4. o Baileys renova o QR a cada ~20s e `QRCODE_LIMIT` é **3** — cerca de um
+4. o Baileys renova o QR a cada ~20s e `QRCODE_LIMIT` é **3**   cerca de um
    minuto;
 5. ao estourar o limite, a Evolution chama `client.logout()`
    (`monitor.service.ts:435`), que **remove o aparelho do lado do WhatsApp**;
@@ -161,7 +161,7 @@ O tempo bate: 408 às ~19:11, QR emitido, 401 às ~19:17.
 
 ### Por que o cofre não resolve isto
 
-O cofre tem cópia (`guardada 19:13:16`) e **recusa restaurar em 401** — e a
+O cofre tem cópia (`guardada 19:13:16`) e **recusa restaurar em 401**   e a
 recusa está certa, não é excesso de zelo. `client.logout()` desfez o pareamento
 **no servidor do WhatsApp**. A credencial local virou papel sem valor: devolvê-la
 ao banco só faria o vigia acreditar que há sessão e adiar para sempre o QR que
@@ -185,19 +185,19 @@ WHATSAPP_LIMITE_CONNECTING_MS=900000
 **2. Escanear com o celular já na mão.** Com `QRCODE_LIMIT: 3` e renovação a
 cada ~20s, a tela de QR dura **cerca de um minuto** antes de a Evolution chamar
 `logout()`. Abrir o QR e ir procurar o telefone é literalmente o que dispara o
-passo 5 da cascata. Se expirar, clique em "Gerar QR" de novo — aí sim sem
+passo 5 da cascata. Se expirar, clique em "Gerar QR" de novo   aí sim sem
 consequência.
 
 O valor `3` continua certo pelo motivo pelo qual foi escolhido (uma tela de QR
 esquecida aberta com `30` provoca logout depois de ~10 minutos). O que este
 incidente mostra é que ele também limita o tempo de uma **reconexão automática
-que passou a emitir QR sozinha** — cenário que não existia quando o número foi
+que passou a emitir QR sozinha**   cenário que não existia quando o número foi
 decidido, porque a reconexão nunca chegava a esse ponto.
 
 ### O que isto muda na recomendação sobre recriar o contêiner
 
 Sobe de "operação de janela" para **"operação de janela com risco real de
-perder o pareamento"** — não pelo motivo que a auditoria anterior deu (a
+perder o pareamento"**   não pelo motivo que a auditoria anterior deu (a
 credencial sobrevive ao `docker compose up`, e sobreviveu), mas pela cascata
 acima, que começa numa ressincronização que não cabe no prazo.
 
