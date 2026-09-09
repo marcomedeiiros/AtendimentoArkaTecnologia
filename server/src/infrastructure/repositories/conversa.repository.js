@@ -668,17 +668,28 @@ class ConversaRepository {
     return msg;
   }
 
-  // A mensagem ALVO de uma reacao. `waMessageId` e unico no schema, entao
-  // `findUnique` basta -- nao ha ambiguidade possivel.
-  findMensagemPorWaId(waMessageId) {
-    return prisma.mensagem.findUnique({ where: { waMessageId } });
-  }
-
   // Nao rebaixa o status: um "entregue" atrasado nao pode apagar um "lida".
   async atualizarStatusPorWaId(waMessageId, status) {
     const ordem = { enviando: 0, enviada: 1, entregue: 2, lida: 3 };
     const msg = await prisma.mensagem.findUnique({ where: { waMessageId } });
     if (!msg) return null;
+    // ── RISQUINHO SO EXISTE NO QUE SAIU DAQUI ───────────────────────────────
+    //
+    // O `waMessageId` nao distingue quem enviou: TODA mensagem recebida tambem
+    // guarda o dela (e o `key.id` do webhook, e e ele que impede o webhook
+    // reentregue de rodar o fluxo duas vezes). Logo, um ACK do WhatsApp casava
+    // igualmente bem com a bolha do CLIENTE -- e gravava "entregue"/"lida" nela.
+    //
+    // O sintoma na tela era estranho o bastante para custar uma investigacao:
+    // os risquinhos apareciam na mensagem do cliente e SUMIAM quando o atendente
+    // respondia. Os dois caminhos ate a bolha discordavam -- o patch de tempo
+    // real (`mensagem:status`) nao passa pelo mapper, e o retrato completo passa,
+    // e `mapMensagem` ja anulava o status de quem tem `origem: "cliente"`.
+    //
+    // Recusar aqui e o que impede o dado sujo de existir. As outras duas guardas
+    // (o `fromMe` no webhook e a bolha) cobrem o mesmo caso mais cedo e mais
+    // tarde; esta e a que protege o BANCO, que e o unico estado permanente.
+    if (msg.origem === "cliente") return null;
     // ACK que nao muda nada (repetido ou atrasado) devolve `conversa: null`:
     // sem mudanca real nao ha o que emitir, e emitir mesmo assim era gastar uma
     // leitura completa da conversa para reenviar o status que o front ja tinha.
@@ -864,12 +875,29 @@ class ConversaRepository {
    * unique de `waMessageId` e GLOBAL, e casar sem escopo permitiria, em teoria,
    * uma citacao apontar para mensagem de outro fio -- que apareceria na bolha
    * como se fosse desta conversa.
+   *
+   * ── HOUVE DUAS DESTAS, E A SEGUNDA APAGAVA A PRIMEIRA ─────────────────────
+   *
+   * Este metodo esteve declarado DUAS vezes na mesma classe: uma para a reacao
+   * (um argumento, `findUnique`, linha inteira) e outra para a citacao (esta).
+   * Em corpo de classe a ultima vence, em silencio -- sem erro, sem aviso, sem
+   * lint. A de reacao simplesmente deixou de existir, e quem a chamava passou a
+   * receber um recorte SEM `metadata`.
+   *
+   * O estrago nao era no risquinho: `_processarReacao` le `msg.metadata`, aplica
+   * a reacao e GRAVA o resultado por cima do campo inteiro. Com `undefined` na
+   * entrada, o metadata saia contendo so as reacoes -- o cliente reagir 👍 numa
+   * foto apagava a foto (e a citacao, e o selo de encaminhada) da Central.
+   *
+   * Por isso agora e UM metodo so, com o `select` que serve aos dois usos: com
+   * dois, bastava alguem mexer em um para a divergencia voltar calada.
    */
   findMensagemPorWaId(waMessageId, conversaId = null) {
     if (!waMessageId) return Promise.resolve(null);
     return prisma.mensagem.findFirst({
       where: { waMessageId: String(waMessageId), ...(conversaId ? { conversaId } : {}) },
-      select: { id: true, origem: true, texto: true },
+      // `conversaId` e `metadata` sao da reacao; `origem` e `texto`, da citacao.
+      select: { id: true, conversaId: true, origem: true, texto: true, metadata: true },
     });
   }
 

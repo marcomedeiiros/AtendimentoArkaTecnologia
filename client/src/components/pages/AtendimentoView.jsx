@@ -3189,11 +3189,23 @@ function PainelChat({
           // O conteúdo do horário, montado UMA vez: a bolha de texto o desenha
           // duas (uma visível no canto, uma invisível reservando o espaço), e
           // as duas precisam ter exatamente a mesma largura. Ver a nota lá.
+          //
+          // O RISQUINHO SÓ EXISTE NO QUE SAIU DAQUI, e a bolha precisa saber
+          // disso sozinha. O retrato completo já vem com `status: null` para
+          // quem é do cliente (ver mapMensagem), mas o PATCH de tempo real
+          // (`mensagem:status`) não passa pelo mapper -- ele vai do event-bus
+          // direto para `aplicarStatusMensagem`. Era por aí que os ✓✓ apareciam
+          // na bolha do cliente e sumiam no retrato seguinte, quando o atendente
+          // respondia: um caminho pintava, o outro apagava.
+          //
+          // As outras duas guardas estão no servidor (o `fromMe` no webhook e a
+          // `origem` em `atualizarStatusPorWaId`). Esta é a última, e é a única
+          // que vale para um dado que já esteja sujo no banco.
           const relogio = (
             <>
               {m.editada && <span className="italic">editada</span>}
               <span>{m.hora}</span>
-              <StatusMensagem status={m.status} escuro />
+              {m.de !== 'cliente' && <StatusMensagem status={m.status} escuro />}
             </>
           );
           return (

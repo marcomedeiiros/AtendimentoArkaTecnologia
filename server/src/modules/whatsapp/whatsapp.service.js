@@ -278,6 +278,129 @@ class WhatsAppService {
     }
   }
 
+  /**
+   * O `protocolMessage` do payload: EDICAO e "apagar para todos" do cliente.
+   *
+   * Nenhum dos dois e mensagem -- sao eventos SOBRE uma mensagem que ja existe,
+   * e por isso nao passam por `_processarMensagem`. Ate aqui nao passavam por
+   * lugar nenhum: chegavam, nao casavam com nada e morriam em silencio.
+   *
+   * O caso da EDICAO era o pior dos dois, e nao pela etiqueta que faltava: o
+   * cliente corrigia o e-mail, o numero de serie ou o "nao" que virou "sim", via
+   * a correcao no aparelho dele, e a Central seguia mostrando a versao ANTERIOR
+   * sem nenhum sinal de que existia outra. O atendente lia o texto errado
+   * acreditando estar lendo o certo.
+   *
+   * A BUSCA E ESTRUTURAL pelo mesmo motivo de `_contextos`: o Baileys aninha
+   * isto em `editedMessage.message.protocolMessage`, a Evolution as vezes
+   * achata para `message.protocolMessage`, e o evento chega ora como
+   * `messages.update`, ora como `messages.upsert`. Casar por caminho fixo era
+   * apostar numa forma que ja mudou entre versoes.
+   *
+   * O `type` vem como nome ou como numero, conforme a versao (o enum do Baileys
+   * traz REVOKE = 0 e MESSAGE_EDIT = 14).
+   */
+  extrairProtocolo(payload) {
+    const achados = [];
+    this._coletarProtocolos(payload?.data || payload, achados);
+    for (const p of achados) {
+      const alvo = p.key?.id || p.key?.ID || null;
+      if (!alvo) continue;
+      // Nome ("REVOKE") ou numero (0), e o numero as vezes chega como string.
+      const cru = p.type;
+      const tipo =
+        cru != null && String(cru).trim() !== "" && !Number.isNaN(Number(cru))
+          ? Number(cru)
+          : String(cru || "").toUpperCase();
+
+      if (tipo === "MESSAGE_EDIT" || tipo === 14) {
+        // O conteudo novo vem embrulhado como uma mensagem comum, entao quem le
+        // e o mesmo `extrairTexto` de sempre -- inclusive para legenda de midia.
+        const nova = p.editedMessage?.message || p.editedMessage || null;
+        const texto = nova ? this.extrairTexto({ message: nova }) : null;
+        if (texto) return { acao: "editar", waMessageId: String(alvo), texto };
+        // Editou algo que nao sabemos ler (midia sem legenda, por exemplo):
+        // melhor nao tocar na bolha do que substituir o texto por vazio.
+        continue;
+      }
+
+      if (tipo === "REVOKE" || tipo === 0) {
+        return { acao: "apagar", waMessageId: String(alvo) };
+      }
+    }
+    return null;
+  }
+
+  _coletarProtocolos(no, achados, profundidade = 0) {
+    if (!no || typeof no !== "object" || profundidade > 6) return;
+    if (Array.isArray(no)) {
+      for (const item of no) this._coletarProtocolos(item, achados, profundidade + 1);
+      return;
+    }
+    // A assinatura, e nao a posicao: `type` + `key` e o que faz um
+    // `protocolMessage`. Sem `key` nao ha alvo, e sem alvo nao ha o que fazer.
+    if (no.protocolMessage && typeof no.protocolMessage === "object") {
+      achados.push(no.protocolMessage);
+    }
+    for (const [chave, valor] of Object.entries(no)) {
+      // `quotedMessage` fica de fora pela mesma razao de `_coletarContextos`:
+      // ali dentro mora OUTRA mensagem, e o que ela carrega nao e sobre esta.
+      if (chave === "protocolMessage" || chave === "quotedMessage") continue;
+      if (!valor || typeof valor !== "object") continue;
+      this._coletarProtocolos(valor, achados, profundidade + 1);
+    }
+  }
+
+  /**
+   * Aplica a edicao / o "apagar para todos" que o CLIENTE fez no aparelho.
+   *
+   * Alvo desconhecido e caso NORMAL, nao erro -- igual a reacao: o cliente pode
+   * editar algo anterior a integracao, ou fora do que foi importado. Sai em
+   * silencio, sem criar bolha nenhuma.
+   */
+  async _processarProtocolo({ acao, waMessageId, texto }) {
+    const alvo = await conversaRepository.findMensagemPorWaId(waMessageId);
+    if (!alvo) {
+      logger.debug("Evento de protocolo sobre mensagem desconhecida", { acao, waMessageId });
+      return { recebido: true, processado: false, motivo: "protocolo_sem_alvo" };
+    }
+
+    if (acao === "editar") {
+      // Texto identico: a Evolution reentrega webhooks, e regravar carimbaria
+      // `editadaEm` de novo e subiria a versao da conversa a toa.
+      if (String(alvo.texto || "") === texto) {
+        return { recebido: true, processado: false, motivo: "edicao_repetida" };
+      }
+      await conversaRepository.editarMensagem(alvo.id, texto);
+    } else {
+      if (alvo.metadata?.deletada) {
+        return { recebido: true, processado: false, motivo: "apagar_repetido" };
+      }
+      await conversaRepository.marcarMensagemApagada(alvo.id);
+    }
+
+    await this._emitirConversa(alvo.conversaId);
+    logger.info("Evento de protocolo do cliente aplicado", {
+      acao,
+      conversaId: alvo.conversaId,
+      waMessageId,
+    });
+    return { recebido: true, processado: true, motivo: acao, conversaId: alvo.conversaId };
+  }
+
+  /**
+   * Empurra a CAUDA da conversa para a tela. Mesmo formato do motor: o front
+   * reconstroi o resto pelo merge (ver findByIdParaEvento e mesclarConversa).
+   */
+  async _emitirConversa(conversaId) {
+    try {
+      const conversa = await conversaRepository.findByIdParaEvento(conversaId);
+      if (conversa) bus.emitConversa(mapConversa({ ...conversa, __parcial: true }));
+    } catch (error) {
+      logger.warn("Falha ao emitir conversa no SSE", { conversaId, message: error.message });
+    }
+  }
+
   _contextos(payload) {
     // ── POR QUE A BUSCA E ESTRUTURAL, E NAO UMA LISTA DE LUGARES ────────────
     //
@@ -480,6 +603,17 @@ class WhatsAppService {
       return this._processarQrcode(instance);
     }
 
+    // EDICAO E "APAGAR PARA TODOS" DO CLIENTE, antes de tudo o que trata
+    // mensagem e ACK.
+    //
+    // Fica aqui em cima porque o mesmo evento chega pelas DUAS portas conforme a
+    // versao -- ora `messages.update`, ora `messages.upsert` -- e cada porta o
+    // descartava por um motivo diferente: o ACK saia em "ack_sem_dados" (nao ha
+    // status), e a mensagem, em "dados_incompletos" (nao ha texto nem midia).
+    // Dois silencios distintos para o mesmo evento perdido.
+    const protocolo = this.extrairProtocolo(body);
+    if (protocolo) return this._processarProtocolo(protocolo);
+
     if (event === "messages.update" || event === "MESSAGES_UPDATE") {
       return this._processarAck(body);
     }
@@ -599,6 +733,20 @@ class WhatsAppService {
     const data = body?.data || body;
     const waMessageId = data?.key?.id || data?.keyId || null;
     const bruto = String(data?.status || data?.update?.status || "").toUpperCase();
+
+    // ACK DE MENSAGEM QUE NAO E NOSSA: nao ha risquinho a atualizar.
+    //
+    // O WhatsApp tambem emite `messages.update` para mensagens RECEBIDAS (o
+    // recibo de leitura que o proprio aparelho manda). Como toda mensagem
+    // recebida guarda o `key.id` no mesmo campo que o nosso envio, o ACK casava
+    // com a bolha do cliente e carimbava "entregue"/"lida" nela. Ver a guarda
+    // gemea em `atualizarStatusPorWaId` -- esta so evita a ida ao banco.
+    //
+    // `=== false` de proposito: `fromMe` ausente nao e "nao e minha". Nesse caso
+    // a decisao fica com o repositorio, que sabe a `origem` da linha.
+    if (data?.key?.fromMe === false) {
+      return { recebido: true, processado: false, motivo: "ack_de_mensagem_recebida" };
+    }
 
     const MAPA = {
       PENDING: "enviando",
