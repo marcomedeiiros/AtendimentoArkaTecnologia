@@ -272,6 +272,11 @@ const VERIFICACOES = [
     resumo: "uma por pessoa, o metadata da midia intacto e a reacao que chega",
   },
   {
+    arquivo: "verificar-mensagem-recebida.js",
+    titulo: "O que chega do cliente",
+    resumo: "risquinho so no que sai daqui, reacao sem apagar midia, edicao e apagar do aparelho",
+  },
+  {
     arquivo: "verificar-mensagens-antigas.js",
     titulo: "Ver mensagens antigas",
     resumo: "o clique pula OS vazia e sempre revela algo",
