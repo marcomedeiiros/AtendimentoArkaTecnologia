@@ -67,6 +67,36 @@ services:
       DATABASE_URL: "file:/data/arka.db"
       # Nome do servico na rede do compose -- nao e localhost aqui dentro.
       EVOLUTION_API_URL: "http://evolution-api:8080"
+
+      # ── AS DUAS CHAVES DA ESTABILIDADE DO PAREAMENTO ────────────────────────
+      #
+      # Estavam so no `.env` da VM, escritas a mao no meio de um incidente. Um
+      # `git clone` novo, uma VM nova ou um `.env` recriado perdiam as duas em
+      # silencio -- e a perda so aparece HORAS depois, como pareamento caido.
+      # Declaradas aqui elas viajam com o repositorio.
+      #
+      # 1. SEM SINCRONIZACAO COMPLETA DO HISTORICO.
+      #
+      # Com ela ligada, toda instancia recem-criada (e todo conteiner recriado)
+      # recebe o historico inteiro de uma vez. Em 09/09/2026 isso estourou o
+      # `AwaitingInitialSync` do Baileys, virou 408, e o 408 na 2.4.0 entra no
+      # ramo que APAGA a credencial -- de onde saiu, em cascata, um logout real
+      # (ver docs/auditoria-queda-408-pos-recriacao.md).
+      #
+      # O preco e a agenda de contatos nao vir toda de uma vez. E barato: a
+      # sincronizacao acontece com o uso, e conversa nova traz o contato junto.
+      EVOLUTION_SYNC_FULL_HISTORY: "false"
+      #
+      # 2. TEMPO QUE `connecting` AINDA E NORMAL, antes do vigia religar.
+      #
+      # O padrao do codigo (3 min) foi calibrado para uma queda comum, em que
+      # nao ha ressincronizacao nenhuma. Depois de recriar o conteiner ou parear
+      # de novo, o handshake demora mais -- e o vigia matava o handshake no meio,
+      # produzindo o 408 que ele deveria evitar. 15 min cobrem o pior caso.
+      #
+      # O custo de um valor alto e so demorar mais para agir num handshake
+      # genuinamente travado, que e raro e visivel no painel.
+      WHATSAPP_LIMITE_CONNECTING_MS: "900000"
       # QUANTOS PROXIES ESTAO NA FRENTE, de fora para dentro.
       #
       # Sao DOIS: Cloudflare (termina o HTTPS) e o nginx do container `web`.

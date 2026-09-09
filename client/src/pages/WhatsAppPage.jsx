@@ -620,6 +620,29 @@ export default function WhatsAppPage() {
                 container e a rede. A sessão do WhatsApp continua guardada.
               </p>
             </div>
+          ) : detalhes?.situacao === 'UNKNOWN' ? (
+            /* NÃO SABEMOS -- e dizer "sessão preservada" aqui é afirmar o que
+               não se sabe.
+
+               `UNKNOWN` é o veredito do vigia quando a Evolution não respondeu à
+               consulta de diagnóstico. Isso NÃO é a mesma coisa que
+               `evolutionOnline === false` (o ramo acima): as duas consultas são
+               separadas, e uma pode falhar com a outra respondendo. Foi assim
+               que, em 09/09/2026, o painel escreveu "A sessão do WhatsApp
+               continua válida" no meio de um pareamento perdido -- e o operador
+               ficou esperando um religamento que não viria.
+
+               A tela alterna entre este estado e o veredito real conforme as
+               consultas respondem ou não; o que ela não pode é escolher a versão
+               otimista. */
+            <div className="text-xs text-slate-400 max-w-xs">
+              <p className="font-bold text-espera-400 mb-1">Estado não confirmado</p>
+              <p>
+                A Evolution não respondeu à última verificação, então não dá para
+                dizer se a sessão está de pé. O servidor continua tentando e a
+                tela se corrige sozinha na próxima consulta.
+              </p>
+            </div>
           ) : (
             <div className="text-xs text-slate-400 max-w-xs">
               <p className="font-bold text-espera-400 mb-1">
