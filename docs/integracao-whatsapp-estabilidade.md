@@ -1,6 +1,6 @@
 # Integração WhatsApp: o que a mantém de pé, e o que a derruba
 
-**Data:** 2026-09-09 · **Escopo:** a integração inteira — Evolution, pareamento,
+**Data:** 2026-09-09 · **Escopo:** a integração inteira  Evolution, pareamento,
 webhook, vigia de reconexão e o painel.
 **Por que existe:** em um único dia, três operações que pareciam inofensivas
 derrubaram o atendimento por mais de uma hora. Nenhuma delas era um bug. Todas
@@ -27,7 +27,7 @@ sobraram delas.
 
 Regra que atravessa tudo: **a tela nunca decide nada.** Ela mostra o veredito do
 servidor. Toda vez que essa regra foi quebrada no passado, o resultado foi um QR
-pedido à toa — e QR pedido à toa é a forma mais rápida de perder o pareamento.
+pedido à toa  e QR pedido à toa é a forma mais rápida de perder o pareamento.
 
 ---
 
@@ -41,7 +41,7 @@ WhatsApp → Baileys → [1] WEBHOOK_EVENTS_* do contêiner → [2] eventos assi
                           pela instância → webhook → Arka
 ```
 
-Ligar só o primeiro **não muda nada** — e o primeiro é o caro (exige recriar o
+Ligar só o primeiro **não muda nada**  e o primeiro é o caro (exige recriar o
 contêiner), enquanto o segundo é o barato (uma chamada HTTP pelo painel).
 
 Foi exatamente esse engano que custou a recriação do contêiner de 09/09, e com
@@ -69,7 +69,7 @@ assinatura da instância. Quase sempre o problema está no filtro barato.
 
 Os dois primeiros agora estão **declarados no `docker-compose.prod.yml`**, não
 mais só num `.env` escrito à mão. Isso importa mais do que parece: eles estavam
-só no `.env` da VM, e um clone novo os perderia em silêncio — a perda só
+só no `.env` da VM, e um clone novo os perderia em silêncio  a perda só
 apareceria horas depois, como pareamento caído.
 
 ### A cascata que esses números produzem quando desalinhados
@@ -90,14 +90,14 @@ Cada seta é rápida. Do primeiro 408 ao 401 foram **seis minutos** em 09/09.
 
 ## 4. O que fazer, por estado
 
-O painel mostra a `Situação` em Saúde da Conexão. Ela é o que manda — não a cor
+O painel mostra a `Situação` em Saúde da Conexão. Ela é o que manda  não a cor
 do badge nem a impressão de quem olha.
 
 | Situação | O que é | O que fazer |
 | --- | --- | --- |
 | `CONNECTED` | tudo certo | nada |
 | `RECONNECTING` / `DISCONNECTED_TEMPORARY` | caiu, credencial intacta | **esperar.** A escada termina em 60s e nunca desiste |
-| `LOGGED_OUT` (401/403) | o WhatsApp removeu o aparelho | parear de novo — é o único caso em que o QR é a resposta |
+| `LOGGED_OUT` (401/403) | o WhatsApp removeu o aparelho | parear de novo  é o único caso em que o QR é a resposta |
 | `UNKNOWN` | a Evolution não respondeu | esperar a próxima consulta. Não é queda do WhatsApp |
 | `INSTÂNCIA NÃO EXISTE` (404) | o nome sumiu na Evolution | recriar pelo "Gerar QR", que oferece a criação |
 
@@ -117,7 +117,7 @@ do badge nem a impressão de quem olha.
 ## 5. Recriar o contêiner da Evolution: quando e como
 
 **É operação de janela, com risco real de reparear.** Não pelo motivo intuitivo
-(a credencial sobrevive ao `docker compose up` — e sobreviveu), mas pela cascata
+(a credencial sobrevive ao `docker compose up`  e sobreviveu), mas pela cascata
 do §3: o contêiner novo sobe o Baileys do zero, e a ressincronização é o
 estopim.
 
@@ -130,7 +130,7 @@ Faça **só** quando não houver outro caminho, e nesta ordem:
 3. fora do horário de atendimento, com o celular por perto;
 4. `docker compose -f docker-compose.prod.yml up -d evolution-api`;
 5. acompanhar `logs -f evolution-api` até `CONNECTED TO WHATSAPP`, e depois
-   ficar de olho por ~15 min — o perigo é **depois** do CONNECTED, não durante.
+   ficar de olho por ~15 min  o perigo é **depois** do CONNECTED, não durante.
 
 Para **subir código nosso** (que é o caso comum), não recrie a Evolution:
 
@@ -178,9 +178,9 @@ E o que **não** pode aparecer:
 
 | Linha | Significa |
 | --- | --- |
-| `Webhook da Evolution assina MENOS eventos do que deveria` | filtro 2 desatualizado (§2) — conserto pelo painel |
+| `Webhook da Evolution assina MENOS eventos do que deveria` | filtro 2 desatualizado (§2)  conserto pelo painel |
 | `WEBHOOK AUSENTE` | nenhuma mensagem vai entrar |
-| `Webhook recebido e nao roteado` | chegou um evento que o roteador não conhece — o nome está na linha |
+| `Webhook recebido e nao roteado` | chegou um evento que o roteador não conhece  o nome está na linha |
 | `LOGOUT REAL DETECTADO` | 401/403 vigente: só QR resolve |
 
 Verificação de rotina, quando quiser confirmar que nada regrediu:
@@ -201,13 +201,13 @@ Nem tudo aqui está resolvido. O que segue em aberto, com o tamanho real:
 * **`QRCODE_LIMIT: 3` é uma faca de dois gumes.** Ele protege de uma tela de QR
   esquecida aberta, mas converte uma reconexão automática que passou a emitir QR
   num logout de verdade em ~1 minuto. Revisar esse número exige recriar o
-  contêiner, então fica para a próxima janela — não vale abrir uma só por isso;
+  contêiner, então fica para a próxima janela  não vale abrir uma só por isso;
 * **A citação de resposta em texto não chega** (regressão da Evolution, issue
   #2065). Não há conserto deste lado, e trocar de versão custaria os botões do
   menu. Ver `auditoria-mensagens-recebidas.md` §7;
 * **`connectionState` às vezes responde 200 sem o campo `state`.** Nosso código
   lê isso como `close`. Foi observado logo após excluir a instância, e se
-  corrigiu sozinho na consulta seguinte — mas é um estado que a leitura não
+  corrigiu sozinho na consulta seguinte  mas é um estado que a leitura não
   distingue de uma queda real;
 * **A Evolution 2.4.0 não tem para onde subir.** A 2.3.7 é a última estável e
   quebra os botões do menu. Ficamos onde estamos, conscientemente.
@@ -220,5 +220,5 @@ Toda queda de hoje começou com uma mudança pequena, correta e bem-intencionada
 aplicada sem olhar o que ela desencadeava dois passos adiante.
 
 O que teria evitado as três: **antes de tocar na Evolution, perguntar se o
-conserto não está do lado barato** — na assinatura da instância, num `.env` da
+conserto não está do lado barato**  na assinatura da instância, num `.env` da
 API, num rebuild de contêiner nosso. Na esmagadora maioria das vezes, está.

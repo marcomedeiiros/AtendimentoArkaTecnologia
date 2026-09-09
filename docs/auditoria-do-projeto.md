@@ -1,6 +1,6 @@
 # Auditoria do projeto
 
-**Data:** 2026-09-09 · **Escopo:** o sistema inteiro — servidor, painel, banco,
+**Data:** 2026-09-09 · **Escopo:** o sistema inteiro   servidor, painel, banco,
 rede de testes, segurança e operação.
 **Método:** leitura do código e **execução** da suíte. Tudo o que está marcado
 como **medido** foi rodado, não deduzido.
@@ -25,7 +25,7 @@ quebrar.*
 
 Em uma frase: é uma **central de atendimento por WhatsApp** com chatbot de fluxo
 configurável, fila por setor, OS por atendimento, pesquisa de satisfação,
-rankings de equipe e relatórios — servindo uma operação real, hoje, em produção.
+rankings de equipe e relatórios   servindo uma operação real, hoje, em produção.
 
 ---
 
@@ -44,7 +44,7 @@ rankings de equipe e relatórios — servindo uma operação real, hoje, em prod
 **O motor é o risco estrutural do projeto.** Quase 5.000 linhas num arquivo só,
 e é o arquivo onde um erro é mais caro: ele fala com o cliente sem ninguém
 olhando. Os dois defeitos de citação corrigidos hoje nasceram ali, e o segundo
-nasceu **de dentro do próprio arquivo** — a lista certa
+nasceu **de dentro do próprio arquivo**   a lista certa
 (`AGUARDA_RESPOSTA_DO_CLIENTE`) estava setenta linhas acima da condição errada.
 
 Isso não é argumento para reescrevê-lo. É argumento para que toda mudança nele
@@ -56,15 +56,15 @@ venha com cenário, o que hoje acontece.
 
 O projeto não usa framework de teste. Usa scripts próprios que rodam contra o
 código real e imprimem `OK`/`FALHA`. Na prática funciona melhor do que parece:
-eles são legíveis, contam o *porquê* de cada checagem, e travam comportamento —
+eles são legíveis, contam o *porquê* de cada checagem, e travam comportamento  
 não implementação.
 
 **Cobertura real, por área** (pelos nomes dos 58 scripts):
 
-* **forte** — chatbot e fluxos, WhatsApp/webhook, conversas e mídia,
+* **forte**   chatbot e fluxos, WhatsApp/webhook, conversas e mídia,
   transferência, inatividade, horário, rankings, segurança;
-* **fraca** — agenda, campanhas/envio em massa, helpdesk, preferências, n8n;
-* **ausente** — nada cobre o painel administrativo de configurações.
+* **fraca**   agenda, campanhas/envio em massa, helpdesk, preferências, n8n;
+* **ausente**   nada cobre o painel administrativo de configurações.
 
 O ponto cego que mais custou hoje já foi corrigido: nada exercitava o
 **repositório de verdade** no caminho da reação, e por isso um defeito que
@@ -72,13 +72,13 @@ apagava mídia sobreviveu meses sob um teste que dizia cobri-lo.
 
 ---
 
-## 4. As quatro falhas antigas — agora diagnosticadas
+## 4. As quatro falhas antigas   agora diagnosticadas
 
 `verificar-tudo.js` **não passa 100%**, e há tempos se convive com "as 4 falhas
 pré-existentes" sem que ninguém soubesse o que eram. **Medido hoje, uma por
 uma:**
 
-### 4.1 · `verificar-rankings.js` — CRASH, e é bug de produção
+### 4.1 · `verificar-rankings.js`   CRASH, e é bug de produção
 
 ```
 TypeError: itens.filter is not a function
@@ -92,7 +92,7 @@ A causa é uma armadilha clássica de JavaScript:
 const mediaCompletude = media(entregues.map(completudeDe));
 ```
 
-`Array.prototype.map` chama a função com **três** argumentos — `(item, índice,
+`Array.prototype.map` chama a função com **três** argumentos   `(item, índice,
 array)`. E a assinatura é:
 
 ```js
@@ -101,12 +101,12 @@ function completudeDe(m, itens = ITENS_MAPEAMENTO)
 
 Então `itens` recebe o **índice** (um número), o valor padrão nunca entra, e
 `0.filter(...)` estoura. **Não é artefato de teste:** isso quebra sempre que
-existir ao menos um relatório entregue — ou seja, o ranking externo está
+existir ao menos um relatório entregue   ou seja, o ranking externo está
 derrubado em produção desde que a linha existe.
 
 E há um segundo defeito escondido no mesmo lugar: o checklist configurável
 (`itensEmVigor`, calculado na linha 185, dez linhas acima) **é ignorado**. Mesmo
-sem o crash, a conta usaria a lista de fábrica, não a que a empresa configurou —
+sem o crash, a conta usaria a lista de fábrica, não a que a empresa configurou  
 que é a razão de ser da funcionalidade.
 
 **Correção (uma linha):**
@@ -115,7 +115,7 @@ que é a razão de ser da funcionalidade.
 const mediaCompletude = media(entregues.map((m) => completudeDe(m, itensEmVigor)));
 ```
 
-### 4.2 · `verificar-ranking-equipe.js` — quem tem zero ponto some da Visão Geral
+### 4.2 · `verificar-ranking-equipe.js`   quem tem zero ponto some da Visão Geral
 
 Oito checagens falhando, todas do mesmo tronco:
 
@@ -125,7 +125,7 @@ FALHA Carla com undefined pts (so tem OS aberta, nada fechado)
 FALHA quem so tem OS ABERTA tambem tem ultimo atendimento
 ```
 
-Quem ainda não fechou nenhuma OS **não entra na lista** — e quando entra, entra
+Quem ainda não fechou nenhuma OS **não entra na lista**   e quando entra, entra
 com `undefined pts` em vez de `0`. O teste é explícito sobre a intenção: entra
 todo mundo, e a "parede" (o pódio público) é que corta no top 3. Hoje a
 exclusão acontece antes, no cálculo.
@@ -133,17 +133,17 @@ exclusão acontece antes, no cálculo.
 Efeito prático: um atendente novo, ou alguém que só tem atendimento em curso,
 desaparece do painel da equipe.
 
-### 4.3 · `verificar-fotos-contatos.js` — o avatar não cai para o boneco
+### 4.3 · `verificar-fotos-contatos.js`   o avatar não cai para o boneco
 
 ```
 FALHA o Avatar cai para o boneco quando o link da foto vence (403)
 ```
 
 A URL da foto de perfil do WhatsApp expira. Quando expira, o `<img>` falha e
-falta o `onError` que troca pelo boneco — a lista de contatos fica com ícones
+falta o `onError` que troca pelo boneco   a lista de contatos fica com ícones
 quebrados. Cosmético, mas visível para todo mundo o tempo todo.
 
-### 4.4 · `verificar-responsivo.js` — duas violações pontuais
+### 4.4 · `verificar-responsivo.js`   duas violações pontuais
 
 ```
 components/LimiteDeErro.jsx:52   min-h-[60vh]      -> use dvh, ou prefixe com sm:
@@ -160,7 +160,7 @@ não cumprida** (4.2) e **duas são de uma linha** (4.3, 4.4).
 
 Conviver com um baseline vermelho tem um custo que já se pagou hoje: quando a
 suíte sempre falha, ninguém confia nela para dizer se **a sua** mudança quebrou
-algo — e a pergunta "isto é meu ou é antigo?" tem que ser respondida na mão toda
+algo   e a pergunta "isto é meu ou é antigo?" tem que ser respondida na mão toda
 vez. **Zerar as quatro é a maior devolução por esforço que este projeto tem
 disponível.**
 
@@ -181,7 +181,7 @@ O que existe, e é mais do que a média para um projeto deste porte:
 | `validate` | Zod na borda |
 | `seguranca-headers.conf` | CSP e cabeçalhos no nginx |
 
-E o princípio está escrito e seguido: **a autorização nunca confia no front** —
+E o princípio está escrito e seguido: **a autorização nunca confia no front**  
 o token é validado no banco, e a rota reconfere o que o DTO já filtrou.
 
 Cinco scripts cobrem isso (`exposicao`, `escopo-dados`, `sessao-cookie`,
@@ -192,7 +192,7 @@ O que está afirmado acima é o que a estrutura e a suíte mostram, não o resul
 de um pentest.
 
 Um ponto operacional que **não** é código: o `deploy/backup.sh` avisa que
-`enviar-backup.sh` não está configurado — nenhuma cópia sai da VM. Foi discutido
+`enviar-backup.sh` não está configurado   nenhuma cópia sai da VM. Foi discutido
 e há snapshot externo da VM, então está coberto por outro caminho.
 
 ---
@@ -202,14 +202,14 @@ e há snapshot externo da VM, então está coberto por outro caminho.
 A integração WhatsApp ganhou documento próprio
 (`integracao-whatsapp-estabilidade.md`), e o resumo que interessa aqui é:
 
-* **o que protege funcionou** — o cofre da sessão, a classificação de 401 vs 408,
+* **o que protege funcionou**   o cofre da sessão, a classificação de 401 vs 408,
   a escada de reconexão que não desiste, o servidor decidindo se o QR aparece;
 * **o que faltava era observabilidade.** Três pontos cegos foram fechados hoje:
   evento não roteado agora sai em `info`, o diagnóstico de payload cobre todos os
   eventos, e a conferência do boot **compara** a assinatura em vez de só
-  imprimi-la — foi ela que revelou, na primeira execução, que a instância
+  imprimi-la   foi ela que revelou, na primeira execução, que a instância
   assinava três eventos enquanto o contêiner autorizava cinco;
-* **o que ainda depende de disciplina** — recriar o contêiner da Evolution é
+* **o que ainda depende de disciplina**   recriar o contêiner da Evolution é
   operação de janela, e a cascata que ela pode disparar (408 → credencial
   apagada → QR automático → `QRCODE_LIMIT` → logout real) leva seis minutos.
 
@@ -221,7 +221,7 @@ A integração WhatsApp ganhou documento próprio
 | --- | --- | --- | --- |
 | 1 | **Ranking externo quebrado** (§4.1) | 1 linha | página derrubada em produção |
 | 2 | **Zero ponto some da Visão Geral** (§4.2) | pequeno | atendente novo invisível |
-| 3 | **Avatar e responsivo** (§4.3, §4.4) | 3 linhas | baseline verde — e a suíte volta a valer |
+| 3 | **Avatar e responsivo** (§4.3, §4.4) | 3 linhas | baseline verde   e a suíte volta a valer |
 | 4 | Cobertura ausente em agenda, campanhas, helpdesk | médio | áreas sem rede |
 | 5 | `chatbot.engine.js` com 4.987 linhas | alto | risco estrutural, sem urgência |
 | 6 | `QRCODE_LIMIT: 3` | exige janela | converte queda em logout real |
@@ -237,30 +237,30 @@ Os três primeiros somam **menos de um dia** e transformam o baseline de
 Vale dizer, porque uma auditoria só de problemas mente por omissão:
 
 * **as decisões estão escritas onde acontecem.** Os comentários deste projeto
-  explicam *por que*, não *o que* — e contam o incidente que originou a regra.
+  explicam *por que*, não *o que*   e contam o incidente que originou a regra.
   Isso é raro, e é o que permitiu diagnosticar em minutos coisas que levariam
   horas;
-* **as invariantes do domínio são explícitas e respeitadas** — conversa nasce sem
+* **as invariantes do domínio são explícitas e respeitadas**   conversa nasce sem
   setor, quem responde é quem atende, o CNPJ liga conversa e empresa pelo banco,
   o evento de tempo real leva só a cauda, nunca se deduz pela aparência;
 * **o histórico do cliente é intocável.** Apagar é sempre soft-delete; excluir a
   instância da Evolution não afeta o banco da Central;
 * **a suíte de 58 scripts é um ativo**, não burocracia. Ela pegou hoje um defeito
-  que apagava mídia — depois de ganhar o cenário que faltava.
+  que apagava mídia   depois de ganhar o cenário que faltava.
 
 ---
 
 ## 9. A recomendação, em uma frase
 
 **Zere o baseline.** Enquanto `verificar-tudo.js` terminar em vermelho, ele
-responde "alguma coisa está quebrada" em vez de "a sua mudança quebrou algo" — e
+responde "alguma coisa está quebrada" em vez de "a sua mudança quebrou algo"   e
 essa diferença é a única coisa que separa uma suíte de testes de uma decoração.
 São quatro correções, três delas triviais, e uma delas é um crash que está em
 produção agora.
 
 ---
 
-## 10. Feito — o baseline está verde (2026-09-09)
+## 10. Feito   o baseline está verde (2026-09-09)
 
 ```
 TUDO PASSOU.      58 scripts · 1.646 checagens
@@ -270,33 +270,33 @@ TUDO PASSOU.      58 scripts · 1.646 checagens
 
 | | Diagnóstico | Natureza |
 | --- | --- | --- |
-| `rankings` | `map(completudeDe)` passando o índice como checklist | **defeito de código** — crash em produção |
-| `ranking-equipe` | semeadura de zerados só olhava a equipe configurada | **defeito de código** — regra não cumprida |
-| `responsivo` (1/2) | `min-h-[60vh]` na tela de erro | **defeito de código** — corta no celular |
+| `rankings` | `map(completudeDe)` passando o índice como checklist | **defeito de código**   crash em produção |
+| `ranking-equipe` | semeadura de zerados só olhava a equipe configurada | **defeito de código**   regra não cumprida |
+| `responsivo` (1/2) | `min-h-[60vh]` na tela de erro | **defeito de código**   corta no celular |
 | `responsivo` (2/2) | `xl:min-w-[330px]` acusado como largura teimosa | **falso positivo da regra** |
 | `fotos-contatos` | asserção casava o texto exato do `onError` | **falso positivo da asserção** |
 
 Ou seja: **três eram defeitos reais, dois eram os testes acusando errado.** E os
-dois falsos positivos tinham a mesma forma — travavam a **forma** do código em
+dois falsos positivos tinham a mesma forma   travavam a **forma** do código em
 vez da **garantia**:
 
 * a regra de responsivo não sabia que uma largura prefixada com `xl:` só existe
   acima de 1280px, onde 330px não estoura nada. "Corrigir" o `ModoTv` seria
   decorar o código para calar o teste;
 * a asserção do avatar exigia `onError={() => setErroFoto(true)}` ao pé da letra.
-  O componente melhorou — passou a avisar quem o usa de que a URL morreu — e o
+  O componente melhorou   passou a avisar quem o usa de que a URL morreu   e o
   teste acusou falha num código melhor.
 
 Duas descobertas de brinde, que a suíte só revelou porque parou de esconder:
 
 * **o `ranking-equipe` chamava `limparPainel`/`restaurarPainel` com a assinatura
   antiga**, de antes de a limpeza separar sede de externo. O autor caía no lugar
-  do ranking, o serviço recusava com "Ranking desconhecido" — e a exceção
+  do ranking, o serviço recusava com "Ranking desconhecido"   e a exceção
   abortava a própria limpeza do teste, deixando lixo no banco para a execução
   seguinte;
 * **a seção do PDF nunca poderia passar em máquina nenhuma.** Ela depende de um
   documento de cliente que não mora no repositório, e reprovava como falha.
-  Virou `PENDENTES` — visível no fim da execução, sem derrubar a suíte — com
+  Virou `PENDENTES`   visível no fim da execução, sem derrubar a suíte   com
   `RANKINGS_PDF_EXEMPLO` para quem tiver a cópia. Ausência de insumo e defeito de
   código pedem ações opostas.
 
