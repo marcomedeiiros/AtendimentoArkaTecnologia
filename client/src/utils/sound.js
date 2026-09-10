@@ -1,19 +1,17 @@
 /**
- * OS DOIS SONS DO PAINEL, e por que eles sao dois.
+ * OS DOIS SONS DO PAINEL, um por TELA.
  *
- *   ARKACHATMonitoramento.mp3   CHAMADO NOVO entrando na fila. Alto, para ser
- *                               ouvido de longe: ele existe para a TV na parede.
- *   blipnotificacaomensagem.mp3 MENSAGEM chegando no dia a dia da Central.
- *                               Discreto, porque toca muitas vezes por turno.
+ *   ARKACHATMonitoramento.mp3   o som do MODO TV. Alto, para ser ouvido de
+ *                               longe: ele existe para a tela na parede.
+ *   blipnotificacaomensagem.mp3 o som da CENTRAL, no dia a dia de quem esta no
+ *                               chat. Discreto, porque toca muitas vezes.
  *
- * Antes havia UM som para as duas coisas, disparado no mesmo lugar
- * (AppContext), sem distincao de tela nem de momento do atendimento: chamado
- * novo e a decima mensagem da mesma conversa soavam igual. Quem escutava nao
- * tinha como saber se precisava correr ou nao.
+ * Antes havia UM som para as duas telas. Quem escutava de longe nao tinha como
+ * saber se aquilo era da parede ou do computador de alguem.
  *
  * QUEM DECIDE QUAL TOCA NAO E ESTE ARQUIVO -- e o AppContext, que e o unico
- * lugar onde se sabe ao mesmo tempo (a) que chegou mensagem, (b) se a conversa
- * e nova e (c) se o Modo TV esta ligado. Aqui so ficam os canos.
+ * lugar onde se sabe se o Modo TV esta ligado. E a decisao e SO essa: uma tela,
+ * um som. Aqui so ficam os canos.
  *
  * ── POR QUE ESTE ARQUIVO E MAIS COMPLICADO DO QUE PARECE ────────────────────
  *
@@ -34,12 +32,12 @@
 // `audioInstancia`, um `fetch` no topo do modulo), e por isso o segundo som nao
 // tinha onde existir.
 const ARQUIVOS = {
-  chamadoNovo: '/ARKACHATMonitoramento.mp3',
+  monitoramento: '/ARKACHATMonitoramento.mp3',
   mensagem: '/blipnotificacaomensagem.mp3',
 };
 
 const sons = {
-  chamadoNovo: { buffer: null, elemento: null },
+  monitoramento: { buffer: null, elemento: null },
   mensagem: { buffer: null, elemento: null },
 };
 
@@ -100,7 +98,7 @@ export function desbloquearAudioGlobal() {
     if (ctx && ctx.state === 'suspended') {
       ctx.resume();
     }
-    const a = obterAudioElemento('mensagem') || obterAudioElemento('chamadoNovo');
+    const a = obterAudioElemento('mensagem') || obterAudioElemento('monitoramento');
     if (a) {
       a.volume = 0.01;
       const p = a.play();
@@ -128,9 +126,35 @@ if (typeof window !== 'undefined') {
   eventos.forEach(ev => window.addEventListener(ev, handler, { passive: true }));
 }
 
-/** CHAMADO NOVO na fila. Hoje so o Modo TV dispara este. */
-export function tocarSomChamadoNovo(volume = 1.0) {
-  tocarSom('chamadoNovo', volume);
+/** O som do MODO TV. So aquela tela dispara este. */
+export function tocarSomMonitoramento(volume = 1.0) {
+  tocarSom('monitoramento', volume);
+}
+
+/**
+ * O NAVEGADOR AINDA ESTA BLOQUEANDO O SOM?
+ *
+ * ── POR QUE ISTO PRECISA SER PERGUNTAVEL ───────────────────────────────────
+ *
+ * Navegador nao toca audio automatico antes de um GESTO na pagina. Numa TV de
+ * parede -- que fica aberta sozinha, e que recarrega ou volta de um deploy sem
+ * ninguem tocar nela -- esse gesto nunca acontece, e o alerta simplesmente nao
+ * sai. Nenhum ajuste de codigo muda isso: e regra do navegador.
+ *
+ * O problema nao e o bloqueio, e o SILENCIO. Da tela, "bloqueado" e
+ * "quebrado" sao a mesma coisa: nao sai som e nada explica. Foi exatamente essa
+ * a duvida que voltou varias vezes em 10/09/2026 -- e o codigo estava certo.
+ *
+ * Com isto exposto, o Modo TV pode DIZER que o som esta bloqueado e oferecer o
+ * clique que o destrava, em vez de deixar quem olha adivinhando.
+ *
+ * A resposta e honesta em vez de otimista: so responde "liberado" se o
+ * elemento de audio de fato tocou uma vez OU se o AudioContext esta `running`.
+ * Qualquer outra coisa e "nao sei se vai sair", e nao se anuncia como liberado.
+ */
+export function somBloqueado() {
+  if (audioDesbloqueado) return false;
+  return !(audioCtxGlobal && audioCtxGlobal.state === 'running');
 }
 
 /** MENSAGEM nova numa conversa. O som do dia a dia da Central. */

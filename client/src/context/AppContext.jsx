@@ -7,7 +7,7 @@
  */
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { EquipeAPI, FluxosAPI, ParceirosAPI, ConversasAPI, WhatsAppAPI, AuthAPI } from '../services/api';
-import { tocarSomChamadoNovo, tocarSomMensagem } from '../utils/sound';
+import { tocarSomMonitoramento, tocarSomMensagem } from '../utils/sound';
 import { notificar, estaOlhando, pedirPermissaoNoPrimeiroGesto } from '../utils/notificacao';
 import { mesclarConversa, aplicarStatusMensagem } from '../utils/mesclarConversa';
 import { useAuth } from './AuthContext';
@@ -599,10 +599,6 @@ export function AppProvider({ children }) {
     const anterior = ultimaMsgRef.current;
     if (anterior !== null) {
       const novas = [];
-      // CHAMADO NOVO x MENSAGEM EM CONVERSA CONHECIDA -- a distinção que decide
-      // qual som toca. Ela já estava disponível aqui e não era usada: uma
-      // conversa AUSENTE do retrato anterior é uma que a tela não tinha.
-      let houveChamadoNovo = false;
       conversas.forEach(c => {
         const marca = marcas[c.id];
         if (!marca) return;
@@ -610,7 +606,6 @@ export function AppProvider({ children }) {
         // transferida para este setor). Continua avisando, como antes.
         // Marca IGUAL = nada novo, mesmo que a lista de mensagens tenha crescido.
         if (anterior[c.id] === marca) return;
-        if (anterior[c.id] === undefined) houveChamadoNovo = true;
         const msgs = c.mensagens || [];
         const ultima = [...msgs].reverse().find(ehDoCliente);
         novas.push({
@@ -625,34 +620,35 @@ export function AppProvider({ children }) {
         });
       });
       if (novas.length > 0) {
-        // ── QUAL DOS DOIS SONS ───────────────────────────────────────────────
+        // ── QUAL DOS DOIS SONS: A TELA DECIDE, E NADA MAIS ───────────────────
         //
-        //                      chamado novo        mensagem em conversa conhecida
-        //   Modo TV ligado     Monitoramento       blip
-        //   Central (sem TV)   blip                blip
+        //   Modo TV ligado     ARKACHATMonitoramento
+        //   Central (sem TV)   blipnotificacaomensagem
         //
-        // O chamado NOVO é o único que muda de som, e ele é o mais alto de
-        // propósito: é o que precisa ser ouvido do outro lado da sala.
+        // É o que os nomes dos arquivos dizem, e o que foi pedido: um som para a
+        // tela de monitoramento na parede, outro para quem está no chat.
         //
-        // ── A REGRA ANTERIOR DEIXAVA O MODO TV MUDO, E ISSO ESTAVA ERRADO ────
+        // ── DUAS TENTATIVAS MINHAS ANTES DESTA, E POR QUE AS DUAS ERRARAM ────
         //
-        // Por uma passagem, o Modo TV ficava em SILÊNCIO para mensagem de
-        // conversa já conhecida. O argumento era que painel de parede não
-        // precisa blipar a cada mensagem de conversa em andamento. Ele
-        // contrariava o pedido original -- "quando o atendente atender o cliente
-        // começar a blipar" -- e, na prática, o Modo TV é justamente como a
-        // equipe monitora: mudo, ele deixa de avisar de conversa em andamento e
-        // foi lido como "o som do Modo TV parou de funcionar".
+        // 1. o Modo TV ficava em SILÊNCIO para conversa já conhecida, e só
+        //    tocava em chamado novo. Isso deixava a TV muda na maior parte do
+        //    tempo -- e silêncio decidido em código é indistinguível de defeito;
+        // 2. depois passou a tocar o BLIP para conversa conhecida e o
+        //    Monitoramento só para chamado novo. Continuava errado: na TV, o som
+        //    do Monitoramento praticamente não saía, porque chamado novo é o
+        //    caso raro.
         //
-        // Se algum dia o barulho incomodar numa TV sem operador, o caminho é um
-        // controle explícito naquela tela -- e não silêncio decidido aqui, que
-        // é indistinguível de defeito para quem está olhando.
+        // As duas versões nasceram de uma distinção que EU introduzi (chamado
+        // novo x conversa conhecida) e que ninguém pediu. A regra pedida sempre
+        // foi a de cima -- uma tela, um som --, e ela não precisa saber se a
+        // conversa é nova. Por isso `houveChamadoNovo` saiu daqui: condição que
+        // não decide nada é condição que volta a decidir errado.
         //
         // UM TOQUE POR RAJADA, não por mensagem: `novas` pode trazer várias
         // conversas na mesma passada, e cinco sons sobrepostos não informam mais
         // do que um. Era assim antes e continua.
-        if (modoTvRef.current && houveChamadoNovo) {
-          tocarSomChamadoNovo();
+        if (modoTvRef.current) {
+          tocarSomMonitoramento();
         } else {
           tocarSomMensagem();
         }

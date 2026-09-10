@@ -120,23 +120,26 @@ console.log("=== Aviso de mensagem nova ===");
   if (!/\}\s*else\s*\{\s*\n\s*tocarSomMensagem\(\);/.test(app)) {
     problemas.push("fora do Modo TV o som deixou de ser incondicional");
   }
-  if (!/tocarSomChamadoNovo\(\)/.test(app)) {
-    problemas.push("o Modo TV deixou de anunciar chamado novo");
-  }
-  // O MODO TV NAO PODE FICAR MUDO -- e ja ficou uma vez.
+  // ── UMA TELA, UM SOM: a regra e SO o Modo TV ────────────────────────────
   //
-  // Por uma passagem a regra era `if (modoTv) { if (chamadoNovo) toca; }`, e
-  // dentro do Modo TV mensagem de conversa conhecida nao produzia som nenhum.
-  // Foi relatado como "o som do Modo TV parou de funcionar", e a leitura estava
-  // certa: silencio decidido em codigo e indistinguivel de defeito.
+  // A escolha do som depende UNICAMENTE de qual tela esta aberta. Duas versoes
+  // anteriores minhas erraram aqui, e as duas pelo mesmo motivo -- uma condicao
+  // extra que ninguem pediu ("a conversa e nova?"):
   //
-  // A condicao COMBINADA e o que garante a cobertura: com
-  // `modoTv && chamadoNovo` num ramo, o `else` pega TODO o resto -- Modo TV com
-  // conversa conhecida incluido. A forma aninhada deixava um caso sem saida.
-  if (!/if \(modoTvRef\.current && houveChamadoNovo\)/.test(app)) {
+  //   1. `if (modoTv) { if (chamadoNovo) toca; }` -- deixava o Modo TV MUDO na
+  //      maior parte do tempo, e silencio e indistinguivel de defeito;
+  //   2. `if (modoTv && chamadoNovo) monitoramento; else blip;` -- na TV o som
+  //      do Monitoramento praticamente nao saia, porque chamado novo e raro.
+  //
+  // Por isso a checagem trava a condicao EXATA, sem `&&`: qualquer condicao a
+  // mais ali e o caminho de volta para os dois defeitos acima.
+  if (!/if \(modoTvRef\.current\) \{\s*\n\s*tocarSomMonitoramento\(\);\s*\n\s*\} else \{\s*\n\s*tocarSomMensagem\(\);/.test(app)) {
     problemas.push(
-      "a escolha do som deixou de ser uma condicao combinada -- Modo TV pode ter voltado a ficar mudo"
+      "a escolha do som deixou de ser SO a tela -- Modo TV toca Monitoramento, Central toca blip, sem condicao extra"
     );
+  }
+  if (/houveChamadoNovo/.test(app.replace(/\/\/[^\n]*/g, ""))) {
+    problemas.push("voltou a distincao 'chamado novo' na decisao do som (ela nunca foi pedida)");
   }
   if (/Notificações ligadas|Notificações bloqueadas|BellOff/.test(layout)) {
     problemas.push("o botao de ligar/desligar voltou para a barra lateral");

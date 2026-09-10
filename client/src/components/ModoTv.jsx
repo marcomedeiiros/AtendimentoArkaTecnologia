@@ -57,10 +57,11 @@
  * ninguem liderar por causa de uma unica estrela solta.
  */
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { Trophy, Star, Clock, Users, Inbox, Target, WifiOff, X, AlertCircle, UserCheck, Crown, Medal } from 'lucide-react';
+import { Trophy, Star, Clock, Users, Inbox, Target, WifiOff, VolumeX, X, AlertCircle, UserCheck, Crown, Medal } from 'lucide-react';
 import Portal from './Portal';
 import Avatar from './Avatar';
 import { DashboardAPI } from '../services/api';
+import { somBloqueado, desbloquearAudioGlobal, tocarSomMonitoramento } from '../utils/sound';
 
 const ATUALIZAR_MS = 30_000;
 
@@ -627,6 +628,26 @@ export default function ModoTv({ onFechar, fila = [] }) {
   const [erro, setErro] = useState(false);
   const [agora, setAgora] = useState(new Date());
 
+  // ── O SOM DESTA TELA, E SE ELE VAI SAIR ───────────────────────────────
+  //
+  // Perguntado por intervalo, e nao uma vez: o desbloqueio pode acontecer a
+  // qualquer momento (alguem passa e clica), e um estado calculado so na
+  // montagem deixaria o aviso na tela depois de o som ja estar liberado.
+  const [somMudo, setSomMudo] = useState(() => somBloqueado());
+  useEffect(() => {
+    const id = setInterval(() => setSomMudo(somBloqueado()), 3000);
+    return () => clearInterval(id);
+  }, []);
+
+  // O clique JA E o gesto que o navegador exige -- por isso o desbloqueio
+  // acontece aqui, e nao num efeito. E toca o som uma vez: sem ouvir, quem
+  // clicou nao tem como saber se funcionou, e a duvida continuaria de pe.
+  const liberarSom = useCallback(() => {
+    desbloquearAudioGlobal();
+    tocarSomMonitoramento();
+    setSomMudo(somBloqueado());
+  }, []);
+
   const carregar = useCallback(async () => {
     try {
       setDados(await DashboardAPI.painel());
@@ -726,6 +747,27 @@ export default function ModoTv({ onFechar, fila = [] }) {
               <span className="flex items-center gap-1.5 text-espera-400" style={T.apoio} title="Mostrando o último quadro recebido">
                 <WifiOff size={14} /> sem conexão
               </span>
+            )}
+            {/* ── O SOM ESTÁ BLOQUEADO, E A TELA PRECISA DIZER ────────────────
+                Navegador não toca áudio automático antes de um GESTO na página.
+                Numa TV de parede -- aberta sozinha, que recarrega ou volta de um
+                deploy sem ninguém tocar nela -- esse gesto nunca acontece, e o
+                alerta simplesmente não sai. Nenhum ajuste de código muda isso:
+                é regra do navegador.
+
+                O problema não é o bloqueio, é o SILÊNCIO: da tela, "bloqueado"
+                e "quebrado" são a mesma coisa. Esta é a única saída honesta --
+                dizer que está bloqueado e oferecer o clique que destrava. */}
+            {somMudo && (
+              <button
+                type="button"
+                onClick={liberarSom}
+                title="O navegador bloqueia som automático até alguém interagir com a página. Clique para liberar."
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-espera/15 border border-espera/40 text-espera-400 font-bold hover:bg-espera/25 transition-colors shrink-0"
+                style={T.apoio}
+              >
+                <VolumeX size={16} /> <span className="hidden sm:inline">Ativar som</span>
+              </button>
             )}
             <div className="text-right leading-none">
               <div className="font-display font-bold text-white tabular-nums whitespace-nowrap" style={T.relogio}>
