@@ -15,6 +15,19 @@
  * Por isso nao existe nem endpoint que devolva os dois juntos: a separacao
  * mora no servidor, e a tela nao teria como misturar mesmo que quisesse.
  *
+ * ── E POR ISSO A COLUNA DO OUTRO LADO MOSTRA DOIS NUMEROS, NAO UMA MEDIA ───
+ *
+ * Havia aqui uma coluna "Geral": a media das duas notas, ponderada pelo
+ * trabalho de cada lado, para quem acumula as duas funcoes. Ela fazia sentido
+ * enquanto as duas iam de 0 a 100 -- e virou aritmetica sem significado quando
+ * a sede perdeu o teto (250 na sede com 80 fora da sede dava "165", e aquele
+ * numero ainda desempatava o ranking externo).
+ *
+ * Agora a coluna mostra o outro lado COMO ELE E, na escala dele, ao lado dos
+ * pontos daqui. A pergunta que a geral respondia -- "essa pessoa tambem
+ * trabalha na rua?" -- continua respondida; o que saiu foi a media que ninguem
+ * conseguia conferir. Ver `ranking.service`.
+ *
  * ── OS CRITERIOS APARECEM SEMPRE ───────────────────────────────────────────
  *
  * Cada linha abre e mostra de onde vieram os pontos. Ranking que so mostra o
@@ -148,6 +161,11 @@ function intervaloCiclo(janela) {
   };
   return `${dia(janela.inicio)} a ${dia(janela.fim, true)}`;
 }
+
+// "18:00" -- a hora do ciclo, escrita por extenso. Num lugar só porque agora
+// ela aparece em três frases diferentes da explicação do fechamento.
+const horaDoCiclo = (ciclo) =>
+  `${String(ciclo?.hora ?? 0).padStart(2, '0')}:${String(ciclo?.minuto ?? 0).padStart(2, '0')}`;
 
 function iniciais(nome = '') {
   const p = String(nome).trim().split(/\s+/).filter(Boolean);
@@ -286,7 +304,7 @@ function Podio({ classificacao, premiacoes, premiados }) {
  */
 const MEDALHAS_NA_LISTA = 3;
 
-function LinhaTabela({ p, aberta, onAlternar, premiados = 1, temGeral = false }) {
+function LinhaTabela({ p, aberta, onAlternar, temOutroLado = false, rotuloOutroLado = '' }) {
   const temMedalha = p.posicao <= MEDALHAS_NA_LISTA;
   const cor = MEDALHAS[p.posicao - 1] || '--quieto';
   return (
@@ -359,22 +377,29 @@ function LinhaTabela({ p, aberta, onAlternar, premiados = 1, temGeral = false })
           </div>
         </td>
         <td className="py-2.5 px-3 text-right font-display font-extrabold tabular-nums text-texto">{p.pontos}</td>
-        {/* A GERAL, só para quem acumula as duas funções.
+        {/* O OUTRO LADO, só para quem acumula as duas funções.
 
-            Para quem atua num lado só ela é igual à coluna Pontos, e repetir o
-            mesmo número duas vezes na mesma linha faz procurar diferença onde
-            não há. O traço diz "esta pessoa não tem os dois lados" sem gastar
-            uma frase. */}
-        {temGeral && (
+            É a pontuação daquela competição, na escala DELA -- e nunca uma
+            média com a desta coluna: uma vai de 0 a 100 e a outra não tem teto.
+            O traço diz "esta pessoa não tem os dois lados" sem gastar uma
+            frase. */}
+        {temOutroLado && (
           <td className="py-2.5 px-3 text-right tabular-nums text-xs hidden sm:table-cell"
             title={
-              p.geralDeDoisLados && p.outroLado
-                ? `${p.pontos} aqui (${p.registros}) e ${p.outroLado.pontos} do outro lado (${p.outroLado.registros}), na proporção do trabalho`
+              p.outroLado
+                ? `${rotuloOutroLado}: ${p.outroLado.pontos} pts em ${p.outroLado.registros} ${p.outroLado.registros === 1 ? 'registro' : 'registros'} -- outra régua, não se soma com os ${p.pontos} desta coluna`
                 : undefined
             }>
-            {p.geralDeDoisLados
-              ? <span className="font-display font-extrabold text-acao-200">{p.geral ?? '-'}</span>
-              : <span className="text-texto-fraco">-</span>}
+            {p.outroLado ? (
+              <span className="font-display font-extrabold text-acao-200">
+                {p.outroLado.pontos}
+                <span className="font-sans font-semibold text-texto-fraco text-[10px] ml-0.5">
+                  /{p.outroLado.registros}
+                </span>
+              </span>
+            ) : (
+              <span className="text-texto-fraco">-</span>
+            )}
           </td>
 )}
         <td className="py-2.5 px-3 text-right tabular-nums text-texto-suave text-xs hidden lg:table-cell">{p.registros}</td>
@@ -409,7 +434,7 @@ function LinhaTabela({ p, aberta, onAlternar, premiados = 1, temGeral = false })
       </tr>
       {aberta && (
         <tr className="bg-grafite-800/60">
-          <td colSpan={7 + (temGeral ? 1 : 0)} className="px-3 pb-3">
+          <td colSpan={7 + (temOutroLado ? 1 : 0)} className="px-3 pb-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-1">
               {p.criterios.map((c) => {
                 const v = valorCriterio(c);
@@ -666,6 +691,16 @@ export default function Rankings() {
   const [salvandoCfg, setSalvandoCfg] = useState(false);
   const [erroCfg, setErroCfg] = useState('');
 
+  // O TETO DO PÓDIO VEM DO SERVIDOR (`premiadosMaximo`).
+  //
+  // O campo oferecia até 50, e o resto do sistema aceita 3: o registro de
+  // prêmio recusava a posição 4 e o pódio tem três medalhas. Configurar 5
+  // rendia cinco botões de prêmio, dois deles falhando sempre. O número mora
+  // em `rankings/premiados` (MAXIMO) e chega aqui pela configuração -- cravá-lo
+  // na tela seria recriar a divergência que causou o defeito. O `?? 3` cobre
+  // só a resposta antiga em cache.
+  const maxPremiados = Number(config?.premiadosMaximo) || 3;
+
   const abrirConfig = async () => {
     setErroCfg('');
     try {
@@ -707,8 +742,12 @@ export default function Rankings() {
 
   const lista = dados?.classificacao || [];
   // Alguem acumula as duas funcoes neste mes? E o servidor quem sabe: ele
-  // marca `geralDeDoisLados` em quem esta nas duas equipes.
-  const temGeral = lista.some((p) => p.geralDeDoisLados);
+  // manda `outroLado` em quem esta nas duas equipes -- com os numeros daquela
+  // competicao, na escala daquela competicao, e nunca uma media com estes.
+  const temOutroLado = lista.some((p) => p.outroLado);
+  // O nome curto da OUTRA competicao, para rotular a coluna. Sai da mesma lista
+  // de abas -- a tela nao inventa nome de ranking em lugar nenhum.
+  const rotuloOutroLado = aba === 'sede' ? 'Fora da sede' : 'Na sede';
   const rotuloAba = ABAS.find((a) => a.id === aba)?.rotulo || '';
   // Desde quando ESTE ranking está contando. Vem do servidor junto com a
   // classificação, e não de um estado local: quem limpou pode ter sido outro
@@ -930,8 +969,8 @@ export default function Rankings() {
               <div>
                 <label className="text-[10px] text-texto-fraco block mb-1">Dia do mês</label>
                 <input
-                  type="number" min={1} max={28} value={rascunho.ciclo?.dia ?? 1}
-                  onChange={(e) => { setErroCfg(''); setRascunho((r) => ({ ...r, ciclo: { ...r.ciclo, dia: Math.max(1, Math.min(28, Number(e.target.value) || 1)) } })); }}
+                  type="number" min={1} max={31} value={rascunho.ciclo?.dia ?? 1}
+                  onChange={(e) => { setErroCfg(''); setRascunho((r) => ({ ...r, ciclo: { ...r.ciclo, dia: Math.max(1, Math.min(31, Number(e.target.value) || 1)) } })); }}
                   className="w-24 bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto focus:outline-none focus:border-acao/50"
                 />
               </div>
@@ -952,9 +991,13 @@ export default function Rankings() {
             <p className="text-[10px] text-texto-fraco leading-relaxed">
               {(rascunho.ciclo?.dia ?? 1) === 1 && !(rascunho.ciclo?.hora || rascunho.ciclo?.minuto)
                 ? 'Mês do calendário: do dia 1 ao último dia, como sempre foi.'
-                : `Cada ciclo vai do dia ${rascunho.ciclo?.dia} de um mês até o dia ${rascunho.ciclo?.dia} do mês seguinte, ` +
-                  `às ${String(rascunho.ciclo?.hora ?? 0).padStart(2, '0')}:${String(rascunho.ciclo?.minuto ?? 0).padStart(2, '0')}. ` +
-                  'O dia 28 é o maior permitido fevereiro não tem 30.'}
+                : (rascunho.ciclo?.dia ?? 1) === 31
+                  ? `Sempre no ÚLTIMO DIA DO MÊS, às ${horaDoCiclo(rascunho.ciclo)} 31 em janeiro, 30 em abril, 28 ou 29 em fevereiro.`
+                  : `Cada ciclo vai do dia ${rascunho.ciclo?.dia} de um mês até o dia ${rascunho.ciclo?.dia} do mês seguinte, ` +
+                    `às ${horaDoCiclo(rascunho.ciclo)}. ` +
+                    ((rascunho.ciclo?.dia ?? 1) >= 29
+                      ? `No mês que não tiver dia ${rascunho.ciclo?.dia}, fecha no último dia dele fevereiro fecha em 28 (ou 29, em ano bissexto).`
+                      : 'Escolha 31 para fechar sempre no último dia do mês.')}
             </p>
             <p className="text-[10px] text-espera-400 leading-relaxed border border-espera/30 bg-espera/10 rounded-xl p-2.5">
               Diferente da régua de pontos, o dia de fechamento <strong>não mexe no passado</strong>. Os meses
@@ -974,11 +1017,11 @@ export default function Rankings() {
               <div>
                 <label className="text-[10px] text-texto-fraco block mb-1">Atendimento na sede</label>
                 <input
-                  type="number" min={1} max={50} placeholder="1"
+                  type="number" min={1} max={maxPremiados} placeholder="1"
                   value={rascunho.premiados?.sede ?? ''}
                   onChange={(e) => {
                     setErroCfg('');
-                    const v = e.target.value === '' ? null : Math.max(1, Math.min(50, Number(e.target.value) || 1));
+                    const v = e.target.value === '' ? null : Math.max(1, Math.min(maxPremiados, Number(e.target.value) || 1));
                     setRascunho((r) => ({ ...r, premiados: { ...r.premiados, sede: v } }));
                   }}
                   className="w-32 bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto focus:outline-none focus:border-acao/50"
@@ -987,11 +1030,11 @@ export default function Rankings() {
               <div>
                 <label className="text-[10px] text-texto-fraco block mb-1">Fora da sede</label>
                 <input
-                  type="number" min={1} max={50} placeholder="1"
+                  type="number" min={1} max={maxPremiados} placeholder="1"
                   value={rascunho.premiados?.externo ?? ''}
                   onChange={(e) => {
                     setErroCfg('');
-                    const v = e.target.value === '' ? null : Math.max(1, Math.min(50, Number(e.target.value) || 1));
+                    const v = e.target.value === '' ? null : Math.max(1, Math.min(maxPremiados, Number(e.target.value) || 1));
                     setRascunho((r) => ({ ...r, premiados: { ...r.premiados, externo: v } }));
                   }}
                   className="w-32 bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto focus:outline-none focus:border-acao/50"
@@ -1000,8 +1043,9 @@ export default function Rankings() {
             </div>
             <p className="text-[10px] text-texto-fraco leading-relaxed">
               <strong>Um campeão em cada competição</strong> é o padrão o prêmio é do primeiro
-              lugar. Aumente aqui se um pódio maior fizer sentido; nunca mais do que existe no
-              ranking. Em branco volta a 1.
+              lugar. Aumente aqui se um pódio maior fizer sentido nunca mais do que existe no
+              ranking, e no máximo {maxPremiados} (as medalhas são ouro, prata e bronze; um
+              4º lugar não tem medalha de quê). Em branco volta a 1.
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
@@ -1078,13 +1122,13 @@ export default function Rankings() {
                     <th className="text-left py-2 px-3 font-bold text-texto-suave w-14">Pos.</th>
                     <th className="text-left py-2 px-3 font-bold text-texto-suave">Funcionário</th>
                     <th className="text-right py-2 px-3 font-bold text-texto-suave w-20">Pontos</th>
-                    {/* GERAL: só aparece quando há alguém nos dois times. Numa
-                        operação em que ninguém acumula as duas funções ela seria
-                        uma cópia da coluna Pontos -- ruído com cara de dado. */}
-                    {temGeral && (
-                      <th className="text-right py-2 px-3 font-bold text-texto-suave w-20 hidden sm:table-cell"
-                        title="Média das duas notas, ponderada pelo trabalho feito de cada lado">
-                        Geral
+                    {/* O OUTRO LADO: só aparece quando há alguém nos dois
+                        times. Numa operação em que ninguém acumula as duas
+                        funções, a coluna seria uma fileira de traços. */}
+                    {temOutroLado && (
+                      <th className="text-right py-2 px-3 font-bold text-texto-suave w-24 hidden sm:table-cell"
+                        title={`Pontos e registros de quem também concorre em "${rotuloOutroLado}" -- outra régua, e por isso os dois números nunca se somam`}>
+                        {rotuloOutroLado}
                       </th>
                     )}
                     <th className="text-right py-2 px-3 font-bold text-texto-suave w-24 hidden lg:table-cell">
@@ -1102,8 +1146,8 @@ export default function Rankings() {
                       p={p}
                       aberta={abertas.has(p.usuarioId)}
                       onAlternar={() => alternar(p.usuarioId)}
-                      premiados={dados?.premiados}
-                      temGeral={temGeral}
+                      temOutroLado={temOutroLado}
+                      rotuloOutroLado={rotuloOutroLado}
                     />
                   ))}
                 </tbody>

@@ -99,65 +99,63 @@ function competenciaAnterior(comp) {
  * equipe veria o podio "mudando sozinho".
  */
 /**
- * A NOTA GERAL -- média das duas notas, PONDERADA PELO TRABALHO FEITO.
+ * ── POR QUE NAO EXISTE MAIS UMA "NOTA GERAL" ─────────────────────────────
  *
- * ── POR QUE NÃO SOMAR ──────────────────────────────────────────────────────
+ * Havia aqui uma `notaGeral`: a media das duas notas, ponderada pelo volume de
+ * cada lado, para responder "quem se saiu melhor no mes, considerando tudo?".
+ * Ela nasceu certa e MORREU no dia em que a pontuacao da sede perdeu o teto.
  *
- * As mesmas pessoas atendem na sede E visitam cliente. A pergunta "quem se
- * saiu melhor no mês, considerando tudo?" é legítima -- mas somar as duas
- * notas responde errado, de três jeitos:
+ * O cabecalho dela afirmava, textualmente, "continua de 0 a 100, na mesma
+ * escala das duas -- e media, nao soma". Com a sede acumulando sem teto, a
+ * afirmacao virou falsa e a conta virou sem sentido:
  *
- *   Um dia na rua é um dia sem atender no chat. A nota da sede já cai
- *   sozinha; somando, quem viaja mais perde de um lado e não recupera.
+ *   sede 250 (10 avaliados) + externo 80 (10 relatorios)  ->  165
  *
- *   Quem decide a escala é a empresa. A soma passaria a medir o planejamento
- *   de rotas, e não o desempenho de quem foi.
+ * E o numero nao era so estranho na tela: ele era o PRIMEIRO DESEMPATE dos dois
+ * rankings. No externo, onde ninguem passa de 100, quem tambem atende na sede
+ * chegava ao desempate com um numero em outra escala -- empate em 62 pontos
+ * entre um tecnico e alguem que acumula as duas funcoes, e o segundo subia com
+ * 165 contra 62. Por trabalho feito na OUTRA competicao. Era exatamente a
+ * mistura que o cabecalho deste arquivo proibe, entrando pela porta do
+ * desempate. (auditoria-tela-rankings-10-09.md, achado 1)
  *
- *   As duas notas saturam em 100. Quem trabalha bem dos dois lados chega a
- *   200 e empata de novo -- exatamente o problema que se queria resolver.
+ * ── E POR QUE NAO FOI SO NORMALIZAR ──────────────────────────────────────
  *
- * ── O QUE A MÉDIA PONDERADA RESPONDE ───────────────────────────────────────
+ * Porque nao ha por onde. A sede nao tem teto, entao converter em "porcentagem
+ * de quanto?" exige escolher um denominador -- e o unico disponivel e o
+ * primeiro colocado do mes. A nota de cada um passaria a depender de quanto os
+ * OUTROS trabalharam, mudaria sozinha quando alguem fechasse mais um
+ * atendimento, e reescreveria o passado a cada consulta (nada de ranking e
+ * guardado). Trocar um numero sem sentido por um numero instavel nao e conserto.
  *
- * "Quão bem esta pessoa fez o trabalho que de fato fez" -- seja qual for a
- * mistura. Quem passou o mês só na sede recebe a nota da sede, sem prejuízo;
- * quem passou metade na rua tem as duas pesadas na proporção real.
+ * Media de escala aberta com escala fechada obriga a inventar um fator de
+ * conversao, e o fator escolhido decide o vencedor -- e a mesma objecao que
+ * `painel.service` levanta desde o primeiro dia contra juntar volume e nota.
  *
- * O peso é o VOLUME de cada lado (atendimentos avaliados, relatórios
- * entregues) porque é ele que diz onde a pessoa gastou o mês. Pesar meio a
- * meio faria duas visitas valerem tanto quanto quarenta atendimentos.
+ * ── O QUE FICOU NO LUGAR ─────────────────────────────────────────────────
  *
- * Continua de 0 a 100, na mesma escala das duas -- é média, não soma. Isto
- * NÃO derruba a regra de nunca misturar os dois rankings (ver o cabeçalho
- * deste arquivo): lá o erro é comparar PESSOAS DIFERENTES em réguas
- * diferentes; aqui é a mesma pessoa, e o que se pergunta é sobre ela.
+ * Os DOIS NUMEROS, lado a lado, sem media nenhuma: quem esta nas duas equipes
+ * leva junto o `outroLado` (pontos e volume daquele mes) so para a tela poder
+ * mostrar. Ninguem perde informacao -- "essa pessoa tambem trabalha do outro
+ * lado?" continua respondida --, e nada do outro ranking toca a ORDEM deste.
  */
-function notaGeral(sede, externo) {
-  const vSede = Math.max(0, Number(sede?.registros) || 0);
-  const vExterno = Math.max(0, Number(externo?.registros) || 0);
-  const total = vSede + vExterno;
-  // Mês sem trabalho nenhum dos dois lados não tem nota geral. `0` seria uma
-  // afirmação ("foi mal") sobre um mês em que não há o que julgar.
-  if (total === 0) return null;
-  const pSede = Number(sede?.pontos) || 0;
-  const pExterno = Number(externo?.pontos) || 0;
-  return Math.round((pSede * vSede + pExterno * vExterno) / total);
-}
 
 /**
- * Ordena e numera. O DESEMPATE é a nota geral -- foi para isso que ela nasceu.
+ * Ordena e numera as posicoes.
  *
- * Empate na pontuação é comum (as parcelas saturam), e até aqui era resolvido
- * pelo volume e, em último caso, pela ordem alfabética -- sorteio disfarçado.
- * Com a geral, o desempate passa a olhar o mês INTEIRO da pessoa, incluindo o
- * outro lado do trabalho.
+ * O DESEMPATE E O DE CADA COMPETICAO: pontos, depois o VOLUME proprio
+ * (atendimentos avaliados numa ponta, relatorios entregues na outra) e por fim
+ * o nome, que garante ordem estavel -- sem ele, dois empatados trocariam de
+ * lugar a cada F5 e a equipe veria o podio "mudando sozinho".
  *
- * Para quem atua num lado só, a geral é igual à nota do próprio ranking:
- * o empate continua caindo no volume, exatamente como antes. Ninguém é
- * prejudicado por não fazer o outro trabalho.
+ * A nota geral esteve aqui, como primeiro desempate, e saiu com a mistura de
+ * escalas que ela passou a fazer (ver o bloco acima). Os empates de plato que
+ * a motivaram eram efeito do TETO da sede, que nao existe mais: ali cada
+ * atendimento avaliado move o placar. No externo o teto continua, e o empate
+ * volta a cair no volume -- que e propriedade daquele trabalho, e nao do outro.
  *
- * `posicao` vai por ÚLTIMO no objeto de propósito: com ela antes do espalhar,
- * reclassificar uma lista já classificada mantinha a posição velha -- e é
- * exatamente isso que `obter` faz depois de anexar a nota geral.
+ * `posicao` vai por ULTIMO no objeto de proposito: com ela antes do espalhar,
+ * reclassificar uma lista ja classificada mantinha a posicao velha.
  */
 function classificar(pessoas, volumeDe) {
   return pessoas
@@ -165,7 +163,6 @@ function classificar(pessoas, volumeDe) {
     .sort(
       (a, b) =>
         b.pontos - a.pontos ||
-        (b.geral ?? b.pontos) - (a.geral ?? a.pontos) ||
         volumeDe(b) - volumeDe(a) ||
         a.nome.localeCompare(b.nome)
     )
@@ -347,18 +344,28 @@ class RankingService {
     const equipes = await this.equipes();
     const equipe = equipes[equipeChave];
 
-    // ── A NOTA GERAL, e por que ela é aplicada AOS DOIS MESES ──────────────
+    // ── O OUTRO LADO VIAJA JUNTO, SO PARA EXIBICAO ────────────────────────
     //
-    // Ela precisa do OUTRO ranking, que custa uma rodada de consultas. Só vale
-    // para quem está nas DUAS equipes: para os demais a geral é igual à nota do
-    // próprio ranking, e buscar o outro lado seria pagar por um número já
-    // conhecido. Onde as equipes não se cruzam, isto não custa nada.
+    // As mesmas pessoas atendem na sede E visitam cliente, e a tela mostra numa
+    // coluna como foi o mes da pessoa do OUTRO lado -- porque a pergunta "essa
+    // pessoa tambem trabalha na rua?" e legitima e a resposta esta a uma
+    // consulta de distancia.
     //
-    // O MÊS ANTERIOR RECEBE O MESMO TRATAMENTO, e isso não é capricho: dele sai
-    // só a POSIÇÃO de cada um, que a tela transforma em "subiu"/"caiu". Com o
-    // desempate novo valendo num mês e não no outro, dois empatados trocariam
-    // de lugar entre os meses sem nada ter acontecido -- e a tela anunciaria um
-    // movimento que não existiu.
+    // O QUE ELE NAO FAZ MAIS: entrar na conta e na ORDEM. Havia aqui uma media
+    // ponderada das duas notas (`notaGeral`) que era o primeiro desempate --
+    // e, com a sede sem teto, ela misturava escalas e deixava pontuacao da sede
+    // decidir posicao no ranking externo. Ver o bloco "POR QUE NAO EXISTE MAIS
+    // UMA NOTA GERAL" no topo do arquivo.
+    //
+    // Custa uma rodada de consultas, e so para quem esta nas DUAS equipes:
+    // onde as equipes nao se cruzam, isto nao custa nada.
+    //
+    // E SO PARA O MES QUE ESTA NA TELA. O mes anterior recebia o mesmo
+    // tratamento quando a geral ordenava -- era obrigatorio, senao o desempate
+    // valeria num mes e nao no outro e a tela anunciaria um "subiu" que nao
+    // aconteceu. Sem a geral, a ordem dos dois meses sai do mesmo criterio, e
+    // do mes anterior a tela usa somente a POSICAO: buscar o outro lado dele
+    // seria pagar por um dado que ninguem le.
     const outraChave = equipeChave === "sede" ? "externo" : "sede";
     const nosDois = new Set(
       equipe.filter((u) => equipes[outraChave].some((o) => o.id === u.id)).map((u) => u.id)
@@ -369,39 +376,33 @@ class RankingService {
         ? this._rankingSede(aa, mm, equipes.sede)
         : this._rankingExterno(aa, mm, equipes.externo);
 
-    // Anexa a geral e reordena. Sem gente nos dois lados, devolve como veio.
-    const comGeral = async (r, aa, mm) => {
+    // Anexa o outro lado SEM reordenar: a classificacao que chega aqui ja esta
+    // decidida pelo criterio desta competicao, e mexer nela seria trazer o
+    // outro ranking de volta para dentro da ordem.
+    const comOutroLado = async (r, aa, mm) => {
       if (nosDois.size === 0) return r;
       const outra = await rankingDe(outraChave, aa, mm);
       const doOutroLado = new Map(outra.classificacao.map((x) => [x.usuarioId, x]));
       const lista = r.classificacao.map((p) => {
-        // Quem atua num lado só: a geral é a própria nota. Não é "não tem" --
-        // é que a média de um número só é ele mesmo, e usar `null` aqui jogaria
-        // essa pessoa para o fim de todo desempate.
-        if (!nosDois.has(p.usuarioId)) return { ...p, geral: p.pontos, geralDeDoisLados: false };
+        if (!nosDois.has(p.usuarioId)) return { ...p, nosDoisRankings: false, outroLado: null };
         const o = doOutroLado.get(p.usuarioId);
         return {
           ...p,
-          geral: equipeChave === "sede" ? notaGeral(p, o) : notaGeral(o, p),
-          geralDeDoisLados: true,
-          // O outro lado, para a tela poder explicar de onde a geral saiu em vez
-          // de mostrar um número que ninguém consegue conferir.
-          outroLado: o ? { pontos: o.pontos, registros: o.registros } : null,
+          nosDoisRankings: true,
+          // Os numeros do outro lado, como eles sao -- e nao uma media deles
+          // com os de ca. A tela escreve os dois, cada um na sua escala.
+          outroLado: o ? { ranking: outraChave, pontos: o.pontos, registros: o.registros } : null,
         };
       });
-      return { ...r, classificacao: classificar(lista, (x) => x.registros) };
+      return { ...r, classificacao: lista };
     };
 
-    const atual = await comGeral(await rankingDe(equipeChave, ano, mes), ano, mes);
+    const atual = await comOutroLado(await rankingDe(equipeChave, ano, mes), ano, mes);
 
     // Mes anterior so para saber a posicao de cada um. Uma consulta a mais, e
     // ela vale: sem ela a tela mostraria "1o lugar" sem dizer se isso e novo.
     const antes = interpretarCompetencia(competenciaAnterior(comp));
-    const anterior = await comGeral(
-      await rankingDe(equipeChave, antes.ano, antes.mes),
-      antes.ano,
-      antes.mes
-    );
+    const anterior = await rankingDe(equipeChave, antes.ano, antes.mes);
     const posicaoAntes = new Map(anterior.classificacao.map((p) => [p.usuarioId, p.posicao]));
     const pontosAntes = new Map(anterior.classificacao.map((p) => [p.usuarioId, p.pontos]));
     const classificacao = atual.classificacao.map((p) => {
@@ -541,12 +542,40 @@ class RankingService {
     const { ranking, competencia, posicao } = dados;
     if (!EQUIPES.includes(ranking)) throw new AppError("Ranking desconhecido", 400, "RANKING_INVALIDO");
     if (!interpretarCompetencia(competencia)) throw new AppError("Competência inválida (use AAAA-MM)", 400, "COMPETENCIA_INVALIDA");
-    if (![1, 2, 3].includes(Number(posicao))) throw new AppError("Posição deve ser 1, 2 ou 3", 400, "POSICAO_INVALIDA");
+    // O TETO vem de `premiados`, e nao repetido aqui -- ver o bloco MAXIMO la.
+    const pos = Number(posicao);
+    if (!Number.isInteger(pos) || pos < 1 || pos > premiados.MAXIMO) {
+      throw new AppError(
+        `Posição deve ser de 1 a ${premiados.MAXIMO}`,
+        400,
+        "POSICAO_INVALIDA"
+      );
+    }
 
     // O vencedor NAO vem do corpo da requisicao: e lido do ranking calculado.
     // Aceitar um id do cliente deixaria premiar quem nao ganhou.
     const r = await this.obter(ranking, competencia);
-    const vencedor = r.classificacao.find((p) => p.posicao === Number(posicao));
+
+    // ── O PODIO CONFIGURADO TAMBEM E LIMITE, E ELE E CHECADO AQUI ──────────
+    //
+    // O teto acima diz o maximo que o sistema suporta; `r.premiados` diz
+    // quantos lugares ESTE ranking tem agora (`premiados.quantos`). Com um
+    // campeao so configurado, registrar premio do 2o lugar e premiar quem a
+    // regra nao premia -- e vira linha no banco, que ninguem desfaz.
+    //
+    // A tela ja oferece somente as vagas que existem, mas esconder botao nunca
+    // foi protecao: sem este guarda, a mesma chamada sai no curl.
+    if (pos > r.premiados) {
+      throw new AppError(
+        r.premiados === 1
+          ? `O pódio de "${r.rotulo}" tem um campeão só. Não há prêmio para o ${pos}º -- aumente "Premiados no pódio" na configuração se quiser premiar mais gente.`
+          : `O pódio de "${r.rotulo}" tem ${r.premiados} lugares. Não há prêmio para o ${pos}º.`,
+        400,
+        "FORA_DO_PODIO"
+      );
+    }
+
+    const vencedor = r.classificacao.find((p) => p.posicao === pos);
     if (!vencedor) throw new AppError("Não há ninguém nessa posição neste mês", 400, "SEM_VENCEDOR");
     // ZERO PONTO NAO E PODIO.
     //
@@ -567,7 +596,7 @@ class RankingService {
     const registro = {
       ranking,
       competencia,
-      posicao: Number(posicao),
+      posicao: pos,
       usuarioId: vencedor.usuarioId,
       usuarioNome: vencedor.nome,
       pontos: vencedor.pontos,
@@ -578,7 +607,7 @@ class RankingService {
     };
 
     const salvo = await prisma.premiacaoRanking.upsert({
-      where: { ranking_competencia_posicao: { ranking, competencia, posicao: Number(posicao) } },
+      where: { ranking_competencia_posicao: { ranking, competencia, posicao: pos } },
       update: registro,
       create: registro,
     });

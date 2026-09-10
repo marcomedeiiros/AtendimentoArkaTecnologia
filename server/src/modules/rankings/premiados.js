@@ -36,6 +36,29 @@ const CHAVE = "ranking.premiados";
 
 // Um campeão em cada competição.
 const UM_CAMPEAO = 1;
+
+/**
+ * O TETO SÃO TRÊS LUGARES, e o número mora AQUI -- num lugar só.
+ *
+ * ── O DEFEITO QUE ISTO FECHA (auditoria-tela-rankings-10-09.md, achado 2) ──
+ *
+ * O campo aceitava até 50. Nada mais no sistema aceitava: `premiacaoSchema` e
+ * `registrarPremiacao` travavam a posição em 1, 2 ou 3, o pódio da tela tem
+ * três cores de medalha (`MEDALHAS`) e desenha três cartões. Configurando 5,
+ * a tela oferecia cinco botões de prêmio e os dois últimos falhavam SEMPRE,
+ * com uma mensagem de validação em inglês -- e o cartão do 4º saía com a cor
+ * `rgb(var(undefined))`, que o navegador descarta em silêncio.
+ *
+ * Três é o teto honesto: as medalhas são ouro, prata e bronze, e um "4º lugar"
+ * não tem medalha de quê. Abrir para 50 exigiria inventar cor, refazer o
+ * desenho do pódio (que é 2-1-3, e não generaliza) e decidir o que significa
+ * premiar dois terços da equipe -- muito mais do que o campo prometia.
+ *
+ * Quem consome este limite (o Zod da rota, o serviço e a tela) importa daqui.
+ * Era a duplicação que produzia o defeito: o mesmo número, escrito em quatro
+ * lugares, com um deles discordando.
+ */
+const MAXIMO = 3;
 const PADRAO = { sede: UM_CAMPEAO, externo: UM_CAMPEAO };
 
 /**
@@ -63,7 +86,7 @@ function validar(entrada, base = PADRAO) {
       continue;
     }
     const n = Number(v);
-    out[chave] = Number.isFinite(n) ? Math.min(50, Math.max(1, Math.round(n))) : base[chave];
+    out[chave] = Number.isFinite(n) ? Math.min(MAXIMO, Math.max(1, Math.round(n))) : base[chave];
   }
   return out;
 }
@@ -93,4 +116,4 @@ async function salvar(entrada, autor = null) {
   return novo;
 }
 
-module.exports = { CHAVE, PADRAO, quantos, validar, obter, salvar };
+module.exports = { CHAVE, PADRAO, MAXIMO, quantos, validar, obter, salvar };

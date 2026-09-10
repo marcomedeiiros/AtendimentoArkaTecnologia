@@ -7,6 +7,9 @@
  * a rota pode ganhar um verbo novo amanha.
  */
 const { z } = require("zod");
+// O teto do pódio vem de quem manda nele, e não repetido aqui: o defeito do
+// achado 2 era exatamente este número escrito em quatro lugares.
+const { MAXIMO: MAXIMO_PREMIADOS } = require("./premiados");
 
 // "2026-09". Regex e nao data solta: o mes e a chave do ranking inteiro, e um
 // formato livre viraria consulta silenciosamente vazia.
@@ -106,7 +109,9 @@ const atualizarMapeamentoSchema = criarMapeamentoSchema.partial().refine(
  */
 const regrasRelatorioSchema = z.object({
   prazoDias: z.number().int().min(1).max(90).optional(),
-  vencimentoDiaDoMes: z.number().int().min(1).max(28).nullable().optional(),
+  // De 1 a 31: o dia que nao existe no mes cai no ultimo dia dele (a aparagem e
+  // em `relatorio.regras`, com o helper de calendario). Aqui so a faixa.
+  vencimentoDiaDoMes: z.number().int().min(1).max(31).nullable().optional(),
   exigirPdf: z.boolean().optional(),
   minimoRelatorios: z.number().int().min(1).max(20).optional(),
   custoPorDevolucao: z.number().int().min(0).max(25).optional(),
@@ -134,7 +139,7 @@ const devolverMapeamentoSchema = z.object({
 const premiacaoSchema = z.object({
   ranking: z.enum(["sede", "externo"]),
   competencia,
-  posicao: z.number().int().min(1).max(3),
+  posicao: z.number().int().min(1).max(MAXIMO_PREMIADOS),
   premio: z.string().trim().max(160).optional().nullable(),
   valor: z.string().trim().max(60).optional().nullable(),
   entregueEm: z.string().optional().nullable(),

@@ -52,16 +52,55 @@ const inteiro = (v, min, max, atual) => {
 };
 
 /**
- * Dia de 1 a 28, e não a 31.
+ * QUAL DIA DE FECHAMENTO EXISTE NAQUELE MÊS.
  *
- * Fevereiro não tem dia 30. Um ciclo marcado para o dia 31 pularia meses, ou
- * cairia no dia 1 do mês seguinte conforme o `Date` decide -- e o ranking
- * mudaria de janela sozinho, sem ninguém ter mexido em nada. 28 é o maior dia
- * que existe em todo mês.
+ * ── POR QUE ISTO PRECISOU EXISTIR ──────────────────────────────────────────
+ *
+ * O dia era limitado a 28, e a justificativa estava escrita aqui: fevereiro não
+ * tem 30, e `new Date(2026, 1, 30)` não estoura -- ele **transborda** para 02
+ * de março. Um ciclo marcado para o dia 31 mudaria de janela sozinho, mês a
+ * mês, sem ninguém ter mexido em nada.
+ *
+ * O limite resolvia o problema errado. Quem fecha folha no dia 30 precisa que o
+ * ranking feche no dia 30, e "escolha 28" não é uma resposta -- são dois dias de
+ * trabalho caindo no ciclo seguinte, todo mês.
+ *
+ * ── A REGRA: O DIA ESCOLHIDO, OU O ÚLTIMO QUE O MÊS TIVER ──────────────────
+ *
+ * Dia 30 fecha em 30/01, 28/02 (ou 29, em ano bissexto), 30/03... e dia **31**
+ * passa a significar, na prática, "sempre no último dia do mês". Nada
+ * transborda, porque a data nunca é inventada: ela é aparada para um dia que
+ * existe naquele mês.
+ *
+ * ── E POR QUE NÃO UMA DATA DE CALENDÁRIO ───────────────────────────────────
+ *
+ * Porque o ciclo é uma regra que REPETE. Uma data escolhida no calendário
+ * ("30/09/2026") responde por um mês só, e alguém teria de voltar aqui todo mês
+ * -- e no mês em que esquecesse, o ranking não fecharia. O dia do mês é a regra;
+ * a hora, que já existia, é o refinamento dela.
+ *
+ * A aparagem em si mora em `shared/helpers/calendario`, porque o vencimento
+ * mensal do relatório de visita faz a mesma pergunta ao calendário.
+ *
+ * A janela e a competência corrente usam a MESMA aparagem, e isso não é
+ * detalhe: quando as duas discordam sobre onde o mês vira, nasce um dia que não
+ * pertence a competência nenhuma -- foi exatamente o defeito de 10/09
+ * (auditoria-ranking-zerado-10-09.md). `verificar-ciclo-ranking` varre 18 meses
+ * dia a dia justamente para provar que elas concordam.
+ */
+// A aparagem mora no helper: o vencimento mensal do relatorio faz a MESMA
+// pergunta ao calendario, e duas copias dela seriam dois calendarios.
+const { diaQueExiste } = require("../../shared/helpers/calendario.helper");
+
+/**
+ * Dia de 1 a 31 -- o maior que existe em algum mês.
+ *
+ * Escolher 31 não cria um "31 de fevereiro": `diaQueExiste` apara para o
+ * último dia daquele mês. É por isso que o teto pôde subir de 28 para 31.
  */
 function validar(entrada, base = PADRAO) {
   const out = { ...base };
-  if (entrada?.dia !== undefined) out.dia = inteiro(entrada.dia, 1, 28, base.dia);
+  if (entrada?.dia !== undefined) out.dia = inteiro(entrada.dia, 1, 31, base.dia);
   if (entrada?.hora !== undefined) out.hora = inteiro(entrada.hora, 0, 23, base.hora);
   if (entrada?.minuto !== undefined) out.minuto = inteiro(entrada.minuto, 0, 59, base.minuto);
   if (entrada?.vigenteDesde !== undefined) {
@@ -137,8 +176,13 @@ function janela(ano, mes, cfg = PADRAO) {
   return {
     inicio: ehTransicao
       ? new Date(ano, mes - 1, PADRAO.dia, PADRAO.hora, PADRAO.minuto, 0, 0)
-      : new Date(ano, mes - 1, dia, hora, minuto, 0, 0),
-    fim: new Date(ano, mes, dia, hora, minuto, 0, 0),
+      : new Date(ano, mes - 1, diaQueExiste(ano, mes - 1, dia), hora, minuto, 0, 0),
+    // A APARAGEM VALE NAS DUAS PONTAS, e o mês de referência de cada uma é
+    // diferente: o fim é o dia do ciclo no mês SEGUINTE. Com dia 31, a
+    // competência de janeiro vai de 31/01 a 28/02 -- e a de fevereiro começa
+    // exatamente onde ela termina. Aparar só o início abriria um vão de dias
+    // sem competência entre um mês curto e o seguinte.
+    fim: new Date(ano, mes, diaQueExiste(ano, mes, dia), hora, minuto, 0, 0),
     // Para a tela dizer o intervalo por extenso, em vez de deixar quem lê
     // adivinhar se o dia 25 é o começo ou o fim.
     personalizada: !!valeAqui,
@@ -170,10 +214,14 @@ function competenciaDe(agora = new Date(), cfg = PADRAO) {
   // pelo RÓTULO que devolvia, nunca contra a janela correspondente.
   if (comp === cfg.vigenteDesde) return comp;
 
+  // A MESMA aparagem da `janela` -- ver `diaQueExiste`. Sem ela, com dia 30 em
+  // fevereiro a virada seria 02/03: os dias 28/02 e 01/03 responderiam a
+  // competência anterior, cuja janela já teria terminado em 28/02. É a forma
+  // exata do defeito que fez a tela mostrar a equipe zerada em 10/09.
   const viradaDesteMes = new Date(
     agora.getFullYear(),
     agora.getMonth(),
-    cfg.dia,
+    diaQueExiste(agora.getFullYear(), agora.getMonth(), cfg.dia),
     cfg.hora,
     cfg.minuto,
     0,
@@ -218,4 +266,4 @@ async function salvar(entrada, autor = null) {
   return novo;
 }
 
-module.exports = { CHAVE, PADRAO, obter, salvar, validar, janela, competenciaDe };
+module.exports = { CHAVE, PADRAO, obter, salvar, validar, janela, competenciaDe, diaQueExiste };

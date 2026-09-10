@@ -63,6 +63,12 @@ class DashboardController {
       // rankings, mas quem configura e a mesma pessoa na mesma tela.
       premiados: await premiados.obter(),
       premiadosPadrao: premiados.PADRAO,
+      // O TETO, para o formulario nao oferecer o que o resto do sistema recusa.
+      // Era o achado 2 da auditoria: o campo aceitava 50, e o registro de
+      // premio (e o desenho do podio) suportam 3 -- ver o bloco MAXIMO em
+      // `rankings/premiados`. Vem do servidor, e nao cravado na tela, senao
+      // sao dois numeros para manter iguais.
+      premiadosMaximo: premiados.MAXIMO,
     });
   }
 

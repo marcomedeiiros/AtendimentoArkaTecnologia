@@ -31,6 +31,8 @@
 const prisma = require("../../infrastructure/database/prisma.client");
 const AppError = require("../../shared/errors/AppError");
 const logger = require("../../config/logger");
+// A MESMA aparagem que o ciclo do ranking usa -- ver o helper.
+const { diaQueExiste } = require("../../shared/helpers/calendario.helper");
 const { ITENS_MAPEAMENTO, PESOS, MINIMO_MAPEAMENTOS, CUSTO_POR_DEVOLUCAO } = require("./pontuacao.externa");
 const { PALAVRAS_PADRAO } = require("./analise.relatorio");
 
@@ -145,9 +147,12 @@ function validar(entrada, base = padrao()) {
 
   if (entrada.vencimentoDiaDoMes !== undefined) {
     const v = entrada.vencimentoDiaDoMes;
-    // Teto em 28: o dia 30 nao existe em fevereiro, e uma regra que some num
-    // mes do ano e pior do que nao ter regra.
-    out.vencimentoDiaDoMes = v === null || v === "" ? null : inteiro(v, 1, 28, base.vencimentoDiaDoMes ?? 5);
+    // DE 1 A 31, e o dia que nao existe no mes cai no ULTIMO dia dele (ver
+    // `prazoDe` e o helper de calendario). O teto era 28, com a justificativa
+    // "o dia 30 nao existe em fevereiro" -- e ela resolvia o problema errado:
+    // quem fecha o mes no dia 30 precisava do dia 30. O que a regra nunca pode
+    // fazer e SUMIR num mes do ano, e a aparagem e o que garante isso.
+    out.vencimentoDiaDoMes = v === null || v === "" ? null : inteiro(v, 1, 31, base.vencimentoDiaDoMes ?? 5);
   }
 
   if (entrada.exigirPdf !== undefined) out.exigirPdf = !!entrada.exigirPdf;
@@ -281,7 +286,24 @@ function prazoDe(dataVisitaISO, regras) {
 
   if (!regras?.vencimentoDiaDoMes) return porRelatorio;
 
-  const mensal = new Date(base.getFullYear(), base.getMonth() + 1, regras.vencimentoDiaDoMes, 12, 0, 0, 0);
+  // O VENCIMENTO CAI NO ULTIMO DIA DO MES QUANDO O DIA NAO EXISTE NELE.
+  //
+  // Sem a aparagem, `new Date(2026, 1, 30)` nao falha: TRANSBORDA para 02/03,
+  // e o vencimento de fevereiro passaria a ser em marco -- dois dias de folga
+  // que ninguem concedeu, num mes so, sem nada na tela explicando.
+  //
+  // O mes de referencia e o SEGUINTE ao da visita, e por isso a aparagem usa
+  // `getMonth() + 1`: e nele que o dia precisa existir.
+  const mesDoVencimento = base.getMonth() + 1;
+  const mensal = new Date(
+    base.getFullYear(),
+    mesDoVencimento,
+    diaQueExiste(base.getFullYear(), mesDoVencimento, regras.vencimentoDiaDoMes),
+    12,
+    0,
+    0,
+    0
+  );
   return porRelatorio <= mensal ? porRelatorio : mensal;
 }
 

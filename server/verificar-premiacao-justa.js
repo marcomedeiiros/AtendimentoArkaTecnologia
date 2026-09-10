@@ -1,5 +1,5 @@
 /**
- * O PÓDIO DO TAMANHO DA EQUIPE, E A NOTA GERAL DE QUEM FAZ AS DUAS FUNÇÕES.
+ * O PÓDIO: QUANTOS SOBEM, ATÉ ONDE DÁ PARA CONFIGURAR, E QUEM DESEMPATA.
  *
  * ── O QUE MOTIVOU ──────────────────────────────────────────────────────────
  *
@@ -8,19 +8,21 @@
  * medalha.
  *
  * E as mesmas três pessoas também atendem na sede. A pergunta "quem se saiu
- * melhor no mês, considerando tudo?" é legítima; a resposta proposta (somar as
- * duas notas) não é -- ver `notaGeral` em `ranking.service`.
+ * melhor no mês, considerando tudo?" é legítima -- e a resposta que existiu
+ * aqui (a média ponderada das duas notas) deixou de ser defensável quando a
+ * pontuação da sede perdeu o teto. Ver o bloco da média mais abaixo.
  *
  * ── O QUE ESTÁ TRAVADO AQUI ────────────────────────────────────────────────
  *
- * A regra do pódio em cada tamanho de equipe, e as propriedades da média
- * ponderada que a tornam JUSTA -- que é a palavra que o usuário usou, e é ela
- * que precisa resistir a exemplo numérico:
+ * Três coisas, e todas são "justo" -- que é a palavra que o usuário usou, e é
+ * ela que precisa resistir a exemplo numérico:
  *
- *   NEUTRA À ESCALA   a mistura de trabalho (definida pela empresa) não pode
- *                     mudar a nota de quem trabalha igual bem nos dois lados.
- *   SEM PREJUÍZO      quem atua num lado só recebe a nota daquele lado.
- *   DENTRO DA ESCALA  o resultado fica entre as duas notas, nunca 0-200.
+ *   O PÓDIO PREMIA     um campeão por competição, e nunca mais vagas do que
+ *                      gente existindo no ranking.
+ *   UM TETO SÓ         o número de premiados que a tela oferece é o mesmo que o
+ *                      registro de prêmio aceita -- em UM lugar (`MAXIMO`).
+ *   SEM MISTURA        nada do outro ranking decide posição neste: as duas
+ *                      escalas não são comparáveis, e média entre elas não é.
  */
 const path = require("path");
 
@@ -77,90 +79,170 @@ console.log("=== Premiacao justa ===");
   }
   check("a escolha manual vence, sem passar do que existe", problemas);
 }
-// ── A NOTA GERAL ─────────────────────────────────────────────────────────────
+// ── UM TETO SO PARA O PODIO ─────────────────────────────────────────────────
 //
-// `notaGeral` nao e exportada (e detalhe do servico), entao a formula e extraida
-// do arquivo e executada. Reimplementa-la aqui faria o teste concordar com o
-// defeito no dia em que ele voltasse.
+// O DEFEITO (auditoria-tela-rankings-10-09.md, achado 2): o campo aceitava 50,
+// o `premiacaoSchema` e o servico travavam em 1-2-3, e a tela tem tres cores de
+// medalha. Configurando 5, apareciam cinco botoes de premio e os dois ultimos
+// falhavam SEMPRE -- e o cartao do 4o saia com `rgb(var(undefined))`.
+//
+// O numero passou a morar em `premiados.MAXIMO`, e quem o consome importa de
+// la. Este teste existe para o mesmo numero nao voltar a ser escrito em quatro
+// lugares, com um deles discordando.
 {
   const fs = require("fs");
-  const fonte = fs.readFileSync(path.join(__dirname, "src/modules/rankings/ranking.service.js"), "utf8");
-  const corpo = /function notaGeral\(sede, externo\) \{([\s\S]*?)\n\}/.exec(fonte)?.[1];
+  const problemas = [];
 
-  check("achei a formula da nota geral", corpo ? [] : ["nao achei `notaGeral` em ranking.service.js"]);
-
-  if (corpo) {
-    // eslint-disable-next-line no-new-func
-    const geral = new Function("sede", "externo", corpo);
-
-    // ── Neutra à escala ──────────────────────────────────────────────────────
-    //
-    // O núcleo do pedido. Duas pessoas igualmente boas (80 dos dois lados) com
-    // misturas de trabalho MUITO diferentes -- uma quase toda na sede, outra
-    // quase toda na rua -- têm de receber a mesma nota. A escala é definida pela
-    // empresa; ninguém pode ganhar ou perder por ela.
-    const quaseSede = geral({ pontos: 80, registros: 40 }, { pontos: 80, registros: 2 });
-    const quaseRua = geral({ pontos: 80, registros: 2 }, { pontos: 80, registros: 40 });
-    check("a mistura de trabalho nao muda a nota de quem vai igual bem", [
-      ...(quaseSede === 80 && quaseRua === 80
-        ? []
-        : [`80/80 deveria dar 80 nas duas misturas; deu ${quaseSede} e ${quaseRua}`]),
-    ]);
-
-    // ── Quem atua num lado só não é prejudicado ──────────────────────────────
-    const soSede = geral({ pontos: 72, registros: 30 }, { pontos: 0, registros: 0 });
-    const soRua = geral({ pontos: 0, registros: 0 }, { pontos: 91, registros: 12 });
-    check("quem atua num lado so recebe a nota daquele lado", [
-      ...(soSede === 72 ? [] : ["so sede deveria dar 72, deu " + soSede]),
-      ...(soRua === 91 ? [] : ["so rua deveria dar 91, deu " + soRua]),
-    ]);
-
-    // ── Nunca vira soma ──────────────────────────────────────────────────────
-    //
-    // Era exatamente a proposta descartada: 100 + 100 = 200, e todo mundo que
-    // trabalha bem dos dois lados volta a empatar no teto.
-    const otimo = geral({ pontos: 100, registros: 20 }, { pontos: 100, registros: 20 });
-    check("continua de 0 a 100 -- e media, nao soma", [
-      ...(otimo === 100 ? [] : ["100 e 100 deveriam dar 100 (media), deu " + otimo]),
-    ]);
-
-    // ── Fica entre as duas notas ─────────────────────────────────────────────
-    const problemas = [];
-    for (const [a, va, b, vb] of [[40, 10, 90, 30], [90, 1, 40, 99], [55, 7, 55, 7], [0, 5, 100, 5]]) {
-      const g = geral({ pontos: a, registros: va }, { pontos: b, registros: vb });
-      if (g < Math.min(a, b) || g > Math.max(a, b)) {
-        problemas.push(`${a}(${va}) e ${b}(${vb}) deram ${g}, fora do intervalo [${Math.min(a, b)}, ${Math.max(a, b)}]`);
-      }
-    }
-    // E o peso PUXA para o lado onde a pessoa trabalhou mais.
-    const puxaSede = geral({ pontos: 90, registros: 40 }, { pontos: 30, registros: 2 });
-    if (!(puxaSede > 80)) problemas.push("com 40 atendimentos e 2 visitas, a geral deveria ficar perto da sede; deu " + puxaSede);
-    check("fica entre as duas notas, puxada para onde houve mais trabalho", problemas);
-
-    // ── Mês sem trabalho nenhum não tem nota ─────────────────────────────────
-    check("mes sem trabalho nenhum nao recebe nota zero", [
-      ...(geral({ pontos: 0, registros: 0 }, { pontos: 0, registros: 0 }) === null
-        ? []
-        : ["deveria ser null: `0` afirmaria 'foi mal' sobre um mes em que nao ha o que julgar"]),
-    ]);
+  if (premiados.MAXIMO !== 3) {
+    problemas.push("o teto deveria ser 3 (ouro, prata, bronze), e e " + premiados.MAXIMO);
   }
+  // O que passar do teto e APARADO na leitura tambem: um 5 gravado antes desta
+  // regra volta como 3, em vez de continuar mandando na tela.
+  const aparado = premiados.validar({ sede: 5, externo: 50 }, premiados.PADRAO);
+  if (aparado.sede !== premiados.MAXIMO || aparado.externo !== premiados.MAXIMO) {
+    problemas.push("valor acima do teto deveria ser aparado para o teto: " + JSON.stringify(aparado));
+  }
+
+  // A BORDA usa o mesmo numero, e nao uma copia dele.
+  const { premiacaoSchema } = require(path.join(__dirname, "src/modules/rankings/ranking.dto"));
+  const base = { ranking: "sede", competencia: "2026-09" };
+  if (!premiacaoSchema.safeParse({ ...base, posicao: premiados.MAXIMO }).success) {
+    problemas.push("a borda recusa a ultima posicao do podio (" + premiados.MAXIMO + ")");
+  }
+  if (premiacaoSchema.safeParse({ ...base, posicao: premiados.MAXIMO + 1 }).success) {
+    problemas.push("a borda aceita posicao acima do teto");
+  }
+
+  // E O PODIO CONFIGURADO TAMBEM E LIMITE, no servico: com um campeao so, o 2o
+  // lugar nao tem premio a registrar -- e esconder o botao nunca foi protecao,
+  // porque a mesma chamada sai no curl.
+  const servico = fs.readFileSync(
+    path.join(__dirname, "src/modules/rankings/ranking.service.js"),
+    "utf8"
+  );
+  if (!servico.includes("pos > r.premiados")) {
+    problemas.push("o servico deixou de recusar premio para posicao fora do podio configurado");
+  }
+  if (!servico.includes("FORA_DO_PODIO")) {
+    problemas.push("o codigo de erro FORA_DO_PODIO saiu -- a tela nao tem como explicar a recusa");
+  }
+  if (servico.includes("[1, 2, 3].includes")) {
+    problemas.push("o servico voltou a cravar 1-2-3 em vez de usar premiados.MAXIMO");
+  }
+
+  // E a TELA nao pode oferecer o que o servidor recusa.
+  const tela = fs.readFileSync(
+    path.join(__dirname, "../client/src/components/pages/Rankings.jsx"),
+    "utf8"
+  );
+  if (tela.includes("Math.min(50,") || tela.includes("max={50}")) {
+    problemas.push("o campo de premiados voltou a oferecer 50");
+  }
+  if (!tela.includes("Number(config?.premiadosMaximo)")) {
+    problemas.push("a tela nao le mais o teto do servidor");
+  }
+  check("um teto so para o podio, do formulario ao banco", problemas);
 }
 
-// ── O desempate usa a geral ──────────────────────────────────────────────────
+// ── A MEDIA DAS DUAS NOTAS NAO EXISTE MAIS ──────────────────────────────────
+//
+// Existia uma `notaGeral`: media das duas notas, ponderada pelo volume de cada
+// lado. Ela era JUSTA enquanto as duas escalas iam de 0 a 100 -- e as checagens
+// que moravam aqui provavam isso (neutra a escala, sem prejuizo para quem atua
+// num lado so, dentro da escala).
+//
+// A pontuacao da SEDE perdeu o teto, e a media perdeu o sentido junto: 250 na
+// sede com 80 fora da sede dava 165. E este teste NAO PEGOU, porque alimentava
+// a funcao com `pontos: 100` dos dois lados -- uma regua da sede que nao existia
+// mais. Era um teste protegendo a alegacao do comentario, e nao o comportamento
+// do codigo.
+//
+// A media saiu (auditoria-tela-rankings-10-09.md, achado 1). O que se trava
+// agora e o contrario: que ela NAO VOLTE, e que o outro lado viaje so para
+// exibicao -- sem tocar a ordem.
+//
+// Sem regex de proposito: sao trechos literais de codigo, e a comparacao por
+// texto exato falha alto quando alguem os reescreve -- que e o que se quer.
+const fs = require("fs");
+const SALTO = String.fromCharCode(10);
+// Lido SEM o retorno de carro: os arquivos deste projeto estao em CRLF, e
+// comparar trecho de codigo com quebra de linha exige uma forma so.
+const semCR = (t) => t.split(String.fromCharCode(13)).join("");
+const fonteServico = semCR(fs.readFileSync(
+  path.join(__dirname, "src/modules/rankings/ranking.service.js"),
+  "utf8"
+));
+
+/** O trecho entre um cabecalho de funcao e a marca que a fecha. */
+function corpoDe(fonte, cabecalho, fechamento) {
+  const i = fonte.indexOf(cabecalho);
+  if (i < 0) return "";
+  const j = fonte.indexOf(fechamento, i);
+  return j < 0 ? "" : fonte.slice(i, j);
+}
+
 {
-  const fs = require("fs");
-  const fonte = fs.readFileSync(path.join(__dirname, "src/modules/rankings/ranking.service.js"), "utf8");
-  const corpo = /function classificar\(pessoas, volumeDe\) \{([\s\S]*?)\n\}/.exec(fonte)?.[1] || "";
   const problemas = [];
-  if (!/\(b\.geral \?\? b\.pontos\) - \(a\.geral \?\? a\.pontos\)/.test(corpo)) {
-    problemas.push("`classificar` nao desempata pela geral -- empate volta a cair na ordem alfabetica");
+  if (fonteServico.includes("function notaGeral")) {
+    problemas.push("`notaGeral` voltou: media de escala aberta com escala fechada nao significa nada");
+  }
+  // O bloco que explica POR QUE ela saiu tem de continuar la: sem ele, o
+  // proximo a olhar a coluna do outro lado recria a media em uma tarde.
+  if (!fonteServico.includes('POR QUE NAO EXISTE MAIS UMA "NOTA GERAL"')) {
+    problemas.push("o bloco que explica por que a media saiu foi removido");
+  }
+  check("nao ha media entre as duas escalas", problemas);
+}
+
+// ── O DESEMPATE E O DA PROPRIA COMPETICAO ───────────────────────────────────
+//
+// Empate em pontos volta a cair no VOLUME proprio e, por fim, no nome. Era
+// assim antes da geral, e e assim de novo: o que a geral trazia era pontuacao
+// do OUTRO ranking decidindo posicao neste -- no externo, onde ninguem passa de
+// 100, quem tambem atende na sede desempatava com 165 contra 62.
+{
+  const corpo = corpoDe(fonteServico, "function classificar(pessoas, volumeDe) {", SALTO + "}");
+  const problemas = [];
+  if (!corpo) problemas.push("nao achei `classificar` em ranking.service.js");
+  if (corpo.includes("geral")) {
+    problemas.push("`classificar` voltou a olhar a geral -- o outro ranking nao ordena este");
+  }
+  const desempate = [
+    "        b.pontos - a.pontos ||",
+    "        volumeDe(b) - volumeDe(a) ||",
+    "        a.nome.localeCompare(b.nome)",
+  ].join(SALTO);
+  if (corpo && !corpo.includes(desempate)) {
+    problemas.push("o desempate deixou de ser pontos -> volume proprio -> nome");
   }
   // `posicao` por ultimo: com ela antes do espalhar, reclassificar uma lista ja
-  // classificada mantinha a posicao velha -- e e isso que `obter` faz.
-  if (!/\{ \.\.\.p, posicao: i \+ 1 \}/.test(corpo)) {
+  // classificada mantinha a posicao velha.
+  if (corpo && !corpo.includes("{ ...p, posicao: i + 1 }")) {
     problemas.push("`posicao` voltou a ser escrita ANTES do espalhar: reclassificar nao renumera");
   }
-  check("o desempate olha o mes inteiro da pessoa", problemas);
+  check("o desempate e o criterio da propria competicao", problemas);
+}
+
+// ── O OUTRO LADO VIAJA, MAS NAO REORDENA ────────────────────────────────────
+//
+// A coluna "como foi o mes desta pessoa do outro lado" precisa dos numeros do
+// outro ranking. Anexar e barato; REORDENAR com eles e trazer a mistura de
+// volta pela porta de tras.
+{
+  const corpo = corpoDe(
+    fonteServico,
+    "const comOutroLado = async (r, aa, mm) => {",
+    SALTO + "    };"
+  );
+  const problemas = [];
+  if (!corpo) problemas.push("nao achei `comOutroLado` -- a coluna do outro lado saiu?");
+  if (corpo.includes("classificar(")) {
+    problemas.push("`comOutroLado` reclassifica: o outro ranking voltou a mexer na ordem deste");
+  }
+  if (corpo && !corpo.includes("outroLado: o ? { ranking: outraChave, pontos: o.pontos, registros: o.registros }")) {
+    problemas.push("o outro lado nao viaja mais com os pontos e registros proprios");
+  }
+  check("o outro lado e exibicao, nao ordem", problemas);
 }
 
 // ── A TELA NAO PODE CONTRADIZER A REGRA ──────────────────────────────────────

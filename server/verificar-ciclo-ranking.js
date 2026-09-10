@@ -128,11 +128,21 @@ console.log("=== Ciclo do ranking ===");
     { dia: 25, hora: 18, minuto: 0, vigenteDesde: "2026-09" },
     { dia: 25, hora: 18, minuto: 0, vigenteDesde: "2026-01" },
     { dia: 15, hora: 12, minuto: 30, vigenteDesde: "2026-06" },
+    // OS DIAS QUE NAO EXISTEM EM TODO MES. Antes o teto era 28 para nao lidar
+    // com eles; agora a data e aparada para o ultimo dia do mes (ver
+    // `diaQueExiste`), e e AQUI que a aparagem se prova: se a janela e a
+    // competencia corrente discordarem sobre onde fevereiro vira, esta
+    // varredura acha o dia orfao.
+    { dia: 29, hora: 0, minuto: 0, vigenteDesde: "2025-12" },
+    { dia: 30, hora: 18, minuto: 0, vigenteDesde: "2025-12" },
+    { dia: 31, hora: 23, minuto: 59, vigenteDesde: "2025-12" },
   ];
   for (const cfg of configs) {
     // Varre 18 meses dia a dia -- barato, e cobre viradas, meses curtos e o
-    // mes da vigencia inteiro.
-    for (let d = new Date(2025, 11, 1); d < new Date(2027, 5, 1); d.setDate(d.getDate() + 1)) {
+    // mes da vigencia inteiro. Vai ate meados de 2028 para pegar o fevereiro
+    // BISSEXTO: com dia 30, a virada cai em 29/02 naquele ano e em 28/02 nos
+    // outros, e as duas contas tem de concordar nos dois casos.
+    for (let d = new Date(2025, 11, 1); d < new Date(2028, 5, 1); d.setDate(d.getDate() + 1)) {
       const quando = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 13, 10, 0);
       const comp = ciclo.competenciaDe(quando, cfg);
       const [ano, mes] = comp.split("-").map(Number);
@@ -226,9 +236,43 @@ console.log("=== Ciclo do ranking ===");
 // ── Valores que nao podem passar ─────────────────────────────────────────────
 {
   const problemas = [];
-  for (const dia of [29, 30, 31, 40]) {
+  // O TETO SUBIU DE 28 PARA 31, e o que impede o "31 de fevereiro" nao e mais
+  // o limite: e a aparagem. Quem fecha folha no dia 30 precisava do dia 30.
+  for (const dia of [32, 40, 99]) {
     const v = ciclo.validar({ dia }, ciclo.PADRAO);
-    if (v.dia > 28) problemas.push(`dia ${dia} passou (virou ${v.dia}) -- fevereiro nao tem esse dia`);
+    if (v.dia > 31) problemas.push(`dia ${dia} passou (virou ${v.dia}) -- nao existe mes com esse dia`);
+  }
+  for (const dia of [29, 30, 31]) {
+    if (ciclo.validar({ dia }, ciclo.PADRAO).dia !== dia) {
+      problemas.push(`dia ${dia} deveria ser aceito -- e aparado mes a mes, nao recusado`);
+    }
+  }
+  // A APARAGEM, no dia em que ela importa: fevereiro.
+  const apara = [
+    [2026, 1, 30, 28, "fevereiro comum"],
+    [2028, 1, 30, 29, "fevereiro bissexto"],
+    [2026, 1, 31, 28, "dia 31 em fevereiro"],
+    [2026, 3, 31, 30, "dia 31 em abril"],
+    [2026, 0, 31, 31, "dia 31 em janeiro fica 31"],
+    [2026, 0, 15, 15, "dia que existe nao e mexido"],
+  ];
+  for (const [ano, mesIdx, dia, esperado, oque] of apara) {
+    const obtido = ciclo.diaQueExiste(ano, mesIdx, dia);
+    if (obtido !== esperado) {
+      problemas.push(`${oque}: dia ${dia} deveria cair em ${esperado}, caiu em ${obtido}`);
+    }
+  }
+  // E o efeito na JANELA: nada de transbordar para o mes seguinte, que era o
+  // motivo do teto de 28 (`new Date(2026, 1, 30)` vira 02/03).
+  const fev = ciclo.janela(2026, 2, { dia: 30, hora: 0, minuto: 0, vigenteDesde: "2025-12" });
+  if (iso(fev.inicio) !== "2026-02-28 00:00") {
+    problemas.push("com dia 30, fevereiro/2026 deveria comecar em 28/02; veio " + iso(fev.inicio));
+  }
+  // A ponta de cima tambem e aparada, senao sobra um vao entre um mes curto e o
+  // seguinte.
+  const jan = ciclo.janela(2026, 1, { dia: 31, hora: 0, minuto: 0, vigenteDesde: "2025-12" });
+  if (iso(jan.fim) !== "2026-02-28 00:00") {
+    problemas.push("com dia 31, janeiro/2026 deveria terminar em 28/02; veio " + iso(jan.fim));
   }
   if (ciclo.validar({ dia: 0 }, ciclo.PADRAO).dia < 1) problemas.push("dia 0 passou");
   if (ciclo.validar({ hora: 99 }, ciclo.PADRAO).hora > 23) problemas.push("hora 99 passou");
@@ -238,7 +282,7 @@ console.log("=== Ciclo do ranking ===");
   if (ciclo.validar({ vigenteDesde: "ontem" }, ciclo.PADRAO).vigenteDesde !== null) {
     problemas.push("vigencia com formato invalido deveria virar null");
   }
-  check("dia impossivel e valor absurdo nao viram regra", problemas);
+  check("dia 29, 30 e 31 valem -- aparados para o ultimo dia do mes", problemas);
 }
 
 // ── A vigencia nao pode ser pedida de fora ───────────────────────────────────

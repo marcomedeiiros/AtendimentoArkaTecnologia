@@ -1008,6 +1008,29 @@ async function main() {
       const relatorioManda = regras.paraISO(regras.prazoDe("2026-09-01", { prazoDias: 3, vencimentoDiaDoMes: 5 }));
       check(relatorioManda === "2026-09-04", `e o prazo curto aperta o mensal (${relatorioManda})`);
 
+      // O VENCIMENTO NO DIA 30 (E NO 31) -- e o que fevereiro faz com ele.
+      //
+      // O campo era limitado a 28 porque "o dia 30 nao existe em fevereiro". O
+      // teto saiu e a data passou a ser APARADA para o ultimo dia do mes (ver o
+      // helper de calendario): sem isso, `new Date(2026, 1, 30)` nao falha --
+      // transborda para 02/03 e concede dois dias de folga que ninguem deu.
+      const fev = regras.paraISO(regras.prazoDe("2026-01-20", { prazoDias: 90, vencimentoDiaDoMes: 30 }));
+      check(fev === "2026-02-28", `dia 30 vence em 28/02 num fevereiro comum (${fev})`);
+      const bissexto = regras.paraISO(regras.prazoDe("2028-01-20", { prazoDias: 90, vencimentoDiaDoMes: 30 }));
+      check(bissexto === "2028-02-29", `e em 29/02 no ano bissexto (${bissexto})`);
+      // Dia 31 significa, na pratica, "sempre no ultimo dia do mes".
+      const abril = regras.paraISO(regras.prazoDe("2026-03-10", { prazoDias: 90, vencimentoDiaDoMes: 31 }));
+      check(abril === "2026-04-30", `dia 31 vence em 30/04 (${abril})`);
+      // E o mes que TEM o dia nao e mexido.
+      const outubro = regras.paraISO(regras.prazoDe("2026-09-20", { prazoDias: 90, vencimentoDiaDoMes: 30 }));
+      check(outubro === "2026-10-30", `dia 30 vence em 30/10, sem aparar (${outubro})`);
+      // A borda aceita a faixa nova, e continua recusando o que nao existe.
+      const trinta = await regras.salvar({ vencimentoDiaDoMes: 30 });
+      check(trinta.vencimentoDiaDoMes === 30, `dia 30 e aceito na configuracao (${trinta.vencimentoDiaDoMes})`);
+      const absurdo = await regras.salvar({ vencimentoDiaDoMes: 40 });
+      check(absurdo.vencimentoDiaDoMes === 31, `dia 40 e aparado para 31 (${absurdo.vencimentoDiaDoMes})`);
+      await regras.salvar({ vencimentoDiaDoMes: null });
+
       // A CONFIGURACAO MUDA A NOTA -- se nao mudasse, a tela seria decoracao.
       const m = {
         status: "aprovado", entregueEm: new Date(), prazoEm: new Date(Date.now() + 86400000),

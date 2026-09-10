@@ -979,8 +979,8 @@ function Configuracao() {
               onChange={(e) => mexer('prazoDias', Number(e.target.value))} />
           </Campo>
           <Campo rotulo="Vencimento mensal (dia do mês seguinte)"
-            dica="Todos os relatórios de um mês precisam estar entregues até esse dia do mês seguinte Vazio = a empresa não usa essa regra valendo as duas, vale a mais apertada">
-            <input type="number" min={1} max={28} placeholder="não usar" className={ENTRADA}
+            dica="Todos os relatórios de um mês precisam estar entregues até esse dia do mês seguinte No mês que não tiver esse dia, vence no último dia dele (31 = sempre no último dia) Vazio = a empresa não usa essa regra valendo as duas, vale a mais apertada">
+            <input type="number" min={1} max={31} placeholder="não usar" className={ENTRADA}
               value={rascunho.vencimentoDiaDoMes ?? ''}
               onChange={(e) => mexer('vencimentoDiaDoMes', e.target.value === '' ? null : Number(e.target.value))} />
           </Campo>
