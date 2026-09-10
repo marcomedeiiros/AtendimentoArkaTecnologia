@@ -28,21 +28,41 @@ class RankingController {
   }
 
   /**
-   * A REGRA DA PONTUACAO EXTERNA, publicada.
+   * O QUE A TELA DE RELATORIOS PRECISA SABER -- e o que ela NAO recebe aqui.
    *
-   * A tela mostra "por que voce esta nesta posicao", e para isso precisa dos
-   * pesos. Eles vem do servidor, e nao repetidos no front: numero de regra
-   * copiado na tela e o jeito mais rapido de a explicacao passar a mentir
-   * quando alguem ajusta a formula.
+   * ── O PAYLOAD SE CHAMAVA "AS REGRAS" E RESPONDIA OUTRA COISA ─────────────
+   *
+   * Ele montava os pesos, as faixas, o custo por devolucao e o minimo a partir
+   * das CONSTANTES de `pontuacao.externa` -- os valores de fabrica --, e nao do
+   * que o administrador configurou. Nada quebrava hoje (a tela usa apenas
+   * `itens`), mas um payload que se chama "as regras" e responde outra coisa e
+   * uma armadilha armada para o proximo a consumi-lo.
+   * (auditoria-tela-rankings-10-09.md, achado 10)
+   *
+   * Agora o que e padrao mora DENTRO de `padrao`, e diz isso no nome.
+   *
+   * ── E POR QUE NAO MANDAR A REGUA EM VIGOR ────────────────────────────────
+   *
+   * Porque esta rota e mais larga que a tela de configuracao: ela abre para
+   * quem lanca relatorio (`exigirRelatorioDeVisita`), e nao so para o
+   * Administrador. A regua exata em vigor e restrita de proposito -- ver o
+   * bloco de `GET /configuracao` nas rotas --, e quem PRECISA dela para
+   * entender a propria posicao recebe no payload do ranking
+   * (`GET /rankings/:equipe`), que exige o modulo "rankings".
    */
   async regras(req, res) {
     return success(res, {
       externo: {
-        pesos: PESOS,
-        faixasVolume: FAIXAS_VOLUME,
-        faixasEvidencias: FAIXAS_EVIDENCIAS,
-        custoPorDevolucao: CUSTO_POR_DEVOLUCAO,
-        minimoMapeamentos: MINIMO_MAPEAMENTOS,
+        // O PADRAO, e com esse nome. Serve para a tela explicar a FORMA da
+        // pontuacao (que ha faixa de volume, que devolucao desconta) sem
+        // anunciar os numeros que estao valendo agora.
+        padrao: {
+          pesos: PESOS,
+          faixasVolume: FAIXAS_VOLUME,
+          faixasEvidencias: FAIXAS_EVIDENCIAS,
+          custoPorDevolucao: CUSTO_POR_DEVOLUCAO,
+          minimoMapeamentos: MINIMO_MAPEAMENTOS,
+        },
         // Os itens EM VIGOR, e não a lista de fábrica: a tela desenha o
         // formulário de visita a partir daqui, e com a lista fixa um item
         // criado pela empresa não teria campo para ser preenchido.
@@ -60,7 +80,7 @@ class RankingController {
   }
 
   async removerPremiacao(req, res) {
-    return success(res, await rankingService.removerPremiacao(req.params.id));
+    return success(res, await rankingService.removerPremiacao(req.params.id, req.user));
   }
 
  // ── configuracao dos relatorios (so administrador) ───────────────────────

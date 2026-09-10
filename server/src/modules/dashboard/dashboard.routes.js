@@ -3,6 +3,8 @@ const dashboardController = require("./dashboard.controller");
 const { authMiddleware } = require("../../shared/middlewares/auth.middleware");
 const { exigirModulo } = require("../permissoes/modulo.middleware");
 const { adminMiddleware } = require("../../shared/middlewares/admin.middleware");
+const validate = require("../../shared/middlewares/validate.middleware");
+const { regrasSedeSchema } = require("./dashboard.dto");
 
 // Visao Geral: acesso definido pela matriz de permissoes (modulo "dashboard").
 // Antes esta rota nao tinha autenticacao nenhuma: as metricas ficavam publicas.
@@ -71,7 +73,12 @@ router.get("/ranking-equipe", (req, res, next) =>
 // inclusive na leitura: a tela expoe a regua exata, e quem e avaliado saber
 // dela antes de a empresa anunciar e outra coisa.
 router.get("/regras", adminMiddleware, (req, res, next) => dashboardController.obterRegras(req, res).catch(next));
-router.put("/regras", adminMiddleware, (req, res, next) => dashboardController.salvarRegras(req, res).catch(next));
+// COM VALIDACAO NA BORDA, como a rota irma dos relatorios: o Zod barra a
+// forma aqui e os tres gravadores reconferem a regra (ver `dashboard.dto`).
+// Era a unica escrita de ranking sem esta primeira camada.
+router.put("/regras", adminMiddleware, validate(regrasSedeSchema), (req, res, next) =>
+  dashboardController.salvarRegras(req, res).catch(next)
+);
 
 router.post("/painel/limpar", adminMiddleware, (req, res, next) =>
   dashboardController.limparPainel(req, res).catch(next)

@@ -113,6 +113,99 @@ class UsuarioRepository {
 
   // Edicao do proprio perfil (nome). NAO toca em cargo/ativo -- isso e gestao,
   // exclusiva de Administrador em outro fluxo.
+  /**
+   * OUTRA CONTA JA USA ESTE NOME?
+   *
+   * O nome NAO e unico no schema (so o e-mail e), e o ranking da sede cruza
+   * a equipe com a pontuacao POR NOME -- e por nome que o atendimento guarda
+   * o atendente. Dois homonimos marcados na sede recebiam a mesma linha: os
+   * mesmos pontos, o mesmo ultimo atendimento, sem nada na tela indicando.
+   * (auditoria-tela-rankings-10-09.md, achado 9)
+   *
+   * A comparacao ignora caixa e espaco nas pontas: "Marco Medeiros" e "marco
+   * medeiros " sao a mesma pessoa para quem le a tabela, e e a tabela que
+   * este guarda protege. Acento NAO e normalizado -- "Joao" e "João" sao
+   * nomes diferentes, e adivinhar isso criaria recusa que ninguem entende.
+   *
+   * @param {string} nome
+   * @param {string|null} exceto id que pode ficar com o nome (o proprio dono)
+   */
+  async nomeEmUso(nome, exceto = null) {
+    const alvo = String(nome || "").trim().toLowerCase();
+    if (!alvo) return false;
+    // Comparacao em memoria: `mode: "insensitive"` do Prisma nao vale no
+    // SQLite, e a tabela de usuarios tem dezenas de linhas -- ler os nomes
+    // custa menos que manter uma coluna normalizada em sincronia.
+    const todos = await prisma.usuario.findMany({ select: { id: true, nome: true } });
+    return todos.some((u) => u.id !== exceto && String(u.nome || "").trim().toLowerCase() === alvo);
+  }
+
+  /**
+   * Nomes repetidos que JA existem, agrupados -- para o diagnostico da subida.
+   *
+   * O guarda acima impede novos; este conta os que entraram antes dele. Sem
+   * isto, "o nome e unico" seria uma crenca sobre dados que ninguem olhou.
+   */
+  async nomesRepetidos() {
+    const todos = await prisma.usuario.findMany({ select: { id: true, nome: true } });
+    const porNome = new Map();
+    for (const u of todos) {
+      const chave = String(u.nome || "").trim().toLowerCase();
+      if (!chave) continue;
+      porNome.set(chave, [...(porNome.get(chave) || []), u.nome]);
+    }
+    return [...porNome.entries()]
+      .filter(([, nomes]) => nomes.length > 1)
+      .map(([, nomes]) => ({ nome: nomes[0], quantas: nomes.length }));
+  }
+
+  /**
+   * O NOME VELHO SEGUE O DONO no historico denormalizado.
+   *
+   * ── QUAIS COLUNAS, E POR QUE SO ESTAS ───────────────────────────────────
+   *
+   * Tres colunas guardam o nome de quem trabalhou, e as tres respondem "quem
+   * e essa pessoa AGORA":
+   *
+   *   Atendimento.atendenteNome        e a CHAVE do ranking da sede -- sem
+   *                                    mover, a pontuacao passada vai a zero;
+   *   MapeamentoTecnico.tecnicoNome    o nome exibido nos relatorios de visita
+   *                                    (o ranking externo cruza por id);
+   *   Conversa.ultimoAtendenteNome     o "por ultimo, quem atendeu" da Central.
+   *
+   * ── E QUAIS FICAM COMO ESTAO, DE PROPOSITO ──────────────────────────────
+   *
+   * `PremiacaoRanking.usuarioNome` e `MapeamentoTecnico.validadoPorNome` sao
+   * RETRATO de um ato: "o premio de setembro foi dado a esta pessoa", "este
+   * relatorio foi devolvido por aquela". Um registro do que aconteceu nao muda
+   * porque alguem trocou o nome depois -- e a premiacao guarda de proposito o
+   * numero e o nome do fechamento (ver `ranking.service.registrarPremiacao`).
+   *
+   * A troca e por NOME EXATO, e nao por id: os historicos sao justamente as
+   * linhas que nao tem id do usuario. Se houver homonimo antigo no banco (o
+   * guarda de `nomeEmUso` impede novos), esta troca move o historico dos dois
+   * -- e e por isso que `checar-integridade` grita quando encontra um.
+   */
+  async renomearHistorico(de, para) {
+    const antigo = String(de || "").trim();
+    const novo = String(para || "").trim();
+    if (!antigo || !novo || antigo === novo) return { atendimentos: 0, mapeamentos: 0, conversas: 0 };
+
+    const [atendimentos, mapeamentos, conversas] = await prisma.$transaction([
+      prisma.atendimento.updateMany({ where: { atendenteNome: antigo }, data: { atendenteNome: novo } }),
+      prisma.mapeamentoTecnico.updateMany({ where: { tecnicoNome: antigo }, data: { tecnicoNome: novo } }),
+      prisma.conversa.updateMany({
+        where: { ultimoAtendenteNome: antigo },
+        data: { ultimoAtendenteNome: novo },
+      }),
+    ]);
+    return {
+      atendimentos: atendimentos.count,
+      mapeamentos: mapeamentos.count,
+      conversas: conversas.count,
+    };
+  }
+
   atualizarNome(id, nome) {
     return prisma.usuario.update({
       where: { id },

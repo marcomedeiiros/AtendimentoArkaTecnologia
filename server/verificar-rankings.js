@@ -1512,6 +1512,163 @@ async function main() {
     }
   }
 
+  /**
+   * 12. A BORDA, O NOME E OS RESTOS -- achados 8, 9 e 10 da auditoria.
+   */
+  titulo("12. A BORDA DA CONFIGURACAO DA SEDE (achado 8)");
+  {
+    const { regrasSedeSchema } = require("./src/modules/dashboard/dashboard.dto");
+
+    const bom = regrasSedeSchema.safeParse({
+      unidades: { atendimento: 12, estrela: 3 },
+      minimoAvaliacoes: 4,
+      ciclo: { dia: 30, hora: 18, minuto: 30 },
+      premiados: { sede: 2, externo: null },
+    });
+    check(bom.success, "o corpo que a tela manda passa pela borda");
+
+    // A LISTA DE VIGENCIAS E DESCARTADA NA BORDA. O formulario devolve o objeto
+    // do ciclo inteiro (incluindo `vigencias` e `vigenteDesde`), e quem decide
+    // de quando a regra vale e o servidor.
+    const comLista = regrasSedeSchema.safeParse({
+      ciclo: { dia: 15, vigenteDesde: "2020-01", vigencias: [{ desde: "2020-01", dia: 9 }] },
+    });
+    check(
+      comLista.success &&
+        comLista.data.ciclo.vigencias === undefined &&
+        comLista.data.ciclo.vigenteDesde === undefined,
+      "vigencia mandada pela tela e descartada na borda, sem recusar o pedido"
+    );
+    check(comLista.success && comLista.data.ciclo.dia === 15, "e o dia pedido continua chegando");
+
+    // FORA DE FAIXA e recusado AQUI, antes de qualquer gravador.
+    const fora = [
+      [{ ciclo: { dia: 40 } }, "dia 40"],
+      [{ ciclo: { hora: 99 } }, "hora 99"],
+      [{ minimoAvaliacoes: 0 }, "minimo 0"],
+      [{ minimoAvaliacoes: 99 }, "minimo 99"],
+      [{ premiados: { sede: 9 } }, "9 premiados"],
+      [{ unidades: { atendimento: -5 } }, "unidade negativa"],
+      [{ unidades: { atendimento: "dez" } }, "unidade em texto"],
+    ];
+    const passou = fora.filter(([corpo]) => regrasSedeSchema.safeParse(corpo).success).map(([, o]) => o);
+    check(
+      passou.length === 0,
+      "valor fora de faixa e recusado na borda" + (passou.length ? ": passou " + passou.join(", ") : "")
+    );
+
+    // E a ROTA usa o schema: sem isto, o arquivo existe e nao protege nada.
+    const rotas = fs.readFileSync(path.join(__dirname, "src/modules/dashboard/dashboard.routes.js"), "utf8");
+    check(rotas.includes("validate(regrasSedeSchema)"), "a rota PUT /dashboard/regras valida na borda");
+  }
+
+  titulo("12b. O NOME IDENTIFICA UMA PESSOA SO (achado 9)");
+  {
+    const usuarioRepository = require("./src/infrastructure/repositories/usuario.repository");
+    const authService = require("./src/modules/auth/auth.service");
+
+    // O RANKING DA SEDE CRUZA POR NOME: dois homonimos recebiam a mesma linha,
+    // com os mesmos pontos e o mesmo ultimo atendimento.
+    check(await usuarioRepository.nomeEmUso(ana.nome), "nome ja usado e reconhecido");
+    check(
+      await usuarioRepository.nomeEmUso("  " + ana.nome.toUpperCase() + "  "),
+      "e reconhecido tambem com caixa e espaco diferentes"
+    );
+    check(!(await usuarioRepository.nomeEmUso(ana.nome, ana.id)), "o proprio dono nao conflita consigo");
+    check(!(await usuarioRepository.nomeEmUso(MARCA + " Ninguem")), "nome livre nao acusa conflito");
+
+    let recusou = null;
+    try {
+      await authService.atualizarPerfil(bruno.id, { nome: ana.nome });
+    } catch (e) {
+      recusou = e.code;
+    }
+    check(recusou === "NOME_EM_USO", "renomear para um nome em uso e recusado (" + recusou + ")");
+
+    // ── E RENOMEAR LEVA O HISTORICO ──────────────────────────────────────────
+    //
+    // Sem isto, a pontuacao passada da pessoa ia a ZERO: os atendimentos
+    // continuavam com o nome velho, e nada de ranking e guardado.
+    const antesDoNome = await rankingService.obter("sede", COMP);
+    const pontosAntes = antesDoNome.classificacao.find((x) => x.usuarioId === ana.id)?.pontos ?? 0;
+    check(pontosAntes > 0, "a Ana tem pontos antes de trocar de nome (" + pontosAntes + ")");
+
+    const nomeNovo = MARCA + " Ana Renomeada";
+    const movidas = await usuarioRepository.renomearHistorico(ana.nome, nomeNovo);
+    await usuarioRepository.atualizarNome(ana.id, nomeNovo);
+    check(movidas.atendimentos > 0, "o historico de atendimento acompanha (" + movidas.atendimentos + " linhas)");
+
+    const depoisDoNome = await rankingService.obter("sede", COMP);
+    const linhaNova = depoisDoNome.classificacao.find((x) => x.usuarioId === ana.id);
+    check(linhaNova?.nome === nomeNovo, "a tabela mostra o nome novo");
+    check(
+      linhaNova?.pontos === pontosAntes,
+      "e a pontuacao continua a mesma depois da troca (" + pontosAntes + " -> " + linhaNova?.pontos + ")"
+    );
+
+    // A PREMIACAO NAO E RENOMEADA: ela e retrato de um ato, e o nome dela e o
+    // que justificou o premio no fechamento.
+    const premiacoes = await prisma.premiacaoRanking.findMany({
+      where: { usuarioNome: { startsWith: MARCA } },
+      select: { usuarioNome: true },
+    });
+    check(
+      !premiacoes.some((x) => x.usuarioNome === nomeNovo),
+      "e a premiacao registrada guarda o nome do fechamento, sem acompanhar a troca"
+    );
+
+    // Volta o nome, para o resto do arquivo continuar falando da Ana.
+    await usuarioRepository.renomearHistorico(nomeNovo, ana.nome);
+    await usuarioRepository.atualizarNome(ana.id, ana.nome);
+  }
+
+  titulo("12c. OS RESTOS (achado 10)");
+  {
+    // O PAYLOAD DE /rankings/regras dizia "as regras" e devolvia o PADRAO.
+    const controller = require("./src/modules/rankings/ranking.controller");
+    let corpoResposta = null;
+    const res = {
+      status: () => res,
+      json: (x) => {
+        corpoResposta = x;
+        return res;
+      },
+    };
+    await controller.regras({}, res);
+    const externo = corpoResposta?.data?.externo;
+    check(!!externo?.padrao?.pesos, "o que e padrao vai dentro de `padrao`, e diz isso no nome");
+    check(externo?.pesos === undefined, "e nao ha mais um `pesos` no topo fingindo ser a regua em vigor");
+    check(Array.isArray(externo?.itens) && externo.itens.length > 0, "e o checklist EM VIGOR continua no topo");
+
+    // REMOVER O QUE NAO EXISTE NAO PODE DIZER "REMOVIDO".
+    let erroRemocao = null;
+    try {
+      await rankingService.removerPremiacao("nao-existe-esse-id");
+    } catch (e) {
+      erroRemocao = { code: e.code, status: e.statusCode };
+    }
+    check(
+      erroRemocao?.code === "PREMIACAO_INEXISTENTE" && erroRemocao?.status === 404,
+      "remover premiacao inexistente responde 404 (" + JSON.stringify(erroRemocao) + ")"
+    );
+
+    // E remover a que existe continua funcionando -- uma vez.
+    const paraRemover = await prisma.premiacaoRanking.findFirst({
+      where: { usuarioNome: { startsWith: MARCA } },
+    });
+    if (paraRemover) {
+      const ok = await rankingService.removerPremiacao(paraRemover.id, { nome: MARCA });
+      check(ok.removido === true, "remover a premiacao que existe funciona");
+      let segunda = null;
+      try {
+        await rankingService.removerPremiacao(paraRemover.id);
+      } catch (e) {
+        segunda = e.code;
+      }
+      check(segunda === "PREMIACAO_INEXISTENTE", "e remover de novo acusa que nao havia nada");
+    }
+  }
+
   titulo("limpeza");
   await limpar();
   const sobrou =

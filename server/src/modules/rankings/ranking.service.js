@@ -648,8 +648,31 @@ class RankingService {
     return salvo;
   }
 
-  async removerPremiacao(id) {
-    await prisma.premiacaoRanking.deleteMany({ where: { id } });
+  /**
+   * Remove o registro de uma premiacao.
+   *
+   * ── "REMOVIDO" SO QUANDO ALGO FOI REMOVIDO ───────────────────────────────
+   *
+   * Isto devolvia `{ removido: true }` SEMPRE, inclusive para um id que nao
+   * existe -- `deleteMany` nao reclama de conjunto vazio. Registro de
+   * premiacao e o que foi pago a quem, e uma confirmacao de remocao que nao
+   * removeu nada e a resposta que ninguem confere: quem clicou fica achando
+   * que desfez. (auditoria-tela-rankings-10-09.md, achado 10)
+   *
+   * Fica no log com AUTORIA pelo mesmo motivo que o registro: e premio saindo
+   * do historico.
+   */
+  async removerPremiacao(id, autor = null) {
+    const { count } = await prisma.premiacaoRanking.deleteMany({
+      where: { id: String(id || "") },
+    });
+    if (!count) {
+      throw new AppError("Premiação não encontrada", 404, "PREMIACAO_INEXISTENTE");
+    }
+    logger.warn("Premiacao removida", {
+      id,
+      por: autor?.nome || autor?.email || autor?.sub || "desconhecido",
+    });
     return { removido: true };
   }
 }

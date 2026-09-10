@@ -104,6 +104,17 @@ class AuthService {
       );
     }
 
+    // O NOME TAMBEM PRECISA SER UNICO -- o ranking identifica quem atendeu por
+    // ele (ver `atualizarPerfil`). Conferido antes do e-mail porque e o erro
+    // mais provavel de acontecer sem ma intencao: dois funcionarios homonimos.
+    if (await usuarioRepository.nomeEmUso(nome)) {
+      throw new AppError(
+        "Já existe uma conta com esse nome. O ranking identifica quem atendeu pelo nome, então dois iguais somariam os pontos na mesma linha.",
+        409,
+        "NOME_EM_USO"
+      );
+    }
+
     const jaExiste = await usuarioRepository.findByEmail(email);
     if (jaExiste) {
       throw new AppError(
@@ -310,8 +321,48 @@ class AuthService {
 
   // Edita o proprio perfil. `userId` vem SEMPRE do token (req.user.sub), nunca
   // do corpo -- por isso ninguem edita a conta de outro.
+  /**
+   * ── TROCAR O PROPRIO NOME MEXE NO RANKING, E ISSO PRECISOU DE CUIDADO ───
+   *
+   * O atendimento guarda o atendente por NOME (`atendenteNome`), e o ranking
+   * da sede cruza a equipe com a pontuacao por esse campo. Duas
+   * consequencias, as duas encontradas na auditoria (achado 9):
+   *
+   *   HOMONIMO      dois "Marco Medeiros" marcados na sede recebiam a mesma
+   *                 linha -- os mesmos pontos, o mesmo ultimo atendimento --
+   *                 porque para o cruzamento eles eram a mesma pessoa;
+   *   RENOMEAR      o historico ficava com o nome velho. A pontuacao passada
+   *                 ia a zero e nao havia como recuperar pela tela: nada de
+   *                 ranking e guardado, tudo e recalculado a cada consulta.
+   *
+   * O nome nao e unico no banco (so o e-mail e), entao a garantia e aqui e no
+   * cadastro -- as duas portas por onde um nome entra.
+   */
   async atualizarPerfil(userId, { nome }) {
-    const usuario = await usuarioRepository.atualizarNome(userId, String(nome).trim());
+    const limpo = String(nome || "").trim();
+    if (await usuarioRepository.nomeEmUso(limpo, userId)) {
+      throw new AppError(
+        "Já existe uma conta com esse nome. O ranking identifica quem atendeu pelo nome, então dois iguais somariam os pontos na mesma linha.",
+        409,
+        "NOME_EM_USO"
+      );
+    }
+
+    const antes = await usuarioRepository.findById(userId);
+    const usuario = await usuarioRepository.atualizarNome(userId, limpo);
+
+    // O NOME VELHO SEGUE O DONO. Sem isto, quem renomeia perde o proprio mes
+    // no ranking -- e o de todos os meses anteriores.
+    if (antes && antes.nome && antes.nome !== limpo) {
+      const movidas = await usuarioRepository.renomearHistorico(antes.nome, limpo);
+      logger.info("Nome atualizado e historico acompanhado", {
+        usuarioId: userId,
+        de: antes.nome,
+        para: limpo,
+        ...movidas,
+      });
+    }
+
     const permissoes = await permissaoService.modulosDe(usuario.cargo);
     return { ...usuario, permissoes };
   }

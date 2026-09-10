@@ -32,7 +32,51 @@ const { PrismaClient } = require("@prisma/client");
 
 const prisma = new PrismaClient({ log: [] });
 
+/**
+ * NOME REPETIDO ENTRE CONTAS -- a outra coisa que some sem barulho.
+ *
+ * O ranking da sede cruza a equipe com a pontuacao POR NOME: e por nome que
+ * o atendimento guarda quem atendeu (`atendenteNome`). Dois homonimos
+ * marcados na sede recebem a MESMA linha -- os mesmos pontos, o mesmo ultimo
+ * atendimento -- e nada na tela indica isso.
+ * (auditoria-tela-rankings-10-09.md, achado 9)
+ *
+ * O cadastro e a troca de nome passaram a recusar nome em uso, entao novos
+ * nao entram. Este aviso conta os que entraram ANTES daquele guarda: sem ele,
+ * "o nome identifica a pessoa" seria uma crenca sobre dados que ninguem olhou.
+ *
+ * Nao e fatal, pelo mesmo motivo do orfao: derrubar a API por causa de dois
+ * cadastros parecidos trocaria um problema silencioso por indisponibilidade.
+ */
+async function conferirNomesRepetidos() {
+  const todos = await prisma.usuario.findMany({ select: { nome: true, email: true } });
+  const porNome = new Map();
+  for (const u of todos) {
+    const chave = String(u.nome || "").trim().toLowerCase();
+    if (!chave) continue;
+    porNome.set(chave, [...(porNome.get(chave) || []), u]);
+  }
+  const repetidos = [...porNome.values()].filter((c) => c.length > 1);
+  if (!repetidos.length) {
+    console.log("[arka] nomes de conta: OK (nenhum repetido)");
+    return;
+  }
+  console.error("[arka] ================================================================");
+  console.error("[arka] ATENCAO: ha contas com o MESMO nome.");
+  console.error("[arka]");
+  for (const contas of repetidos) {
+    console.error(`[arka]   "${contas[0].nome}" -> ${contas.map((c) => c.email).join(", ")}`);
+  }
+  console.error("[arka]");
+  console.error("[arka] O ranking da sede identifica quem atendeu pelo NOME: essas contas");
+  console.error("[arka] somam pontos na mesma linha. Renomeie uma delas em Perfil -- o");
+  console.error("[arka] historico acompanha a troca.");
+  console.error("[arka] ================================================================");
+}
+
 async function main() {
+  await conferirNomesRepetidos();
+
   const violacoes = await prisma.$queryRawUnsafe("PRAGMA foreign_key_check");
 
   if (!violacoes.length) {

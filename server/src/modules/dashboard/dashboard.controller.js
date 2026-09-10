@@ -74,9 +74,13 @@ class DashboardController {
 
   async salvarRegras(req, res) {
     const regras = await painelService.salvarRegras(req.body, req.user);
-    // Salvo DEPOIS: `salvarRegras` recusa pesos que nao somam 100, e gravar o
-    // ciclo antes deixaria metade do formulario aplicada num pedido que a
-    // pessoa viu falhar.
+    // Salvo DEPOIS, e a ORDEM importa: `salvarRegras` pode recusar o pedido
+    // (regua toda zero -> REGUA_TODA_ZERO), e gravar o ciclo antes deixaria
+    // metade do formulario aplicada num pedido que a pessoa viu falhar.
+    //
+    // O motivo escrito aqui era "recusa pesos que nao somam 100" -- regra que
+    // saiu quando a pontuacao da sede perdeu o teto (c1627d6). A ordem
+    // continua certa; a justificativa e que estava vencida.
     const cicloNovo = req.body?.ciclo ? await ciclo.salvar(req.body.ciclo, req.user) : await ciclo.obter();
     const premiadosNovo = req.body?.premiados
       ? await premiados.salvar(req.body.premiados, req.user)

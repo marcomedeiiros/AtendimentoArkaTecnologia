@@ -39,9 +39,9 @@ disso, o pódio configurável tem um caminho que o servidor recusa, e a legenda 
 | 5 | "A caminho da nota" ignora o mínimo configurado | servidor | média · ✅ corrigido (§14) |
 | 6 | Mudar o ciclo pela segunda vez reescreve os ciclos do primeiro | servidor | média · ✅ corrigido (§15) |
 | 7 | O histórico e a tabela podem discordar da posição da mesma pessoa | servidor | média · ✅ fechou junto com o 1 (§11.1) |
-| 8 | `PUT /dashboard/regras` é a única escrita de ranking sem validação na borda | servidor | média |
-| 9 | O ranking da sede cruza por NOME: homônimo soma junto, renomear apaga o mês | servidor | baixa/média |
-| 10 | Restos: payload de regra que ninguém usa, textos e comentários vencidos | os dois | baixa |
+| 8 | `PUT /dashboard/regras` é a única escrita de ranking sem validação na borda | servidor | média · ✅ corrigido (§16) |
+| 9 | O ranking da sede cruza por NOME: homônimo soma junto, renomear apaga o mês | servidor | baixa/média · ✅ corrigido (§16) |
+| 10 | Restos: payload de regra que ninguém usa, textos e comentários vencidos | os dois | baixa · ✅ corrigido (§16) |
 
 ---
 
@@ -831,3 +831,138 @@ Suíte completa: `TUDO PASSOU`. Build do cliente limpo.
 diferença aparece na **próxima** vez que alguém mexer no dia de fechamento: os
 ciclos anteriores param de se mexer, e o aviso da tela -- que dizia isso desde
 sempre -- passa a ser verdade.
+
+---
+
+## 16. O que foi feito (os achados 8, 9 e 10)
+
+Os três últimos, e nenhum deles tinha defeito visível na tela hoje -- são as
+garantias que faltavam para o próximo defeito não nascer.
+
+### 16.1 A borda da configuração da sede (achado 8)
+
+`PUT /api/dashboard/regras` ganhou `validate(regrasSedeSchema)`, com o schema
+em `dashboard.dto.js` -- a mesma forma da rota irmã dos relatórios. A divisão de
+trabalho é a de sempre: **aqui a forma, no serviço a regra.** `sede.regras`
+continua recusando régua toda zero, `ciclo.salvar` continua carimbando a
+vigência com o relógio do servidor, `premiados` continua aparando pelo teto do
+pódio -- nenhum dos dois confia no outro.
+
+E há um ganho que não era o objetivo: **o Zod descarta `ciclo.vigencias` e
+`ciclo.vigenteDesde`**, que o formulário devolve porque os recebeu. A injeção
+que o §15.6 barra no serviço agora morre uma camada antes -- e `z.object`
+descarta chave desconhecida em vez de recusar o pedido, então a tela continua
+podendo mandar o que leu.
+
+O campo "Mínimo de avaliações" passou a aparar no cliente (1 a 20, como os
+vizinhos). Sem isso, digitar 25 deixaria de ser aparado em silêncio pelo serviço
+e passaria a voltar 400 -- trocar um comportamento discreto por um erro em
+inglês não é conserto.
+
+### 16.2 O nome identifica uma pessoa só (achado 9)
+
+Duas metades, e a segunda era a que custava caro.
+
+**Homônimo não entra mais.** `nomeEmUso` guarda as duas portas por onde um nome
+é definido -- o cadastro e a troca no próprio perfil --, comparando sem caixa e
+sem espaço nas pontas ("Marco Medeiros" e "marco medeiros " são a mesma pessoa
+para quem lê a tabela, e é a tabela que o guarda protege). **Acento não é
+normalizado**: "Joao" e "João" são nomes diferentes, e adivinhar isso criaria
+recusa que ninguém entende.
+
+**E renomear parou de apagar o mês.** O atendimento guarda o atendente por nome,
+então trocar o próprio nome zerava a pontuação passada -- sem recuperação pela
+tela, porque nada de ranking é guardado. Agora o nome antigo segue o dono em
+três colunas, e a escolha de quais é o ponto:
+
+| coluna | por quê |
+| --- | --- |
+| `Atendimento.atendenteNome` | é a **chave** do ranking da sede |
+| `MapeamentoTecnico.tecnicoNome` | o nome exibido nos relatórios de visita |
+| `Conversa.ultimoAtendenteNome` | o "quem atendeu por último" da Central |
+
+E as que **não** mudam, de propósito: `PremiacaoRanking.usuarioNome` e
+`MapeamentoTecnico.validadoPorNome` são **retrato de um ato** ("o prêmio de
+setembro foi dado a esta pessoa", "este relatório foi devolvido por aquela"). Um
+registro do que aconteceu não muda porque alguém trocou o nome depois -- e a
+premiação guarda o nome e os pontos do fechamento justamente para continuar
+legível quando a fórmula ou a pessoa mudar.
+
+**A restrição no banco NÃO foi adicionada, e isso é deliberado.** `@unique` em
+`Usuario.nome` seria o cinto sobre a suspensória -- mas o entrypoint roda
+`prisma db push --accept-data-loss` a cada subida, e um índice único que não
+pode ser aplicado (porque já existem dois nomes iguais) **falha o push e derruba
+a API em crash-loop** -- é o 502 que o DEPLOY.md §157 descreve. Trocar um
+homônimo silencioso por uma indisponibilidade não é melhorar.
+
+No lugar, `checar-integridade.js` -- que já roda a cada subida e é
+deliberadamente não-fatal -- passou a **contar os homônimos que já existem**:
+
+```
+[arka] nomes de conta: OK (nenhum repetido)
+```
+
+Quando o log da produção disser isso, adicionar `@unique` é seguro e vira uma
+linha no schema. Antes disso, seria uma aposta com o deploy.
+
+### 16.3 Os restos (achado 10)
+
+* **`GET /rankings/regras`** montava `pesos`, `faixas*`, `custoPorDevolucao` e
+  `minimoMapeamentos` a partir das **constantes** -- e se chamava "as regras".
+  Nada quebrava (a tela usa apenas `itens`), mas um payload que se chama assim e
+  responde outra coisa é uma armadilha armada para o próximo a consumi-lo. O que
+  é padrão passou para dentro de `padrao`, e diz isso no nome.
+
+  **E não passou a mandar a régua em vigor**, de propósito: esta rota é mais
+  larga que a tela de configuração (abre para quem lança relatório, não só para
+  o Administrador), e a régua exata em vigor é restrita por decisão registrada
+  nas rotas. Quem precisa dela para entender a própria posição recebe no payload
+  do ranking, que exige o módulo "rankings" -- é o §13;
+
+* **`removerPremiacao`** devolvia `{ removido: true }` sempre, inclusive para um
+  id inexistente: `deleteMany` não reclama de conjunto vazio. Registro de
+  premiação é o que foi pago a quem, e uma confirmação que não removeu nada é a
+  resposta que ninguém confere -- quem clicou fica achando que desfez. Agora é
+  **404 `PREMIACAO_INEXISTENTE`**, e a remoção fica no log com autoria, pelo
+  mesmo motivo do registro;
+
+* **os textos vencidos**: o comentário de `salvarRegras` justificava a ordem de
+  gravação com "recusa pesos que não somam 100" (regra removida em `c1627d6`) --
+  a ordem continua certa, a justificativa é que estava velha --, e o aviso da
+  tela falava de "Pesos, **alvo** e mínimo", sendo que `alvoAtendimentos` deixou
+  de existir.
+
+### 16.4 A verificação
+
+Seção nova em `verificar-rankings` (**12**, **12b**, **12c**), 21 checagens:
+
+* a borda aceita o corpo que a tela manda, **descarta** as vigências que ela
+  devolve sem recusar o pedido, e recusa dia 40, hora 99, mínimo 0 e 99,
+  9 premiados, unidade negativa e unidade em texto -- mais a garantia de que a
+  **rota** usa o schema (o arquivo existir não protege nada);
+* `nomeEmUso` reconhece caixa e espaço diferentes, não acusa o próprio dono,
+  não acusa nome livre, e `atualizarPerfil` recusa com `NOME_EM_USO`;
+* e a prova que importa: **a Ana tem 75 pontos, troca de nome, e continua com
+  75** -- com a premiação registrada guardando o nome do fechamento;
+* o payload de `/rankings/regras` (chamando o controller de verdade) tem
+  `padrao.pesos`, não tem `pesos` no topo e mantém o checklist em vigor;
+* remover premiação inexistente responde 404, remover a que existe funciona uma
+  vez, e a segunda tentativa acusa.
+
+Suíte completa: `TUDO PASSOU`. Build do cliente limpo.
+
+---
+
+## Fim: os dez achados
+
+Todos os dez fechados, em quatro commits. Sobra **um** item consciente do
+levantamento do front-end (`PRIMEIRA_COMPETENCIA`, registrado no §10) e **uma**
+decisão adiada com critério: o `@unique` em `Usuario.nome`, que espera o log da
+produção dizer que não há homônimo.
+
+O padrão que apareceu três vezes neste dia, e que vale mais que qualquer um dos
+consertos: **quando uma régua muda, o teste que a citava passa a proteger o
+comentário em vez do comportamento -- e continua verde.** Aconteceu com o
+"continua de 0 a 100" da nota geral, com o "a sede também para em 100" e com o
+"dia 28 é o maior permitido". Nos três casos o teste passava, e nos três a
+afirmação era falsa desde um commit anterior.

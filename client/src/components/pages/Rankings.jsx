@@ -767,7 +767,7 @@ export default function Rankings() {
       // esperar que o dia de fechamento novo reescrevesse janeiro -- e ele
       // não reescreve, de propósito.
       avisar(
-        'Pesos, alvo e mínimo de avaliações já valem, inclusive para os meses anteriores.\n\n' +
+        'O valor por atendimento, o valor por estrela e o mínimo de avaliações já valem, inclusive para os meses anteriores.\n\n' +
         'O dia de fechamento vale só a partir deste ciclo: os meses já passados continuam como foram vividos.',
         { titulo: 'Configuração salva', tipo: 'info' }
       );
@@ -984,7 +984,7 @@ export default function Rankings() {
             <label className="text-[11px] font-semibold text-texto-suave block mb-1">Mínimo de avaliações</label>
             <input
               type="number" min={1} max={20} value={rascunho.minimoAvaliacoes}
-              onChange={(e) => { setErroCfg(''); setRascunho((r) => ({ ...r, minimoAvaliacoes: Number(e.target.value) || 1 })); }}
+              onChange={(e) => { setErroCfg(''); setRascunho((r) => ({ ...r, minimoAvaliacoes: Math.max(1, Math.min(20, Number(e.target.value) || 1)) })); }}
               className="w-full sm:w-48 bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto focus:outline-none focus:border-acao/50"
             />
             <p className="text-[10px] text-texto-fraco mt-1 leading-relaxed">
