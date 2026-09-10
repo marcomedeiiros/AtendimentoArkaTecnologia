@@ -23,6 +23,7 @@ const rankingService = require("./src/modules/rankings/ranking.service");
 const mapeamentoService = require("./src/modules/rankings/mapeamento.service");
 const midiaStorage = require("./src/infrastructure/storage/midia.storage");
 const {
+  reguaEmVigor,
   pontuarExterno,
   ITENS_MAPEAMENTO,
   quantidadeEvidencias: quantidadeEvidenciasDe,
@@ -591,20 +592,83 @@ async function main() {
     "as tres parcelas de qualidade ficam em 0 ate a amostra minima");
   check(umSo.pontos < 30, `e o total fica baixo (${umSo.pontos}), em vez de liderar`);
   check(umSo.completude.amostra === 1, "mas a tela recebe a amostra, para dizer '1 de 3' e nao '0,0'");
+  // E RECEBE O MINIMO JUNTO. Sem este campo a tela usava um 3 cravado, e com o
+  // minimo configurado em 5 escrevia "4 de 3" -- que se le como "bati o minimo
+  // e o sistema nao esta contando". (auditoria-tela-rankings-10-09.md, 4)
+  check(
+    umSo.completude.minimo === 3 && umSo.prazo.minimo === 3 && umSo.evidencias.minimo === 3,
+    "e o MINIMO vai junto nas tres parcelas de qualidade, para a tela nao chutar"
+  );
+  const comCinco = pontuarExterno(
+    [{ status: "entregue", resumo: "x".repeat(50), itens: itensCheios, evidencias: [1, 2, 3], devolucoes: 0 }],
+    { minimoRelatorios: 5 }
+  );
+  check(
+    comCinco.completude.minimo === 5,
+    `o minimo CONFIGURADO e o que viaja (${comCinco.completude.minimo}), e nao o de fabrica`
+  );
+
+  // ── A REGUA EM VIGOR, que e o que a tela escreve no rodape ────────────────
+  //
+  // O rodape da aba "Fora da Sede" trazia "aprovados (25), completo (25), prazo
+  // (20), evidencias (15), sem retorno (15)" e "3 relatorios" CRAVADOS no
+  // cliente -- e os cinco pesos e o minimo sao configuraveis. Mexer na
+  // configuracao nao mudava o texto, e ele passava a explicar outra conta.
+  const reguaPadrao = reguaEmVigor();
+  check(
+    reguaPadrao.teto === 100,
+    `o teto e a SOMA das parcelas, e nao 100 escrito a mao (${reguaPadrao.teto})`
+  );
+  const reguaCfg = reguaEmVigor({
+    pesos: { volume: 30, completude: 20, prazo: 20, evidencias: 15, retrabalho: 15 },
+    minimoRelatorios: 5,
+    custoPorDevolucao: 8,
+  });
+  check(
+    reguaCfg.parcelas.volume === 30 && reguaCfg.minimo === 5 && reguaCfg.custoPorDevolucao === 8,
+    "a regua em vigor e a configurada, e nao a de fabrica"
+  );
+  // E ela e a MESMA que pontua: duas leituras da configuracao seriam duas
+  // reguas -- a que a tela explica e a que sai no placar.
+  const comVolume30 = pontuarExterno(
+    [
+      { status: "entregue", resumo: "x".repeat(50), itens: itensCheios, evidencias: [1, 2, 3], devolucoes: 0, prazoEm: noMes(8), entregueEm: noMes(6) },
+      { status: "entregue", resumo: "x".repeat(50), itens: itensCheios, evidencias: [1, 2, 3], devolucoes: 0, prazoEm: noMes(8), entregueEm: noMes(6) },
+      { status: "entregue", resumo: "x".repeat(50), itens: itensCheios, evidencias: [1, 2, 3], devolucoes: 0, prazoEm: noMes(8), entregueEm: noMes(6) },
+    ],
+    { pesos: { volume: 30, completude: 20, prazo: 20, evidencias: 15, retrabalho: 15 } }
+  );
+  check(
+    comVolume30.volume.pontos > 0 && comVolume30.completude.pontos <= 20,
+    `o peso configurado chega na conta (volume ${comVolume30.volume.pontos}, completude ${comVolume30.completude.pontos} de 20)`
+  );
 
   // E rascunho nao pontua: abrir formulario nao pode valer ponto.
   const soRascunho = pontuarExterno([{ status: "rascunho", resumo: "x".repeat(50), itens: itensCheios, evidencias: [1, 2, 3] }]);
   check(soRascunho.pontos === 0, "rascunho nao pontua nada");
 
   titulo("6. OS DOIS RANKINGS NAO SE MISTURAM");
-  // Os dois tem o MESMO teto agora, e por isso a checagem mudou de alvo: o que
-  // separa os rankings nao e mais a escala, e sim o criterio. O risco real
-  // passou a ser um endpoint devolver os dois na mesma lista -- e e isso que se
-  // confere aqui e logo abaixo.
-  const maiorSede = Math.max(...sede.classificacao.map((p) => p.pontos));
+  // AS ESCALAS SAO DIFERENTES, E CADA RESPOSTA DIZ A SUA.
+  //
+  // Esta checagem afirmava que "a sede tambem para em 100" -- e ela passava
+  // porque o cenario chega a 75. A sede perdeu o teto em c1627d6: a afirmacao
+  // ja era falsa, e o teste protegia a frase do comentario em vez do
+  // comportamento. Era o mesmo defeito do "continua de 0 a 100" da nota geral.
+  //
+  // O que interessa provar e que cada payload DECLARA a propria escala, para a
+  // tela nao ter de saber de cor -- e foi por nao declarar que o rodape do
+  // externo ficou com "0 a 100" e os cinco pesos cravados no cliente.
   check(
-    maiorSede <= 100,
-    `a sede tambem para em 100 (maior aqui: ${maiorSede}) -- tetos iguais, criterios diferentes`
+    sede.pesos?.semTeto === true && !sede.pesos?.teto,
+    "a sede declara que nao tem teto"
+  );
+  check(
+    externo.pesos?.semTeto === false && externo.pesos?.teto === 100,
+    `e o externo declara o teto dele (${externo.pesos?.teto})`
+  );
+  check(
+    typeof sede.minimoAmostra === "number" && typeof externo.minimoAmostra === "number",
+    "os dois dizem o minimo de amostra, na unidade de cada um"
   );
   check(
     sede.ranking === "sede" && externo.ranking === "externo",
@@ -1129,6 +1193,55 @@ async function main() {
     check(
       doLogin?.equipeRanking === "externo",
       "e a consulta do login tambem -- e dela que sai o usuario mandado para a tela"
+    );
+  }
+
+  /**
+   * 8f. A TELA NAO PODE ESCREVER A REGUA POR CONTA PROPRIA.
+   *
+   * O rodape da aba "Fora da Sede" trazia os cinco pesos e o minimo CRAVADOS
+   * ("aprovados (25), completo (25), prazo (20), evidencias (15), sem retorno
+   * (15)" e "3 relatorios"), e os seis numeros sao configuraveis. Mexer na
+   * configuracao nao mudava o texto -- ele passava a explicar uma conta que nao
+   * roda mais. E ainda dizia "aprovados", carimbo que deixou de existir.
+   *
+   * A aba da SEDE ja lia tudo do servidor, com um comentario explicando por que.
+   * O padrao certo estava na mesma funcao, aplicado a um lado so.
+   * (auditoria-tela-rankings-10-09.md, achados 3 e 4)
+   */
+  titulo("8f. O RODAPE DA TELA SAI DA REGUA EM VIGOR");
+  {
+    const tela = fs.readFileSync(
+      path.join(__dirname, "../client/src/components/pages/Rankings.jsx"),
+      "utf8"
+    );
+    check(
+      !/(25), relat[oó]rio completo (25)/i.test(tela),
+      "os pesos do externo nao estao cravados no rodape"
+    );
+    check(
+      !/mapeamentos aprovados/i.test(tela),
+      "e o texto nao fala mais de 'aprovados' -- a aprovacao nao existe"
+    );
+    check(
+      tela.includes("reguaExterna(dados?.pesos?.parcelas)"),
+      "o rodape monta a regua a partir do que o servidor mandou"
+    );
+    check(
+      tela.includes("dados?.minimoAmostra"),
+      "e o minimo de amostra vem do servidor nas duas abas"
+    );
+    // O CHUTE DO "1 de 3": sem o campo, escreve so a amostra. Um numero
+    // inventado no lugar do minimo e pior do que nao ter minimo escrito.
+    check(
+      !tela.includes("c.minimo ?? 3"),
+      "o minimo do '1 de 3' nao volta a ter valor de fabrica no cliente"
+    );
+    // A lista de rotulos e percorrida a partir da resposta do servidor: uma
+    // parcela nova aparece com a propria chave em vez de sumir do texto.
+    check(
+      /Object.entries(parcelas || {})/.test(tela),
+      "a lista de parcelas vem do servidor, e nao das chaves escritas na tela"
     );
   }
 

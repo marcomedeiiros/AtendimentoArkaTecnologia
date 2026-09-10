@@ -193,13 +193,51 @@ function duracao(seg) {
  */
 function valorCriterio(c) {
   if (c.conta === false) {
-    return { texto: `${c.amostra ?? 0} de ${c.minimo ?? 3}`, fraco: true };
+    // O MINIMO VEM DO SERVIDOR, sempre. Havia um `?? 3` aqui, e ele entrava em
+    // TODAS as parcelas do ranking externo -- que não mandavam o campo. Com o
+    // mínimo de relatórios configurado em 5, a tela escrevia "4 de 3", que se
+    // lê como "bati o mínimo e o sistema não está contando".
+    //
+    // Sem o campo, escreve só a amostra: "4 registros" é verdade sempre. Um
+    // número inventado no lugar do mínimo é pior do que não ter mínimo escrito.
+    return {
+      texto: c.minimo ? `${c.amostra ?? 0} de ${c.minimo}` : `${c.amostra ?? 0}`,
+      fraco: true,
+    };
   }
   if (c.valor == null) return { texto: '-', fraco: true };
   if (c.chave === 'nota') return { texto: c.valor.toFixed(1).replace('.', ','), fraco: false };
   if (c.chave === 'agilidade') return { texto: duracao(c.valor) || '-', fraco: false };
   return { texto: `${c.valor}${c.sufixo || ''}`, fraco: false };
 }
+
+/**
+ * OS RÓTULOS DAS PARCELAS DO ATENDIMENTO FORA DA SEDE.
+ *
+ * Só os NOMES moram aqui -- eles são texto de tela. Os NÚMEROS vêm do servidor
+ * (`dados.pesos.parcelas`), e é essa a correção: o rodapé desta aba trazia
+ * "aprovados (25), completo (25), prazo (20), evidências (15), sem retorno
+ * (15)" e "a partir de 3 relatórios" cravados no cliente. Os cinco pesos e o
+ * mínimo são configuráveis em Relatórios → Configuração, então o texto passou a
+ * explicar uma conta que não roda mais no dia em que alguém os ajustou -- e
+ * ainda mandava o técnico buscar uma "aprovação" que deixou de existir.
+ *
+ * A LISTA É PERCORRIDA A PARTIR DA RESPOSTA DO SERVIDOR, e não desta chave: uma
+ * parcela criada lá aparece no rodapé com a própria chave como nome -- feio, e
+ * visível -- em vez de desaparecer do texto sem ninguém notar.
+ */
+const PARCELAS_EXTERNO = {
+  volume: 'relatórios entregues',
+  completude: 'relatório completo',
+  prazo: 'entrega no prazo',
+  evidencias: 'evidências por visita',
+  retrabalho: 'sem retorno para correção',
+};
+
+const reguaExterna = (parcelas) =>
+  Object.entries(parcelas || {})
+    .map(([chave, pontos]) => `${PARCELAS_EXTERNO[chave] || chave} (${pontos})`)
+    .join(', ');
 
 const EVOLUCAO = {
   subiu: { Icon: TrendingUp, cor: 'text-ativo-400', titulo: 'Subiu de posição em relação ao mês anterior' },
@@ -1165,7 +1203,7 @@ export default function Rankings() {
                   <strong className="text-texto-suave">Sem teto</strong> cada atendimento soma:
                   {' '}{dados?.pesos?.unidades?.atendimento ?? 10} por atendimento avaliado,
                   {' '}{dados?.pesos?.unidades?.estrela ?? 2} por estrela recebida (a partir
-                  de {dados?.minimoAvaliacoes ?? 3} notas) e até
+                  de {dados?.minimoAmostra ?? 3} notas) e até
                   {' '}{dados?.pesos?.bonusAgilidade?.[0]?.pontos ?? 5} de bônus por assumir rápido
                   {' '}<strong className="text-texto-suave">só pontua atendimento fechado que o cliente
                   avaliou</strong> as três parcelas saem da mesma base
@@ -1175,9 +1213,22 @@ export default function Rankings() {
                 </>
               ) : (
                 <>
-                  Pontuação de 0 a 100: mapeamentos aprovados (25), relatório completo (25), entrega no
-                  prazo (20), evidências por visita (15) e ausência de retorno para correção (15)
-                  {' '}as três parcelas de qualidade só contam a partir de 3 relatórios entregues
+                  {/* MESMA REGRA DA ABA VIZINHA: os números vêm do servidor.
+                      O carimbo de aprovação também saiu do texto: ele deixou
+                      de existir, o ranking conta o que foi ENTREGUE, e a frase
+                      antiga mandava o técnico esperar um aval que ninguém dá.
+                      (A verificação procura a palavra antiga neste arquivo --
+                      então ela não pode ser citada nem em comentário.) */}
+                  <strong className="text-texto-suave">
+                    Pontuação de 0 a {dados?.pesos?.teto ?? 100}
+                  </strong>: {reguaExterna(dados?.pesos?.parcelas) || 'as cinco parcelas do relatório'}
+                  {dados?.pesos?.custoPorDevolucao
+                    ? ` cada retorno para correção desconta ${dados.pesos.custoPorDevolucao}`
+                    : ''}
+                  {' '}completo, prazo e evidências só contam a partir de
+                  {' '}{dados?.minimoAmostra ?? 3} relatórios entregues
+                  {' '}os pesos e o mínimo saem de <strong className="text-texto-suave">Relatórios
+                  {' '}Configuração</strong>.
                 </>
               )}
             </p>

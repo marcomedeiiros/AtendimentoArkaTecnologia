@@ -155,6 +155,38 @@ function noPrazo(m) {
 }
 
 /**
+ * A REGUA EM VIGOR -- o padrao deste arquivo com a configuracao por cima.
+ *
+ * ── POR QUE ELA PRECISOU SAIR DE DENTRO DA CONTA ──────────────────────────
+ *
+ * Estas quatro linhas moravam dentro de `pontuarExterno`, e por isso a regua
+ * so existia enquanto alguem estava sendo pontuado. A TELA precisa dela sem
+ * ninguem no meio: para escrever "relatorio completo (25)" e "a partir de 3
+ * relatorios" ela tem de saber os numeros que estao valendo AGORA.
+ *
+ * Sem isto, a tela escrevia os numeros de fabrica direto no rodape -- 25, 25,
+ * 20, 15, 15 e "3 relatorios" cravados no cliente. Trocar completude para 30 na
+ * configuracao nao mudava o texto, e ele passava a explicar uma conta que nao
+ * roda mais. (auditoria-tela-rankings-10-09.md, achados 3 e 4)
+ *
+ * O TETO e a SOMA das parcelas, e nao 100 escrito a mao: `relatorio.regras`
+ * obriga os pesos a somarem 100 (`PESOS_NAO_SOMAM_100`), entao a soma JA e 100
+ * -- mas se um dia aquela invariante mudar, quem escreve o teto na tela nao
+ * precisa saber disso para continuar certo. Foi assim que o "Pontuacao de 0 a
+ * 100" da sede virou mentira quando o teto de la caiu.
+ */
+function reguaEmVigor(regras = null) {
+  const parcelas = { ...PESOS, ...(regras?.pesos || {}) };
+  return {
+    parcelas,
+    teto: Object.values(parcelas).reduce((soma, v) => soma + (Number(v) || 0), 0),
+    // Quantos relatorios entregues ja permitem julgar as parcelas de qualidade.
+    minimo: regras?.minimoRelatorios ?? MINIMO_MAPEAMENTOS,
+    custoPorDevolucao: regras?.custoPorDevolucao ?? CUSTO_POR_DEVOLUCAO,
+  };
+}
+
+/**
  * Pontua UMA pessoa a partir dos mapeamentos dela no mes.
  *
  * Devolve as parcelas SEPARADAS, e nao so o total -- pelo mesmo motivo que a
@@ -178,9 +210,9 @@ function noPrazo(m) {
  * @param {object} [regras] pesos e limites vindos da configuracao
  */
 function pontuarExterno(lista, regras = null) {
-  const pesos = { ...PESOS, ...(regras?.pesos || {}) };
-  const minimo = regras?.minimoRelatorios ?? MINIMO_MAPEAMENTOS;
-  const custoDevolucao = regras?.custoPorDevolucao ?? CUSTO_POR_DEVOLUCAO;
+  // A MESMA regua que a tela recebe -- ver `reguaEmVigor`. Duas leituras da
+  // configuracao seriam duas reguas: a que pontua e a que a tela explica.
+  const { parcelas: pesos, minimo, custoPorDevolucao: custoDevolucao } = reguaEmVigor(regras);
   // O checklist em vigor. Sem configuração, a lista de fábrica.
   const itensEmVigor = Array.isArray(regras?.itens) && regras.itens.length ? regras.itens : ITENS_MAPEAMENTO;
   // So o que ja saiu da mao do tecnico entra na conta: rascunho e trabalho em
@@ -257,18 +289,30 @@ function pontuarExterno(lista, regras = null) {
       valor: entregues.length ? Math.round(mediaCompletude * 100) : null,
       conta: temAmostra,
       amostra: entregues.length,
+      // QUANTOS FALTAM E RESPONSABILIDADE DE QUEM SABE O MINIMO. A tela escreve
+      // "1 de 3" a partir daqui; sem este campo ela usava um 3 cravado, e com
+      // o minimo configurado em 5 escrevia "4 de 3".
+      minimo,
       pontos: ptsCompletude,
     },
     prazo: {
       valor: entregues.length ? Math.round(proporcaoPrazo * 100) : null,
       conta: temAmostra,
       amostra: entregues.length,
+      // QUANTOS FALTAM E RESPONSABILIDADE DE QUEM SABE O MINIMO. A tela escreve
+      // "1 de 3" a partir daqui; sem este campo ela usava um 3 cravado, e com
+      // o minimo configurado em 5 escrevia "4 de 3".
+      minimo,
       pontos: ptsPrazo,
     },
     evidencias: {
       valor: entregues.length ? Math.round(mediaEvidencias * 10) / 10 : null,
       conta: temAmostra,
       amostra: entregues.length,
+      // QUANTOS FALTAM E RESPONSABILIDADE DE QUEM SABE O MINIMO. A tela escreve
+      // "1 de 3" a partir daqui; sem este campo ela usava um 3 cravado, e com
+      // o minimo configurado em 5 escrevia "4 de 3".
+      minimo,
       pontos: ptsEvidencias,
     },
     retrabalho: { devolucoes, pontos: ptsRetrabalho },
@@ -277,6 +321,7 @@ function pontuarExterno(lista, regras = null) {
 
 module.exports = {
   pontuarExterno,
+  reguaEmVigor,
   completudeDe,
   // Publicado para a verificacao exercitar a regra sem montar um mes inteiro.
   quantidadeEvidencias,

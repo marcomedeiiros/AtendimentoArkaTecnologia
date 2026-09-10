@@ -34,8 +34,8 @@ disso, o pódio configurável tem um caminho que o servidor recusa, e a legenda 
 | --- | --- | --- | --- |
 | 1 | A "nota geral" deixou de ser 0 a 100 -- e é o desempate dos DOIS rankings | servidor | **alta** · ✅ corrigido (§11) |
 | 2 | Pódio acima de 3 lugares: a tela oferece o botão, o servidor recusa | os dois | **alta** · ✅ corrigido (§11) |
-| 3 | A legenda do "Fora da Sede" está escrita no front -- e já mente | **front** | média |
-| 4 | "1 de 3" no externo: o mínimo é chute do cliente | **front** | média |
+| 3 | A legenda do "Fora da Sede" está escrita no front -- e já mente | **front** | média · ✅ corrigido (§13) |
+| 4 | "1 de 3" no externo: o mínimo é chute do cliente | **front** | média · ✅ corrigido (§13) |
 | 5 | "A caminho da nota" ignora o mínimo configurado | servidor | média |
 | 6 | Mudar o ciclo pela segunda vez reescreve os ciclos do primeiro | servidor | média |
 | 7 | O histórico e a tabela podem discordar da posição da mesma pessoa | servidor | média · ✅ fechou junto com o 1 (§11.1) |
@@ -302,8 +302,8 @@ que a tela faz:
 | Recorte por equipe / exclusão de quem não concorre | servidor | ✅ no `_ranking`, na entrada -- não é filtro de tela |
 | "Contando a partir de" (limpeza) | servidor (`zeradoEm`, `zeradoNoMes`) | ✅ inclusive a regra sutil de o marco não valer para mês já fechado (`pisoDoMes`) |
 | Régua da sede no rodapé | servidor (`dados.pesos.unidades`) | ✅ |
-| **Régua do externo no rodapé** | **cliente, cravado** | ❌ achado 3 |
-| **Mínimo de amostra do externo** | **cliente, `?? 3`** | ❌ achado 4 |
+| Régua do externo no rodapé | servidor (`pesos.parcelas`, `pesos.teto`) | ✅ corrigido (§13) |
+| Mínimo de amostra (as duas abas) | servidor (`minimoAmostra`, e `minimo` por critério) | ✅ corrigido (§13) |
 | Primeira competência do ranking | cliente, constante | ⚠️ consciente e documentado (achado 10) |
 | Menu/visibilidade por equipe (`utils/equipeRanking.js`) | cliente | ✅ **não é autorização** -- está escrito no arquivo, e o servidor relê o cadastro a cada chamada (`podeVerRelatoriosDeVisita` + recorte por dono no `mapeamento.service`) |
 
@@ -558,3 +558,105 @@ importam de lá. O helper mora em `shared` pelo mesmo motivo que
 `verificar-rankings` ganhou o fevereiro comum, o bissexto, o dia 31 em abril, o
 mês que tem o dia (para provar que nada é aparado sem necessidade) e a faixa nova
 na configuração (30 aceito, 40 aparado para 31).
+
+---
+
+## 13. O que foi feito (os achados 3 e 4)
+
+Os dois tinham a mesma raiz, e ela era no **servidor**: a régua do ranking
+externo nunca saía de lá. `_rankingExterno` devolvia só `classificacao`, então
+`pesos` chegava `null` na tela -- e o cliente preenchia o vazio com os números
+de fábrica. O conserto foi fazer o servidor falar.
+
+### 13.1 A régua em vigor passou a existir como coisa
+
+As quatro linhas que mesclam o padrão com a configuração moravam **dentro** de
+`pontuarExterno`, e por isso a régua só existia enquanto alguém estava sendo
+pontuado. Viraram `reguaEmVigor(regras)`, em `pontuacao.externa`:
+
+```
+padrao: {"parcelas":{"volume":25,"completude":25,"prazo":20,"evidencias":15,"retrabalho":15},
+         "teto":100,"minimo":3,"custoPorDevolucao":5}
+config: {"parcelas":{"volume":30,"completude":20,...},"teto":100,"minimo":5,"custoPorDevolucao":8}
+```
+
+`pontuarExterno` passou a consumir essa mesma função -- **duas leituras da
+configuração seriam duas réguas**: a que pontua e a que a tela explica.
+
+**O teto é a SOMA das parcelas**, e não `100` escrito à mão. Hoje dá 100 porque
+`relatorio.regras` obriga os pesos a somarem 100; se um dia essa invariante
+mudar, quem escreve o teto na tela continua certo sem saber disso. Foi
+exatamente por escrever "0 a 100" à mão que o rodapé da **sede** virou mentira
+quando o teto dela caiu.
+
+### 13.2 O rodapé do "Fora da Sede" monta-se a partir da resposta
+
+A tela ficou com os **rótulos** (texto é texto) e o servidor manda os
+**números**. A lista é percorrida a partir de `dados.pesos.parcelas`, e não das
+chaves escritas no cliente: uma parcela nova criada no servidor aparece no
+rodapé com a própria chave como nome -- feio, e **visível** -- em vez de
+desaparecer do texto sem ninguém notar.
+
+Saíram junto três coisas erradas na mesma frase: os cinco pesos cravados, o
+"3 relatórios" cravado, e a palavra **"aprovados"** -- carimbo que deixou de
+existir e que mandava o técnico esperar um aval que ninguém dá. Entrou uma que
+faltava: quanto cada retorno para correção desconta, que também é configurável.
+
+E o rodapé agora diz **onde se muda isso** ("os pesos e o mínimo saem de
+Relatórios → Configuração"), porque a pergunta seguinte a "por que 25?" é sempre
+essa.
+
+### 13.3 O "1 de 3" parou de ser chute
+
+`minimo` passou a viajar nas três parcelas de qualidade, com o valor que
+`pontuarExterno` **de fato usou**. E o `?? 3` do cliente saiu: sem o campo, a
+tela escreve só a amostra ("4 registros"), que é verdade sempre. **Um número
+inventado no lugar do mínimo é pior do que não ter mínimo escrito** -- com o
+mínimo configurado em 5, um técnico com 4 relatórios lia "4 de 3", e a leitura
+possível era "bati o mínimo e o sistema não está contando".
+
+### 13.4 `minimoAvaliacoes` virou `minimoAmostra` no payload dos rankings
+
+O campo responde **uma** pergunta -- "quantos registros já permitem julgar as
+parcelas de qualidade?" -- e a unidade muda com o ranking: avaliações na sede,
+relatórios entregues fora dela. Dois nomes para o mesmo campo obrigariam a tela
+a escolher qual ler por aba, que é uma decisão que ela não deve tomar.
+
+O `minimoAvaliacoes` do painel de parede e do formulário de configuração da
+sede **não** foram tocados: lá o nome é a coisa certa, porque só existe uma
+unidade.
+
+### 13.5 Mais um teste que protegia uma frase morta
+
+`verificar-rankings` afirmava, na seção "os dois rankings não se misturam", que
+*"a sede também para em 100"* -- e passava porque o cenário chega a 75. A sede
+perdeu o teto em `c1627d6`: a afirmação já era falsa. **É o mesmo defeito do
+"continua de 0 a 100" da nota geral, no mesmo dia, em outro arquivo** -- e vale
+registrar o padrão: quando uma régua muda, o teste que a citava passa a proteger
+o comentário em vez do comportamento, e continua verde.
+
+Trocado pelo que interessa provar: **cada payload declara a própria escala**
+(`semTeto: true` na sede; `teto: 100` no externo) e os dois dizem o mínimo de
+amostra. Foi por não declarar que o rodapé do externo ficou com "0 a 100"
+cravado no cliente.
+
+### 13.6 A verificação
+
+Seção nova, **8f**, com o mesmo formato do guarda que já existia para os botões
+de prêmio -- ela lê a tela e falha se a régua voltar para lá: os pesos não estão
+cravados, a palavra "aprovados" não voltou (nem em comentário), o rodapé monta a
+lista a partir do servidor, o mínimo vem do servidor nas duas abas, e o
+`c.minimo ?? 3` não renasce.
+
+Mais as garantias do servidor: o mínimo viaja nas três parcelas, o mínimo
+**configurado** é o que viaja (5, e não o 3 de fábrica), o teto é a soma das
+parcelas, e a régua configurada é a que chega na conta.
+
+Suíte completa: `TUDO PASSOU`. Build do cliente limpo.
+
+### 13.7 O que sobra da coluna "front-end decide regra"
+
+Do levantamento do §"O front-end guarda dado ou decide regra?", **restou um
+item**: `PRIMEIRA_COMPETENCIA = '2026-09'`, e ele está registrado como decisão
+consciente (a data de início da operação não é dedutível do banco). Os dois ❌
+da tabela viraram ✅.

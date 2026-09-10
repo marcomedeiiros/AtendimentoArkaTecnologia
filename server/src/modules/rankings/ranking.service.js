@@ -41,7 +41,7 @@
  */
 const prisma = require("../../infrastructure/database/prisma.client");
 const painelService = require("../dashboard/painel.service");
-const { pontuarExterno } = require("./pontuacao.externa");
+const { pontuarExterno, reguaEmVigor } = require("./pontuacao.externa");
 const regrasRelatorio = require("./relatorio.regras");
 const ciclo = require("./ciclo");
 const premiados = require("./premiados");
@@ -260,7 +260,12 @@ class RankingService {
 
     return {
       pesos: doMes.pesos,
-      minimoAvaliacoes: doMes.minimoAvaliacoes,
+      // O MINIMO DE AMOSTRA, com o nome da PERGUNTA e nao da unidade: "quantos
+      // registros ja permitem julgar as parcelas de qualidade". Na sede sao
+      // avaliacoes, fora da sede sao relatorios entregues -- e a tela escreve
+      // "1 de 3" nos dois casos, a partir deste campo. Dois nomes para o mesmo
+      // campo obrigariam a tela a escolher qual ler por aba.
+      minimoAmostra: doMes.minimoAvaliacoes,
       classificacao: classificar(pessoas, (p) => p.registros),
     };
   }
@@ -300,6 +305,13 @@ class RankingService {
     // ranking, e nao dentro do laco: sao os mesmos para todo mundo do mes, e ler
     // por pessoa faria a conta depender de quando cada linha foi calculada.
     const regras = await regrasRelatorio.obter();
+    // A REGUA QUE ESTA VALENDO, para a tela poder explicar a conta sem repetir
+    // numero nenhum. Vem da MESMA funcao que pontua (`reguaEmVigor`) -- e nao
+    // relida daqui --, senao a tela explicaria uma regua e o placar sairia de
+    // outra. A aba da sede ja fazia assim; a do externo escrevia "25, 25, 20,
+    // 15, 15" e "3 relatorios" cravados no cliente, e mentia desde o dia em que
+    // alguem mexeu na configuracao. (auditoria-tela-rankings-10-09.md, 3 e 4)
+    const regua = reguaEmVigor(regras);
 
     const pessoas = equipe.map((u) => {
       const p = pontuarExterno(porTecnico.get(u.id) || [], regras);
@@ -309,16 +321,34 @@ class RankingService {
         pontos: p.pontos,
         criterios: [
           { chave: "volume", rotulo: "Relatórios entregues", valor: p.volume.valor, pontos: p.volume.pontos },
-          { chave: "completude", rotulo: "Relatório completo", valor: p.completude.valor, conta: p.completude.conta, amostra: p.completude.amostra, sufixo: "%", pontos: p.completude.pontos },
-          { chave: "prazo", rotulo: "Entregue no prazo", valor: p.prazo.valor, conta: p.prazo.conta, amostra: p.prazo.amostra, sufixo: "%", pontos: p.prazo.pontos },
-          { chave: "evidencias", rotulo: "Evidências por visita", valor: p.evidencias.valor, conta: p.evidencias.conta, amostra: p.evidencias.amostra, pontos: p.evidencias.pontos },
+          // `minimo` VAI JUNTO nas tres parcelas de qualidade: e o numero que a
+          // tela escreve no "1 de 3". Sem ele, o cliente usava um 3 cravado --
+          // e com o minimo configurado em 5 escrevia "4 de 3", que se le como
+          // "bati o minimo e o sistema nao esta contando".
+          { chave: "completude", rotulo: "Relatório completo", valor: p.completude.valor, conta: p.completude.conta, amostra: p.completude.amostra, minimo: p.completude.minimo, sufixo: "%", pontos: p.completude.pontos },
+          { chave: "prazo", rotulo: "Entregue no prazo", valor: p.prazo.valor, conta: p.prazo.conta, amostra: p.prazo.amostra, minimo: p.prazo.minimo, sufixo: "%", pontos: p.prazo.pontos },
+          { chave: "evidencias", rotulo: "Evidências por visita", valor: p.evidencias.valor, conta: p.evidencias.conta, amostra: p.evidencias.amostra, minimo: p.evidencias.minimo, pontos: p.evidencias.pontos },
           { chave: "retrabalho", rotulo: "Sem retorno para correção", valor: p.retrabalho.devolucoes, pontos: p.retrabalho.pontos },
         ],
         registros: p.volume.entregues,
       };
     });
 
-    return { classificacao: classificar(pessoas, (p) => p.registros) };
+    return {
+      // A regua na MESMA forma que a sede usa (`pesos`), com o conteudo que
+      // este ranking tem: parcelas com teto, e o teto e a SOMA delas. `semTeto`
+      // e o campo que a tela le para decidir entre "de 0 a 100" e "sem teto" --
+      // as duas competicoes respondem a mesma pergunta, com respostas
+      // diferentes, e nenhuma das duas fica escrita no cliente.
+      pesos: {
+        parcelas: regua.parcelas,
+        custoPorDevolucao: regua.custoPorDevolucao,
+        teto: regua.teto,
+        semTeto: false,
+      },
+      minimoAmostra: regua.minimo,
+      classificacao: classificar(pessoas, (p) => p.registros),
+    };
   }
 
   /**
@@ -448,7 +478,7 @@ class RankingService {
         transicao: !!janelaMes.transicao,
       },
       pesos: atual.pesos || null,
-      minimoAvaliacoes: atual.minimoAvaliacoes ?? null,
+      minimoAmostra: atual.minimoAmostra ?? null,
       participantes: equipe.length,
       // Quantos sobem ao pódio. Decidido no SERVIDOR (ver `premiados`): a tela
       // desenhava três lugares fixos, o que numa equipe de três premiava até o
