@@ -369,7 +369,7 @@ três decisões do §7.3 seguem em aberto.
 ## 10. A pontuação sem teto foi implementada (10/09, fim do dia)
 
 O §7 ficou em aberto esperando um caso concreto, e ele veio: *"o ranking tá
-travado nos 84 pontos"*. Era o platô da escada — **6 e 7 atendimentos valiam os
+travado nos 84 pontos"*. Era o platô da escada  **6 e 7 atendimentos valiam os
 mesmos 24 pontos de volume**, e com a nota já cheia (5,0) o placar não tinha para
 onde ir. Fechar o sétimo não movia nada.
 
@@ -388,13 +388,13 @@ deles, **250**. O próximo sempre soma.
 
 **As duas decisões do §7.3 que estavam em aberto foram resolvidas assim:**
 
-* **a nota** virou a **soma** das notas, e não a média — média não acumula.
+* **a nota** virou a **soma** das notas, e não a média  média não acumula.
   Somar premia qualidade *e* volume, e o teste trava as duas pontas: dez notas 5
   valem mais que dez notas 3, e vinte notas 3 passam dez notas 5 (esta segunda é
   a decisão de produto de não ter teto);
 * **a agilidade** virou bônus por atendimento. A mediana continua sendo
-  calculada e exibida como indicador — ela responde "quanto tempo tipicamente
-  levo para assumir?" — mas não pontua mais, porque não cresce com o trabalho.
+  calculada e exibida como indicador  ela responde "quanto tempo tipicamente
+  levo para assumir?"  mas não pontua mais, porque não cresce com o trabalho.
 
 **O que se perde, e foi aceito:** a escada existia para que "fechar mais uma OS"
 não valesse sempre o mesmo, e essa porta reabre. Duas coisas seguram o pior
@@ -402,16 +402,16 @@ caso, e nenhuma foi tocada: só pontua o que o cliente **avaliou**, e o mínimo 
 avaliações continua protegendo a parcela de qualidade.
 
 **O que se ganha além do pedido:** o empate de três pessoas em 84 era o platô, e
-não trabalho idêntico — com a régua nova elas se separam pelo que fizeram.
+não trabalho idêntico  com a régua nova elas se separam pelo que fizeram.
 
 ### 10.1 O que mudou junto
 
-`sede.regras` deixou de exigir que os pesos somem 100 — aquela era a invariante
-do teto — e passou a recusar régua **toda zero**, que seria um ranking em que
+`sede.regras` deixou de exigir que os pesos somem 100  aquela era a invariante
+do teto  e passou a recusar régua **toda zero**, que seria um ranking em que
 ninguém pontua nunca. `alvoAtendimentos`, `FAIXAS_VOLUME`, `escadaDeVolume`,
 `pontosDeVolume`, `FAIXAS_AGILIDADE` e `pontosDeAgilidade` foram **removidos**, e
 não deixados sem uso: régua antiga parada no arquivo é convite para alguém
-religá-la — foi o que aconteceu com `inicioDoMes` nesta mesma classe.
+religá-la  foi o que aconteceu com `inicioDoMes` nesta mesma classe.
 
 A tela de configuração trocou os três campos de peso por dois de unidade e ganhou
 uma **conta de exemplo** ("com esta régua, um atendimento assim vale 25 pontos"),
@@ -419,14 +419,14 @@ porque "10 e 2" não diz quanto é um ciclo. E o texto "Pontuação de 0 a 100" 
 de todos os lugares onde aparecia: virou mentira.
 
 **O ranking EXTERNO não foi tocado.** Ele tem teto 100 de propósito, e os dois
-nunca se somam nem se comparam — a diferença de escala entre eles só aumentou.
+nunca se somam nem se comparam  a diferença de escala entre eles só aumentou.
 
 ### 10.2 Verificação
 
 `verificar-pontuacao-sede.js` foi reescrito: ele já existia para impedir
 saturação (a escada saturava em 10 no mês), e a saturação havia voltado por outro
-caminho. Agora trava a garantia que interessa — **o placar se move quando alguém
-trabalha mais** — varrendo de 1 a 40 atendimentos um por um, além do par exato do
+caminho. Agora trava a garantia que interessa  **o placar se move quando alguém
+trabalha mais**  varrendo de 1 a 40 atendimentos um por um, além do par exato do
 relato (6 → 7) e do dobro de trabalho valendo o dobro.
 
 `verificar-rankings.js` teve as parcelas atualizadas e ganhou três checagens: que
@@ -435,7 +435,7 @@ que os tetos antigos não voltaram no payload.
 
 Suíte completa com a única falha pré-existente (`inatividade`). Build limpo. E
 verificado na tela: a configuração abre com os campos novos, a conta de exemplo
-calcula sozinha, e salvar devolve `PUT /api/dashboard/regras → 200 OK` — sem o
+calcula sozinha, e salvar devolve `PUT /api/dashboard/regras → 200 OK`  sem o
 erro de "os pesos precisam somar 100", que deixou de existir.
 
 ### 10.3 O que ainda merece atenção
