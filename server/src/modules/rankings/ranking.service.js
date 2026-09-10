@@ -414,7 +414,8 @@ class RankingService {
     });
 
     const marco = await painelService.marcoDe(equipeChave);
-    const { inicio: inicioMes, fim: fimMes } = ciclo.janela(ano, mes, await ciclo.obter());
+    const janelaMes = ciclo.janela(ano, mes, await ciclo.obter());
+    const { inicio: inicioMes, fim: fimMes } = janelaMes;
 
     const premiacoes = await prisma.premiacaoRanking.findMany({
       where: { ranking: equipeChave, competencia: comp },
@@ -426,6 +427,25 @@ class RankingService {
       rotulo: ROTULOS[equipeChave],
       competencia: comp,
       competenciaAnterior: competenciaAnterior(comp),
+      // ── O INTERVALO POR EXTENSO, PORQUE O RÓTULO NÃO BASTA ─────────────────
+      //
+      // "setembro/2026" não diz de quando a quando se está contando, e com o
+      // ciclo fora do dia 1 os dois deixam de coincidir: com fechamento no dia
+      // 28, "setembro/2026" vai de 28/09 a 28/10.
+      //
+      // `transicao` é o caso que MAIS precisa ser dito: a primeira competência
+      // sob um ciclo novo absorve os dias entre onde o calendário parou e a
+      // virada nova (ver `ciclo.janela`), então ela é mais longa que as outras
+      // -- uma vez só. Sem esta informação, a tela mostra um mês com 57 dias e
+      // nada explica por quê, e a próxima pergunta é se o ranking quebrou de
+      // novo. A tela de configuração já escreve o intervalo por extenso pelo
+      // mesmo motivo; faltava aqui.
+      janela: {
+        inicio: janelaMes.inicio.toISOString(),
+        fim: janelaMes.fim.toISOString(),
+        personalizada: !!janelaMes.personalizada,
+        transicao: !!janelaMes.transicao,
+      },
       pesos: atual.pesos || null,
       minimoAvaliacoes: atual.minimoAvaliacoes ?? null,
       participantes: equipe.length,

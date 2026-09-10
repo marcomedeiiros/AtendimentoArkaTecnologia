@@ -119,6 +119,33 @@ function mesesDisponiveis(corrente) {
   return out.length ? out : [corrente];
 }
 
+/**
+ * "01/09 a 28/10" -- o intervalo do ciclo, escrito por extenso.
+ *
+ * O `fim` que o servidor manda é EXCLUSIVO (é o instante em que o ciclo
+ * seguinte começa), e escrever esse instante como se fosse o último dia do
+ * ciclo é errar por um dia inteiro: "01/09 a 28/10" com fim exclusivo em 28/10
+ * significa que 28/10 já é do ciclo novo. Mostramos o dia anterior ao fim, que
+ * é o último dia que de fato pertence a este ciclo.
+ *
+ * DEPENDE DO FUSO DO SERVIDOR, e não tem como não depender: `ciclo.janela` monta
+ * a data com o relógio LOCAL do contêiner (`new Date(ano, mes - 1, dia)`) e a
+ * manda em ISO. O `docker-compose.prod.yml` fixa `TZ: America/Sao_Paulo` na api,
+ * igual ao `FUSO_BR` usado aqui, então os dois concordam. Se aquele TZ virar
+ * UTC, este rótulo passa a errar por um dia (01/09 apareceria como 31/08) -- e a
+ * janela do ranking inteiro mudaria junto, então o rótulo seria o menor dos
+ * problemas.
+ */
+function intervaloCiclo(janela) {
+  if (!janela?.inicio || !janela?.fim) return '';
+  const dia = (iso, recuar = false) => {
+    const d = new Date(iso);
+    if (recuar) d.setDate(d.getDate() - 1);
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: FUSO_BR });
+  };
+  return `${dia(janela.inicio)} a ${dia(janela.fim, true)}`;
+}
+
 function iniciais(nome = '') {
   const p = String(nome).trim().split(/\s+/).filter(Boolean);
   if (!p.length) return '?';
@@ -718,6 +745,26 @@ export default function Rankings() {
               ))}
             </select>
           </div>
+
+          {/* DE QUANDO A QUANDO, e não só o nome do mês.
+              Com o ciclo fora do dia 1, "setembro/2026" e o mês de setembro
+              deixam de ser a mesma coisa -- e a competência de TRANSIÇÃO é mais
+              longa que as outras, uma vez só, porque absorve os dias entre onde
+              o calendário parou e a virada nova. Sem esta linha a tela mostra um
+              mês com 57 dias e nada explica por quê. */}
+          {dados?.janela?.personalizada && (
+            <span
+              className="text-[10px] text-texto-fraco leading-tight max-w-[16rem]"
+              title={dados.janela.transicao
+                ? 'Primeiro ciclo depois da mudança do dia de fechamento: ele absorve os dias que ficariam sem ciclo. Acontece uma vez.'
+                : 'Intervalo deste ciclo, conforme o dia de fechamento configurado.'}
+            >
+              {intervaloCiclo(dados.janela)}
+              {dados.janela.transicao && (
+                <span className="text-espera-400"> · ciclo de transição</span>
+              )}
+            </span>
+          )}
 
           {/* O botão é o da ABA ABERTA, e some quando não há o que fazer: com o
               ranking zerado, o que cabe ali é restaurar, não limpar de novo. */}

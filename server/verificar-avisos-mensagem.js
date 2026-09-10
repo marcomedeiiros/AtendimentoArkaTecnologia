@@ -123,6 +123,21 @@ console.log("=== Aviso de mensagem nova ===");
   if (!/tocarSomChamadoNovo\(\)/.test(app)) {
     problemas.push("o Modo TV deixou de anunciar chamado novo");
   }
+  // O MODO TV NAO PODE FICAR MUDO -- e ja ficou uma vez.
+  //
+  // Por uma passagem a regra era `if (modoTv) { if (chamadoNovo) toca; }`, e
+  // dentro do Modo TV mensagem de conversa conhecida nao produzia som nenhum.
+  // Foi relatado como "o som do Modo TV parou de funcionar", e a leitura estava
+  // certa: silencio decidido em codigo e indistinguivel de defeito.
+  //
+  // A condicao COMBINADA e o que garante a cobertura: com
+  // `modoTv && chamadoNovo` num ramo, o `else` pega TODO o resto -- Modo TV com
+  // conversa conhecida incluido. A forma aninhada deixava um caso sem saida.
+  if (!/if \(modoTvRef\.current && houveChamadoNovo\)/.test(app)) {
+    problemas.push(
+      "a escolha do som deixou de ser uma condicao combinada -- Modo TV pode ter voltado a ficar mudo"
+    );
+  }
   if (/Notificações ligadas|Notificações bloqueadas|BellOff/.test(layout)) {
     problemas.push("o botao de ligar/desligar voltou para a barra lateral");
   }

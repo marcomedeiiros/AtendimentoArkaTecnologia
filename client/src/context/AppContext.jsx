@@ -571,8 +571,31 @@ export function AppProvider({ children }) {
       return null;
     };
 
+    // ── SÓ REGISTRA QUEM TEM MARCA, e isto é uma correção ─────────────────
+    //
+    // Antes gravava `marcas[c.id] = null` para conversa sem mensagem de cliente
+    // legível. Parecia inofensivo -- o laço abaixo pula marca nula --, mas o
+    // `null` FICAVA no retrato anterior, e aí "esta conversa é nova?" passava a
+    // ter duas respostas diferentes para a mesma situação:
+    //
+    //   tick A  a conversa chega sem mensagem legível -> grava null, não avisa
+    //   tick B  a mensagem do cliente aparece         -> anterior[id] é null,
+    //                                                    e não `undefined`
+    //
+    // No tick B a conversa É nova (nunca foi anunciada), mas o teste
+    // `anterior[c.id] === undefined` respondia FALSO -- e no Modo TV, onde só
+    // chamado novo toca, isso significava SILÊNCIO num chamado novo de verdade.
+    // Era o defeito relatado: "o som do Modo TV parou de funcionar".
+    //
+    // Não gravar a marca nula resolve na origem: quem nunca teve mensagem
+    // conhecida continua ausente do retrato, e ausente é o que "novo" quer
+    // dizer. Não há risco de aviso duplicado, porque no tick A nada foi
+    // anunciado.
     const marcas = {};
-    conversas.forEach(c => { marcas[c.id] = marcaDaUltima(c); });
+    conversas.forEach(c => {
+      const m = marcaDaUltima(c);
+      if (m) marcas[c.id] = m;
+    });
     const anterior = ultimaMsgRef.current;
     if (anterior !== null) {
       const novas = [];
@@ -605,21 +628,31 @@ export function AppProvider({ children }) {
         // ── QUAL DOS DOIS SONS ───────────────────────────────────────────────
         //
         //                      chamado novo        mensagem em conversa conhecida
-        //   Modo TV ligado     Monitoramento       silêncio
+        //   Modo TV ligado     Monitoramento       blip
         //   Central (sem TV)   blip                blip
         //
-        // O Modo TV é painel de parede: ele existe para anunciar chamado novo, e
-        // blipar a cada mensagem de conversa em andamento viraria barulho
-        // contínuo numa tela que ninguém está operando. Fora dele, quem está na
-        // Central continua sendo avisado de tudo -- inclusive de chamado novo,
-        // porque tirar esse aviso seria perder o comportamento que já existia
-        // para quem trabalha sem Modo TV.
+        // O chamado NOVO é o único que muda de som, e ele é o mais alto de
+        // propósito: é o que precisa ser ouvido do outro lado da sala.
+        //
+        // ── A REGRA ANTERIOR DEIXAVA O MODO TV MUDO, E ISSO ESTAVA ERRADO ────
+        //
+        // Por uma passagem, o Modo TV ficava em SILÊNCIO para mensagem de
+        // conversa já conhecida. O argumento era que painel de parede não
+        // precisa blipar a cada mensagem de conversa em andamento. Ele
+        // contrariava o pedido original -- "quando o atendente atender o cliente
+        // começar a blipar" -- e, na prática, o Modo TV é justamente como a
+        // equipe monitora: mudo, ele deixa de avisar de conversa em andamento e
+        // foi lido como "o som do Modo TV parou de funcionar".
+        //
+        // Se algum dia o barulho incomodar numa TV sem operador, o caminho é um
+        // controle explícito naquela tela -- e não silêncio decidido aqui, que
+        // é indistinguível de defeito para quem está olhando.
         //
         // UM TOQUE POR RAJADA, não por mensagem: `novas` pode trazer várias
         // conversas na mesma passada, e cinco sons sobrepostos não informam mais
         // do que um. Era assim antes e continua.
-        if (modoTvRef.current) {
-          if (houveChamadoNovo) tocarSomChamadoNovo();
+        if (modoTvRef.current && houveChamadoNovo) {
+          tocarSomChamadoNovo();
         } else {
           tocarSomMensagem();
         }
