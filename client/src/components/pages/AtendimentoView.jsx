@@ -2542,111 +2542,6 @@ function PainelPerfilContato({
   );
 }
 
-/**
- * A BADGE DE SETOR, CLICÁVEL.
- *
- * Fecha a lacuna descrita em `definirSetor`: até aqui o setor de uma conversa só
- * podia ser gravado pelo cliente respondendo o menu do bot. Toda conversa
- * iniciada pela equipe -- e todo fio anterior ao menu -- ficava em "Geral", que
- * na tela é SEM SETOR, e não havia nenhum jeito de mudar isso pela interface.
- *
- * ── POR QUE ELA GRITA QUANDO ESTÁ SEM SETOR ────────────────────────────────
- *
- * Sem setor não é um estado neutro: `podeAcessarSetor` esconde a conversa de
- * Financeiro e Comercial, então "SEM SETOR" significa "invisível para dois
- * terços da equipe". Uma badge cinza e discreta descrevia isso como se fosse
- * detalhe. Com o contorno de atenção e o "definir" ao lado, ela passa a pedir a
- * ação que resolve.
- *
- * Quando JÁ tem setor, ela volta a ser discreta -- ali não há nada pendente, e
- * mudar o setor de uma conversa triada é a exceção, não a rotina.
- */
-function SeletorSetor({ conversa, atual, onDefinir }) {
-  const [aberto, setAberto] = useState(false);
-  const [salvando, setSalvando] = useState(false);
-  const caixaRef = useRef(null);
-  const semSetor = atual.id === 'geral';
-
-  /**
-   * Fecha com Esc e com clique fora.
-   *
-   * ── POR QUE A CHECAGEM É POR REFERÊNCIA, E NÃO POR stopPropagation ────────
-   *
-   * A primeira versão ouvia o clique da janela em fase de CAPTURA e confiava num
-   * `stopPropagation` no menu para se proteger. Isso não funciona, e o efeito é
-   * pior do que não fechar: a captura roda ANTES do alvo, então o menu era
-   * desmontado antes de o `onClick` da opção (que o React entrega na fase de
-   * BOLHA) chegar a existir. Clicar em "Financeiro" fechava o menu e não trocava
-   * nada -- nenhuma requisição saía, e a tela não dava sinal de que o clique
-   * tinha sido perdido.
-   *
-   * Verificado no navegador, e é como o defeito apareceu: `read_network_requests`
-   * não registrou nenhum PATCH depois do clique.
-   *
-   * Perguntar "o clique caiu dentro de mim?" não depende da ordem das fases nem
-   * de ninguém lembrar de barrar a propagação.
-   */
-  useEffect(() => {
-    if (!aberto) return;
-    const onTecla = (e) => { if (e.key === 'Escape') setAberto(false); };
-    const onClique = (e) => {
-      if (!caixaRef.current?.contains(e.target)) setAberto(false);
-    };
-    window.addEventListener('keydown', onTecla);
-    window.addEventListener('click', onClique);
-    return () => {
-      window.removeEventListener('keydown', onTecla);
-      window.removeEventListener('click', onClique);
-    };
-  }, [aberto]);
-
-  const escolher = async (setor) => {
-    setAberto(false);
-    if (setor === atual.setor || salvando) return;
-    setSalvando(true);
-    try { await onDefinir?.(conversa.id, setor); } finally { setSalvando(false); }
-  };
-
-  return (
-    <span ref={caixaRef} className="relative inline-flex">
-      <button
-        type="button"
-        onClick={() => setAberto(v => !v)}
-        disabled={salvando || !onDefinir}
-        title={semSetor
-          ? 'Sem setor: esta conversa não aparece para Financeiro nem Comercial. Clique para definir.'
-          : `Setor: ${atual.setor}. Clique para mudar.`}
-        className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border transition-all disabled:opacity-60 ${atual.classe} ${
-          semSetor ? 'ring-1 ring-espera/50 hover:ring-espera' : 'hover:brightness-125'
-        }`}
-      >
-        {salvando ? 'salvando…' : atual.label}
-        {semSetor && !salvando && <span className="font-normal opacity-80">· definir</span>}
-        <ChevronDown size={10} className="opacity-70" />
-      </button>
-
-      {aberto && (
-        <div className="absolute left-0 top-full mt-1 z-30 w-52 glass-panel border border-linha rounded-xl shadow-2xl overflow-hidden fade-in">
-          {SETORES_ATENDIMENTO.map(s => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => escolher(s.id)}
-              className={`w-full text-left px-3 py-2 hover:bg-grafite-700 transition-colors ${
-                s.id === atual.setor ? 'bg-acao/10' : ''
-              }`}
-            >
-              <div className={`text-[11px] font-bold ${s.id === atual.setor ? 'text-acao-200' : 'text-slate-200'}`}>
-                {s.label || s.id}
-              </div>
-              <div className="text-[10px] text-slate-500 leading-snug">{s.desc}</div>
-            </button>
-          ))}
-        </div>
-      )}
-    </span>
-  );
-}
 
 function PainelChat({
   conversa, parceiros,
@@ -2658,8 +2553,6 @@ function PainelChat({
   podeBuscarHistorico, buscandoHistorico, onBuscarHistorico, buscaSemNovidade,
   // Clique em "Conversar" no cartao de contato que o cliente encaminhou.
   onAbrirContato,
-  // Define o setor de uma conversa que JA existe -- ver `definirSetor` no pai.
-  onDefinirSetor
 }) {
   const [showMsgRapidas, setShowMsgRapidas] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
@@ -3286,19 +3179,21 @@ function PainelChat({
               avulso={tipoCliente !== 'cadastrado'}
             />
         }
-        {/* A BADGE DE SETOR VIROU CONTROLE.
-            Ela era só leitura, e o setor só podia ser gravado pelo cliente
-            escolhendo no menu do bot -- então conversa iniciada pela equipe, e
-            todo fio antigo, ficava em SEM SETOR para sempre. E "Geral" não
-            pertence a Financeiro nem a Comercial: a conversa desaparecia
-            justamente para quem deveria atendê-la, sem nada na tela para
-            corrigir. A rota do servidor já existia e ninguém chamava. */}
+        {/* A BADGE DE SETOR É SÓ LEITURA -- ela DIZ, não decide.
+            Chegou a ser um menu de edição, e voltou a ser etiqueta: o setor de
+            uma conversa nasce de duas decisões que já existem, e nenhuma delas
+            é um clique aqui. Ou o cliente escolheu no menu do bot, ou a equipe
+            escolheu ao iniciar a conversa (o modal exige o setor). Para MUDAR o
+            setor de um fio que já existe, o caminho é "Transferir": mandando
+            para alguém de outro setor, a conversa vai junto -- e ali a mudança
+            tem dono e motivo, em vez de acontecer solta num menu. */}
         {setorPedido && (
-          <SeletorSetor
-            conversa={conversa}
-            atual={setorPedido}
-            onDefinir={onDefinirSetor}
-          />
+          <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border ${setorPedido.classe}`}
+            title={setorPedido.id === 'geral'
+              ? 'Ainda sem triagem: o cliente nao escolheu setor no menu'
+              : `Setor: ${setorPedido.setor}`}>
+            {setorPedido.label}
+          </span>
         )}
         {atendente && (
           <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 font-semibold"
@@ -4859,33 +4754,6 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     [trocarAtendente]
   );
 
-  /**
-   * DEFINIR O SETOR DE UMA CONVERSA QUE JÁ EXISTE.
-   *
-   * ── A LACUNA QUE ISTO FECHA ────────────────────────────────────────────────
-   *
-   * A rota `PATCH /conversas/:id/setor` existe no servidor e o cliente HTTP já a
-   * expunha (`ConversasAPI.atualizarSetor`) -- e nenhuma tela a chamava. Ou
-   * seja: dava para consultar o setor, filtrar por setor e esconder conversa por
-   * setor, mas não havia como DEFINIR o setor de uma conversa pela interface.
-   *
-   * O único caminho que gravava setor era o cliente escolhendo no menu do bot.
-   * Quem nunca passou pelo menu -- toda conversa iniciada pela equipe, e todo
-   * fio antigo -- ficava em "Geral" para sempre, e "Geral" não pertence a
-   * Financeiro nem a Comercial (`podeAcessarSetor`): a conversa some para
-   * exatamente quem deveria atendê-la, sem nada na tela para corrigir isso.
-   *
-   * Perguntar o setor ao criar (o modal de conversa nova) resolve só as futuras.
-   * Isto resolve as que já existem, que são a maioria.
-   */
-  const definirSetor = useCallback(async (conversaId, setor) => {
-    try {
-      aplicarConversa(await ConversasAPI.atualizarSetor(conversaId, setor));
-    } catch (e) {
-      avisar('Não foi possível mudar o setor: ' + e.message);
-    }
-  }, [aplicarConversa]);
-
   // Inicia conversa com um numero digitado. O servidor acha ou cria a conversa,
   // ja aberta e no setor escolhido, e envia a primeira mensagem.
   const iniciarConversaNova = useCallback(async (dados) => {
@@ -5672,7 +5540,6 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               buscandoHistorico={importandoHistorico === conversa.id}
               onBuscarHistorico={importarHistorico}
               onAbrirContato={conversarComContatoRecebido}
-              onDefinirSetor={definirSetor}
             />
           )}
         </div>
