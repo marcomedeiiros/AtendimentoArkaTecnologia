@@ -54,6 +54,36 @@ const ESCADA_MS = [1_000, 2_000, 5_000, 10_000, 20_000, 30_000, 60_000];
 // Jitter para nao sincronizar rajadas quando varios processos sobem juntos.
 const JITTER = 0.2;
 
+// ── FLAPPING: QUANDO RELIGAR RAPIDO E O PROBLEMA, NAO A SOLUCAO ─────────────
+//
+// A escada acima comeca em 1s porque a esmagadora maioria das quedas dura
+// segundos. Isso e certo para UMA queda -- e errado quando a sessao esta sendo
+// DISPUTADA.
+//
+// O que aconteceu em producao (10/09/2026, auditoria-integracao-whatsapp-10-09
+// secao 9): o log da Evolution registrou 23 `conflict: replaced` em 12
+// segundos. `replaced` e o WhatsApp dizendo "outra conexao assumiu esta
+// sessao". Cada socket novo substitui o anterior, que morre antes de terminar a
+// inicializacao (`failed to send initial passive iq`, `Failed to upload
+// pre-keys`) -- e a instancia nunca chega a funcionar de verdade, so aparece
+// como `open` por um instante.
+//
+// Nesse cenario, `_resetar()` a cada `open` fazia a escada RECOMECAR do 1s
+// depois de uma sessao que durou 15 segundos. Ou seja: quanto pior a disputa,
+// mais rapido nos jogavamos sockets nela. Somos parte do laco.
+//
+// A correcao NAO e desistir (a sessao continua valida, e o QR nunca ajuda
+// aqui). E parar de martelar: contamos as quedas numa janela e, quando elas se
+// repetem, a escada passa a comecar num degrau folgado em vez do primeiro.
+const JANELA_FLAP_MS = Number(process.env.WHATSAPP_JANELA_FLAP_MS) || 10 * 60 * 1000;
+// Tres quedas em dez minutos nao e "azar": e padrao. Duas ainda podem ser duas
+// quedas independentes de rede.
+const QUEDAS_PARA_FLAP = Number(process.env.WHATSAPP_QUEDAS_PARA_FLAP) || 3;
+// Degrau minimo enquanto o flapping durar: o 4o da escada, 10s. Segue
+// religando -- so nao em rajada. Dez vezes o piso anterior (1s) e ainda rapido
+// o suficiente para nao atrasar de forma sensivel a volta de uma queda comum.
+const DEGRAU_MINIMO_FLAP = 4;
+
 // Quanto tempo `connecting` ainda e normal. Com `syncFullHistory` ligado a
 // sincronizacao inicial estica bastante, por isso a folga e generosa. Passou
 // disso, o socket travou e ai sim vale derrubar e religar.
@@ -155,8 +185,44 @@ let precisaParear = false;
 // lixo de um logout que ja foi resolvido". Ver `_motivoEhDaQuedaAtual`.
 let ultimoOpenEm = null;
 
+// ── O HISTORICO DE QUEDAS ───────────────────────────────────────────────────
+//
+// Serve a duas coisas, e as duas faltavam:
+//
+//   1. frear a escada quando a sessao esta sendo disputada (ver JANELA_FLAP_MS);
+//   2. RESPONDER "quantas vezes caiu?" -- a pergunta que originou a auditoria de
+//      10/09 e que so tinha resposta no `docker logs`. Sem este numero, o painel
+//      nao distinguia "caiu uma vez e esta demorando" de "caiu oito vezes",
+//      que sao problemas diferentes e pedem acoes diferentes.
+let quedas = [];
+
+function _registrarQueda(agora) {
+  quedas.push(agora);
+  _podarQuedas(agora);
+}
+
+function _podarQuedas(agora = Date.now()) {
+  const limite = agora - JANELA_FLAP_MS;
+  if (quedas.length && quedas[0] < limite) {
+    quedas = quedas.filter((q) => q >= limite);
+  }
+  return quedas.length;
+}
+
+/** A sessao esta sendo derrubada em serie? */
+function _estaFlapando(agora = Date.now()) {
+  return _podarQuedas(agora) >= QUEDAS_PARA_FLAP;
+}
+
 function _esperaMs(n) {
-  const base = ESCADA_MS[Math.min(n, ESCADA_MS.length) - 1];
+  // SOB FLAPPING A ESCADA NAO COMECA NO PRIMEIRO DEGRAU.
+  //
+  // `n` e a tentativa desta queda, e ela volta a 1 a cada religamento. Numa
+  // disputa de sessao isso significava reabrir socket 1 segundo depois de uma
+  // sessao que durou 15 -- alimentando exatamente a briga que derrubou a
+  // anterior. O piso mantem o religamento, mas em ritmo de espera.
+  const degrau = _estaFlapando() ? Math.max(n, DEGRAU_MINIMO_FLAP) : n;
+  const base = ESCADA_MS[Math.min(degrau, ESCADA_MS.length) - 1];
   return Math.round(base * (1 + (Math.random() * 2 - 1) * JITTER));
 }
 
@@ -201,13 +267,64 @@ function marcarPrecisaParear(motivo, extra = {}) {
 // O webhook de `connection.update` avisa a queda antes do proximo ciclo. Nao
 // reconectamos aqui: apenas liberamos o relogio para a verificacao agir ja na
 // proxima passada. Assim continua existindo UM so caminho de reconexao.
+//
+// ── O DEFEITO QUE ESTE FREIO FECHA ─────────────────────────────────────────
+//
+// `proximaTentativaEm = 0` cru ANULAVA O BACKOFF. Um aviso do webhook nao e um
+// evento raro: em 10/09/2026 a Evolution mandou `connection.update` com
+// `state: close` centenas de vezes em minutos -- ate cinco no mesmo segundo, e
+// inclusive DEPOIS de a instancia voltar a `open` (ela declara `open` sem
+// terminar a sincronizacao, `Timeout in AwaitingInitialSync`, e por isso o
+// webhook e o `/connectionState` podiam discordar sendo os dois honestos).
+//
+// Cada um desses avisos zerava o relogio. A escada de 1s..60s virou decoracao,
+// e o vigia passou a disparar `/instance/connect` a cada 15s (o tick do timer)
+// independentemente do degrau. A prova esta no log:
+//
+//   07:53:16  Reconnect attempt: 7   proximoEmMs: 58854
+//   07:53:31  Reconnect attempt: 8            <- 15 segundos depois, nao 59
+//
+// Isso nos colocou DENTRO do laco: socket novo por cima de um que a Evolution
+// ainda estava levantando e o WhatsApp derrubando os dois com
+// `conflict: replaced`.
+//
+// A REGRA AGORA: o aviso pode ADIANTAR uma verificacao, nunca ENCURTAR uma
+// espera que ja foi decidida. Se ha backoff pendente, nos ja sabemos da queda
+// -- o aviso nao traz informacao nova, so pressa.
+let avisosIgnorados = 0;
+let ultimoAvisoLogadoEm = 0;
+const INTERVALO_LOG_AVISO_MS = 60 * 1000;
+
 function notificarQueda(state) {
   if (precisaParear) return;
-  proximaTentativaEm = 0;
-  logger.warn("[WhatsApp] Queda sinalizada pela Evolution", {
-    instance: instanciaVigiada,
-    state,
-  });
+
+  const agora = Date.now();
+  const backoffPendente = proximaTentativaEm > agora;
+
+  if (backoffPendente) {
+    // Ja estamos esperando de proposito. Contamos o aviso (o volume dele e
+    // diagnostico: rajada = sessao disputada) e nao tocamos no relogio.
+    avisosIgnorados += 1;
+  } else {
+    proximaTentativaEm = 0;
+  }
+
+  // O LOG TAMBEM PRECISAVA DE FREIO. Uma linha por aviso enchia o log de
+  // producao com centenas de `Queda sinalizada` identicas -- e enterrava as
+  // linhas que importavam (`Reconnect attempt`, `Online`, o cofre). Uma por
+  // minuto, com a conta do que foi suprimido, diz a mesma coisa e deixa o log
+  // legivel.
+  if (agora - ultimoAvisoLogadoEm >= INTERVALO_LOG_AVISO_MS) {
+    logger.warn("[WhatsApp] Queda sinalizada pela Evolution", {
+      instance: instanciaVigiada,
+      state,
+      avisosIgnoradosNoBackoff: avisosIgnorados,
+      quedasNaJanela: _podarQuedas(agora),
+      flapping: _estaFlapando(agora),
+    });
+    ultimoAvisoLogadoEm = agora;
+    avisosIgnorados = 0;
+  }
 }
 
 // ── CLASSIFICACAO: E QUEDA OU E LOGOUT? ─────────────────────────────────────
@@ -472,6 +589,12 @@ async function _verificar() {
     return { situacao, classificacao, state, acao: "aguardando_backoff", emMs: proximaTentativaEm - agora };
   }
 
+  // UMA QUEDA, NAO UMA TENTATIVA. `tentativa` saindo do zero e a fronteira de
+  // um ciclo novo -- e e isso que o contador de quedas precisa medir. Contar por
+  // tentativa transformaria uma queda longa (8 tentativas) em "8 quedas" e
+  // dispararia o freio de flapping onde nao ha flapping nenhum.
+  if (tentativa === 0) _registrarQueda(agora);
+
   tentativa += 1;
   const espera = _esperaMs(tentativa);
   proximaTentativaEm = agora + espera;
@@ -609,6 +732,18 @@ function estado() {
     ultimoMotivoVigente,
     ultimaAcao,
     cofre: cofre.estado(instancia),
+    // ── QUANTAS VEZES CAIU ────────────────────────────────────────────────
+    //
+    // A pergunta que originou a auditoria de 10/09 e que so tinha resposta no
+    // `docker logs`. Ela separa dois problemas que a tela mostrava igual:
+    // "caiu uma vez e esta demorando para voltar" (rede, Evolution) de "caiu
+    // oito vezes em dez minutos" (sessao disputada). As acoes sao opostas.
+    quedasNaJanela: _podarQuedas(),
+    janelaQuedasMs: JANELA_FLAP_MS,
+    // `flapping` tambem explica ao operador por que a espera entre tentativas
+    // ficou longa de propositos -- sem isso, o freio pareceria lentidao.
+    flapping: _estaFlapando(),
+    ultimaQuedaEm: quedas.length ? new Date(quedas[quedas.length - 1]).toISOString() : null,
   };
 }
 
@@ -636,10 +771,32 @@ function parar() {
   timer = null;
 }
 
+// ── COSTURA DE TESTE ────────────────────────────────────────────────────────
+//
+// `verificar-reconexao-whatsapp.js` precisa atravessar o backoff sem esperar de
+// verdade (a escada chega a 60s; 25 rodadas levariam minutos). Antes ele usava
+// `notificarQueda` para isso -- o que so funcionava porque aquele metodo zerava
+// o relogio, que era exatamente o defeito corrigido aqui. Com o freio no lugar,
+// o teste precisa de uma porta propria, explicita e fora do caminho de
+// producao: nada no servidor chama isto.
+const __paraTestes = {
+  liberarBackoff() {
+    proximaTentativaEm = 0;
+  },
+  /** Zera o historico, para um teste poder medir a escada sem o freio de flap. */
+  zerarQuedas() {
+    quedas = [];
+  },
+  quedas: () => quedas.slice(),
+};
+
 module.exports = {
   ESTADOS,
   CODIGOS_LOGOUT_REAL,
   ESCADA_MS,
+  DEGRAU_MINIMO_FLAP,
+  QUEDAS_PARA_FLAP,
+  __paraTestes,
   iniciar,
   parar,
   verificar,

@@ -1166,6 +1166,14 @@ class WhatsAppService {
       motivoDesconexaoEm: vigia.ultimoMotivoEm,
       motivoDesconexaoVigente: !!vigia.ultimoMotivoVigente,
       proximaTentativaEm: vigia.proximaTentativaEm,
+      // QUANTAS VEZES CAIU na janela, e se isso ja configura disputa de sessao.
+      // Sem estes dois a tela mostrava igual dois problemas opostos: uma queda
+      // longa (esperar) e uma sessao sendo derrubada em serie (procurar o
+      // segundo dono do pareamento). Ver auditoria-integracao-whatsapp-10-09.
+      quedasNaJanela: vigia.quedasNaJanela,
+      janelaQuedasMs: vigia.janelaQuedasMs,
+      flapping: vigia.flapping,
+      ultimaQuedaEm: vigia.ultimaQuedaEm,
       cofreSessao: vigia.cofre,
       conectadoDesde: this._conectadoDesde[nome] || null,
       ultimaSincronizacao: new Date().toISOString(),

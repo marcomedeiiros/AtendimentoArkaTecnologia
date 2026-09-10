@@ -56,6 +56,21 @@ export function AppProvider({ children }) {
   const [parceiros,         setParceiros]         = useState([]);
   const [conversas,         setConversas]         = useState([]);
   const [whatsAppConectado, setWhatsAppConectado] = useState(false);
+  // ── O RÓTULO, NÃO SÓ O BOOLEANO ───────────────────────────────────────────
+  //
+  // `whatsAppConectado` é `state === "open"` e nada mais. O servidor distingue
+  // seis situações (Online, Conectando, Reconectando, Reescaneie o QR, Evolution
+  // indisponível, Instância não existe) e a Central de Atendimento reduzia tudo
+  // isso a Online/Offline.
+  //
+  // O efeito em produção (10/09/2026): uma queda de 15 segundos que o vigia
+  // resolve sozinho aparecia como "WhatsApp Offline", e a volta como "WhatsApp
+  // Online". A pílula piscava a cada poll de 10s e foi lida como "a conexão cai
+  // e volta toda hora" -- que é verdade sobre o socket, mas a tela não sabia
+  // dizer que o servidor estava religando e nada havia sido perdido.
+  //
+  // `statusLabel` já vinha na resposta do /status e ninguém aqui lia.
+  const [whatsAppStatus, setWhatsAppStatus] = useState(null);
   const [notificacoes,      setNotificacoes]      = useState([]);
   const [historico,         setHistorico]         = useState([]);
   const [apiOffline,        setApiOffline]        = useState(false);
@@ -671,8 +686,19 @@ export function AppProvider({ children }) {
     const checar = async () => {
       try {
         const st = await WhatsAppAPI.status();
-        if (ativo && st) setWhatsAppConectado(!!st.conectado);
-      } catch { /* Evolution offline: mantem desconectado */ }
+        if (ativo && st) {
+          setWhatsAppConectado(!!st.conectado);
+          setWhatsAppStatus(st.statusLabel || null);
+        }
+      } catch {
+        // A LEITURA FALHOU -- e isso NÃO é o WhatsApp offline.
+        //
+        // `whatsAppConectado` é deixado como está de propósito (o `catch` nunca
+        // o derrubou, e não deve). O rótulo passa a `null`, que é o que a tela
+        // interpreta como "não sei": melhor não afirmar nada do que afirmar
+        // "Offline" a partir de uma requisição que não chegou.
+        if (ativo) setWhatsAppStatus(null);
+      }
     };
     checar();
     const id = setInterval(checar, 10000);
@@ -734,6 +760,7 @@ export function AppProvider({ children }) {
       // Pulsos de "algo mudou" para os painéis derivados, vindos do mesmo SSE.
       sinalConversas,   sinalContatos,   sinalMensagemNova,
       whatsAppConectado, setWhatsAppConectado,
+      whatsAppStatus,
       notificacoes,      removerNotificacao,
       historico,         marcarNotificacoesLidas, limparHistorico,
       apiOffline

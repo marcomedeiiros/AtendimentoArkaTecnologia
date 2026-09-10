@@ -29,8 +29,38 @@ const STATUS_UI = {
   // ideia de que estava quase la, e ninguem ia buscar o telefone.
   'Reescaneie o QR': { badge: 'bg-falha/20 text-falha-400',   box: 'bg-falha/15 text-falha-400 border border-falha/30' },
   Desconectado:  { badge: 'bg-falha/20 text-falha-400',       box: 'bg-falha/15 text-falha-400 border border-falha/30' },
+  // NÃO SABEMOS -- e este rótulo existe porque "não sei" nunca deveria ter sido
+  // escrito como "Offline". Ver ESTADO_DESCONHECIDO abaixo. Cinza, porque a
+  // tela não está afirmando nada sobre a conexão.
+  'Estado desconhecido': { badge: 'bg-slate-500/20 text-slate-400', box: 'bg-slate-500/15 text-slate-400 border border-linha-forte' },
   Offline:       { badge: 'bg-slate-500/20 text-slate-400',     box: 'bg-slate-500/15 text-slate-400 border border-linha-forte' }
 };
+
+/**
+ * O RÓTULO DE QUANDO O PAINEL NÃO CONSEGUIU LER O ESTADO.
+ *
+ * ── O DEFEITO QUE ISTO FECHA ─────────────────────────────────────────────────
+ *
+ * Com `detalhes` nulo (a primeira leitura de `/whatsapp/detalhes` falhou --
+ * sessão do painel expirada, 403, `arka-api` reiniciando) a tela caía para
+ * "Offline", "Nenhum número pareado" e "Cofre da sessão: inativo" AO MESMO
+ * TEMPO. Nenhuma dessas três coisas havia sido verificada, e as três dizem ao
+ * operador que o pareamento se perdeu.
+ *
+ * Isso foi visto em produção em 10/09/2026: o painel anunciou pareamento
+ * perdido e cofre inexistente cinco minutos depois de a tela anterior mostrar
+ * o número pareado e o cofre guardado às 07:42:46. Nada havia mudado na
+ * conexão -- o painel só não conseguiu falar com o próprio back-end.
+ *
+ * E o custo desse engano não é cosmético: quem lê "perdi o pareamento" vai
+ * buscar o QR, e com `QRCODE_LIMIT: 3` na Evolution um QR pedido à toa termina
+ * em `client.logout()` -- ou seja, a tela mentindo sobre a perda do pareamento
+ * é capaz de PROVOCAR a perda do pareamento.
+ *
+ * A regra, agora, é a mesma que já vale no servidor: ausência de informação não
+ * é veredito. Sem dado, a tela diz que não sabe.
+ */
+const ESTADO_DESCONHECIDO = 'Estado desconhecido';
 
 function formatarDuracao(desde) {
   if (!desde) return '-';
@@ -61,7 +91,16 @@ export default function WhatsAppPage() {
   const instanciaRef = useRef(instancia);
   instanciaRef.current = instancia;
 
-  const status = detalhes?.statusLabel || (whatsAppConectado ? 'Online' : 'Offline');
+  // NÃO LEMOS O ESTADO. Tudo o que depende de `detalhes` tem de dizer "não sei"
+  // em vez de chutar para o lado negativo -- ver ESTADO_DESCONHECIDO.
+  const semLeitura = detalhes === null;
+
+  // O fallback para `whatsAppConectado` continua valendo quando ele é POSITIVO:
+  // o poll do AppContext confirmou `open` por outra rota, e negar isso seria
+  // trocar um dado por um palpite. O que sai é o inverso -- concluir "Offline"
+  // de uma leitura que não aconteceu.
+  const status = detalhes?.statusLabel
+    || (whatsAppConectado ? 'Online' : (semLeitura ? ESTADO_DESCONHECIDO : 'Offline'));
   const conectado = status === 'Online';
   const ui = STATUS_UI[status] || STATUS_UI.Offline;
 
@@ -467,7 +506,10 @@ export default function WhatsAppPage() {
                     {detalhes.perfil.nome ? ` • ${detalhes.perfil.nome}` : ''}
                   </>
                 )
-                : 'Nenhum número pareado'}
+                /* SEM LEITURA NÃO É "SEM PAREAMENTO". Dizer "Nenhum número
+                   pareado" aqui era afirmar a pior notícia possível a partir de
+                   uma requisição que falhou -- ver ESTADO_DESCONHECIDO. */
+                : semLeitura ? 'Não foi possível ler o estado da conexão' : 'Nenhum número pareado'}
               {conectado && <> • Online há {formatarDuracao(detalhes?.conectadoDesde)}</>}
             </p>
           </div>
@@ -635,6 +677,22 @@ export default function WhatsAppPage() {
                 <KeyRound size={14} /> Código por telefone
               </button>
             </div>
+          ) : semLeitura ? (
+            /* NÃO LEMOS NADA -- e o ramo final ("Sessão preservada") afirmaria
+               que a sessão está válida, que é justamente o que não se sabe.
+               Este era o outro lado do defeito: a mesma tela dizia "Nenhum
+               número pareado" no cabeçalho e "a sessão continua válida" aqui.
+               Uma das duas tinha de estar errada, e estavam as duas -- nenhuma
+               havia sido verificada. */
+            <div className="text-xs text-slate-400 max-w-xs">
+              <p className="font-bold text-slate-300 mb-1">Estado não lido</p>
+              <p>
+                O painel não conseguiu ler o estado da conexão no servidor. Isso
+                <strong> não</strong> diz nada sobre o pareamento, e não se
+                resolve com QR Code. Recarregue a página; se persistir, refaça o
+                login e verifique o <code>arka-api</code>.
+              </p>
+            </div>
           ) : evolutionOnline === false ? (
             <div className="text-xs text-falha-400 max-w-xs">
               <p className="font-bold mb-1">Evolution API indisponível</p>
@@ -765,28 +823,63 @@ export default function WhatsAppPage() {
                 {detalhes?.tentativaReconexao ? `#${detalhes.tentativaReconexao}` : '-'}
               </div>
 
+              {/* QUANTAS VEZES CAIU. A pergunta que a auditoria de 10/09 só
+                  conseguiu responder com `docker logs`: uma queda longa (esperar)
+                  e uma sessão derrubada em série (procurar o segundo dono do
+                  pareamento) apareciam idênticas aqui, e pedem ações opostas. */}
+              <div className="text-slate-500" title="Quedas contadas na janela recente. Repetição indica que a sessão está sendo disputada, não que a rede oscilou.">
+                Quedas recentes
+              </div>
+              <div className="font-mono">
+                {detalhes?.quedasNaJanela != null
+                  ? <span className={detalhes.flapping ? 'text-falha-400' : 'text-slate-200'}>
+                      {detalhes.quedasNaJanela}
+                      {detalhes.janelaQuedasMs ? ` em ${Math.round(detalhes.janelaQuedasMs / 60000)}min` : ''}
+                      {detalhes.flapping ? ' • sessão disputada' : ''}
+                    </span>
+                  : <span className="text-slate-200">-</span>}
+              </div>
+
               <div className="text-slate-500" title="statusCode do Baileys que fechou o socket. 401/403 = logout real; o resto é queda temporária.">
                 Motivo da desconexão
               </div>
+              {/* O CÓDIGO SOZINHO NÃO DIZ DE QUAL QUEDA ELE FALA.
+                  A Evolution grava `disconnectionReasonCode` e NUNCA o apaga
+                  quando a instância volta. O servidor já resolvia isso e mandava
+                  `motivoDesconexaoVigente` -- e esta tela ignorava o campo,
+                  rotulando todo 401 como "logout real" mesmo quando o vigia já
+                  o havia descartado por ser anterior à sessão que vimos de pé.
+                  Era o "401 (logout real)" ao lado de CONNECTED, de novo, agora
+                  na renderização. Quem decide é `vigente`. */}
               <div className="text-slate-200 font-mono">
                 {detalhes?.motivoDesconexao != null
-                  ? `${detalhes.motivoDesconexao}${[401, 403].includes(detalhes.motivoDesconexao) ? ' (logout real)' : ' (temporário)'}`
+                  ? `${detalhes.motivoDesconexao}${
+                      [401, 403].includes(detalhes.motivoDesconexao)
+                        ? (detalhes.motivoDesconexaoVigente ? ' (logout real)' : ' (de uma queda anterior)')
+                        : ' (temporário)'
+                    }`
                   : '-'}
               </div>
 
               <div className="text-slate-500" title="Cópia da credencial do pareamento, usada quando a Evolution a apaga numa queda temporária.">
                 Cofre da sessão
               </div>
+              {/* "inativo" era o ramo `else` de `disponivel` -- e com `detalhes`
+                  nulo o `else` é o que sobra. A tela anunciava cofre inexistente
+                  minutos depois de mostrar o cofre guardado, no campo que
+                  responde justamente "dá para recuperar a sessão?". */}
               <div className="font-mono">
-                {detalhes?.cofreSessao?.disponivel
-                  ? detalhes.cofreSessao.temCofre
-                    ? <span className="text-ativo-400">
-                        guardada{detalhes.cofreSessao.salvoEm ? ` • ${formatarHora(detalhes.cofreSessao.salvoEm)}` : ''}
-                      </span>
-                    : <span className="text-espera-400">ativo, sem cópia ainda</span>
-                  : <span className="text-falha-400">
-                      inativo{detalhes?.cofreSessao?.motivoIndisponivel ? ` (${detalhes.cofreSessao.motivoIndisponivel})` : ''}
-                    </span>}
+                {semLeitura
+                  ? <span className="text-slate-400">não lido</span>
+                  : detalhes?.cofreSessao?.disponivel
+                    ? detalhes.cofreSessao.temCofre
+                      ? <span className="text-ativo-400">
+                          guardada{detalhes.cofreSessao.salvoEm ? ` • ${formatarHora(detalhes.cofreSessao.salvoEm)}` : ''}
+                        </span>
+                      : <span className="text-espera-400">ativo, sem cópia ainda</span>
+                    : <span className="text-falha-400">
+                        inativo{detalhes?.cofreSessao?.motivoIndisponivel ? ` (${detalhes.cofreSessao.motivoIndisponivel})` : ''}
+                      </span>}
               </div>
             </div>
           </div>

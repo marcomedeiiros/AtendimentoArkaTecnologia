@@ -1048,6 +1048,71 @@ function SkeletonCard() {
 //
 // O status real continua no banco e no `title` de cada ícone: passar o mouse
 // mostra o estado verdadeiro daquela mensagem.
+/**
+ * A PÍLULA DO WHATSAPP NO CABEÇALHO -- e por que ela deixou de ter dois estados.
+ *
+ * ── O DEFEITO ───────────────────────────────────────────────────────────────
+ *
+ * Ela lia só `whatsAppConectado`, que é `state === "open"` e nada mais. O
+ * servidor distingue seis situações; a pílula tinha duas. Então TODA queda que o
+ * vigia resolve sozinho -- inclusive as de 15 segundos, que são a maioria --
+ * aparecia aqui como "WhatsApp Offline", em vermelho, e a volta como "Online".
+ *
+ * Em 10/09/2026 isso rendeu duas capturas da MESMA tela, uma verde e uma
+ * vermelha, e a leitura de que "a conexão cai e volta toda hora". O socket de
+ * fato oscilava, mas a pílula não sabia dizer a diferença entre "caiu e o
+ * servidor está religando com a mesma sessão" (não há nada a fazer, nada foi
+ * perdido) e "o pareamento se perdeu" (alguém precisa pegar o celular). São
+ * ações opostas pintadas com a mesma cor.
+ *
+ * ── A REGRA ─────────────────────────────────────────────────────────────────
+ *
+ * Três grupos, porque são três ações:
+ *
+ *   verde   Online              nada a fazer
+ *   âmbar   religando/subindo   esperar -- o servidor está cuidando
+ *   vermelho  precisa de gente  Reescaneie o QR, Evolution indisponível, ...
+ *   cinza   `statusLabel` nulo  a leitura falhou; não afirmamos nada
+ *
+ * O `statusLabel` já vinha do servidor desde antes e ninguém aqui lia.
+ */
+const PILULA_ESPERA = new Set(['Reconectando', 'Conectando']);
+
+function PilulaWhatsApp({ conectado, statusLabel }) {
+  const rotulo = statusLabel || (conectado ? 'Online' : null);
+  const esperando = !conectado && PILULA_ESPERA.has(rotulo);
+  // Sem rótulo não há veredito: a requisição de status não voltou. Dizer
+  // "Offline" aqui seria inventar a pior notícia a partir de uma falha de rede
+  // do próprio painel.
+  const desconhecido = rotulo === null;
+
+  const cor = conectado
+    ? 'bg-ativo/15 border-ativo/40 text-ativo-400'
+    : esperando
+      ? 'bg-espera/15 border-espera/40 text-espera-400'
+      : desconhecido
+        ? 'bg-slate-500/15 border-linha-forte text-slate-400'
+        : 'bg-falha/15 border-falha/40 text-falha-400';
+
+  const titulo = conectado
+    ? 'WhatsApp conectado'
+    : esperando
+      ? 'O servidor está religando com a mesma sessão nada foi perdido e não há nada a fazer'
+      : desconhecido
+        ? 'Não foi possível ler o estado da conexão isso não diz nada sobre o pareamento'
+        : `WhatsApp ${rotulo} veja em Integração WhatsApp`;
+
+  return (
+    <div
+      title={titulo}
+      className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${cor}`}
+    >
+      {conectado ? <Wifi size={14} /> : <WifiOff size={14} />}
+      <span>WhatsApp {desconhecido ? 'sem leitura' : rotulo}</span>
+    </div>
+  );
+}
+
 function StatusMensagem({ status, escuro }) {
   if (!status) return null;
   const base = escuro ? 'text-slate-400' : 'text-slate-900/70';
@@ -3929,7 +3994,7 @@ const ItemContatoAgenda = React.memo(function ItemContatoAgenda({ contato, onAbr
 // de onde vinha o defeito do Técnico. O nome do responsável nunca veio dali:
 // vem da própria conversa (`atendenteDaConversa`).
 export default function AtendimentoView({ conversas, setConversas, fluxos, parceiros }) {
-  const { whatsAppConectado, carregando, historico = [], marcarNotificacoesLidas, limparHistorico, sinalContatos, sinalMensagemNova } = useAppContext();
+  const { whatsAppConectado, whatsAppStatus, carregando, historico = [], marcarNotificacoesLidas, limparHistorico, sinalContatos, sinalMensagemNova } = useAppContext();
   const { usuario, assinaturaNome } = useAuth();
   // Nome usado ao assinar mensagens: vem do perfil (personalizavel no menu de
   // perfil) e cai no primeiro nome como padrao. Fica no AuthContext, entao muda
@@ -5199,17 +5264,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
             )}
           </div>
 
-          <div
-            title={whatsAppConectado ? 'WhatsApp conectado' : 'WhatsApp desconectado configure em Integração WhatsApp'}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${
-              whatsAppConectado
-                ? 'bg-ativo/15 border-ativo/40 text-ativo-400'
-                : 'bg-falha/15 border-falha/40 text-falha-400'
-            }`}
-          >
-            {whatsAppConectado ? <Wifi size={14} /> : <WifiOff size={14} />}
-            <span>WhatsApp {whatsAppConectado ? 'Online' : 'Offline'}</span>
-          </div>
+          <PilulaWhatsApp conectado={whatsAppConectado} statusLabel={whatsAppStatus} />
         </div>
       </div>
 

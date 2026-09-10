@@ -101,10 +101,16 @@ function novoVigia(config) {
   return require(CAMINHO_VIGIA);
 }
 
-/** Deixa o backoff vencer sem esperar de verdade. */
+/**
+ * Deixa o backoff vencer sem esperar de verdade.
+ *
+ * ANTES isto chamava `vigia.notificarQueda("close")`, e funcionava por um motivo
+ * ruim: aquele metodo ZERAVA o backoff a cada aviso do webhook. Era o defeito
+ * que anulou a escada em producao (10/09/2026) -- o teste estava, sem querer,
+ * dependendo dele. Agora usa a costura de teste explicita.
+ */
 function liberarBackoff(vigia) {
-  const e = vigia.estado();
-  if (e.proximaTentativaEm) vigia.notificarQueda("close");
+  vigia.__paraTestes.liberarBackoff();
 }
 
 (async () => {
@@ -236,6 +242,87 @@ function liberarBackoff(vigia) {
   check(e7b.tentativa >= 20, `continua tentando depois de 25 rodadas (tentativa ${e7b.tentativa})`);
   check(e7b.precisaParear === false, "nunca desistiu nem pediu QR");
   check(e7b.situacao === "RECONNECTING" || e7b.situacao === "DISCONNECTED_TEMPORARY", "segue tentando");
+
+  // ── 7c. O AVISO DO WEBHOOK NAO ENCURTA UM BACKOFF JA DECIDIDO ─────────────
+  //
+  // O DEFEITO DE PRODUCAO (10/09/2026): `notificarQueda` fazia
+  // `proximaTentativaEm = 0` em todo aviso de `connection.update`. A Evolution
+  // mandou centenas desses avisos em minutos -- ate cinco no mesmo segundo --,
+  // a escada virou decoracao e o vigia passou a abrir socket a cada 15s, por
+  // cima dos que a Evolution ainda estava levantando. O log provou:
+  // `Reconnect attempt: 7` anunciou 58854ms e a 8a saiu 15 segundos depois.
+  console.log("\n=== 7c. a enxurrada de webhooks nao anula o backoff ===");
+  const v7c = novoVigia({ state: "close", motivoCodigo: 408, credencial: true });
+  await v7c.verificar();
+  const antes7c = v7c.estado().proximaTentativaEm;
+  check(antes7c > Date.now(), "ha um backoff pendente depois da 1a tentativa");
+  for (let i = 0; i < 200; i += 1) v7c.notificarQueda("close");
+  check(
+    v7c.estado().proximaTentativaEm === antes7c,
+    "200 avisos do webhook NAO mexeram no relogio do backoff"
+  );
+  const durante7c = await v7c.verificar();
+  check(
+    durante7c.acao === "aguardando_backoff",
+    "e a verificacao seguinte ainda respeita a espera (nao abriu socket novo)"
+  );
+  // O aviso continua servindo para o que foi feito: adiantar quando NAO ha
+  // espera pendente. Sem isso, uma queda real esperaria o proximo tick de 15s.
+  v7c.__paraTestes.liberarBackoff();
+  v7c.notificarQueda("close");
+  check(
+    v7c.estado().proximaTentativaEm === null,
+    "sem backoff pendente, o aviso continua adiantando a proxima verificacao"
+  );
+
+  // ── 7d. FLAPPING: A ESCADA NAO RECOMECA NO 1s QUANDO A SESSAO E DISPUTADA ──
+  //
+  // `conflict: replaced` 23 vezes em 12 segundos (log da Evolution, 10/09).
+  // Cada religamento zerava `tentativa`, entao voltavamos a abrir socket 1
+  // segundo depois de uma sessao que durou 15 -- alimentando a briga. O piso
+  // mantem o religamento e tira a rajada.
+  console.log("\n=== 7d. freio de flapping ===");
+  const v7d = novoVigia({ state: "close", motivoCodigo: 408, credencial: true });
+  check(v7d.QUEDAS_PARA_FLAP === 3, "tres quedas na janela caracterizam flapping");
+  // Simula o flap: cai, volta, cai, volta, cai. Cada volta zera `tentativa`,
+  // que e exatamente o que fazia a escada reiniciar.
+  for (let i = 0; i < 3; i += 1) {
+    cenario.state = "close";
+    v7d.__paraTestes.liberarBackoff();
+    await v7d.verificar();
+    cenario.state = "open";
+    await v7d.verificar();
+  }
+  const e7d = v7d.estado();
+  check(e7d.quedasNaJanela === 3, `contou 3 quedas, nao 3 tentativas (foram ${e7d.quedasNaJanela})`);
+  check(e7d.flapping === true, "reconhece o flapping");
+  // Agora a proxima queda tem de esperar o degrau minimo, nao 1 segundo.
+  cenario.state = "close";
+  v7d.__paraTestes.liberarBackoff();
+  await v7d.verificar();
+  const espera7d = v7d.estado().proximaTentativaEm - Date.now();
+  const piso = v7d.ESCADA_MS[v7d.DEGRAU_MINIMO_FLAP - 1];
+  check(
+    espera7d > piso * 0.7,
+    `sob flapping a 1a espera ja sai no degrau folgado (~${piso}ms; foi ${espera7d}ms)`
+  );
+  check(v7d.estado().precisaParear === false, "frear NAO e desistir: nao pede QR");
+
+  // ── 7e. UMA QUEDA LONGA NAO E FLAPPING ────────────────────────────────────
+  //
+  // O contador mede QUEDAS. Se medisse tentativas, uma unica queda com 8
+  // tentativas viraria "8 quedas" e o freio entraria onde nao ha disputa --
+  // atrasando a volta de uma queda de rede comum.
+  console.log("\n=== 7e. uma queda longa nao dispara o freio ===");
+  const v7e = novoVigia({ state: "close", motivoCodigo: 408, credencial: true });
+  for (let i = 0; i < 8; i += 1) {
+    liberarBackoff(v7e);
+    await v7e.verificar();
+  }
+  const e7e = v7e.estado();
+  check(e7e.tentativa === 8, `oito tentativas (foram ${e7e.tentativa})`);
+  check(e7e.quedasNaJanela === 1, `mas UMA queda so (contou ${e7e.quedasNaJanela})`);
+  check(e7e.flapping === false, "nao e flapping");
 
   // ── 8. EVOLUTION FORA DO AR ───────────────────────────────────────────────
   //
