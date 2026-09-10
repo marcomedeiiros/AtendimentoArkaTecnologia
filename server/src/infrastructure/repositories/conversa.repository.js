@@ -853,43 +853,17 @@ class ConversaRepository {
     });
   }
 
-  /**
-   * A ULTIMA MENSAGEM QUE SAIU DAQUI -- do bot ou do atendente.
-   *
-   * Serve a citacao DERIVADA: quando o cliente responde sem tocar em botao, o
-   * WhatsApp nao manda `contextInfo` nenhum (para ele, digitar "1" e uma
-   * mensagem nova), e o retrato precisa vir de outro lugar. Vem daqui: a ultima
-   * coisa que o cliente recebeu e o que ele estava respondendo.
-   *
-   * ── POR QUE NAO E MAIS SO O BOT ─────────────────────────────────────────
-   *
-   * Esta consulta nasceu como `ultimaPerguntaDoBot`, filtrando `origem: "bot"`
-   * -- a ideia era que so a pergunta da automacao fosse um FATO, porque so ela
-   * fica registrada na sessao (`aguardando`). O efeito em producao foi o
-   * oposto do pretendido: assim que o atendente assumia a conversa, toda
-   * resposta do cliente passava a citar a ultima fala do ROBO, tres turnos
-   * atras, enquanto o WhatsApp dele mostrava a citacao do atendente.
-   *
-   * A restricao estava certa sobre a natureza e errada sobre a conclusao. A
-   * citacao nao afirma "ele respondeu a esta pergunta"; afirma "isto chegou
-   * depois daquilo" -- que e verificavel, e e a mesma aposta que o WhatsApp faz
-   * ao desenhar a conversa em ordem. Ver docs/auditoria-citacao-derivada.md.
-   *
-   * FICAM DE FORA, e cada uma por um motivo diferente:
-   *   - `nota`: nunca foi enviada a ninguem. Cita-la na bolha do cliente faria
-   *     parecer que ele leu o que a equipe escreveu em segredo;
-   *   - `sistema`: nao e fala, e aviso da propria Central;
-   *   - apagada: viraria uma caixa vazia na tela.
-   */
-  async ultimaMensagemNossa(conversaId) {
-    const msg = await prisma.mensagem.findFirst({
-      where: { conversaId, origem: { in: ["bot", "equipe"] } },
-      orderBy: { criadoEm: "desc" },
-      select: { id: true, texto: true, metadata: true },
-    });
-    if (!msg || msg.metadata?.deletada) return null;
-    return { id: msg.id, texto: msg.texto };
-  }
+  // A CONSULTA `ultimaMensagemNossa` FOI REMOVIDA JUNTO COM A CITACAO DERIVADA.
+  //
+  // Ela existia para um unico consumidor: o bloco do chatbot.engine que montava
+  // uma citacao quando o WhatsApp nao mandava nenhuma. Com a regra passando a
+  // ser "cita se e somente se o cliente citou no aparelho"
+  // (auditoria-citacao-no-chat-10-09.md), nada mais pergunta "qual foi a ultima
+  // coisa que saiu daqui?" para fins de citacao -- e deixar a consulta parada
+  // aqui convidaria o proximo leitor a religar o comportamento.
+  //
+  // Quem resolve citacao hoje e `findMensagemPorWaId` (logo abaixo), a partir do
+  // `contextInfo.stanzaId` que o aparelho manda.
 
   // Usado para descartar webhooks reentregues pela Evolution API.
   existeMensagemWa(waMessageId) {

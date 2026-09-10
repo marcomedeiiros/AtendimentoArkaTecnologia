@@ -272,55 +272,22 @@ async function main() {
     }) === null
   );
 
-  console.log("\n7. Citacao DERIVADA: aponta para o que o cliente acabou de receber");
+  console.log("\n7. Citacao derivada ANTIGA: o historico continua desenhando");
 
-  // O cenario real: o bot manda o menu e fica esperando. O cliente DIGITA a
-  // resposta em vez de tocar no botao -- e o WhatsApp nao manda contextInfo.
+  // A CITACAO DERIVADA FOI REMOVIDA (auditoria-citacao-no-chat-10-09.md), e com
+  // ela a consulta `ultimaMensagemNossa` -- por isso as checagens que a
+  // exercitavam sairam daqui.
+  //
+  // O que SOBRA e o que continua importando: as mensagens que ja estao no banco
+  // com `metadata.citacao.derivada = true` seguem com o retrato gravado na
+  // linha, e portanto seguem desenhando a citacao na tela. A mudanca vale para
+  // o que chega dali em diante, nao para o passado -- e o mapper tem de
+  // continuar entregando aquele retrato, senao conversas antigas perderiam
+  // pedaco do contexto sem ninguem ter pedido isso.
   const menu = "*Atendimento Tecnico* Como podemos ajudar?";
   const perguntaBot = await prisma.mensagem.create({
     data: { conversaId: conversa.id, origem: "bot", texto: menu, status: "enviada" },
   });
-
-  const ultima = await conversaRepository.ultimaMensagemNossa(conversa.id);
-  conferir("com o bot conduzindo, e a fala dele", ultima?.id === perguntaBot.id);
-  conferir("e ela traz o texto para montar o retrato", ultima?.texto === menu);
-
-  await prisma.mensagem.update({
-    where: { id: perguntaBot.id },
-    data: { metadata: { deletada: true } },
-  });
-  conferir(
-    "mensagem apagada nao vira citacao (a bolha ficaria vazia)",
-    (await conversaRepository.ultimaMensagemNossa(conversa.id)) === null
-  );
-  await prisma.mensagem.update({ where: { id: perguntaBot.id }, data: { metadata: {} } });
-
-  // ── O DEFEITO DE PRODUCAO (#OS00217, 18:56) ─────────────────────────────
-  //
-  // O atendente assume e fala. A partir dai o cliente responde a ELE -- era
-  // aqui que a Central seguia citando a ultima fala do robo, tres turnos atras,
-  // enquanto o WhatsApp do cliente mostrava a citacao do atendente.
-  const doAtendente = await prisma.mensagem.create({
-    data: { conversaId: conversa.id, origem: "equipe", texto: "opaaa" },
-  });
-  conferir(
-    "com o atendente na conversa, e a fala DELE (nao a do bot)",
-    (await conversaRepository.ultimaMensagemNossa(conversa.id))?.id === doAtendente.id,
-    `veio ${(await conversaRepository.ultimaMensagemNossa(conversa.id))?.texto}`
-  );
-
-  // Nota interna nunca sai daqui: cita-la faria parecer que o cliente leu o que
-  // a equipe escreveu em segredo. Mensagem de sistema tambem nao e fala.
-  await prisma.mensagem.create({
-    data: { conversaId: conversa.id, origem: "nota", texto: "cliente ja deu calote" },
-  });
-  await prisma.mensagem.create({
-    data: { conversaId: conversa.id, origem: "sistema", texto: "Marco assumiu a conversa" },
-  });
-  conferir(
-    "nota interna e aviso de sistema nao viram citacao",
-    (await conversaRepository.ultimaMensagemNossa(conversa.id))?.id === doAtendente.id
-  );
 
   // E o retrato derivado atravessa o mapper com a marca de origem.
   const comDerivada = await prisma.mensagem.create({
@@ -339,13 +306,26 @@ async function main() {
   conferir("e a marca de que o retrato foi derivado", bolha.citacao?.derivada === true);
   conferir("a ligacao por id tambem vai junto", bolha.respondendoAId === perguntaBot.id);
 
-  console.log("\n8. E o ciclo inteiro no motor: o cliente DIGITA a resposta");
+  console.log("\n8. No motor: texto puro do cliente NAO gera citacao");
 
-  // O caso que o relato pedia. Tocar no botao ja citava o menu (o WhatsApp manda
-  // o contextInfo junto); digitar "1" chega como texto puro, sem contexto
-  // nenhum -- e a mesma conversa ficava com metade das respostas citando e a
-  // outra metade solta. Aqui a ligacao sai do NOSSO estado: a sessao diz que ha
-  // pergunta em aberto, e a pergunta e a ultima fala do bot.
+  // ── ESTA SECAO AFIRMAVA O CONTRARIO, E FOI INVERTIDA DE PROPOSITO ─────────
+  //
+  // Ela travava a citacao derivada: garantia que digitar "1" apontasse para a
+  // pergunta do bot, e que a resposta seguinte apontasse para a fala do
+  // atendente. Era o comportamento pedido em 09/09 e retirado em 10/09, quando
+  // a producao mostrou o custo (#OS00222: de cinco mensagens do cliente, tres
+  // citavam coisa sem relacao, e duas citacoes repetidas em bolhas seguidas).
+  //
+  // As checagens foram INVERTIDAS, nao apagadas. Apagar deixaria o caminho
+  // livre para a citacao derivada voltar na proxima mudanca do motor sem que
+  // nada reclamasse -- e ela e, por construcao, invisivel na tela: desenha
+  // igual a uma citacao real. O que trava o comportamento tem de ser um teste.
+  //
+  // A REGRA QUE ESTAS CHECAGENS GARANTEM: sem `contextInfo` do aparelho, nao ha
+  // citacao. Nem do bot, nem do atendente, nem com a sessao em `humano`.
+  //
+  // O que continua citando, e tem teste proprio em verificar-botoes.js: a
+  // resposta por BOTAO, porque ali o WhatsApp manda o contexto de verdade.
   const FLUXO = {
     id: "f1", nome: "Menu", gatilho: "*", ativo: true,
     passos: [
@@ -385,12 +365,19 @@ async function main() {
         return m;
       },
       findMensagemPorWaId: async (waId) => conv.mensagens.find((m) => m.waMessageId === waId) || null,
-      // A consulta nova: a ultima mensagem que saiu daqui (bot OU atendente).
+      // ── ARMADILHA DELIBERADA ────────────────────────────────────────────
+      //
+      // A consulta foi removida do repositorio junto com a citacao derivada. O
+      // duble fica aqui, e EXPLODE, porque a chamada original era
+      // `ultimaMensagemNossa?.(...)` -- com o encadeamento opcional, um metodo
+      // ausente devolve `undefined` em silencio e a citacao derivada voltaria
+      // sem nenhum teste reclamando. Melhor falhar alto.
       ultimaMensagemNossa: async () => {
-        const m = [...conv.mensagens]
-          .reverse()
-          .find((x) => x.origem === "bot" || x.origem === "equipe");
-        return m && !m.metadata?.deletada ? { id: m.id, texto: m.texto } : null;
+        throw new Error(
+          "citacao derivada removida (auditoria-citacao-no-chat-10-09.md): o motor nao " +
+            "deve consultar a ultima mensagem nossa para montar citacao. A bolha do " +
+            "cliente cita se e somente se ele citou no aparelho."
+        );
       },
       respondeuDepoisDe: async () => false,
       vincularWaMessageId: async (id, waId) => {
@@ -446,25 +433,27 @@ async function main() {
   await receber("1", "W2");
   const digitada = conv.mensagens.filter((m) => m.origem === "cliente").pop();
   conferir(
-    "a resposta digitada aponta para a pergunta do bot",
-    digitada?.respondendoAId === doBot?.id,
-    `respondendoAId=${digitada?.respondendoAId} pergunta=${doBot?.id}`
+    "a resposta digitada NAO aponta para a pergunta do bot",
+    digitada?.respondendoAId == null,
+    `respondendoAId=${digitada?.respondendoAId} (deveria ser nulo)`
   );
   conferir(
-    "e leva o retrato, marcado como derivado",
-    digitada?.metadata?.citacao?.derivada === true &&
-      String(digitada?.metadata?.citacao?.texto || "").includes("Como podemos ajudar"),
+    "e NAO leva retrato nenhum -- o WhatsApp nao mandou citacao",
+    digitada?.metadata?.citacao == null,
     JSON.stringify(digitada?.metadata?.citacao)
   );
-  // O setor volta canonizado ("Tecnico" -> "Técnico", ver setor.helper): citar e
-  // rotear sao independentes, e a citacao derivada nao pode atrapalhar a escolha.
+  // O setor volta canonizado ("Tecnico" -> "Técnico", ver setor.helper). Citar e
+  // rotear sempre foram independentes, e retirar a citacao nao pode mexer na
+  // escolha -- e a razao de esta checagem continuar aqui, inalterada.
   conferir("a escolha continua roteando normalmente", conv.setor === "Técnico", conv.setor);
 
-  // ── E AGORA O TURNO HUMANO, que e onde estava o defeito ─────────────────
+  // ── E AGORA O TURNO HUMANO, que e o caso da captura de 10/09 ────────────
   //
   // A escolha acima transferiu para a equipe, e isso grava
-  // `aguardando: "humano"` na sessao -- verdadeiro, e nao e pergunta nenhuma.
-  // Era exatamente aqui que a citacao congelava na ultima fala do robo.
+  // `aguardando: "humano"` na sessao. Depois o atendente fala e o cliente
+  // escreve de novo -- foi essa combinacao que produziu as bolhas citando
+  // "pronto" e "so me dizer" em #OS00222, inclusive em mensagens que abriam
+  // assunto novo. Com a citacao derivada fora, nada disso pode acontecer.
   conferir(
     "a transferencia deixou a sessao em 'humano'",
     sessao?.aguardando === "humano",
@@ -479,14 +468,38 @@ async function main() {
   await receber("ajuda eu", "W3");
   const aoHumano = conv.mensagens.filter((m) => m.origem === "cliente").pop();
   conferir(
-    "a resposta ao ATENDENTE cita a fala dele, nao a do bot",
-    aoHumano?.respondendoAId === opaaa.id,
+    "a mensagem depois da fala do atendente tambem NAO cita",
+    aoHumano?.respondendoAId == null,
     `respondendoAId=${aoHumano?.respondendoAId} (bot=${doBot?.id}, atendente=${opaaa.id})`
   );
   conferir(
-    "e o retrato e o texto do atendente",
-    aoHumano?.metadata?.citacao?.texto === "opaaa",
+    "e nao ha retrato do texto do atendente",
+    aoHumano?.metadata?.citacao == null,
     JSON.stringify(aoHumano?.metadata?.citacao)
+  );
+
+  // ── E A CITACAO REAL CONTINUA FUNCIONANDO ──────────────────────────────
+  //
+  // Esta e a metade que o pedido PRESERVA, e sem ela a mudanca teria jogado
+  // fora o recurso todo: quando o cliente cita de verdade no aparelho, o
+  // `stanzaId` chega e a bolha tem de mostrar o trecho citado.
+  await motor.processarMensagemEntrada({
+    instanciaId: "i1", instanceName: "v", telefone: conv.telefone,
+    texto: "isso mesmo", nomeCliente: "F", waMessageId: "W4",
+    botaoId: null, midia: null, encaminhada: null,
+    citacao: { stanzaId: "WA_ATD" },
+  });
+  const citouDeVerdade = conv.mensagens.filter((m) => m.origem === "cliente").pop();
+  conferir(
+    "citou no aparelho -> a bolha aponta para a mensagem citada",
+    citouDeVerdade?.respondendoAId === opaaa.id,
+    `respondendoAId=${citouDeVerdade?.respondendoAId} esperado=${opaaa.id}`
+  );
+  conferir(
+    "e leva o retrato do trecho, sem marca de derivado",
+    citouDeVerdade?.metadata?.citacao?.texto === "opaaa" &&
+      !citouDeVerdade?.metadata?.citacao?.derivada,
+    JSON.stringify(citouDeVerdade?.metadata?.citacao)
   );
 
   await prisma.mensagem.deleteMany({ where: { conversaId: conversa.id } });

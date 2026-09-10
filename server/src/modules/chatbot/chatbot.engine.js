@@ -4153,54 +4153,52 @@ class ChatbotEngine {
         if (!retrato && !original) retrato = { desconhecida: true };
       }
 
-      // ── A RESPOSTA DIGITADA CITA O QUE O CLIENTE ACABOU DE RECEBER ─────────
+      // ── AQUI HAVIA A "CITACAO DERIVADA", E ELA FOI REMOVIDA ────────────────
       //
-      // Tocar num botao volta com o menu citado, porque o WhatsApp manda o
-      // `contextInfo` junto da resposta de botao. DIGITAR a mesma resposta nao:
-      // para o WhatsApp, escrever "1" e uma mensagem nova, nao uma resposta a
-      // nada -- nao ha `contextInfo` para extrair. A mesma conversa ficava com
-      // metade das respostas citando e a outra metade solta, sem que nada na
-      // tela explicasse a diferenca.
+      // A REGRA AGORA, EM UMA LINHA: a bolha do cliente cita se e somente se ele
+      // citou no aparelho. Paridade com o WhatsApp, sem excecao.
       //
-      // A ligacao nao e extraida do payload: ela e a ORDEM da conversa. O
-      // retrato aponta para a ultima mensagem que saiu daqui -- a ultima coisa
-      // que o cliente recebeu antes de escrever.
+      // O que existia aqui: quando o WhatsApp NAO mandava citacao nenhuma, a
+      // Central montava uma apontando para a ultima mensagem que saiu daqui (bot
+      // ou atendente), gravada com `derivada: true`.
       //
-      // ── A PRIMEIRA VERSAO OLHAVA SO PARA O BOT, E ISSO DEU ERRADO ──────────
+      // A MOTIVACAO ERA BOA, e vale continuar registrada, porque o problema que
+      // ela resolvia continua existindo: tocar num botao do menu volta com o
+      // menu citado (o WhatsApp manda `contextInfo` na resposta de botao), mas
+      // DIGITAR "1" nao -- para o WhatsApp e mensagem nova. A conversa ficava
+      // com metade das respostas de menu citando e a outra metade solta.
       //
-      // A condicao era `sessaoAberta.aguardando` (qualquer valor) e a consulta
-      // filtrava `origem: "bot"`. Acontece que entregar a conversa para a equipe
-      // grava `aguardando: "humano"` -- verdadeiro, e nao e pergunta nenhuma.
-      // Resultado medido em producao: enquanto o bot conduzia, acertava; assim
-      // que o atendente assumia, TODA resposta do cliente passava a citar a
-      // ultima fala do robo, tres turnos atras, enquanto o WhatsApp dele
-      // mostrava a citacao da mensagem do atendente.
+      // POR QUE SAIU (auditoria-citacao-no-chat-10-09.md): como quase toda
+      // mensagem do cliente chega sem `contextInfo`, a condicao era verdadeira
+      // quase sempre -- e TODA resposta do cliente passou a exibir citacao. Na
+      // conversa #OS00222 (10/09/2026), de cinco mensagens do cliente, tres
+      // citavam coisa com que nao tinham relacao, e duas citacoes apareciam
+      // repetidas em bolhas seguidas. "Mais uma coisa" foi desenhado citando
+      // "pronto": o cliente anunciando mudanca de assunto, e a bolha afirmando
+      // que ele respondia ao "pronto".
       //
-      // Vale registrar o formato do engano, que ja tinha acontecido neste
-      // arquivo: decidir por PRESENCA de um campo de estado que tem quatro
-      // valores, dos quais so tres significam a mesma coisa. Foi por isso que
-      // `AGUARDA_RESPOSTA_DO_CLIENTE` existe (ver a nota dela). Aqui a correcao
-      // nao e usar aquela lista -- e parar de perguntar ao estado: quem responde
-      // "o que ele acabou de receber?" e a propria conversa.
+      // A auditoria de 09/09 previu esse custo e o classificou como "citacao a
+      // mais, nao citacao errada" -- e essa e a parte que nao se sustentou. A
+      // bolha derivada desenha IGUAL a uma citacao real (o `mapper` entrega
+      // `derivada` e a tela nunca leu o campo), entao quem le entende "o cliente
+      // respondeu a isto". Quando isso e falso, e citacao errada, nao importa
+      // como foi derivada.
       //
-      // NUNCA GANHA DA CITACAO REAL: so entra quando o WhatsApp nao mandou nada.
-      // O que o cliente citou de fato, no aparelho dele, e o que a bolha mostra.
+      // A LICAO, para nao voltar por outro caminho: uma inferencia correta nao
+      // vira uma afirmacao honesta so porque esta marcada como inferencia no
+      // banco. "Esta mensagem chegou depois daquela" e verdade; "o cliente
+      // respondeu a isto" e o que a interface comunica. Enquanto as duas forem
+      // desenhadas do mesmo jeito, vale a segunda -- e ela exige evidencia do
+      // aparelho, nao a ordem da conversa.
       //
-      // CICLO NOVO NAO CITA: quando o cliente volta depois do atendimento
-      // encerrado, a mensagem dele abre um chamado novo -- citar o "obrigado
-      // pelo contato" da semana passada ligaria duas conversas sem relacao.
+      // O CUSTO ACEITO: a resposta de menu DIGITADA volta a nao citar. E
+      // exatamente o que o cliente ve no WhatsApp dele, o menu continua visivel
+      // logo acima, e a resposta por BOTAO -- o caminho recomendado -- nao e
+      // afetada, porque aquela citacao e real.
       //
-      // `derivada` fica gravado no metadata para a origem do retrato nunca se
-      // perder: a bolha desenha os dois iguais (foi a decisao), mas sem a marca
-      // nao haveria como voltar atras nem como auditar depois.
-      if (!respondendoAId && !retrato && !cicloReaberto) {
-        const anterior = await this.deps.conversaRepository.ultimaMensagemNossa?.(conversa.id);
-        const textoAnterior = String(anterior?.texto || "").trim();
-        if (anterior?.id && textoAnterior) {
-          respondendoAId = anterior.id;
-          retrato = { texto: textoAnterior.slice(0, 500), derivada: true };
-        }
-      }
+      // Nada precisa entrar aqui. Os cinco caminhos de citacao REAL ficam acima
+      // (stanzaId resolvido, retrato do original, `desconhecida`, `tipo` de
+      // midia) e do lado da Central (`respondendoAId` quando o atendente cita).
 
       // `metadata` foi montado antes de consultarmos o banco (ele e usado
       // tambem no caminho da conversa NOVA, onde nao ha original possivel).
