@@ -3,11 +3,14 @@
  *
  * ── POR QUE ABAS, E NAO UMA LISTA COM UMA COLUNA "EQUIPE" ──────────────────
  *
- * Nao e organizacao visual: os totais nem sao comparaveis. Na sede o teto
- * cresce com o volume (cada atendimento vale 1 ponto, sem limite); no externo o
- * teto e 100, fechado. Numa tabela unica a equipe externa apareceria sempre
- * atras por causa da escala, e nao do trabalho -- e a primeira pessoa a
- * perceber isso pararia de confiar no ranking inteiro.
+ * Nao e organizacao visual: os totais nem sao comparaveis. Na sede a pontuacao
+ * ACUMULA e nao tem teto (cada atendimento avaliado soma, cada estrela soma);
+ * no externo o teto e 100, fechado. Numa tabela unica a equipe externa
+ * apareceria sempre atras por causa da escala, e nao do trabalho -- e a primeira
+ * pessoa a perceber isso pararia de confiar no ranking inteiro.
+ *
+ * A diferenca de escala entre os dois ficou MAIOR com a sede perdendo o teto, e
+ * por isso vale repetir: eles nunca se somam nem se comparam.
  *
  * Por isso nao existe nem endpoint que devolva os dois juntos: a separacao
  * mora no servidor, e a tela nao teria como misturar mesmo que quisesse.
@@ -675,10 +678,6 @@ export default function Rankings() {
     }
   };
 
-  const somaCfg = useMemo(
-    () => Object.values(rascunho?.pesos || {}).reduce((a, b) => a + Number(b || 0), 0),
-    [rascunho]
-  );
 
   const salvarConfig = async () => {
     setSalvandoCfg(true);
@@ -690,7 +689,7 @@ export default function Rankings() {
       // Recarrega a tabela: os pontos mudam AGORA, e mostrar o quadro antigo ao
       // lado das regras novas faria a pessoa achar que não valeu.
       await carregar();
-      // A RESSALVA IMPORTA: pesos e alvo recalculam o passado, o ciclo não.
+      // A RESSALVA IMPORTA: a régua recalcula o passado, o ciclo não.
       // Dizer "vale para os meses anteriores" sem distinguir faria alguém
       // esperar que o dia de fechamento novo reescrevesse janeiro -- e ele
       // não reescreve, de propósito.
@@ -850,61 +849,57 @@ export default function Rankings() {
           )}
 
           {/* O AVISO QUE PRECISA ESTAR AQUI: o ranking é recalculado a cada
-              consulta, então mudar os pesos muda também os meses passados -- e a
+              consulta, então mudar a régua muda também os ciclos passados -- e a
               premiação já registrada continua apontando para a posição antiga. */}
           <p className="text-[10px] text-espera-400 leading-relaxed border border-espera/30 bg-espera/10 rounded-xl p-2.5">
-            O ranking é recalculado a cada consulta, então mudar os pesos muda também os
+            O ranking é recalculado a cada consulta, então mudar a régua muda também os
             <strong> meses já passados</strong> premiações já registradas continuam como estão
             {' '}Esta é a mesma conta do <strong>Modo TV</strong>
           </p>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {Object.entries(rascunho.pesos).map(([chave, valor]) => (
+          {/* QUANTO VALE CADA UNIDADE -- e não mais "quanto vale a parcela cheia".
+              A pontuação deixou de ter teto: cada atendimento avaliado soma, e
+              cada estrela soma. Não há mais soma que precise fechar em 100, nem
+              alvo de saturação -- os dois campos saíram junto com a escada. */}
+          <div className="grid grid-cols-2 gap-3">
+            {Object.entries(rascunho.unidades || {}).map(([chave, valor]) => (
               <div key={chave}>
                 <label className="text-[11px] font-semibold text-texto-suave block mb-1">
-                  {{ atendimentos: 'Atendimentos', nota: 'Avaliação', agilidade: 'Agilidade' }[chave] || chave}
+                  {{ atendimento: 'Por atendimento avaliado', estrela: 'Por estrela recebida' }[chave] || chave}
                 </label>
                 <input
-                  type="number" min={0} max={100} value={valor}
+                  type="number" min={0} max={1000} value={valor}
                   onChange={(e) => {
                     setErroCfg('');
-                    setRascunho((r) => ({ ...r, pesos: { ...r.pesos, [chave]: Math.max(0, Math.min(100, Number(e.target.value) || 0)) } }));
+                    setRascunho((r) => ({ ...r, unidades: { ...r.unidades, [chave]: Math.max(0, Math.min(1000, Number(e.target.value) || 0)) } }));
                   }}
                   className="w-full bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto focus:outline-none focus:border-acao/50"
                 />
+                <p className="text-[10px] text-texto-fraco mt-1 leading-relaxed">
+                  {chave === 'atendimento'
+                    ? 'Somado uma vez por atendimento fechado E avaliado.'
+                    : 'Multiplicado pela soma das estrelas: uma nota 5 vale cinco vezes isto.'}
+                </p>
               </div>
             ))}
-            <div className={`rounded-xl border p-2.5 text-center self-end ${somaCfg === 100 ? 'border-ativo/40 bg-ativo/10' : 'border-falha/40 bg-falha/10'}`}>
-              <p className="text-[10px] uppercase tracking-wider text-texto-fraco font-bold">Soma</p>
-              <p className={`font-display font-extrabold text-lg ${somaCfg === 100 ? 'text-ativo-400' : 'text-falha-400'}`}>{somaCfg}</p>
-            </div>
           </div>
 
-          {/* O NÚMERO QUE DECIDE SE O MÊS INTEIRO VALE.
-
-              A parcela de atendimentos é uma escada: mais atendimentos, mais
-              pontos, até um teto. O teto vinha cravado em 10 -- calibrado para
-              uma operação menor -- e uma equipe que faz isso numa manhã chegava
-              ao máximo no primeiro dia. Do 11º em diante o mês não mudava mais
-              nada, várias pessoas empatavam no topo e a ordem entre elas virava
-              sorteio.
-
-              É um número só, e não os seis degraus: escada editada degrau a
-              degrau é escada que pode não subir. */}
-          <div>
-            <label className="text-[11px] font-semibold text-texto-suave block mb-1">
-              Atendimentos para a pontuação máxima
-            </label>
-            <input
-              type="number" min={1} max={1000} value={rascunho.alvoAtendimentos ?? 10}
-              onChange={(e) => { setErroCfg(''); setRascunho((r) => ({ ...r, alvoAtendimentos: Math.max(1, Math.min(1000, Number(e.target.value) || 1)) })); }}
-              className="w-full sm:w-48 bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto focus:outline-none focus:border-acao/50"
-            />
-            <p className="text-[10px] text-texto-fraco mt-1 leading-relaxed">
-              Quantos atendimentos <strong>fechados e avaliados no mês</strong> valem os
-              {' '}{rascunho.pesos?.atendimentos ?? 35} pontos cheios desta parcela. Os degraus abaixo
-              acompanham sozinhos. Ponha aqui o que um mês <strong>muito bom</strong> tem se for
-              baixo demais, todo mundo empata no topo e o resto do mês deixa de contar
+          {/* A CONTA DE EXEMPLO, porque "10 e 2" não diz quanto é um mês.
+              Sem ela, mexer nos números é apostar. */}
+          <div className="rounded-xl border border-linha bg-grafite-700/60 p-2.5">
+            <p className="text-[10px] uppercase tracking-wider text-texto-fraco font-bold mb-1">
+              Com esta régua
+            </p>
+            <p className="text-[11px] text-texto-suave leading-relaxed">
+              Um atendimento avaliado com <strong>5 estrelas</strong> e assumido em poucos
+              minutos vale{' '}
+              <strong className="text-acao-200">
+                {(rascunho.unidades?.atendimento ?? 0) + 5 * (rascunho.unidades?.estrela ?? 0) + 5} pontos
+              </strong>
+              {' '}({rascunho.unidades?.atendimento ?? 0} do atendimento +{' '}
+              {5 * (rascunho.unidades?.estrela ?? 0)} das estrelas + até 5 de rapidez).
+              Dez deles, {10 * ((rascunho.unidades?.atendimento ?? 0) + 5 * (rascunho.unidades?.estrela ?? 0) + 5)}.
+              <strong> Não há teto</strong> o próximo atendimento sempre soma.
             </p>
           </div>
 
@@ -962,7 +957,7 @@ export default function Rankings() {
                   'O dia 28 é o maior permitido fevereiro não tem 30.'}
             </p>
             <p className="text-[10px] text-espera-400 leading-relaxed border border-espera/30 bg-espera/10 rounded-xl p-2.5">
-              Diferente dos pesos, o dia de fechamento <strong>não mexe no passado</strong>. Os meses
+              Diferente da régua de pontos, o dia de fechamento <strong>não mexe no passado</strong>. Os meses
               anteriores continuam sendo mês de calendário, para que as premiações já registradas
               continuem apontando para o ranking que existia quando foram dadas.
             </p>
@@ -1014,8 +1009,7 @@ export default function Rankings() {
               className="px-3 py-2 rounded-xl bg-grafite-700 border border-linha text-texto-suave text-[11px] font-bold hover:border-linha-forte disabled:opacity-50 flex items-center gap-1.5">
               <RotateCcw size={12} /> Restaurar o padrão
             </button>
-            <button onClick={salvarConfig} disabled={salvandoCfg || somaCfg !== 100}
-              title={somaCfg !== 100 ? 'Os pesos precisam somar 100' : undefined}
+            <button onClick={salvarConfig} disabled={salvandoCfg}
               className="px-4 py-2 rounded-xl bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold disabled:opacity-50 flex items-center gap-1.5">
               {salvandoCfg ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Salvar regras
             </button>
@@ -1119,17 +1113,20 @@ export default function Rankings() {
             <p className="text-[10px] text-texto-fraco mt-3 leading-relaxed">
               {aba === 'sede' ? (
                 <>
-                  {/* Os tetos vêm do SERVIDOR, e não escritos aqui: um texto
+                  {/* As unidades vêm do SERVIDOR, e não escritas aqui: um texto
                       com os números copiados envelhece calado no dia em que
-                      alguém mexe no peso, e passa a explicar outra conta. */}
-                  Pontuação de 0 a 100 volume de atendimentos ({dados?.pesos?.tetos?.atendimentos ?? 35} a partir de{' '}
-                  {dados?.pesos?.alvoAtendimentos ?? 10} no mês),
-                  nota média × {dados?.pesos?.nota ?? 7} ({dados?.pesos?.tetos?.nota ?? 35}, a partir
-                  de {dados?.minimoAvaliacoes ?? 3} notas) e agilidade até
-                  assumir ({dados?.pesos?.tetos?.agilidade ?? 30})
+                      alguém mexe na régua, e passa a explicar outra conta.
+                      "Pontuação de 0 a 100" saiu daqui porque virou mentira --
+                      a pontuação não tem mais teto. */}
+                  <strong className="text-texto-suave">Sem teto</strong> cada atendimento soma:
+                  {' '}{dados?.pesos?.unidades?.atendimento ?? 10} por atendimento avaliado,
+                  {' '}{dados?.pesos?.unidades?.estrela ?? 2} por estrela recebida (a partir
+                  de {dados?.minimoAvaliacoes ?? 3} notas) e até
+                  {' '}{dados?.pesos?.bonusAgilidade?.[0]?.pontos ?? 5} de bônus por assumir rápido
                   {' '}<strong className="text-texto-suave">só pontua atendimento fechado que o cliente
                   avaliou</strong> as três parcelas saem da mesma base
-                  {' '}a agilidade usa a mediana, para que uma conversa esquecida não derrube o mês inteiro
+                  {' '}quem fecha o dobro de atendimentos avaliados soma o dobro, e o próximo
+                  sempre vale
                   {' '}é exatamente a mesma conta do painel de parede.
                 </>
               ) : (

@@ -1,24 +1,29 @@
 /**
- * A ESCADA DE VOLUME DA SEDE, E O ALVO QUE O ADMINISTRADOR DECIDE.
+ * A PONTUAÇÃO DA SEDE ACUMULA, E NÃO SATURA.
  *
- * ── O DEFEITO ──────────────────────────────────────────────────────────────
+ * ── O DEFEITO QUE ISTO TRAVA ───────────────────────────────────────────────
  *
- * A parcela de atendimentos saturava em 10 no mês -- número cravado no código,
- * calibrado para uma operação que fazia menos que isso. Quando a equipe passou
- * a fazer 10 numa manhã, os 100 pontos eram alcançáveis no primeiro dia: do 11º
- * atendimento em diante, o mês inteiro deixava de valer. Várias pessoas
- * empatavam no teto e a ordem entre elas virava sorteio.
+ * A pontuação era um índice de 0 a 100, e a parcela de volume vinha de uma
+ * ESCADA DE FAIXAS: 6 atendimentos valiam 24 pontos, e 7 também. Fechar o
+ * sétimo não movia nada; o próximo salto era no oitavo.
  *
- * ── POR QUE UM NÚMERO, E NÃO SEIS ──────────────────────────────────────────
+ * Com a equipe fazendo de 2 a 8 atendimentos por ciclo e nota 5,0 (parcela
+ * cheia), três pessoas ficaram em 84 pontos ao mesmo tempo e o placar
+ * congelou -- relatado em 10/09/2026 como "o ranking travado nos 84".
  *
- * A alternativa óbvia -- abrir os seis degraus para edição -- deixa a escada à
- * mercê de quem digita. Configura-se só o topo; a forma é reescalada.
+ * Este arquivo já existia para impedir SATURAÇÃO (a escada saturava em 10 no
+ * mês), e a saturação voltou por outro caminho: o platô entre degraus. As
+ * checagens de escada e alvo saíram porque escada e alvo deixaram de existir --
+ * e o que ficou mede a garantia que interessa, que é a mesma de antes: **o
+ * placar tem de se mover quando alguém trabalha mais.**
  *
  * ── O QUE ESTÁ TRAVADO AQUI ────────────────────────────────────────────────
  *
- * Que o padrão continue idêntico ao de sempre (ninguém acorda com pontuação
- * diferente por causa desta mudança), que a escada sempre suba, que atingir o
- * alvo pague a parcela cheia e que nenhum degrau fique inalcançável.
+ * Que cada atendimento avaliado a mais aumente o total (de 1 a 40, um por um),
+ * que o par 6 -> 7 do relato se mova, que o dobro de trabalho valha o dobro,
+ * que as três parcelas continuem separadas e somem o total, que nota melhor
+ * valha mais, que o mínimo de avaliações siga protegendo a parcela de
+ * qualidade -- e que teto e alvo não voltem a existir sem a suíte reclamar.
  *
  * Medido executando `_ranking`, a função que a parede, a Visão Geral e o ranking
  * da sede usam -- as três são a mesma.
@@ -57,121 +62,159 @@ function pontosCom(fechados, regras) {
   return r.classificacao[0]?.atendimentos?.pontos ?? 0;
 }
 
-console.log("=== Pontuacao da sede: a escada de volume ===");
-
-// ── O padrao nao pode ter mudado ─────────────────────────────────────────────
-{
-  const problemas = [];
-  if (padrao.alvoAtendimentos !== 10) {
-    problemas.push("o alvo padrao deveria ser 10, e " + padrao.alvoAtendimentos);
+// A pontuacao TOTAL, e nao so a parcela de volume: e ela que responde "o placar
+// se move quando eu trabalho mais?".
+function totalCom(fechados, regras) {
+  const atendimentos = [];
+  for (let i = 0; i < fechados; i++) {
+    atendimentos.push({
+      atendenteNome: "Fulano",
+      status: "fechada",
+      avaliacao: 5,
+      abertoEm: new Date("2026-09-01T10:00:00Z"),
+      atendidoEm: new Date("2026-09-01T10:00:10Z"),
+    });
   }
-  // Os degraus historicos, um por um. Se a reescala mexer no caso padrao, a
-  // pontuacao de todo mundo muda sem ninguem ter configurado nada -- e o
-  // historico e recalculado, entao mudaria o passado tambem.
-  const historico = [[10, 35], [8, 30], [6, 24], [4, 17], [2, 9], [1, 4], [0, 0]];
-  for (const [fechados, esperado] of historico) {
-    const obtido = pontosCom(fechados, padrao);
-    if (obtido !== esperado) {
-      problemas.push(`com ${fechados} atendimentos deveria dar ${esperado} pts, deu ${obtido}`);
-    }
-  }
-  check("sem configurar nada, a pontuacao e exatamente a de sempre", problemas);
+  const r = painel._ranking(atendimentos, { limite: 99, regras });
+  return r.classificacao[0]?.pontos ?? 0;
 }
 
-// ── O alvo move o ponto de saturacao ─────────────────────────────────────────
+console.log("=== Pontuacao da sede: acumula, e nao satura ===");
+
+// ── A UNIDADE PADRAO ────────────────────────────────────────────────────────
 {
-  const regras = { ...padrao, alvoAtendimentos: 60 };
   const problemas = [];
-
-  // Era 35 pontos com 10. Com alvo 60, 10 atendimentos nao podem mais valer o teto.
-  const com10 = pontosCom(10, regras);
-  if (com10 >= 35) {
-    problemas.push(`com alvo 60, 10 atendimentos ainda valem ${com10} pts -- o teto nao se moveu`);
+  if (padrao.unidades?.atendimento !== 10) {
+    problemas.push("atendimento deveria valer 10, e " + padrao.unidades?.atendimento);
   }
-  const com60 = pontosCom(60, regras);
-  if (com60 !== 35) problemas.push(`com alvo 60, 60 atendimentos deveriam valer 35 pts, valem ${com60}`);
-
-  check("o alvo empurra a saturacao para onde o administrador disser", problemas);
+  if (padrao.unidades?.estrela !== 2) {
+    problemas.push("estrela deveria valer 2, e " + padrao.unidades?.estrela);
+  }
+  // O teto e o alvo NAO existem mais. Se alguem os reintroduzir, e aqui que a
+  // suite reclama antes de a saturacao voltar em silencio.
+  if (padrao.pesos !== undefined) problemas.push("`pesos` (os tetos antigos) voltou a existir");
+  if (padrao.alvoAtendimentos !== undefined) problemas.push("`alvoAtendimentos` voltou a existir");
+  check("a regua e por unidade, sem teto nem alvo", problemas);
 }
 
-// ── A escada tem de subir SEMPRE ─────────────────────────────────────────────
+// ── O NUCLEO: CADA ATENDIMENTO A MAIS SOMA, PARA SEMPRE ─────────────────────
 //
-// Mais atendimentos nunca pode valer menos pontos, em alvo nenhum -- e atingir
-// o alvo tem de pagar a parcela cheia, senao o numero configurado nao significa
-// o que a tela promete.
+// O defeito que esta mudanca conserta, em teste. Com a escada antiga, 6 e 7
+// atendimentos davam os MESMOS 24 pontos de volume -- fechar o setimo nao movia
+// nada. Tres pessoas ficaram em 84 pontos ao mesmo tempo, e o placar congelou.
 {
   const problemas = [];
-  for (const alvo of [1, 2, 3, 4, 5, 7, 10, 13, 25, 60, 137, 1000]) {
-    const regras = { ...padrao, alvoAtendimentos: alvo };
-    let anterior = -1;
-    // Ate um pouco alem do alvo, para incluir a saturacao.
-    for (let n = 0; n <= alvo + 3; n++) {
-      const pts = pontosCom(n, regras);
-      if (pts < anterior) {
-        problemas.push(`alvo ${alvo}: ${n} atendimentos valem ${pts} pts, menos que ${n - 1} (${anterior})`);
-        break;
-      }
-      anterior = pts;
+  let anterior = totalCom(1, padrao);
+  for (let n = 2; n <= 40; n += 1) {
+    const agora = totalCom(n, padrao);
+    if (agora <= anterior) {
+      problemas.push(`de ${n - 1} para ${n} atendimentos o placar NAO subiu (${anterior} -> ${agora})`);
+      break;
     }
-    if (pontosCom(alvo, regras) !== 35) {
-      problemas.push(`alvo ${alvo}: atingir o alvo deveria dar os 35 pts cheios, deu ${pontosCom(alvo, regras)}`);
-    }
+    anterior = agora;
   }
-  check("a escada nunca desce, e o alvo sempre paga o teto", problemas);
+  check("de 1 a 40 atendimentos, cada um a mais aumenta a pontuacao", problemas);
 }
 
-// ── NENHUM DEGRAU PODE FICAR MORTO ───────────────────────────────────────────
+// ── E NAO HA PLATO ENTRE DEGRAUS ────────────────────────────────────────────
 //
-// Este e o efeito real do ajuste de arredondamento, e ele NAO e evitar que a
-// pontuacao desca: `pontosDeVolume` casa o primeiro degrau da lista, o de maior
-// pontuacao, entao empate nunca inverte a ordem -- medido.
+// A checagem acima pegaria um plato, mas vale travar o caso EXATO do relato:
+// 6 -> 7 era o par que nao se movia.
+{
+  const problemas = [];
+  const seis = totalCom(6, padrao);
+  const sete = totalCom(7, padrao);
+  if (sete === seis) problemas.push(`6 e 7 atendimentos dao o mesmo total (${seis}) -- o plato voltou`);
+  // Dobrar o trabalho tem de dobrar a pontuacao, com nota e rapidez iguais.
+  const doze = totalCom(12, padrao);
+  if (doze !== seis * 2) {
+    problemas.push(`12 atendimentos deveriam valer o dobro de 6 (${seis * 2}), valeram ${doze}`);
+  }
+  check("o caso do relato (6 -> 7) se move, e o dobro de trabalho vale o dobro", problemas);
+}
+
+// ── AS TRES PARCELAS CONTINUAM SEPARADAS E SOMAM O TOTAL ────────────────────
 //
-// O que o empate faz e matar o degrau de baixo. Com alvo 3 e sem o ajuste, os
-// degraus de 24, 9 e 4 pontos nao sao alcancaveis por numero nenhum de
-// atendimentos: a escada de seis degraus vira uma de tres, e quem configurou um
-// alvo baixo perde a resolucao do meio sem ser avisado.
+// A conta a vista sempre foi a condicao para um numero unico ser defensavel.
+// Sem isto, "150 pontos" seria um oraculo.
 {
   const problemas = [];
-  for (const alvo of [1, 2, 3, 4, 5, 7, 10, 60]) {
-    const regras = { ...padrao, alvoAtendimentos: alvo };
-    // A escada EM VIGOR, pelo caminho de verdade: `_ranking` a devolve.
-    const escada = painel._ranking([], { regras }).pesos.volume;
+  const atendimentos = [];
+  for (let i = 0; i < 6; i++) {
+    atendimentos.push({
+      atendenteNome: "Fulano", status: "fechada", avaliacao: 5,
+      abertoEm: new Date("2026-09-01T10:00:00Z"),
+      atendidoEm: new Date("2026-09-01T10:00:10Z"),
+    });
+  }
+  const p = painel._ranking(atendimentos, { limite: 99, regras: padrao }).classificacao[0];
+  const soma = p.atendimentos.pontos + p.nota.pontos + p.agilidade.pontos;
+  if (soma !== p.pontos) problemas.push(`as parcelas somam ${soma}, mas o total e ${p.pontos}`);
+  if (p.atendimentos.pontos !== 60) problemas.push(`volume: 6 x 10 = 60, veio ${p.atendimentos.pontos}`);
+  if (p.nota.pontos !== 60) problemas.push(`nota: soma 30 estrelas x 2 = 60, veio ${p.nota.pontos}`);
+  if (p.agilidade.pontos !== 30) problemas.push(`agilidade: 6 x 5 (assumido em 10s) = 30, veio ${p.agilidade.pontos}`);
+  check("as tres parcelas saem separadas e somam o total", problemas);
+}
 
-    const alcancados = new Set();
-    for (let n = 0; n <= alvo + 2; n++) alcancados.add(pontosCom(n, regras));
-
-    const mortos = escada.filter((d) => !alcancados.has(d.pontos));
-    if (mortos.length) {
-      problemas.push(
-        `alvo ${alvo}: ${mortos.length} degrau(s) inalcancavel(is) -- ` +
-          mortos.map((d) => `${d.pontos}pts a partir de ${d.aPartirDe}`).join(", ")
-      );
+// ── A NOTA PREMIA QUALIDADE, E NAO SO VOLUME ────────────────────────────────
+//
+// Somar as notas (e nao a media) e o que faz a parcela acumular. O risco de
+// somar e virar "volume de novo" -- dez notas 3 nao podem valer mais que dez
+// notas 5. Aqui isso fica travado.
+{
+  const problemas = [];
+  const fazer = (nota, quantos) => {
+    const a = [];
+    for (let i = 0; i < quantos; i++) {
+      a.push({ atendenteNome: "F", status: "fechada", avaliacao: nota,
+        abertoEm: new Date("2026-09-01T10:00:00Z"), atendidoEm: new Date("2026-09-01T10:00:10Z") });
     }
+    return painel._ranking(a, { limite: 99, regras: padrao }).classificacao[0];
+  };
+  const dezCincos = fazer(5, 10);
+  const dezTres = fazer(3, 10);
+  if (!(dezCincos.pontos > dezTres.pontos)) {
+    problemas.push(`dez notas 5 (${dezCincos.pontos}) deveriam valer mais que dez notas 3 (${dezTres.pontos})`);
   }
-  check("todo degrau da escada e alcancavel", problemas);
+  // E volume ainda conta: vinte notas 3 passam dez notas 5, e isso e a decisao
+  // de produto desta regua (sem teto, quem produz mais soma mais).
+  const vinteTres = fazer(3, 20);
+  if (!(vinteTres.pontos > dezCincos.pontos)) {
+    problemas.push(`vinte notas 3 (${vinteTres.pontos}) deveriam passar dez notas 5 (${dezCincos.pontos})`);
+  }
+  check("nota melhor vale mais, e volume tambem conta", problemas);
 }
 
-// ── Valor absurdo no banco nao vira regra ────────────────────────────────────
+// ── O MINIMO DE AVALIACOES CONTINUA VALENDO PARA A NOTA ─────────────────────
+//
+// Sem ele, uma amostra de uma avaliacao ja pontuaria qualidade. O volume conta
+// desde a primeira -- e ele nao depende de amostra.
 {
-  const sedeRegras = require(path.join(__dirname, "src/modules/dashboard/sede.regras"));
   const problemas = [];
-  const zero = sedeRegras.validar({ alvoAtendimentos: 0 }, padrao);
-  if (zero.alvoAtendimentos < 1) {
-    problemas.push("alvo 0 passou: todo mundo ficaria no teto sempre, que e o defeito de origem");
-  }
-  const negativo = sedeRegras.validar({ alvoAtendimentos: -5 }, padrao);
-  if (negativo.alvoAtendimentos < 1) problemas.push("alvo negativo passou");
-  const texto = sedeRegras.validar({ alvoAtendimentos: "abc" }, padrao);
-  if (texto.alvoAtendimentos !== padrao.alvoAtendimentos) {
-    problemas.push("texto no lugar do numero deveria manter o valor atual, virou " + texto.alvoAtendimentos);
-  }
-  check("valor invalido nao vira regra rodando na conta do mes", problemas);
+  const a = [{ atendenteNome: "F", status: "fechada", avaliacao: 5,
+    abertoEm: new Date("2026-09-01T10:00:00Z"), atendidoEm: new Date("2026-09-01T10:00:10Z") }];
+  const p = painel._ranking(a, { limite: 99, regras: padrao }).classificacao[0];
+  if (p.nota.pontos !== 0) problemas.push(`com 1 nota a parcela de qualidade deveria ser 0, veio ${p.nota.pontos}`);
+  if (p.nota.conta !== false) problemas.push("a tela precisa saber que ainda nao conta (para escrever '1 de 3')");
+  if (p.atendimentos.pontos !== 10) problemas.push(`mas o volume conta desde a primeira: 10, veio ${p.atendimentos.pontos}`);
+  check("com uma avaliacao so, qualidade nao pontua e volume pontua", problemas);
 }
 
-console.log(
-  "\n" +
-    (erros.length
-      ? `FALHAS (${erros.length}):\n  ` + erros.join("\n  ")
-      : "PONTUACAO DA SEDE: TUDO CONFERE")
-);
-process.exit(erros.length ? 1 : 0);
+// ── A UNIDADE CONFIGURADA MUDA A ESCALA ─────────────────────────────────────
+{
+  const problemas = [];
+  const dobrado = totalCom(6, { ...padrao, unidades: { atendimento: 20, estrela: 2 } });
+  const normal = totalCom(6, padrao);
+  if (dobrado !== normal + 60) {
+    problemas.push(`dobrar o valor do atendimento deveria somar 60 (6 x 10), somou ${dobrado - normal}`);
+  }
+  check("mexer na unidade muda a pontuacao na proporcao esperada", problemas);
+}
+
+console.log("");
+if (erros.length) {
+  console.log(`${erros.length} FALHA(S)`);
+  for (const e of erros) console.log("  - " + e);
+  process.exit(1);
+}
+console.log("PONTUACAO DA SEDE: TUDO CONFERE");

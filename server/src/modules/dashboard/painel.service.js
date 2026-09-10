@@ -68,121 +68,115 @@ const MINIMO_AVALIACOES = 3;
 // pontos, e um degrau de agilidade valia 20. O ranking premiava atender POUCO e
 // bem, que nao e o que a equipe faz nem o que a empresa quer.
 //
-// Agora as tres parcelas sao COMPARAVEIS entre si e somam 100:
+// Daquele ajuste saiu um indice de 0 a 100 com as tres parcelas comparaveis
+// entre si -- atendimentos ate 35, nota media ate 35, agilidade ate 30. ESSE
+// DESENHO NAO VALE MAIS: ver o bloco seguinte. O historico fica porque explica
+// por que as tres parcelas existem, e por que elas continuam separadas na tela.
 //
-//   atendimentos   ate 35    (FAIXAS_VOLUME)
-//   nota media     ate 35    (5,0 x PESO_NOTA)
-//   agilidade      ate 30    (FAIXAS_AGILIDADE)
+// A conta continua VISIVEL parcela a parcela -- que sempre foi a condicao para
+// um numero unico ser defensavel. Quem discorda do peso discorda de uma conta a
+// vista, e nao de um oraculo.
+
+// ── A PONTUACAO DEIXOU DE TER TETO ─────────────────────────────────────────
 //
-// A conta continua VISIVEL parcela a parcela na tela -- que sempre foi a
-// condicao para um numero unico ser defensavel. Quem discorda do peso discorda
-// de uma conta a vista.
-const PESO_NOTA = 7;
+// Era um INDICE de 0 a 100: volume em faixas (ate 35), nota media x 7 (ate 35) e
+// agilidade em faixas (ate 30). Ele respondia "quao bem voce trabalhou neste
+// ciclo", e as tres parcelas eram comparaveis entre si porque somavam 100.
+//
+// O QUE ISSO CUSTAVA NA PRATICA, e foi o pedido: o numero PARAVA de se mexer. A
+// escada de volume dava 24 pontos para 6 atendimentos E para 7 -- fechar o
+// setimo nao movia nada, e o proximo salto era no oitavo. Com nota 5,0 (parcela
+// cheia) e a equipe fazendo de 2 a 8 atendimentos por ciclo, tres pessoas
+// ficaram em 84 pontos ao mesmo tempo e o placar congelou. Relatado em
+// 10/09/2026 como "o ranking travado nos 84".
+//
+// AGORA CADA ATENDIMENTO SOMA, e a soma nao tem topo:
+//
+//   por atendimento avaliado      PONTOS_POR_ATENDIMENTO
+//   por estrela recebida          PONTOS_POR_ESTRELA        (nota 5 -> +10)
+//   por rapidez em assumir        BONUS_AGILIDADE (por atendimento)
+//
+// Um atendimento perfeito (nota 5, assumido em 2 minutos) vale 25. Seis deles,
+// 150. O setimo passa a valer, e o vigesimo tambem.
+//
+// ── O QUE SE PERDE, DITO POR EXTENSO ───────────────────────────────────────
+//
+// A escada de faixas existia por uma razao boa, que continua valida: "ponto por
+// unidade transforma o ultimo dia do ciclo em corrida -- fechar mais uma OS vale
+// exatamente X, sempre, e ha como perseguir isso fechando conversa que ainda nao
+// acabou". Essa porta REABRE aqui, e foi uma decisao consciente de quem manda na
+// regra, nao um descuido.
+//
+// Duas coisas seguram o pior caso, e por isso nao foram tocadas:
+//
+//   1. so pontua atendimento FECHADO E AVALIADO pelo cliente. Fechar as pressas
+//      sem o cliente avaliar nao rende ponto nenhum -- e correr atropelando o
+//      cliente tende a nao render nota 5;
+//   2. o MINIMO DE AVALIACOES continua valendo para a parcela da nota: com uma
+//      ou duas notas ela fica zerada, e a tela diz "1 de 3" em vez de fingir.
+//
+// ── E O QUE ISSO FAZ COM O HISTORICO ───────────────────────────────────────
+//
+// Nada de ranking e guardado: o historico e recalculado a cada consulta. Trocar
+// a formula REESCREVE todos os ciclos passados -- inclusive os ja premiados --, e
+// a premiacao registrada pode passar a apontar para quem nao e mais o primeiro.
+// Nao ha como evitar isso sem guardar o ranking fechado de cada ciclo, o que
+// nunca existiu aqui. Fica registrado porque e consequencia, nao surpresa.
+const PONTOS_POR_ATENDIMENTO = 10;
+const PONTOS_POR_ESTRELA = 2;
 
 /**
- * Volume em FAIXAS, e nao pontos por unidade.
+ * Bonus de rapidez POR ATENDIMENTO, e nao pela mediana do ciclo.
  *
- * Ponto por unidade transforma o ultimo dia do mes em corrida: fechar mais uma
- * OS vale exatamente X, sempre, e ha como perseguir isso fechando conversa que
- * ainda nao acabou. A faixa premia a ORDEM DE GRANDEZA do mes e para de premiar
- * dentro dela -- entre 6 e 7 atendimentos nao ha vantagem a caçar.
+ * A mediana nao acumula -- ela e propriedade do conjunto, e um numero que nao
+ * cresce com o trabalho nao cabe numa pontuacao sem teto. Medindo atendimento
+ * por atendimento, quem assume rapido dez vezes ganha dez vezes.
  *
- * O teto existe porque a soma precisa fechar em 100. Ele so morde a partir de
- * 10 atendimentos no mes, acima do que a equipe faz hoje; se a operacao crescer,
- * e aqui que se mexe.
+ * Os limiares sao os mesmos de `FAIXAS_AGILIDADE` (a leitura de "rapido" nao
+ * mudou); o que mudou e a escala, porque agora o valor e cobrado por unidade.
  */
-const FAIXAS_VOLUME = [
-  { aPartirDe: 10, pontos: 35 },
-  { aPartirDe: 8, pontos: 30 },
-  { aPartirDe: 6, pontos: 24 },
-  { aPartirDe: 4, pontos: 17 },
-  { aPartirDe: 2, pontos: 9 },
-  { aPartirDe: 1, pontos: 4 },
+const BONUS_AGILIDADE = [
+  { ateSeg: 120, pontos: 5 },
+  { ateSeg: 300, pontos: 4 },
+  { ateSeg: 600, pontos: 3 },
+  { ateSeg: 1200, pontos: 2 },
+  { ateSeg: 2700, pontos: 1 },
 ];
 
-/**
- * A ESCADA DE VOLUME REDESENHADA PARA O ALVO CONFIGURADO.
- *
- * ── POR QUE UM NUMERO SO, E NAO SEIS ──────────────────────────────────────
- *
- * `FAIXAS_VOLUME` foi calibrada para uma operacao que fazia menos de 10
- * atendimentos avaliados por mes. Quando a equipe cresce, o degrau de cima e
- * alcancado no primeiro dia e o resto do mes deixa de valer -- varias pessoas
- * empatam no teto e a ordem entre elas vira sorteio.
- *
- * A saida NAO e abrir os seis degraus para edicao. Escada editada degrau a
- * degrau e escada que pode nao subir, e "por que 6 atendimentos valem menos
- * que 4?" nao e uma pergunta que alguem queira ter de responder.
- *
- * Configura-se UM numero: quantos atendimentos valem a pontuacao maxima. A
- * escada inteira e reescalada por ele, mantendo a FORMA (os degraus e a
- * distancia entre eles) e mudando so onde ela termina.
- *
- * ── O CUIDADO COM O ARREDONDAMENTO ────────────────────────────────────────
- *
- * Com alvo pequeno dois degraus caem no mesmo numero (alvo 3: 8 -> 2,4 e
- * 6 -> 1,8, ambos 2). O risco NAO e a pontuacao descer -- `pontosDeVolume`
- * casa o primeiro degrau da lista, que e o de maior pontuacao, entao um
- * empate nunca inverte a ordem. Isto foi medido antes de escrever a regra.
- *
- * O que acontece e o degrau repetido ficar MORTO: com alvo 3 e sem o ajuste,
- * os degraus de 24, 9 e 4 pontos nao sao alcancaveis por numero nenhum de
- * atendimentos, e a escada de seis degraus vira uma de tres. Quem configurou
- * um alvo baixo perde a resolucao do meio sem ser avisado.
- *
- * Por isso cada degrau e forcado a ficar ao menos 1 abaixo do anterior, e a
- * escada termina quando nao cabe mais degrau -- assim todo degrau que sobra
- * e alcancavel.
- */
-function escadaDeVolume(alvo) {
-  const base = FAIXAS_VOLUME[0].aPartirDe;
-  const desejado = Number(alvo) > 0 ? Number(alvo) : base;
-  // Sem atalho para o caso padrao: com fator 1 cada degrau mapeia em si
-  // mesmo, entao o resultado ja e identico. Um segundo caminho que "deveria"
-  // dar no mesmo lugar e so mais um lugar para divergir.
-  const fator = desejado / base;
-  const escada = [];
-  let anterior = Infinity;
-  for (const f of FAIXAS_VOLUME) {
-    let limiar = Math.max(1, Math.round(f.aPartirDe * fator));
-    if (limiar >= anterior) limiar = anterior - 1;
-    if (limiar < 1) break;
-    escada.push({ aPartirDe: limiar, pontos: f.pontos });
-    anterior = limiar;
-  }
-  return escada;
-}
-
-function pontosDeVolume(fechados, escada = FAIXAS_VOLUME) {
-  return escada.find((f) => fechados >= f.aPartirDe)?.pontos || 0;
-}
-
-/**
- * Agilidade em FAIXAS, e nao proporcional ao tempo.
- *
- * Proporcional premiaria cada segundo economizado, e numa parede isso vira
- * pressa: vale a pena assumir a conversa so para parar o relogio, mesmo sem
- * poder atender. Faixa larga premia o habito ("assumo rapido") e para de
- * premiar depois -- entre 30 s e 90 s nao ha vantagem a perseguir.
- *
- * AS FAIXAS DE CIMA SAO NOVAS. Antes a escada terminava em 20 minutos e tudo
- * acima dava zero: 21 minutos valia o mesmo que dois dias. Como quem assume
- * MAIS conversa acumula mais fila, o zerao caia justamente sobre quem mais
- * atende -- a parcela punia o volume que a parcela de cima premiava.
- */
-const FAIXAS_AGILIDADE = [
-  { ateSeg: 120, pontos: 30 },
-  { ateSeg: 300, pontos: 25 },
-  { ateSeg: 600, pontos: 20 },
-  { ateSeg: 1200, pontos: 14 },
-  { ateSeg: 2700, pontos: 8 },
-  { ateSeg: 7200, pontos: 4 },
-];
-
-function pontosDeAgilidade(segundos) {
+function bonusDeAgilidade(segundos) {
   if (segundos == null) return 0;
-  return FAIXAS_AGILIDADE.find((f) => segundos <= f.ateSeg)?.pontos || 0;
+  return BONUS_AGILIDADE.find((f) => segundos <= f.ateSeg)?.pontos || 0;
 }
+
+// A ESCADA DE VOLUME E `pontosDeVolume` FORAM REMOVIDAS.
+//
+// Elas existiam para dar pontos por FAIXA de volume, com teto -- e a faixa e
+// exatamente o que fazia o placar parar de se mexer entre 6 e 8 atendimentos.
+// Com a pontuacao sem teto, volume e `fechados x PONTOS_POR_ATENDIMENTO`, e
+// nao ha degrau nem alvo a configurar.
+//
+// Removidas em vez de deixadas sem uso: funcao de pontuacao parada no arquivo
+// e convite para alguem religar a regra antiga por engano -- foi o que
+// aconteceu com `inicioDoMes` nesta mesma classe (ver `cicloCorrente`).
+//
+// A escada de faixas do ranking EXTERNO (`rankings/pontuacao.externa`) segue
+// intacta: aquele ranking tem teto 100 de propósito, e nunca se soma a este.
+
+// `FAIXAS_AGILIDADE` e `pontosDeAgilidade` FORAM REMOVIDAS junto com o teto.
+//
+// Elas davam pontos pela MEDIANA do ciclo, e mediana nao acumula -- ela e
+// propriedade do conjunto e nao cresce com o trabalho. Quem substituiu foi
+// `BONUS_AGILIDADE`, cobrado por atendimento.
+//
+// A razao de serem FAIXAS, e nao proporcional ao tempo, continua valendo e vale
+// repetir aqui: proporcional premiaria cada segundo economizado, e numa parede
+// isso vira pressa -- vale a pena assumir a conversa so para parar o relogio,
+// mesmo sem poder atender. Faixa larga premia o habito ("assumo rapido") e para
+// de premiar depois. `BONUS_AGILIDADE` manteve os mesmos limiares por isso.
+//
+// A mediana continua sendo CALCULADA (`assumirTipico`) e exibida como
+// indicador: ela responde "quanto tempo tipicamente levo para assumir?", que e
+// uma pergunta legitima. So nao pontua mais.
 
 const inicioDoDia = () => {
   const d = new Date();
@@ -481,9 +475,9 @@ class PainelService {
    *
    * O que cada pessoa junta no mes:
    *
-   *   atendimentos AVALIADOS     faixa, ate 35   (FAIXAS_VOLUME)
-   *   nota media x PESO_NOTA     ate 35, a partir de MINIMO_AVALIACOES notas
-   *   agilidade (ate assumir)    faixa, ate 30   (FAIXAS_AGILIDADE)
+   *   atendimentos AVALIADOS     x `unidades.atendimento`, sem teto
+   *   soma das NOTAS             x `unidades.estrela`, a partir de MINIMO_AVALIACOES
+   *   rapidez em ASSUMIR         BONUS_AGILIDADE por atendimento, somado
    *
    * ── SO PONTUA ATENDIMENTO QUE O CLIENTE AVALIOU ────────────────────────────
    *
@@ -507,11 +501,17 @@ class PainelService {
    * `aCaminho`), em vez de fingir que a pessoa e ruim de nota.
    */
   /**
-   * Os tetos padrao das tres parcelas -- a FONTE do que a tela de configuracao
-   * oferece como "restaurar", sem repetir os numeros num segundo lugar.
+   * As unidades padrao das tres parcelas -- a FONTE do que a tela de
+   * configuracao oferece como "restaurar", sem repetir os numeros num segundo
+   * lugar.
    */
   regrasPadrao() {
-    return sedeRegras.padraoDe({ PESO_NOTA, MINIMO_AVALIACOES, FAIXAS_VOLUME, FAIXAS_AGILIDADE });
+    return sedeRegras.padraoDe({
+      PONTOS_POR_ATENDIMENTO,
+      PONTOS_POR_ESTRELA,
+      MINIMO_AVALIACOES,
+      BONUS_AGILIDADE,
+    });
   }
 
   regras() {
@@ -524,22 +524,17 @@ class PainelService {
 
   _ranking(atendimentos, { limite = TOP, incluirZerados = false, semearVistos = false, equipe = null, regras = null } = {}) {
     /**
-     * AS FAIXAS ESCALAM COM O PESO CONFIGURADO.
+     * AS UNIDADES QUE O ADMINISTRADOR DECIDE.
      *
-     * FAIXAS_VOLUME e FAIXAS_AGILIDADE foram escritas para os tetos padrao. Se
-     * ficassem cravadas, mexer no peso quase nao mudaria nada e a tela passaria
-     * a mentir sobre a propria regra -- "atendimentos vale 50" com o maximo real
-     * em 35. Reescalar mantem a FORMA da escada (os degraus, e onde ficam) e
-     * muda so o quanto ela vale no total, que e o que o peso significa.
+     * Sao VALORES POR UNIDADE, e nao tetos: `atendimento` e quanto vale cada
+     * atendimento avaliado, `estrela` e quanto vale cada estrela recebida.
+     * Dobrar qualquer um dobra aquela parcela para todo mundo -- nao ha teto
+     * para reescalar, e por isso o `escalar` que existia aqui saiu junto com a
+     * escada de faixas.
      */
     const padrao = this.regrasPadrao();
-    const pesos = { ...padrao.pesos, ...(regras?.pesos || {}) };
+    const unidades = { ...padrao.unidades, ...(regras?.unidades || {}) };
     const minimoNotas = regras?.minimoAvaliacoes ?? MINIMO_AVALIACOES;
-    // Quantos atendimentos avaliados no mes valem a pontuacao maxima de
-    // volume. E o unico numero da escada que o administrador decide.
-    const escadaVolume = escadaDeVolume(regras?.alvoAtendimentos ?? padrao.alvoAtendimentos);
-    const escalar = (pontos, tetoPadrao, tetoAtual) =>
-      tetoPadrao === tetoAtual ? pontos : Math.round((pontos / tetoPadrao) * tetoAtual);
     const porPessoa = new Map();
     // Todo atendente REAL que aparece no periodo, pontuando ou nao.
     const vistosNoMes = new Set();
@@ -643,9 +638,27 @@ class PainelService {
       // duas telas sem nenhum ganho para quem olha.
       const assumirTipico = p.assumir.length ? Math.round(mediana(p.assumir)) : null;
 
-      const ptsAtendimentos = escalar(pontosDeVolume(p.fechados, escadaVolume), padrao.pesos.atendimentos, pesos.atendimentos);
-      const ptsNota = notaConta ? Math.round((notaMedia / 5) * pesos.nota) : 0;
-      const ptsAgilidade = escalar(pontosDeAgilidade(assumirTipico), padrao.pesos.agilidade, pesos.agilidade);
+      // ── AS TRES PARCELAS ACUMULAM, CADA UMA POR UNIDADE ────────────────
+      //
+      // Nenhuma tem teto: quem fecha o dobro de atendimentos avaliados soma o
+      // dobro. Era isto o pedido -- ver o bloco "A PONTUACAO DEIXOU DE TER
+      // TETO" no topo do arquivo.
+      const ptsAtendimentos = p.fechados * unidades.atendimento;
+      // A SOMA das notas, e nao a media: media nao acumula. Assim a parcela
+      // cresce com o volume E com a qualidade -- dez notas 5 valem o dobro de
+      // cinco notas 5, e dez notas 3 valem menos que dez notas 5.
+      //
+      // O MINIMO continua valendo, e por isso a soma e zerada abaixo dele: com
+      // uma nota so, a tela escreve "1 de 3" em vez de mostrar pontuacao de
+      // qualidade a partir de amostra de um.
+      const ptsNota = notaConta
+        ? Math.round(p.notas.reduce((a, b) => a + b, 0) * unidades.estrela)
+        : 0;
+      // Bonus POR ATENDIMENTO, somado. A mediana continua sendo calculada acima
+      // (`assumirTipico`) porque as telas a mostram como indicador -- mas ela
+      // nao pontua mais: mediana e propriedade do conjunto e nao cresce com o
+      // trabalho, entao nao cabe numa pontuacao sem teto.
+      const ptsAgilidade = p.assumir.reduce((soma, seg) => soma + bonusDeAgilidade(seg), 0);
 
       return {
         nome: p.nome,
@@ -694,23 +707,24 @@ class PainelService {
       classificacao,
       aCaminho,
       minimoAvaliacoes: minimoNotas,
-      // Os TETOS de cada parcela, para a tela escrever a regra sem repetir os
-      // numeros do servidor num texto que envelhece sozinho.
+      // A REGUA EM VIGOR, para a tela escrever a regra sem repetir os numeros
+      // do servidor num texto que envelhece sozinho.
+      //
+      // `pesos` continua sendo o nome do campo porque e por ele que a Visao
+      // Geral e a parede leem a regra -- renomear o campo obrigaria as duas a
+      // mudarem juntas por nada. O que mudou e o CONTEUDO: nao ha mais teto
+      // nenhum aqui, sao valores por unidade.
       pesos: {
-        nota: PESO_NOTA,
-        agilidade: FAIXAS_AGILIDADE,
-        // A escada EM VIGOR, e nao a constante: com o alvo configurado a
-        // constante descreve outra escada, e cairia na mesma armadilha que a
-        // nota logo abaixo descreve para os tetos.
-        volume: escadaVolume,
-        // O alvo em vigor -- o numero de atendimentos que vale a parcela
-        // cheia. E ele que a tela precisa para escrever a regra por extenso.
-        alvoAtendimentos: escadaVolume[0]?.aPartirDe ?? FAIXAS_VOLUME[0].aPartirDe,
-        // Os tetos EM VIGOR (o padrao, com o que o administrador configurou por
-        // cima) -- e nao as constantes. A tela escreve "volume de atendimentos
-        // (35)" a partir daqui; com o valor cravado, ela continuaria dizendo 35
-        // depois de alguem trocar para 50.
-        tetos: { ...pesos },
+        // Os valores EM VIGOR (o padrao, com o que o administrador configurou
+        // por cima) -- e nao as constantes. A tela escreve "10 por atendimento"
+        // a partir daqui; com o valor cravado, ela continuaria dizendo 10
+        // depois de alguem trocar para 15.
+        unidades: { ...unidades },
+        // As faixas do bonus de rapidez, para a tela poder listar os degraus.
+        bonusAgilidade: BONUS_AGILIDADE,
+        // NAO HA TETO -- e a tela precisa saber disso para nao escrever
+        // "pontuacao de 0 a 100", que era o texto antigo e virou mentira.
+        semTeto: true,
       },
     };
   }

@@ -38,16 +38,16 @@ const CHAVE = "sede.regras";
 
 // O padrao sai das constantes do painel -- e nao de numeros repetidos aqui.
 // Duas listas para a mesma coisa e o comeco da divergencia.
-function padraoDe({ PESO_NOTA, MINIMO_AVALIACOES, FAIXAS_VOLUME, FAIXAS_AGILIDADE }) {
+function padraoDe({ PONTOS_POR_ATENDIMENTO, PONTOS_POR_ESTRELA, MINIMO_AVALIACOES }) {
   return {
-    pesos: {
-      atendimentos: FAIXAS_VOLUME[0].pontos,
-      nota: 5 * PESO_NOTA,
-      agilidade: FAIXAS_AGILIDADE[0].pontos,
+    // VALORES POR UNIDADE, e nao tetos -- ver o bloco "A PONTUACAO DEIXOU DE
+    // TER TETO" em painel.service. Cada atendimento avaliado vale
+    // `atendimento`; cada estrela recebida vale `estrela`.
+    unidades: {
+      atendimento: PONTOS_POR_ATENDIMENTO,
+      estrela: PONTOS_POR_ESTRELA,
     },
     minimoAvaliacoes: MINIMO_AVALIACOES,
-    // O degrau de cima da escada de volume, que e o alvo do mes.
-    alvoAtendimentos: FAIXAS_VOLUME[0].aPartirDe,
   };
 }
 
@@ -64,25 +64,38 @@ function validar(entrada, base) {
     out.minimoAvaliacoes = inteiro(entrada.minimoAvaliacoes, 1, 20, base.minimoAvaliacoes);
   }
 
-  if (entrada.alvoAtendimentos !== undefined) {
-    // Minimo 1: alvo zero deixaria todo mundo no teto sempre, que e o oposto
-    // do problema que este campo existe para resolver. O maximo e folgado --
-    // quem tiver uma operacao de 500 atendimentos por mes tem de poder dizer.
-    out.alvoAtendimentos = inteiro(entrada.alvoAtendimentos, 1, 1000, base.alvoAtendimentos);
-  }
-
-  if (entrada.pesos && typeof entrada.pesos === "object") {
-    const pesos = {};
-    for (const chave of Object.keys(base.pesos)) {
-      pesos[chave] = inteiro(entrada.pesos[chave], 0, 100, base.pesos[chave]);
+  // ── A REGRA "OS PESOS PRECISAM SOMAR 100" SAIU ──────────────────────────
+  //
+  // Ela era a INVARIANTE do teto: com as tres parcelas somando 100, a pontuacao
+  // era um indice de 0 a 100 por construcao. Com a pontuacao sem teto (ver
+  // painel.service), exigir soma 100 nao teria mais sentido nenhum -- os valores
+  // agora sao "quanto vale UMA unidade", e nao "quanto vale a parcela cheia".
+  //
+  // `alvoAtendimentos` saiu junto: ele dizia quantos atendimentos valiam a
+  // parcela cheia de volume, e nao existe mais parcela cheia.
+  //
+  // Um valor gravado por versao anterior (com `pesos` e `alvoAtendimentos`) nao
+  // quebra nada: `validar` ignora chave que nao conhece, e o padrao entra por
+  // baixo -- entao a regua volta ao padrao novo em vez de virar zero. Foi por
+  // isso que `validar` sempre rodou tambem na LEITURA.
+  if (entrada.unidades && typeof entrada.unidades === "object") {
+    const unidades = {};
+    for (const chave of Object.keys(base.unidades)) {
+      // Minimo 0 para poder DESLIGAR uma parcela (quem nao quer premiar volume
+      // pode zera-la), e maximo folgado -- a escala e livre agora.
+      unidades[chave] = inteiro(entrada.unidades[chave], 0, 1000, base.unidades[chave]);
     }
-    const soma = Object.values(pesos).reduce((a, b) => a + b, 0);
-    // RECUSA em vez de aparar: aparar sozinho gravaria um quadro diferente do
-    // que a pessoa digitou, e ela so descobriria pela pontuacao do mes.
-    if (soma !== 100) {
-      throw new AppError(`Os pesos precisam somar 100. Somaram ${soma}.`, 400, "PESOS_NAO_SOMAM_100");
+    // TUDO ZERO E RECUSADO. Nao e uma regua "sem premiacao": e um ranking em que
+    // ninguem pontua nunca, e a tela ficaria com a equipe inteira em zero sem
+    // nada explicando. Errar aqui e barato de dizer e caro de descobrir.
+    if (Object.values(unidades).every((v) => v === 0)) {
+      throw new AppError(
+        "Ao menos uma parcela precisa valer algo -- com tudo zero ninguem pontua nunca.",
+        400,
+        "REGUA_TODA_ZERO"
+      );
     }
-    out.pesos = pesos;
+    out.unidades = unidades;
   }
 
   return out;

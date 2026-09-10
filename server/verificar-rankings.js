@@ -178,32 +178,41 @@ async function main() {
   /**
    * 1a. AS TRES PARCELAS, E A BASE DE ONDE ELAS SAEM.
    *
-   * A pontuacao foi reequilibrada porque a antiga premiava atender POUCO e bem:
-   * volume valia 1 ponto por atendimento (13% do total) contra 40 da nota e 20
-   * da agilidade. Agora e 35 / 35 / 30, e as tres saem da MESMA base -- os
-   * atendimentos fechados que o cliente avaliou.
+   * As tres saem da MESMA base -- os atendimentos fechados que o cliente
+   * avaliou -- e essa parte nao mudou. O que mudou foi a escala: elas somavam
+   * ate 100 (indice) e agora ACUMULAM por unidade, sem teto.
    *
-   * Estes numeros sao a regra escrita em teste. Mudar um peso sem passar por
+   * O motivo esta em `verificar-pontuacao-sede.js` e em painel.service: a
+   * escada de faixas fazia o placar parar entre 6 e 7 atendimentos, e tres
+   * pessoas travaram em 84 pontos ao mesmo tempo.
+   *
+   * Estes numeros sao a regra escrita em teste. Mudar uma unidade sem passar por
    * aqui e mudar quem leva a premiacao sem ninguem perceber.
    */
-  titulo("1a. AS TRES PARCELAS SOMAM ATE 100, DA MESMA BASE");
+  titulo("1a. AS TRES PARCELAS ACUMULAM, DA MESMA BASE");
 
   const anaCrit = Object.fromEntries(
     sede.classificacao.find((p) => p.nome === ana.nome).criterios.map((c) => [c.chave, c])
   );
   // Ana: 3 fechados AVALIADOS com nota 5, assumidos na hora.
   check(anaCrit.atendimentos.valor === 3, `volume conta os avaliados (${anaCrit.atendimentos.valor})`);
-  check(anaCrit.atendimentos.pontos === 9, `3 avaliados = 9 pts de volume (${anaCrit.atendimentos.pontos})`);
-  check(anaCrit.nota.pontos === 35, `nota 5,0 x 7 = 35 pts, o teto da parcela (${anaCrit.nota.pontos})`);
-  check(anaCrit.agilidade.pontos === 30, `assumir na hora = 30 pts, o teto (${anaCrit.agilidade.pontos})`);
+  check(anaCrit.atendimentos.pontos === 30, `3 avaliados x 10 = 30 pts de volume (${anaCrit.atendimentos.pontos})`);
+  check(anaCrit.nota.pontos === 30, `3 notas 5 = 15 estrelas x 2 = 30 pts (${anaCrit.nota.pontos})`);
+  check(anaCrit.agilidade.pontos === 15, `assumir na hora = 3 x 5 = 15 pts (${anaCrit.agilidade.pontos})`);
   check(
-    anaCrit.atendimentos.pontos + anaCrit.nota.pontos + anaCrit.agilidade.pontos === 74,
-    "as parcelas somam o total (9 + 35 + 30 = 74)"
+    anaCrit.atendimentos.pontos + anaCrit.nota.pontos + anaCrit.agilidade.pontos === 75,
+    "as parcelas somam o total (30 + 30 + 15 = 75)"
   );
-  // O TETO existe e e 100: sem ele a soma nao teria significado nenhum.
+  // NAO HA MAIS TETO, e o servidor precisa DIZER isso -- a tela escrevia
+  // "pontuacao de 0 a 100" a partir daqui, e aquele texto virou mentira.
+  check(doPainel.pesos.semTeto === true, "o servidor declara que a pontuacao nao tem teto");
   check(
-    doPainel.pesos.tetos.atendimentos + doPainel.pesos.tetos.nota + doPainel.pesos.tetos.agilidade === 100,
-    `os tres tetos somam 100 (${doPainel.pesos.tetos.atendimentos} + ${doPainel.pesos.tetos.nota} + ${doPainel.pesos.tetos.agilidade})`
+    doPainel.pesos.unidades.atendimento === 10 && doPainel.pesos.unidades.estrela === 2,
+    `as unidades em vigor chegam a tela (${doPainel.pesos.unidades.atendimento} por atendimento, ${doPainel.pesos.unidades.estrela} por estrela)`
+  );
+  check(
+    doPainel.pesos.tetos === undefined,
+    "os tetos antigos nao voltaram no payload (a tela nao pode voltar a somar 100)"
   );
 
   // FECHAR SEM AVALIACAO NAO PONTUA -- o pedido, e o que mais muda na pratica.
@@ -219,9 +228,17 @@ async function main() {
   // parecer que a pessoa nao existe, quando o que faltou foi avaliacao.
   check(!!brunoSede, "mas continua na tabela da Visao Geral, com zero");
 
-  // A MEDIANA no lugar da media: uma conversa esquecida nao derruba o mes.
-  // Sete atendimentos assumidos em 60 s e um em 6 h dao media de ~45 min
-  // (8 pts) e mediana de 60 s (30 pts).
+  // UMA CONVERSA ESQUECIDA NAO DERRUBA O CICLO -- a garantia continua, por
+  // outro mecanismo.
+  //
+  // Antes ela vinha da MEDIANA: sete atendimentos em 60 s e um em 6 h davam
+  // media de ~45 min (8 pts) e mediana de 60 s (30 pts). Com a pontuacao sem
+  // teto a agilidade passou a ser bonus POR ATENDIMENTO, e a protecao ficou
+  // ainda mais direta: o esquecido simplesmente contribui ZERO, em vez de
+  // arrastar uma media. Sete a 60 s (5 cada) = 35, e o de 6 h nao tira nada.
+  //
+  // A mediana continua sendo calculada e exibida (`medioSeg`) como indicador --
+  // ela responde "quanto tempo tipicamente levo para assumir?". So nao pontua.
   const cMediana = await conversa("mediana");
   const zoe = await criarUsuario("Zoe", { equipeRanking: "sede" });
   for (let i = 0; i < 7; i += 1) {
@@ -237,8 +254,8 @@ async function main() {
   const comOutlier = await painelService.rankingDoMes(hoje.getFullYear(), hoje.getMonth() + 1);
   const zoeP = comOutlier.classificacao.find((p) => p.nome === zoe.nome);
   check(
-    zoeP?.agilidade.pontos === 30,
-    `uma conversa esquecida nao derruba o mes: ${zoeP?.agilidade.medioSeg}s tipicos, ${zoeP?.agilidade.pontos} pts`
+    zoeP?.agilidade.pontos === 35,
+    `o esquecido contribui zero, os sete rapidos pagam: ${zoeP?.agilidade.medioSeg}s tipicos, ${zoeP?.agilidade.pontos} pts`
   );
 
   /**

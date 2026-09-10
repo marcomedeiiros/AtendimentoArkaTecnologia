@@ -363,3 +363,85 @@ continuava de pé. Reescrita para medir isso, mais o chamado novo do Modo TV.
 
 Os **pontos sem teto** (§7). Nada disso foi tocado: a régua continua 0–100, e as
 três decisões do §7.3 seguem em aberto.
+
+---
+
+## 10. A pontuação sem teto foi implementada (10/09, fim do dia)
+
+O §7 ficou em aberto esperando um caso concreto, e ele veio: *"o ranking tá
+travado nos 84 pontos"*. Era o platô da escada — **6 e 7 atendimentos valiam os
+mesmos 24 pontos de volume**, e com a nota já cheia (5,0) o placar não tinha para
+onde ir. Fechar o sétimo não movia nada.
+
+Isso responde a dúvida do §7.3 sobre "quanto vale um atendimento": a régua
+implementada é por unidade, e as três parcelas continuam saindo da mesma base
+(fechado **e** avaliado).
+
+| Parcela | Antes | Agora |
+| --- | --- | --- |
+| volume | escada, teto 35 | `atendimentos × 10`, sem teto |
+| nota | média × 7, teto 35 | **soma das notas** × 2, sem teto |
+| agilidade | faixa pela **mediana**, teto 30 | bônus **por atendimento**, até 5 cada |
+
+Um atendimento avaliado com 5 estrelas e assumido em minutos vale **25**. Dez
+deles, **250**. O próximo sempre soma.
+
+**As duas decisões do §7.3 que estavam em aberto foram resolvidas assim:**
+
+* **a nota** virou a **soma** das notas, e não a média — média não acumula.
+  Somar premia qualidade *e* volume, e o teste trava as duas pontas: dez notas 5
+  valem mais que dez notas 3, e vinte notas 3 passam dez notas 5 (esta segunda é
+  a decisão de produto de não ter teto);
+* **a agilidade** virou bônus por atendimento. A mediana continua sendo
+  calculada e exibida como indicador — ela responde "quanto tempo tipicamente
+  levo para assumir?" — mas não pontua mais, porque não cresce com o trabalho.
+
+**O que se perde, e foi aceito:** a escada existia para que "fechar mais uma OS"
+não valesse sempre o mesmo, e essa porta reabre. Duas coisas seguram o pior
+caso, e nenhuma foi tocada: só pontua o que o cliente **avaliou**, e o mínimo de
+avaliações continua protegendo a parcela de qualidade.
+
+**O que se ganha além do pedido:** o empate de três pessoas em 84 era o platô, e
+não trabalho idêntico — com a régua nova elas se separam pelo que fizeram.
+
+### 10.1 O que mudou junto
+
+`sede.regras` deixou de exigir que os pesos somem 100 — aquela era a invariante
+do teto — e passou a recusar régua **toda zero**, que seria um ranking em que
+ninguém pontua nunca. `alvoAtendimentos`, `FAIXAS_VOLUME`, `escadaDeVolume`,
+`pontosDeVolume`, `FAIXAS_AGILIDADE` e `pontosDeAgilidade` foram **removidos**, e
+não deixados sem uso: régua antiga parada no arquivo é convite para alguém
+religá-la — foi o que aconteceu com `inicioDoMes` nesta mesma classe.
+
+A tela de configuração trocou os três campos de peso por dois de unidade e ganhou
+uma **conta de exemplo** ("com esta régua, um atendimento assim vale 25 pontos"),
+porque "10 e 2" não diz quanto é um ciclo. E o texto "Pontuação de 0 a 100" saiu
+de todos os lugares onde aparecia: virou mentira.
+
+**O ranking EXTERNO não foi tocado.** Ele tem teto 100 de propósito, e os dois
+nunca se somam nem se comparam — a diferença de escala entre eles só aumentou.
+
+### 10.2 Verificação
+
+`verificar-pontuacao-sede.js` foi reescrito: ele já existia para impedir
+saturação (a escada saturava em 10 no mês), e a saturação havia voltado por outro
+caminho. Agora trava a garantia que interessa — **o placar se move quando alguém
+trabalha mais** — varrendo de 1 a 40 atendimentos um por um, além do par exato do
+relato (6 → 7) e do dobro de trabalho valendo o dobro.
+
+`verificar-rankings.js` teve as parcelas atualizadas e ganhou três checagens: que
+o servidor **declara** não ter teto, que as unidades em vigor chegam à tela, e
+que os tetos antigos não voltaram no payload.
+
+Suíte completa com a única falha pré-existente (`inatividade`). Build limpo. E
+verificado na tela: a configuração abre com os campos novos, a conta de exemplo
+calcula sozinha, e salvar devolve `PUT /api/dashboard/regras → 200 OK` — sem o
+erro de "os pesos precisam somar 100", que deixou de existir.
+
+### 10.3 O que ainda merece atenção
+
+**Os ciclos passados foram reescritos.** O histórico é recalculado a cada
+consulta, então todos os ciclos anteriores agora aparecem com a régua nova, e uma
+premiação já registrada pode apontar para quem não é mais o primeiro. Não há como
+evitar sem guardar o ranking fechado de cada ciclo, o que nunca existiu aqui.
+Vale conferir as premiações registradas antes de anunciar a mudança à equipe.
