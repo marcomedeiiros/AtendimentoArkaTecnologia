@@ -37,7 +37,7 @@ disso, o pódio configurável tem um caminho que o servidor recusa, e a legenda 
 | 3 | A legenda do "Fora da Sede" está escrita no front -- e já mente | **front** | média · ✅ corrigido (§13) |
 | 4 | "1 de 3" no externo: o mínimo é chute do cliente | **front** | média · ✅ corrigido (§13) |
 | 5 | "A caminho da nota" ignora o mínimo configurado | servidor | média · ✅ corrigido (§14) |
-| 6 | Mudar o ciclo pela segunda vez reescreve os ciclos do primeiro | servidor | média |
+| 6 | Mudar o ciclo pela segunda vez reescreve os ciclos do primeiro | servidor | média · ✅ corrigido (§15) |
 | 7 | O histórico e a tabela podem discordar da posição da mesma pessoa | servidor | média · ✅ fechou junto com o 1 (§11.1) |
 | 8 | `PUT /dashboard/regras` é a única escrita de ranking sem validação na borda | servidor | média |
 | 9 | O ranking da sede cruza por NOME: homônimo soma junto, renomear apaga o mês | servidor | baixa/média |
@@ -714,3 +714,120 @@ auditoria já registrou dois casos disso hoje (o "continua de 0 a 100" da nota
 geral e o "a sede também para em 100"). Valia conferir.
 
 Suíte completa: `TUDO PASSOU`. Build do cliente limpo.
+
+---
+
+## 15. O que foi feito (o achado 6)
+
+O mais caro dos dez, e o que protege premiação já registrada. `vigenteDesde`
+deixou de ser um campo e passou a ser uma **lista**: `vigencias`, uma linha por
+decisão, cada uma com a competência a partir da qual ela vale.
+
+### 15.1 A fórmula que mantém as janelas coladas
+
+Era a parte que faltava pensar. Uma competência **começa onde o regime anterior
+parou** e **termina na virada da própria regra**:
+
+```
+inicio(comp) = virada no mês de comp,   pela regra da competência ANTERIOR
+fim(comp)    = virada no mês SEGUINTE,  pela regra de comp
+```
+
+Fora de mudança as duas regras são a mesma, e isso **reduz exatamente ao ciclo
+de sempre**. Na mudança, quem absorve o descasamento é a competência da
+vigência -- e a "competência de transição" que já existia (começar no dia 1
+depois da primeira configuração) deixou de ser um caso especial: ela é o que
+essa fórmula produz quando o regime anterior era o calendário.
+
+E o principal cai de graça: como `fim(comp)` e `inicio(comp + 1)` são a **mesma
+expressão**, não existe instante fora de competência. O vão de 27 dias que zerou
+a tela em 10/09 era exatamente isso.
+
+### 15.2 Provado, com os números da auditoria
+
+Dia 28 vigente em 2026-09, depois dia 15 em 2026-11:
+
+| competência | só a 1ª mudança | depois da 2ª | mexeu? |
+| --- | --- | --- | --- |
+| 2026-08 | 01/08 → 01/09 | 01/08 → 01/09 | não |
+| 2026-09 | 01/09 → 28/10 | 01/09 → 28/10 | **não** (antes: 01/09 → 01/10) |
+| 2026-10 | 28/10 → 28/11 | 28/10 → 28/11 | **não** (antes: 01/10 → 01/11) |
+| 2026-11 | 28/11 → 28/12 | 28/11 → **15/12** | sim, é a transição |
+| 2026-12 | 28/12 → 28/01 | 15/12 → 15/01 | sim (futuro) |
+
+Os dois meses que a versão antiga reescrevia agora saem **idênticos**. E a
+transição aqui fica mais **curta** (28/11 a 15/12), que é o caso simétrico do
+primeiro ciclo, que ficava mais longo -- a tela explica os dois.
+
+### 15.3 `competenciaDe` passou a derivar de `janela`
+
+Ela tinha a própria conta da virada, escrita à mão. **Duas contas para a mesma
+pergunta podiam discordar -- e discordaram**: foi assim que, em 10/09, o rótulo
+apontou para uma competência cuja janela não continha o instante que a escolheu.
+
+Agora ela pergunta a `janela` e responde em uma linha: o instante é da
+competência do calendário quando já passou do início dela, e da anterior caso
+contrário. Não existe como discordar -- a classe inteira daquele defeito
+desapareceu, em vez de ganhar mais um teste.
+
+### 15.4 Voltar ao dia 1 também é uma vigência
+
+Era o caso que **apagava a lista**: `ehPadrao → vigenteDesde = null`. Com isso,
+os ciclos personalizados já vividos (e possivelmente premiados) voltavam a ser
+mês de calendário.
+
+"Do mês que vem em diante é mês de calendário" é uma decisão sobre o **futuro**;
+apagar a lista seria dizer que os ciclos passados nunca existiram. Agora é
+gravada como qualquer outra: abril continua 20 a 20, a competência da volta vai
+de 20/09 a 01/10 (e a tela escreve o intervalo, porque não é mês de calendário),
+e de outubro em diante é calendário limpo.
+
+### 15.5 O que NÃO precisou de migração
+
+A configuração gravada hoje (`{dia, hora, minuto, vigenteDesde}`) continua
+sendo lida: `vigenciasDe` aceita as duas formas e trata a antiga como **uma
+vigência só** -- que é exatamente o que ela sempre significou. A linha no banco
+só é reescrita no formato novo no próximo `salvar`. Nenhum passo de deploy,
+nenhum risco de perda.
+
+E a resposta de `obter()` continua trazendo `dia`/`hora`/`minuto` planos,
+**derivados** da última vigência -- por isso o formulário não mudou. Gravar os
+dois formatos seria a versão nova do mesmo defeito: dois lugares dizendo qual é
+a regra corrente.
+
+### 15.6 A verificação
+
+* a **invariante do instante** (para qualquer momento, a janela da competência
+  escolhida o contém) passou a varrer **30 meses em oito configurações**, duas
+  delas com mudanças sucessivas -- incluindo uma com três vigências que termina
+  voltando ao calendário;
+* dois casos explícitos: a tabela do §15.2 conferida mês a mês, e o "voltar ao
+  dia 1 vale do mês seguinte e não apaga o passado";
+* uma seção nova em `verificar-rankings` (**11**) exercita `salvar` **contra o
+  banco**: acrescenta em vez de substituir, mantém a vigência anterior intacta,
+  os meses fechados não mudam de conteúdo, o agora continua dentro da
+  competência corrente, duas mudanças no mesmo mês mantêm uma vigência para ele,
+  e salvar a mesma regra não cria vigência nenhuma;
+* e a **injeção pelo corpo do pedido**: o formulário devolve o objeto do ciclo
+  inteiro, incluindo `vigencias` e `vigenteDesde`. Um pedido montado à mão
+  pedindo vigência em 2020-01 é ignorado -- quem manda é o que está no banco,
+  mais o relógio do servidor.
+
+**E a invariante foi conferida ao contrário:** trocando `regraAntes` por
+`regraAgora` no início da janela, a suíte reprova alto e reproduz o defeito
+original --
+
+```
+FALHA todo instante pertence a uma competencia cuja janela o contem
+      ciclo {"dia":28,...,"vigenteDesde":"2026-09"}: 2026-09-01 13:10 caiu em
+      2026-08, cuja janela e 2026-08-01..2026-09-01 -- nao contem o instante
+```
+
+Suíte completa: `TUDO PASSOU`. Build do cliente limpo.
+
+### 15.7 O que isto muda para a equipe
+
+**Nada, hoje.** A configuração atual é lida igual e produz as mesmas janelas. A
+diferença aparece na **próxima** vez que alguém mexer no dia de fechamento: os
+ciclos anteriores param de se mexer, e o aviso da tela -- que dizia isso desde
+sempre -- passa a ser verdade.

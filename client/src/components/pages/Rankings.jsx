@@ -832,7 +832,7 @@ export default function Rankings() {
             <span
               className="text-[10px] text-texto-fraco leading-tight max-w-[16rem]"
               title={dados.janela.transicao
-                ? 'Primeiro ciclo depois da mudança do dia de fechamento: ele absorve os dias que ficariam sem ciclo. Acontece uma vez.'
+                ? 'Este é o ciclo em que o dia de fechamento mudou: ele começa onde o ciclo anterior terminou, então fica mais longo (dia adiado) ou mais curto (dia antecipado). Acontece uma vez por mudança, e nenhum ciclo anterior é afetado.'
                 : 'Intervalo deste ciclo, conforme o dia de fechamento configurado.'}
             >
               {intervaloCiclo(dados.janela)}
@@ -1038,9 +1038,11 @@ export default function Rankings() {
                       : 'Escolha 31 para fechar sempre no último dia do mês.')}
             </p>
             <p className="text-[10px] text-espera-400 leading-relaxed border border-espera/30 bg-espera/10 rounded-xl p-2.5">
-              Diferente da régua de pontos, o dia de fechamento <strong>não mexe no passado</strong>. Os meses
-              anteriores continuam sendo mês de calendário, para que as premiações já registradas
-              continuem apontando para o ranking que existia quando foram dadas.
+              Diferente da régua de pontos, o dia de fechamento <strong>não mexe no passado</strong> cada
+              mudança fica registrada com o ciclo a partir do qual ela vale, e os ciclos anteriores
+              continuam exatamente como foram vividos incluindo os de uma configuração anterior a
+              esta. É o que mantém as premiações já registradas apontando para o ranking que existia
+              quando foram dadas.
             </p>
           </div>
           {/* QUANTOS SOBEM AO PÓDIO.

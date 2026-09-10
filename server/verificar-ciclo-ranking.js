@@ -136,6 +136,25 @@ console.log("=== Ciclo do ranking ===");
     { dia: 29, hora: 0, minuto: 0, vigenteDesde: "2025-12" },
     { dia: 30, hora: 18, minuto: 0, vigenteDesde: "2025-12" },
     { dia: 31, hora: 23, minuto: 59, vigenteDesde: "2025-12" },
+    // MUDANCAS SUCESSIVAS -- e aqui que o achado 6 vivia. Com uma vigencia so,
+    // a segunda decisao reescrevia os ciclos vividos sob a primeira; agora cada
+    // competencia e lida sob a regra que valia nela, e a varredura confere que
+    // isso nao abre vao nenhum nas viradas de regime.
+    {
+      vigencias: [
+        { desde: "2026-01", dia: 28, hora: 0, minuto: 0 },
+        { desde: "2026-06", dia: 15, hora: 12, minuto: 30 },
+      ],
+    },
+    // Tres mudancas, incluindo dia curto -> dia 31 -> volta ao calendario. A
+    // volta ao dia 1 e o caso que antes APAGAVA a lista.
+    {
+      vigencias: [
+        { desde: "2025-12", dia: 5, hora: 0, minuto: 0 },
+        { desde: "2026-03", dia: 31, hora: 18, minuto: 0 },
+        { desde: "2026-09", dia: 1, hora: 0, minuto: 0 },
+      ],
+    },
   ];
   for (const cfg of configs) {
     // Varre 18 meses dia a dia -- barato, e cobre viradas, meses curtos e o
@@ -233,6 +252,92 @@ console.log("=== Ciclo do ranking ===");
   check("no mes da vigencia, o instante pertence a propria competencia de transicao", problemas);
 }
 
+// ── A SEGUNDA MUDANCA NAO REESCREVE O QUE A PRIMEIRA PRESERVOU ──────────────
+//
+// O achado 6, com os numeros da auditoria. Havia UM `vigenteDesde`,
+// recarimbado a cada mudanca: na segunda, as competencias vividas sob a
+// primeira regra voltavam a ser mes de calendario.
+//
+//   competencia   sob a regra de setembro   depois da 2a mudanca (o defeito)
+//   2026-09       01/09 -> 28/10            01/09 -> 01/10
+//   2026-10       28/10 -> 28/11            01/10 -> 01/11
+//
+// O ciclo de outubro mudava de conteudo INTEIRO, e era o que estava valendo
+// quando o mes foi vivido -- e possivelmente premiado.
+{
+  const primeira = { desde: "2026-09", dia: 28, hora: 0, minuto: 0 };
+  const segunda = { desde: "2026-11", dia: 15, hora: 0, minuto: 0 };
+  const so1 = { vigencias: [primeira] };
+  const dois = { vigencias: [primeira, segunda] };
+  const problemas = [];
+
+  // O PASSADO, byte a byte: agosto (calendario), setembro (transicao) e outubro
+  // (regime normal da regra antiga) tem de sair IGUAIS nas duas leituras.
+  for (const [ano, mes, rotulo] of [[2026, 8, "agosto"], [2026, 9, "setembro"], [2026, 10, "outubro"]]) {
+    const a = ciclo.janela(ano, mes, so1);
+    const b = ciclo.janela(ano, mes, dois);
+    if (iso(a.inicio) !== iso(b.inicio) || iso(a.fim) !== iso(b.fim)) {
+      problemas.push(
+        `${rotulo} mudou de conteudo com a segunda mudanca: ` +
+          `${iso(a.inicio)}..${iso(a.fim)} -> ${iso(b.inicio)}..${iso(b.fim)}`
+      );
+    }
+  }
+
+  // E A COMPETENCIA DA MUDANCA absorve o descasamento: comeca onde outubro
+  // parou (28/11) e termina na virada nova (15/12). Ela fica mais CURTA -- o
+  // caso simetrico do primeiro ciclo, que ficava mais longo.
+  const nov = ciclo.janela(2026, 11, dois);
+  if (iso(nov.inicio) !== "2026-11-28 00:00") {
+    problemas.push("novembro deveria comecar onde outubro terminou (28/11), e comeca em " + iso(nov.inicio));
+  }
+  if (iso(nov.fim) !== "2026-12-15 00:00") {
+    problemas.push("novembro deveria terminar na virada nova (15/12), e termina em " + iso(nov.fim));
+  }
+  if (!nov.transicao) problemas.push("a competencia da mudanca deveria estar marcada como transicao");
+
+  // Do mes seguinte em diante, e 15 a 15 para sempre.
+  const dez = ciclo.janela(2026, 12, dois);
+  if (iso(dez.inicio) !== "2026-12-15 00:00" || iso(dez.fim) !== "2027-01-15 00:00") {
+    problemas.push(`dezembro deveria ser 15/12..15/01, e e ${iso(dez.inicio)}..${iso(dez.fim)}`);
+  }
+  if (dez.transicao) problemas.push("dezembro nao e transicao -- a regra nao trocou nele");
+
+  check("a segunda mudanca de ciclo nao reescreve os ciclos da primeira", problemas);
+}
+
+// ── VOLTAR AO CALENDARIO E UMA DECISAO SOBRE O FUTURO ───────────────────────
+//
+// Antes, voltar o dia para 1 limpava a vigencia -- e com ela ia embora a
+// protecao do passado: os ciclos personalizados que ja tinham sido vividos (e
+// premiados) voltavam a ser mes de calendario.
+{
+  const cfg = {
+    vigencias: [
+      { desde: "2026-03", dia: 20, hora: 0, minuto: 0 },
+      { desde: "2026-09", dia: 1, hora: 0, minuto: 0 },
+    ],
+  };
+  const problemas = [];
+  const abril = ciclo.janela(2026, 4, cfg);
+  if (iso(abril.inicio) !== "2026-04-20 00:00" || iso(abril.fim) !== "2026-05-20 00:00") {
+    problemas.push(`abril deveria seguir 20 a 20, e e ${iso(abril.inicio)}..${iso(abril.fim)}`);
+  }
+  // A competencia da volta comeca no dia velho e termina no dia 1: nao e mes de
+  // calendario, e a tela precisa dizer o intervalo por extenso.
+  const setembro = ciclo.janela(2026, 9, cfg);
+  if (iso(setembro.inicio) !== "2026-09-20 00:00" || iso(setembro.fim) !== "2026-10-01 00:00") {
+    problemas.push(`a volta ao calendario deveria ir de 20/09 a 01/10, e vai de ${iso(setembro.inicio)} a ${iso(setembro.fim)}`);
+  }
+  if (!setembro.personalizada) {
+    problemas.push("a competencia da volta nao e mes de calendario -- a tela tem de escrever o intervalo");
+  }
+  // E de outubro em diante e mes de calendario limpo.
+  const outubro = ciclo.janela(2026, 10, cfg);
+  if (outubro.personalizada) problemas.push("outubro ja deveria ser mes de calendario");
+  check("voltar ao dia 1 vale do mes seguinte, e nao apaga o passado", problemas);
+}
+
 // ── Valores que nao podem passar ─────────────────────────────────────────────
 {
   const problemas = [];
@@ -298,9 +403,20 @@ console.log("=== Ciclo do ranking ===");
   const corpo = /async function salvar\(([\s\S]*?)\n}/.exec(fonte)?.[1] || "";
   check("a vigencia e carimbada pelo servidor, nao recebida", [
     ...(corpo ? [] : ["nao achei `salvar` em ciclo.js"]),
-    ...(corpo.includes("novo.vigenteDesde = compDe(new Date())")
+    ...(corpo.includes("const desde = compDe(new Date());")
       ? []
       : ["`salvar` nao carimba a vigencia com a data do servidor"]),
+    // E ela ACRESCENTA. Substituir era o defeito do achado 6: a lista voltava a
+    // ter uma linha so, e as competencias vividas sob a regra anterior caiam no
+    // calendario.
+    ...(corpo.includes("...atual.vigencias,")
+      ? []
+      : ["`salvar` nao acrescenta a vigencia nova as anteriores"]),
+    // Voltar ao dia 1 tambem e uma vigencia: apagar a lista diria que os ciclos
+    // passados nunca existiram, e eles podem estar premiados.
+    ...(corpo.includes("vigenteDesde = null")
+      ? ["`salvar` voltou a limpar a vigencia quando a regra vira o padrao"]
+      : []),
   ]);
 }
 

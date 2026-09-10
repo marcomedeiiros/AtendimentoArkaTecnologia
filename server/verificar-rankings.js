@@ -22,6 +22,7 @@ const painelService = require("./src/modules/dashboard/painel.service");
 const rankingService = require("./src/modules/rankings/ranking.service");
 const mapeamentoService = require("./src/modules/rankings/mapeamento.service");
 const midiaStorage = require("./src/infrastructure/storage/midia.storage");
+const ciclo = require("./src/modules/rankings/ciclo");
 const {
   reguaEmVigor,
   pontuarExterno,
@@ -1323,6 +1324,191 @@ async function main() {
     await prisma.configuracao.deleteMany({ where: { chave: { in: CHAVES_ZERAGEM } } });
     for (const c of antesDaLimpeza) {
       await prisma.configuracao.create({ data: { chave: c.chave, valor: c.valor } });
+    }
+  }
+
+  /**
+   * 11. O CICLO GUARDA CADA VIGENCIA -- e a segunda mudanca nao mexe no passado.
+   *
+   * O DEFEITO (auditoria-tela-rankings-10-09.md, achado 6): havia UM
+   * `vigenteDesde`, recarimbado a cada mudanca. Ele protegia o passado anterior
+   * a PRIMEIRA configuracao, e so. Na segunda, as competencias vividas sob a
+   * primeira regra voltavam a ser mes de calendario -- o ciclo de outubro mudava
+   * de conteudo inteiro, e era o que estava valendo quando o mes foi vivido e
+   * possivelmente premiado.
+   *
+   * Aqui a coisa e exercitada CONTRA O BANCO, com `salvar` de verdade: e ela
+   * que carimba a vigencia, e era ela que apagava a anterior. O estado real e
+   * guardado e devolvido no fim -- rodar a verificacao nao pode mudar o ciclo de
+   * ninguem.
+   */
+  titulo("11. O CICLO GUARDA CADA VIGENCIA");
+  {
+    const antesDoCiclo = await prisma.configuracao.findUnique({ where: { chave: ciclo.CHAVE } });
+    try {
+      // Parte de um estado CONHECIDO: uma vigencia antiga, cravada a mao, como
+      // a de quem configurou o ciclo em setembro.
+      // Dois meses ATRAS do relogio: assim a mudanca cai numa competencia
+      // diferente e a lista cresce. Vigencia no mes corrente e outro caso, e
+      // esta testado no fim do bloco.
+      const agora = new Date();
+      const doisMesesAtras = new Date(agora.getFullYear(), agora.getMonth() - 2, 1);
+      const compDe = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const primeira = { desde: compDe(doisMesesAtras), dia: 28, hora: 0, minuto: 0 };
+      // Os dois meses JA FECHADOS sob a regra antiga -- e os que nao podem
+      // mudar de conteudo. O primeiro e a propria transicao dela.
+      const fechado1 = doisMesesAtras;
+      const fechado2 = new Date(agora.getFullYear(), agora.getMonth() - 1, 1);
+      const gravar = async (vigencias) => {
+        const valor = JSON.stringify({ vigencias });
+        await prisma.configuracao.upsert({
+          where: { chave: ciclo.CHAVE },
+          update: { valor },
+          create: { chave: ciclo.CHAVE, valor },
+        });
+      };
+      await gravar([primeira]);
+
+      const retrato = async () => {
+        const cfg = await ciclo.obter();
+        const j = (ano, mes) => {
+          const w = ciclo.janela(ano, mes, cfg);
+          return `${w.inicio.toISOString()}..${w.fim.toISOString()}`;
+        };
+        return {
+          cfg,
+          fechado1: j(fechado1.getFullYear(), fechado1.getMonth() + 1),
+          fechado2: j(fechado2.getFullYear(), fechado2.getMonth() + 1),
+        };
+      };
+
+      const antes = await retrato();
+      check(antes.cfg.vigencias.length === 1, "comeca com uma vigencia gravada");
+      check(antes.cfg.dia === 28, `e a regra corrente e a dela (dia ${antes.cfg.dia})`);
+
+      // A SEGUNDA MUDANCA -- o caso do defeito.
+      const salvo = await ciclo.salvar({ dia: 15 }, { nome: MARCA });
+      check(salvo.vigencias.length === 2, `salvar acrescenta, e nao substitui (${salvo.vigencias.length} vigencias)`);
+      check(salvo.dia === 15, "a regra corrente passa a ser a nova");
+      check(
+        salvo.vigencias[0].desde === primeira.desde && salvo.vigencias[0].dia === 28,
+        "a vigencia anterior continua na lista, intacta"
+      );
+
+      const depois = await retrato();
+      for (const qual of ["fechado1", "fechado2"]) {
+        check(
+          depois[qual] === antes[qual],
+          `${qual === "fechado1" ? compDe(fechado1) : compDe(fechado2)} NAO muda de conteudo` +
+            (depois[qual] === antes[qual] ? "" : ` (${antes[qual]} -> ${depois[qual]})`)
+        );
+      }
+
+      // A competencia em que a mudanca foi feita e a que absorve o
+      // descasamento -- e a tela precisa saber para poder explicar.
+      const [va, vm] = salvo.vigenteDesde.split("-").map(Number);
+      const jTransicao = ciclo.janela(va, vm, depois.cfg);
+      check(
+        jTransicao.transicao === true,
+        `a competencia da vigencia (${salvo.vigenteDesde}) e marcada como transicao`
+      );
+      // E ela COMECA onde o regime anterior parou -- e o que mantem as janelas
+      // coladas e nao deixa nascer dia sem competencia.
+      const anteriorAVigencia = ciclo.janela(vm === 1 ? va - 1 : va, vm === 1 ? 12 : vm - 1, depois.cfg);
+      check(
+        anteriorAVigencia.fim.getTime() === jTransicao.inicio.getTime(),
+        "e comeca exatamente onde a competencia anterior termina"
+      );
+      // A competencia CORRENTE tambem continua contendo o agora: uma mudanca de
+      // regra nao pode deixar o dia de hoje fora de ranking nenhum, que foi o
+      // defeito de 10/09.
+      const corrente = ciclo.competenciaDe(new Date(), depois.cfg);
+      const [ca, cm] = corrente.split("-").map(Number);
+      const jCorrente = ciclo.janela(ca, cm, depois.cfg);
+      const agoraMesmo = new Date();
+      check(
+        agoraMesmo >= jCorrente.inicio && agoraMesmo < jCorrente.fim,
+        `e o agora continua dentro da competencia corrente (${corrente})`
+      );
+
+      // VOLTAR AO DIA 1 TAMBEM E UMA VIGENCIA. Apagar a lista diria que os
+      // ciclos passados nunca existiram -- e eles podem estar premiados.
+      const voltou = await ciclo.salvar({ dia: 1, hora: 0, minuto: 0 }, { nome: MARCA });
+      check(
+        voltou.vigencias.some((v) => v.desde === primeira.desde && v.dia === 28),
+        "voltar ao dia 1 NAO apaga a lista: a vigencia antiga continua la"
+      );
+      check(
+        voltou.vigenteDesde === compDe(agora) && voltou.dia === 1,
+        `e o calendario passa a valer a partir de ${voltou.vigenteDesde} (dia ${voltou.dia})`
+      );
+      const comCalendario = await retrato();
+      check(
+        comCalendario.fechado1 === antes.fechado1 && comCalendario.fechado2 === antes.fechado2,
+        "e mesmo voltando ao calendario, os meses fechados seguem como foram vividos"
+      );
+
+      // Salvar a MESMA regra nao cria vigencia: ela empurraria o corte para
+      // frente e devolveria meses recentes ao regime anterior.
+      const denovo = await ciclo.salvar({ dia: 1, hora: 0, minuto: 0 }, { nome: MARCA });
+      check(denovo.vigencias.length === 2, `salvar a mesma regra nao acrescenta nada (${denovo.vigencias.length})`);
+
+      // DUAS MUDANCAS NO MESMO MES: vale a ultima, e a lista nao cresce. Duas
+      // regras para a mesma competencia deixariam a janela dela dependendo da
+      // ordem de gravacao -- e essa competencia ainda esta em curso.
+      const terceira = await ciclo.salvar({ dia: 20 }, { nome: MARCA });
+      check(
+        terceira.vigencias.length === 2 && terceira.dia === 20,
+        `mudar duas vezes no mesmo mes mantem uma vigencia para ele (${terceira.vigencias.length} vigencias, dia ${terceira.dia})`
+      );
+      const noMesmoMes = await retrato();
+      check(
+        noMesmoMes.fechado1 === antes.fechado1 && noMesmoMes.fechado2 === antes.fechado2,
+        "e ainda assim o passado nao se mexe"
+      );
+
+      // ── A LISTA NAO PODE VIR DE FORA ────────────────────────────────────
+      //
+      // O formulario devolve o objeto do ciclo INTEIRO, do jeito que o recebeu
+      // -- incluindo `vigencias` e `vigenteDesde`. Se `salvar` acreditasse
+      // nesses dois campos, um pedido montado a mao pediria vigencia retroativa
+      // e reescreveria meses ja premiados. Quem manda e o que esta no banco,
+      // mais o relogio do servidor.
+      const comInjecao = await ciclo.salvar(
+        {
+          dia: 22,
+          vigenteDesde: "2020-01",
+          vigencias: [{ desde: "2020-01", dia: 9, hora: 3, minuto: 0 }],
+        },
+        { nome: MARCA }
+      );
+      check(
+        !comInjecao.vigencias.some((v) => v.desde === "2020-01"),
+        "vigencia mandada no pedido e ignorada"
+      );
+      check(
+        comInjecao.vigenteDesde === compDe(agora) && comInjecao.dia === 22,
+        `e a vigencia vale do mes do servidor (${comInjecao.vigenteDesde}), com a regra pedida`
+      );
+      check(
+        comInjecao.vigencias.some((v) => v.desde === primeira.desde && v.dia === 28),
+        "e a lista do banco continua de pe"
+      );
+      const depoisDaInjecao = await retrato();
+      check(
+        depoisDaInjecao.fechado1 === antes.fechado1 && depoisDaInjecao.fechado2 === antes.fechado2,
+        "e o passado segue intocado"
+      );
+    } finally {
+      if (antesDoCiclo) {
+        await prisma.configuracao.upsert({
+          where: { chave: ciclo.CHAVE },
+          update: { valor: antesDoCiclo.valor },
+          create: { chave: ciclo.CHAVE, valor: antesDoCiclo.valor },
+        });
+      } else {
+        await prisma.configuracao.deleteMany({ where: { chave: ciclo.CHAVE } });
+      }
     }
   }
 
