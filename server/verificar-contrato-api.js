@@ -263,7 +263,62 @@ for (const [rota, nomeSchema, corpo] of corposDaTela) {
 check("nenhum campo do corpo e descartado pelo schema", camposcomidos);
 
 // ---------------------------------------------------------------------------
-titulo("4. O mapa foi lido de verdade (senao os testes acima passam vazios)");
+titulo("4. Os SETORES da tela sao os mesmos do servidor");
+
+/**
+ * O CONTRATO MAIS SILENCIOSO DOS QUATRO.
+ *
+ * A tela grava o `id` do setor como texto, e e por esse texto que o servidor
+ * decide quem enxerga qual conversa (`podeAcessarSetor`). Um acento a menos, um
+ * setor renomeado de um lado so, e nada estoura: a conversa e gravada com um
+ * valor que `podeAcessarSetor` nao reconhece e some para a equipe inteira, em
+ * silencio.
+ *
+ * Ficou mais facil de acontecer desde que DUAS telas perguntam o setor (o modal
+ * de iniciar conversa e o "Conversar" da lista de Contatos). A lista foi para
+ * `client/src/utils/setores.js` justamente para haver uma copia so -- e este
+ * teste e o que garante que essa copia continua casando com a do servidor.
+ */
+const { SETORES } = require("./src/shared/helpers/setor.helper");
+const setoresTela = [];
+try {
+  const arq = fs.readFileSync(
+    path.join(__dirname, "..", "client", "src", "utils", "setores.js"),
+    "utf8"
+  );
+  for (const m of arq.matchAll(/\{\s*id:\s*'([^']+)'/g)) setoresTela.push(m[1]);
+} catch (e) {
+  setoresTela.push(`__erro_ao_ler__:${e.message}`);
+}
+
+const divergentes = [];
+if (setoresTela.length === 0) {
+  divergentes.push("nao consegui ler nenhum setor de client/src/utils/setores.js");
+} else {
+  for (const s of setoresTela) {
+    if (!SETORES.includes(s)) divergentes.push(`a tela oferece "${s}", que o servidor nao conhece`);
+  }
+  for (const s of SETORES) {
+    if (!setoresTela.includes(s)) divergentes.push(`o servidor conhece "${s}", que a tela nao oferece`);
+  }
+}
+check("a lista de setores casa dos dois lados", divergentes);
+console.log(`        (${setoresTela.length} na tela, ${SETORES.length} no servidor)`);
+
+// A lista duplicada e o jeito de este teste passar e o defeito acontecer mesmo
+// assim: uma tela com a sua propria copia nao e conferida por ninguem.
+const copias = [];
+for (const arq of arquivosCliente) {
+  if (arq.endsWith(path.join("utils", "setores.js"))) continue;
+  const txt = fs.readFileSync(arq, "utf8");
+  if (/id:\s*'Geral',\s*label:\s*'Sem Setor'/.test(txt)) {
+    copias.push(`${path.relative(path.join(__dirname, ".."), arq)} tem a sua propria copia da lista`);
+  }
+}
+check("a lista existe num lugar so", copias);
+
+// ---------------------------------------------------------------------------
+titulo("5. O mapa foi lido de verdade (senao os testes acima passam vazios)");
 
 check("objetos de API encontrados", objetosApi.size > 0 ? [] : ["nenhum XxxAPI lido do api.js"]);
 check("rotas do servidor encontradas", rotasDoServidor.size > 0 ? [] : ["nenhuma rota lida do servidor"]);

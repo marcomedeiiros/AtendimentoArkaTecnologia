@@ -51,6 +51,7 @@ import { mesclarConversa, registrarApagada, desfazerApagada } from '../../utils/
 import { formatarComAssinatura, formatarLegendaComAssinatura, separarAssinatura, juntarAssinatura } from '../../utils/assinatura';
 import { CATEGORIAS_EMOJI, TODOS_EMOJIS } from './emojis';
 import { avisar, confirmar } from '../../utils/dialogo';
+import QuadroSetores from '../QuadroSetores';
 
 // O responsavel pelo atendimento agora vem do banco (conversa.atendenteNome /
 // atendenteId), compartilhado por toda a equipe. Antes vivia no localStorage e
@@ -454,18 +455,6 @@ const STATUS_META = {
   fechada:  { label: 'Fechada',  dot: 'bg-quieto',       chip: 'bg-quieto/20 text-quieto-400 border-quieto/30' }
 };
 
-// Setores de atendimento. A lista casa com a do servidor
-// (shared/helpers/setor.helper.js) -- e ela que decide quem ve qual conversa,
-// entao os nomes precisam bater caractere por caractere.
-const SETORES_ATENDIMENTO = [
-  // 'Geral' e o valor gravado no banco; na tela ele se chama 'Sem Setor',
-  // que e o que ele significa: ninguem escolheu setor ainda.
-  { id: 'Geral',      label: 'Sem Setor',  desc: 'Ainda sem triagem todo mundo vê.' },
-  { id: 'Técnico',    desc: 'Suporte, instalação, defeito.' },
-  { id: 'Financeiro', desc: 'Boleto, fatura, cobrança.' },
-  { id: 'Comercial',  desc: 'Orçamento, proposta, novo contrato.' },
-];
-
 // "27999990000" -> "(27) 99999-0000". Só visual: o que vai para a API é o
 // numero cru, e quem normaliza DDI/DDD e o servidor.
 function mascararTelefone(v) {
@@ -810,7 +799,11 @@ function ModalNovaConversa({ onFechar, onEnviar, enviando, erro, inicial }) {
   //
   // "Sem Setor" segue disponível na lista, e deve seguir: às vezes não se sabe
   // ainda. A diferença é que agora é uma escolha, e não o padrão.
-  const [setor,    setSetor]    = useState('');
+  // JÁ ESCOLHIDO NO CONTATOS? entra marcado. A pergunta é a mesma, e fazê-la
+  // duas vezes seria pedir para confirmar o que a pessoa acabou de dizer -- do
+  // outro lado do salto de tela, ainda por cima. Vindo vazio (qualquer outra
+  // origem), nada vem marcado e a escolha acontece aqui.
+  const [setor,    setSetor]    = useState(inicial?.setor || '');
   const [texto,    setTexto]    = useState('');
 
   // Fechar com Esc, como os outros paineis desta tela.
@@ -910,29 +903,7 @@ function ModalNovaConversa({ onFechar, onEnviar, enviando, erro, inicial }) {
               Setor de atendimento
               {!setor && <span className="text-espera-400 font-normal"> · escolha um para continuar</span>}
             </label>
-            <div className="grid grid-cols-2 gap-2">
-              {SETORES_ATENDIMENTO.map(s => {
-                const ativo = setor === s.id;
-                return (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => setSetor(s.id)}
-                    aria-pressed={ativo}
-                    className={`text-left p-2.5 rounded-xl border transition-all ${
-                      ativo
-                        ? 'bg-acao/15 border-acao/50'
-                        : 'bg-grafite-700 border-linha hover:border-linha-forte'
-                    }`}
-                  >
-                    <div className={`text-[11px] font-bold ${ativo ? 'text-acao-200' : 'text-slate-300'}`}>
-                      {s.label || s.id}
-                    </div>
-                    <div className="text-[10px] text-slate-500 leading-snug mt-0.5">{s.desc}</div>
-                  </button>
-                );
-              })}
-            </div>
+            <QuadroSetores valor={setor} aoEscolher={setSetor} />
           </div>
 
           <div>
@@ -4091,7 +4062,10 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   const [pedidoAbrir,   setPedidoAbrir]  = useState(() => {
     const p = new URLSearchParams(window.location.search);
     const telefone = p.get('abrir');
-    return telefone ? { telefone, nome: p.get('nome') || '' } : null;
+    // `setor` vem do popup da lista de Contatos, que pergunta ANTES do salto.
+    // Sem ele (link antigo, ou pedido de outra origem), o modal abre sem nada
+    // marcado e a pergunta acontece aqui -- que era o comportamento de antes.
+    return telefone ? { telefone, nome: p.get('nome') || '', setor: p.get('setor') || '' } : null;
   });
   // Agenda de Contatos (a mesma de /contatos), usada SO na busca. Sem ela, a
   // busca da Central so via o que estava na conversa: procurar pelo nome da
@@ -4940,7 +4914,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     }
 
     setErroNova('');
-    setNovaInicial({ telefone: contato.telefone, nome: contato.nome || '' });
+    setNovaInicial({ telefone: contato.telefone, nome: contato.nome || '', setor: contato.setor || '' });
     setModalNova(true);
   }, [conversas, irParaConversa, reabrirConversa]);
 

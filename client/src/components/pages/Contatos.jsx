@@ -11,6 +11,7 @@ import VisualizadorMidia from '../VisualizadorMidia';
 import { contatoCombina } from '../../utils/busca';
 import { useAppContext } from '../../context/AppContext';
 import { avisar, confirmar } from '../../utils/dialogo';
+import QuadroSetores from '../QuadroSetores';
 
 function limparTel(v) { return String(v || '').replace(/\D/g, ''); }
 
@@ -246,6 +247,51 @@ const ItemContatoWhatsApp = React.memo(function ItemContatoWhatsApp({ contato, o
   );
 });
 
+/**
+ * "PARA QUAL SETOR?" -- a única pergunta entre o clique e a conversa.
+ *
+ * Deliberadamente pequeno: aqui não se pede telefone (já se sabe), nem nome (já
+ * se sabe), nem mensagem (isso é assunto da Central). Uma pergunta só, quatro
+ * respostas, e o clique no cartão JÁ confirma -- um botão "Continuar" depois de
+ * escolher seria um segundo clique para dizer o que o primeiro já disse.
+ *
+ * Sem setor pré-marcado, e sem saída pelo lado: fechar cancela a conversa em
+ * vez de abri-la em "Geral". Abrir sem setor é o que esta tela existe para
+ * evitar -- uma conversa em "Geral" não aparece para Financeiro nem Comercial.
+ */
+function ModalSetorConversa({ contato, onEscolher, onFechar }) {
+  return (
+    <Portal>
+      <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto"
+        onClick={onFechar}>
+        <div className="glass-panel border border-linha rounded-2xl w-full max-w-md shadow-2xl fade-in my-auto"
+          onClick={e => e.stopPropagation()}>
+          <div className="p-4 bg-grafite-600 border-b border-linha flex items-center justify-between rounded-t-2xl">
+            <div className="flex items-center gap-2 font-bold text-sm text-white min-w-0">
+              <MessageSquare size={16} className="text-ativo-400 shrink-0" />
+              <span className="truncate">Conversar com {contato.nome || mascararTel(contato.telefone)}</span>
+            </div>
+            <button onClick={onFechar} className="text-slate-400 hover:text-white transition-colors shrink-0 ml-2">
+              <X size={16} />
+            </button>
+          </div>
+          <div className="p-4 sm:p-5">
+            <label className="text-[11px] font-semibold text-slate-300 block mb-1.5">
+              Setor de atendimento
+              <span className="text-espera-400 font-normal"> · escolha um para continuar</span>
+            </label>
+            <QuadroSetores valor={null} aoEscolher={onEscolher} />
+            <p className="text-[10px] text-slate-500 mt-3 leading-snug">
+              A conversa abre no setor escolhido. Se este contato já tiver uma
+              conversa, ela é aberta como está e o setor dela não muda.
+            </p>
+          </div>
+        </div>
+      </div>
+    </Portal>
+  );
+}
+
 export default function Contatos({ setAba }) {
   // Pulso de "a agenda mudou no servidor", vindo do SSE do AppContext.
   const { sinalContatos } = useAppContext();
@@ -380,10 +426,31 @@ export default function Contatos({ setAba }) {
    * e pula para ele, ou cria a conversa ja aberta -- sem enviar mensagem
    * nenhuma e sem mexer no que estava na tela.
    */
+  /**
+   * O SETOR É PERGUNTADO AQUI, NO CLIQUE -- e não depois do salto.
+   *
+   * A pergunta já existia, só que do outro lado: quem clicava em "Conversar"
+   * era levado para a Central e ENTÃO via o modal pedindo o setor. Funcionava,
+   * mas a decisão aparecia numa tela que a pessoa não escolheu abrir, depois de
+   * a lista de contatos já ter sumido.
+   *
+   * Perguntando aqui, o "Conversar" volta a ser uma frase inteira: escolho o
+   * contato, digo para onde vai, e só então mudo de tela. E o setor viaja junto
+   * no pedido -- na Central ele chega já marcado, então ninguém responde a
+   * mesma pergunta duas vezes.
+   */
+  const [escolhendoSetor, setEscolhendoSetor] = useState(null);
+
   function iniciarChat(contato) {
     if (!setAba) return;
+    setEscolhendoSetor(contato);
+  }
+
+  function conversarNoSetor(contato, setor) {
+    setEscolhendoSetor(null);
     const params = new URLSearchParams({ abrir: limparTel(contato.telefone) });
     if (contato.nome) params.set('nome', contato.nome);
+    if (setor) params.set('setor', setor);
     setAba(`atendimento?${params}`);
   }
 
@@ -519,6 +586,14 @@ export default function Contatos({ setAba }) {
       {modalAberto && (
         <ModalContato contato={editando} onSalvar={salvarContato}
           onFechar={() => { setModal(false); setEditando(null); }}/>
+      )}
+
+      {escolhendoSetor && (
+        <ModalSetorConversa
+          contato={escolhendoSetor}
+          onEscolher={setor => conversarNoSetor(escolhendoSetor, setor)}
+          onFechar={() => setEscolhendoSetor(null)}
+        />
       )}
 
       {/* A FOTO ABRE AQUI DENTRO, e nao numa aba nova.

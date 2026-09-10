@@ -167,17 +167,25 @@ console.log("\n=== 6. A TELA ESTA LIGADA NO CAMINHO CERTO ===\n");
   // alguem ter escrito uma mensagem. O modal mantem o caminho de abrir em
   // branco, e o botao anuncia qual das duas coisas vai fazer antes do clique.
   const modal = view.slice(view.indexOf("function ModalNovaConversa"));
-  check(/texto: temTexto \? texto\.trim\(\) : '',/.test(modal.slice(0, 3000)),
+  // A JANELA E O MODAL INTEIRO, e nao um numero redondo de caracteres: cada
+  // comentario novo empurrava a linha para fora do recorte de 3000, e o teste
+  // reprovava um codigo que nao tinha mudado.
+  check(/texto: temTexto \? texto\.trim\(\) : '',/.test(modal),
     "campo em branco continua abrindo a conversa sem mandar nada ao cliente");
   check(/Deixe em branco para só abrir a conversa/.test(modal.slice(0, 14000)),
     "e a tela diz isso, em vez de deixar a pessoa descobrir clicando");
 
-  // O SETOR PASSOU A SER OBRIGATORIO, e sem valor pre-marcado: com um valor ja
-  // escolhido, "escolher o setor" virava "confirmar o que estava la" -- e o que
-  // estava la era justamente SEM SETOR.
-  check(/const \[setor,\s+setSetor\]\s+= useState\(''\)/.test(modal.slice(0, 3000)),
-    "nenhum setor vem pre-marcado no modal");
-  check(/podeAbrir\s+= numeroOk && !!setor/.test(modal.slice(0, 3000)),
+  // O SETOR E OBRIGATORIO, e nada vem marcado POR CONTA DO CODIGO: com um valor
+  // ja escolhido, "escolher o setor" virava "confirmar o que estava la" -- e o
+  // que estava la era justamente SEM SETOR.
+  //
+  // O que PODE vir marcado e a escolha que a PESSOA ja fez: o "Conversar" da
+  // lista de Contatos pergunta o setor antes do salto e o manda junto. Por isso
+  // o que se trava aqui e o FALLBACK -- ele tem de ser vazio, nunca um setor
+  // cravado.
+  check(/const \[setor,\s+setSetor\]\s+= useState\((?:''|inicial\?\.setor \|\| '')\)/.test(modal),
+    "o modal nao marca setor por conta propria (so o que ja foi escolhido)");
+  check(/podeAbrir\s+= numeroOk && !!setor/.test(modal),
     "o botao so libera depois de escolher o setor");
   const inicia = view.slice(view.indexOf("const iniciarConversaNova"));
   check(/setAbaAtual\('abertas'\)/.test(inicia.slice(0, 1600)), "a aba vai para Abertas");
@@ -194,12 +202,22 @@ console.log('\n=== 7. "CONVERSAR" DOS CONTATOS NAO FILTRA A CENTRAL ===\n');
   // fechadas sumiam da tela -- parecia que o painel tinha aberto uma sessao
   // nova e vazia. Nada tinha sumido: era um filtro esquecido no campo de busca.
   const contatos = lerCliente("src/components/pages/Contatos.jsx");
-  const inicia = contatos.slice(contatos.indexOf("function iniciarChat"));
+  // A NAVEGACAO SAIU DE `iniciarChat`. Hoje ele so abre a escolha de setor, e
+  // quem monta a URL e `conversarNoSetor`, depois da resposta. O teste segue a
+  // funcao que de fato navega: travar o nome antigo seria travar a forma, e nao
+  // a garantia.
+  const abre = contatos.slice(contatos.indexOf("function iniciarChat"));
+  check(/setEscolhendoSetor\(contato\)/.test(abre.slice(0, 400)),
+    "o clique em Conversar abre a escolha de setor, e nao a conversa direto");
+
+  const inicia = contatos.slice(contatos.indexOf("function conversarNoSetor"));
   const corpo = inicia.slice(0, inicia.indexOf("\n  }"));
   check(!/busca=/.test(corpo), "o botao NAO manda mais `busca=` (era o que esvaziava a lista)");
   check(/abrir:\s*limparTel\(contato\.telefone\)/.test(corpo),
     "manda `abrir=<telefone>`: uma intencao de abrir, nao um filtro");
   check(/params\.set\('nome'/.test(corpo), "leva o nome junto, para a conversa nova nascer rotulada");
+  check(/params\.set\('setor'/.test(corpo),
+    "e o setor escolhido viaja junto, para nao ser perguntado duas vezes");
 
   const view = lerCliente("src/components/pages/AtendimentoView.jsx");
   check(/const \[pedidoAbrir,\s+setPedidoAbrir\]/.test(view), "a Central le o parametro `abrir`");
