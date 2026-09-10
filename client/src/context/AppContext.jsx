@@ -7,7 +7,7 @@
  */
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { EquipeAPI, FluxosAPI, ParceirosAPI, ConversasAPI, WhatsAppAPI, AuthAPI } from '../services/api';
-import { playPing } from '../utils/sound';
+import { tocarSomChamadoNovo, tocarSomMensagem } from '../utils/sound';
 import { notificar, estaOlhando, pedirPermissaoNoPrimeiroGesto } from '../utils/notificacao';
 import { mesclarConversa, aplicarStatusMensagem } from '../utils/mesclarConversa';
 import { useAuth } from './AuthContext';
@@ -71,6 +71,21 @@ export function AppProvider({ children }) {
   //
   // `statusLabel` já vinha na resposta do /status e ninguém aqui lia.
   const [whatsAppStatus, setWhatsAppStatus] = useState(null);
+  // ── O MODO TV MORA AQUI, E NÃO NO AtendimentoView ─────────────────────────
+  //
+  // Ele era estado local daquele componente, e isso impedia a regra dos sons de
+  // existir: quem toca o som é este contexto, e daqui não havia como saber se a
+  // TV estava ligada. Duas cópias sincronizadas por efeito resolveriam e
+  // trariam o defeito clássico de ficarem fora de passo -- aí o som errado
+  // toca, e é o tipo de bug que ninguém reproduz sob demanda.
+  //
+  // Fonte única: o `AtendimentoView` passa a ler e escrever esta.
+  const [modoTv, setModoTv] = useState(false);
+  // O efeito dos sons lê o valor ATUAL sem se reinscrever. Colocar `modoTv` nas
+  // dependências dele faria a detecção de mensagem nova rodar de novo a cada
+  // abre/fecha da TV, e o retrato anterior seria recalculado no meio.
+  const modoTvRef = useRef(false);
+  useEffect(() => { modoTvRef.current = modoTv; }, [modoTv]);
   const [notificacoes,      setNotificacoes]      = useState([]);
   const [historico,         setHistorico]         = useState([]);
   const [apiOffline,        setApiOffline]        = useState(false);
@@ -561,6 +576,10 @@ export function AppProvider({ children }) {
     const anterior = ultimaMsgRef.current;
     if (anterior !== null) {
       const novas = [];
+      // CHAMADO NOVO x MENSAGEM EM CONVERSA CONHECIDA -- a distinção que decide
+      // qual som toca. Ela já estava disponível aqui e não era usada: uma
+      // conversa AUSENTE do retrato anterior é uma que a tela não tinha.
+      let houveChamadoNovo = false;
       conversas.forEach(c => {
         const marca = marcas[c.id];
         if (!marca) return;
@@ -568,6 +587,7 @@ export function AppProvider({ children }) {
         // transferida para este setor). Continua avisando, como antes.
         // Marca IGUAL = nada novo, mesmo que a lista de mensagens tenha crescido.
         if (anterior[c.id] === marca) return;
+        if (anterior[c.id] === undefined) houveChamadoNovo = true;
         const msgs = c.mensagens || [];
         const ultima = [...msgs].reverse().find(ehDoCliente);
         novas.push({
@@ -582,7 +602,27 @@ export function AppProvider({ children }) {
         });
       });
       if (novas.length > 0) {
-        playPing();
+        // ── QUAL DOS DOIS SONS ───────────────────────────────────────────────
+        //
+        //                      chamado novo        mensagem em conversa conhecida
+        //   Modo TV ligado     Monitoramento       silêncio
+        //   Central (sem TV)   blip                blip
+        //
+        // O Modo TV é painel de parede: ele existe para anunciar chamado novo, e
+        // blipar a cada mensagem de conversa em andamento viraria barulho
+        // contínuo numa tela que ninguém está operando. Fora dele, quem está na
+        // Central continua sendo avisado de tudo -- inclusive de chamado novo,
+        // porque tirar esse aviso seria perder o comportamento que já existia
+        // para quem trabalha sem Modo TV.
+        //
+        // UM TOQUE POR RAJADA, não por mensagem: `novas` pode trazer várias
+        // conversas na mesma passada, e cinco sons sobrepostos não informam mais
+        // do que um. Era assim antes e continua.
+        if (modoTvRef.current) {
+          if (houveChamadoNovo) tocarSomChamadoNovo();
+        } else {
+          tocarSomMensagem();
+        }
 
         // ── O AVISO PARA QUEM NÃO ESTÁ OLHANDO ────────────────────────────
         //
@@ -761,6 +801,7 @@ export function AppProvider({ children }) {
       sinalConversas,   sinalContatos,   sinalMensagemNova,
       whatsAppConectado, setWhatsAppConectado,
       whatsAppStatus,
+      modoTv, setModoTv,
       notificacoes,      removerNotificacao,
       historico,         marcarNotificacoesLidas, limparHistorico,
       apiOffline

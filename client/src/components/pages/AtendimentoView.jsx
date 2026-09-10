@@ -3994,7 +3994,7 @@ const ItemContatoAgenda = React.memo(function ItemContatoAgenda({ contato, onAbr
 // de onde vinha o defeito do Técnico. O nome do responsável nunca veio dali:
 // vem da própria conversa (`atendenteDaConversa`).
 export default function AtendimentoView({ conversas, setConversas, fluxos, parceiros }) {
-  const { whatsAppConectado, whatsAppStatus, carregando, historico = [], marcarNotificacoesLidas, limparHistorico, sinalContatos, sinalMensagemNova } = useAppContext();
+  const { whatsAppConectado, whatsAppStatus, modoTv, setModoTv, carregando, historico = [], marcarNotificacoesLidas, limparHistorico, sinalContatos, sinalMensagemNova } = useAppContext();
   const { usuario, assinaturaNome } = useAuth();
   // Nome usado ao assinar mensagens: vem do perfil (personalizavel no menu de
   // perfil) e cai no primeiro nome como padrao. Fica no AuthContext, entao muda
@@ -4066,7 +4066,10 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   const [filtrosExtra,  setFiltrosExtra] = usePreferencia('central.filtrosExtra', []);
   const [visibilidade,  setVisibilidade] = usePreferencia('central.visibilidade', VISIBILIDADE_PADRAO);
   const [showFiltros,   setShowFiltros]  = useState(false);
-  const [modoTv, setModoTv] = useState(false);
+  // O MODO TV VEM DO AppContext, não de um `useState` daqui: quem toca o som de
+  // notificação é o contexto, e é lá que se decide entre o alerta de chamado
+  // novo (só na TV) e o blip de mensagem. Com o estado local, aquela decisão não
+  // tinha acesso ao fato. Fonte única, para os dois não saírem de passo.
   const filtrosRef = useRef(null);
 
   // Pede tela cheia de verdade ao navegador: numa TV, a barra do sistema e o

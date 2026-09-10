@@ -1,6 +1,49 @@
-let audioInstancia = null;
+/**
+ * OS DOIS SONS DO PAINEL, e por que eles sao dois.
+ *
+ *   ARKACHATMonitoramento.mp3   CHAMADO NOVO entrando na fila. Alto, para ser
+ *                               ouvido de longe: ele existe para a TV na parede.
+ *   blipnotificacaomensagem.mp3 MENSAGEM chegando no dia a dia da Central.
+ *                               Discreto, porque toca muitas vezes por turno.
+ *
+ * Antes havia UM som para as duas coisas, disparado no mesmo lugar
+ * (AppContext), sem distincao de tela nem de momento do atendimento: chamado
+ * novo e a decima mensagem da mesma conversa soavam igual. Quem escutava nao
+ * tinha como saber se precisava correr ou nao.
+ *
+ * QUEM DECIDE QUAL TOCA NAO E ESTE ARQUIVO -- e o AppContext, que e o unico
+ * lugar onde se sabe ao mesmo tempo (a) que chegou mensagem, (b) se a conversa
+ * e nova e (c) se o Modo TV esta ligado. Aqui so ficam os canos.
+ *
+ * ── POR QUE ESTE ARQUIVO E MAIS COMPLICADO DO QUE PARECE ────────────────────
+ *
+ * Navegador nao toca audio sem gesto do usuario. As tres camadas abaixo existem
+ * por isso, e nenhuma delas e redundante:
+ *
+ *   1. Web Audio API com o buffer ja decodificado -- o caminho bom. Toca na
+ *      hora, sem latencia de decodificacao, e aceita ganho > 1;
+ *   2. HTML5 `Audio` -- plano B quando o buffer ainda nao decodificou (primeiros
+ *      segundos da pagina) ou quando o AudioContext nao existe;
+ *   3. um chime SINTETIZADO por oscilador -- ultimo recurso. Se o arquivo nao
+ *      carregou (rede, 404, nome errado), ainda sai som. Sem isto, um arquivo
+ *      ausente deixava o painel MUDO em silencio -- a pior falha possivel para
+ *      um alerta, porque ela nao se anuncia.
+ */
+
+// Um estado por arquivo. Era tudo singular aqui (`audioBufferGlobal`,
+// `audioInstancia`, um `fetch` no topo do modulo), e por isso o segundo som nao
+// tinha onde existir.
+const ARQUIVOS = {
+  chamadoNovo: '/ARKACHATMonitoramento.mp3',
+  mensagem: '/blipnotificacaomensagem.mp3',
+};
+
+const sons = {
+  chamadoNovo: { buffer: null, elemento: null },
+  mensagem: { buffer: null, elemento: null },
+};
+
 let audioDesbloqueado = false;
-let audioBufferGlobal = null;
 let audioCtxGlobal = null;
 
 function obterAudioContext() {
@@ -13,29 +56,43 @@ function obterAudioContext() {
   return audioCtxGlobal;
 }
 
-function obterAudioElemento() {
-  if (!audioInstancia && typeof window !== 'undefined') {
-    audioInstancia = new Audio('/ARKACHATMonitoramento.mp3');
-    audioInstancia.preload = 'auto';
+function obterAudioElemento(nome) {
+  const som = sons[nome];
+  if (!som) return null;
+  if (!som.elemento && typeof window !== 'undefined') {
+    som.elemento = new Audio(ARQUIVOS[nome]);
+    som.elemento.preload = 'auto';
   }
-  return audioInstancia;
+  return som.elemento;
 }
 
-// Pré-carrega e decodifica o arquivo /ARKACHATMonitoramento.mp3 em memória via ArrayBuffer na inicialização
+// Pre-carrega e decodifica OS DOIS arquivos na inicializacao. Decodificar na
+// hora de tocar custaria a latencia justamente no instante em que o som
+// importa.
 if (typeof window !== 'undefined') {
-  fetch('/ARKACHATMonitoramento.mp3')
-    .then(r => r.arrayBuffer())
-    .then(arrayBuffer => {
-      const ctx = obterAudioContext();
-      if (ctx) {
-        ctx.decodeAudioData(arrayBuffer, (decoded) => {
-          audioBufferGlobal = decoded;
-        }, () => {});
-      }
-    })
-    .catch(() => {});
+  Object.keys(ARQUIVOS).forEach((nome) => {
+    fetch(ARQUIVOS[nome])
+      .then(r => r.arrayBuffer())
+      .then(arrayBuffer => {
+        const ctx = obterAudioContext();
+        if (ctx) {
+          ctx.decodeAudioData(arrayBuffer, (decoded) => {
+            sons[nome].buffer = decoded;
+          }, () => {});
+        }
+      })
+      .catch(() => {});
+  });
 }
 
+/**
+ * Destrava o audio no primeiro gesto do usuario.
+ *
+ * Toca um dos arquivos em volume quase zero e pausa. E o unico jeito de o
+ * navegador considerar a pagina "autorizada" -- depois disso os alertas
+ * automaticos passam. Basta destravar UM elemento: a permissao e da pagina, nao
+ * do arquivo.
+ */
 export function desbloquearAudioGlobal() {
   if (audioDesbloqueado) return;
   try {
@@ -43,7 +100,7 @@ export function desbloquearAudioGlobal() {
     if (ctx && ctx.state === 'suspended') {
       ctx.resume();
     }
-    const a = obterAudioElemento();
+    const a = obterAudioElemento('mensagem') || obterAudioElemento('chamadoNovo');
     if (a) {
       a.volume = 0.01;
       const p = a.play();
@@ -59,7 +116,7 @@ export function desbloquearAudioGlobal() {
   } catch (e) {}
 }
 
-// Registra ouvintes em múltiplos eventos para forçar o desbloqueio
+// Registra ouvintes em multiplos eventos para forcar o desbloqueio
 if (typeof window !== 'undefined') {
   const eventos = ['click', 'pointerdown', 'keydown', 'touchstart', 'scroll', 'mousemove', 'focus', 'load'];
   const handler = () => {
@@ -71,23 +128,31 @@ if (typeof window !== 'undefined') {
   eventos.forEach(ev => window.addEventListener(ev, handler, { passive: true }));
 }
 
-export function playPing() {
-  tocarSomNotificacao(1.0);
+/** CHAMADO NOVO na fila. Hoje so o Modo TV dispara este. */
+export function tocarSomChamadoNovo(volume = 1.0) {
+  tocarSom('chamadoNovo', volume);
 }
 
-export function tocarSomNotificacao(volume = 1.0) {
+/** MENSAGEM nova numa conversa. O som do dia a dia da Central. */
+export function tocarSomMensagem(volume = 1.0) {
+  tocarSom('mensagem', volume);
+}
+
+function tocarSom(nome, volume = 1.0) {
+  const som = sons[nome];
+  if (!som) return;
   let tocouSucesso = false;
 
   // Tentativa 1: Tocar via AudioBuffer decodificado (Web Audio API - mais potente)
   try {
     const ctx = obterAudioContext();
-    if (ctx && audioBufferGlobal) {
+    if (ctx && som.buffer) {
       if (ctx.state === 'suspended') {
         ctx.resume();
       }
       const source = ctx.createBufferSource();
       const gainNode = ctx.createGain();
-      source.buffer = audioBufferGlobal;
+      source.buffer = som.buffer;
       gainNode.gain.setValueAtTime(Math.min(1.0, Math.max(0, volume)), ctx.currentTime);
       source.connect(gainNode);
       gainNode.connect(ctx.destination);
@@ -102,7 +167,7 @@ export function tocarSomNotificacao(volume = 1.0) {
   if (!tocouSucesso) {
     try {
       desbloquearAudioGlobal();
-      const audio = obterAudioElemento();
+      const audio = obterAudioElemento(nome);
       if (audio) {
         audio.currentTime = 0;
         audio.volume = Math.min(1.0, Math.max(0, volume));
@@ -177,9 +242,3 @@ function tocarChimeIFood(volume = 1.0) {
     });
   } catch (err) {}
 }
-
-
-
-
-
-
