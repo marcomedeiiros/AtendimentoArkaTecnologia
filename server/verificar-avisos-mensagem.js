@@ -95,8 +95,33 @@ console.log("=== Aviso de mensagem nova ===");
   if (/avisosRef|avisos\.som|avisos\.desktop/.test(app)) {
     problemas.push("voltou uma preferencia condicionando o aviso");
   }
-  if (!/if \(novas\.length > 0\) \{\n\s*playPing\(\);/.test(app)) {
-    problemas.push("o som deixou de ser incondicional");
+  // ── ESTA CHECAGEM TRAVAVA A FORMA, E NAO A GARANTIA ───────────────────────
+  //
+  // Ela exigia o texto literal `if (novas.length > 0) {\n playPing();` -- ou
+  // seja, UMA linha de codigo escrita daquele jeito. Quando os dois sons foram
+  // separados (chamado novo na TV, blip na Central), a garantia continuou de pe
+  // e a checagem reprovou de todo modo, porque a forma mudou.
+  //
+  // A garantia que importa e outra, e sao duas coisas:
+  //
+  //   1. NENHUMA PREFERENCIA gateia o aviso -- e o que os greps acima e abaixo
+  //      protegem. Interruptor e o jeito de alguem ficar mudo sem saber, e
+  //      silencio e indistinguivel de "nao chegou mensagem";
+  //   2. quem esta na CENTRAL e avisado de toda mensagem nova, sem condicao
+  //      alguma no caminho.
+  //
+  // O Modo TV toca so em chamado novo, de proposito (auditoria dos sons, 10/09):
+  // e painel de parede, e blipar a cada mensagem de conversa em andamento viraria
+  // barulho continuo numa tela que ninguem esta operando. Isso NAO e um
+  // interruptor -- ninguem pode desligar, e depende do contexto, nao de gosto.
+  if (!/if \(novas\.length > 0\)/.test(app)) {
+    problemas.push("o bloco que dispara o aviso mudou de gatilho");
+  }
+  if (!/\}\s*else\s*\{\s*\n\s*tocarSomMensagem\(\);/.test(app)) {
+    problemas.push("fora do Modo TV o som deixou de ser incondicional");
+  }
+  if (!/tocarSomChamadoNovo\(\)/.test(app)) {
+    problemas.push("o Modo TV deixou de anunciar chamado novo");
   }
   if (/Notificações ligadas|Notificações bloqueadas|BellOff/.test(layout)) {
     problemas.push("o botao de ligar/desligar voltou para a barra lateral");

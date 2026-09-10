@@ -190,11 +190,35 @@ const inicioDoDia = () => {
   return d;
 };
 
-const inicioDoMes = () => {
-  const d = new Date();
-  d.setDate(1);
-  d.setHours(0, 0, 0, 0);
-  return d;
+/**
+ * O CICLO CORRENTE -- e por que `inicioDoMes()` deixou de existir.
+ *
+ * ── O DEFEITO QUE ISTO FECHA (auditoria-ranking-zerado-10-09.md) ────────────
+ *
+ * Havia um `inicioDoMes()` aqui que fixava o dia 1 do mes de calendario, usado
+ * pela parede e pelo `/ranking-equipe`. O cabecalho de `rankings/ciclo` diz que
+ * a regra de "que mes e este?" estava cravada em quatro lugares e foi
+ * centralizada -- mas ESTAS DUAS COPIAS nunca foram migradas. O arquivo que
+ * unificou a regra ficou com um consumidor so.
+ *
+ * Enquanto o ciclo era o padrao (dia 1), as duas formas davam o MESMO
+ * resultado, e a divergencia ficou invisivel. Ela apareceu no dia em que o
+ * administrador moveu o dia do ciclo para 28 -- ou seja, no dia em que o
+ * recurso passou a ser usado: a parede mostrou 84 pontos (mes de calendario) e
+ * a tela do Ranking do Time mostrou 0 (ciclo), na mesma sala, no mesmo minuto.
+ * Foi lido como "o ranking zerou os pontos".
+ *
+ * A licao que vale mais que a correcao: centralizar uma regra sem REMOVER as
+ * copias antigas nao centraliza nada -- cria uma versao a mais dela. E a
+ * divergencia fica latente ate alguem mudar a configuracao, o que faz o defeito
+ * aparecer longe, no tempo e no codigo, da mudanca que o causou. Por isso
+ * `inicioDoMes` foi deletado em vez de deixado sem uso.
+ */
+const cicloCorrente = async () => {
+  const cfg = await ciclo.obter();
+  const comp = ciclo.competenciaDe(new Date(), cfg);
+  const [ano, mes] = comp.split("-").map(Number);
+  return ciclo.janela(ano, mes, cfg);
 };
 
 const media = (lista) => (lista.length ? lista.reduce((a, b) => a + b, 0) / lista.length : 0);
@@ -339,7 +363,12 @@ class PainelService {
     // O zeramento recorta as DUAS janelas. Recortar so a do mes deixaria
     // "fechados hoje" contando atendimentos anteriores a limpeza -- um numero
     // sobrevivente no meio de um painel zerado, que parece defeito.
-    const desdeMes = maisRecente(inicioDoMes(), zerado);
+    // A JANELA DO CICLO, e nao o mes do calendario -- ver `cicloCorrente`. O
+    // `fim` entra na consulta porque a competencia de transicao pode terminar
+    // no mes seguinte: sem ele, a parede somaria dias de um ciclo que ainda nao
+    // fechou junto com os do proximo assim que a virada passasse.
+    const { inicio: inicioCiclo, fim: fimCiclo } = await cicloCorrente();
+    const desdeMes = maisRecente(inicioCiclo, zerado);
     const desdeHoje = maisRecente(inicioDoDia(), zerado);
 
     const [regras, daSede, doMes, fechadosDeHoje, fila, equipe, meta, carga] = await Promise.all([
@@ -355,7 +384,7 @@ class PainelService {
       // So o que o ranking e os tempos precisam. Sem `include`: mensagem
       // nenhuma entra nesta consulta.
       prisma.atendimento.findMany({
-        where: { abertoEm: { gte: desdeMes } },
+        where: { abertoEm: { gte: desdeMes, lt: fimCiclo } },
         select: {
           atendenteId: true,
           atendenteNome: true,
@@ -715,10 +744,14 @@ class PainelService {
     // O MESMO recorte da parede: as duas telas mostram a mesma classificacao, e
     // uma limpeza que valesse so numa delas seria pior do que nao existir.
     const zerado = await marcoDeZeragem();
-    const desdeMes = maisRecente(inicioDoMes(), zerado);
+    // O MESMO ciclo da parede -- ver `cicloCorrente`. Aqui tambem era
+    // `inicioDoMes()`, e as duas telas divergiam do Ranking do Time no dia em
+    // que o ciclo saiu do dia 1.
+    const { inicio: inicioCiclo, fim: fimCiclo } = await cicloCorrente();
+    const desdeMes = maisRecente(inicioCiclo, zerado);
 
     const doMes = await prisma.atendimento.findMany({
-      where: { abertoEm: { gte: desdeMes } },
+      where: { abertoEm: { gte: desdeMes, lt: fimCiclo } },
       select: {
         atendenteNome: true,
         status: true,

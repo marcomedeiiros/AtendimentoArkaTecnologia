@@ -100,12 +100,51 @@ function janela(ano, mes, cfg = PADRAO) {
   // não muda de conteúdo por causa de uma regra criada depois dele.
   const valeAqui = cfg.vigenteDesde && comp >= cfg.vigenteDesde;
   const { dia, hora, minuto } = valeAqui ? cfg : PADRAO;
+
+  // ── A COMPETÊNCIA DE TRANSIÇÃO COMEÇA ONDE O CALENDÁRIO PAROU ─────────────
+  //
+  // O DEFEITO QUE ISTO FECHA (auditoria-ranking-zerado-10-09.md):
+  //
+  // Preservar o passado e mover o dia do ciclo abrem um VÃO entre os dois. Com
+  // fechamento no dia 28 e vigência em 2026-09:
+  //
+  //   competência 2026-08 -> 01/08 a 01/09   (calendário: é anterior à vigência)
+  //   competência 2026-09 -> 28/09 a 28/10   (regra nova)
+  //
+  // Os dias 01/09 a 28/09 não pertenciam a competência NENHUMA. Em produção,
+  // no dia 10/09/2026, a tela do Ranking do Time mostrou a equipe inteira com
+  // 0 pontos e 0 avaliados enquanto o painel de parede mostrava 84 -- e a
+  // leitura imediata foi "o ranking zerou os pontos", quando nada havia sido
+  // apagado: os atendimentos caíram no vão.
+  //
+  // Pior, era um vão INALCANÇÁVEL: `competenciaDe` respondia 2026-08 (correto
+  // pela regra nova, cuja virada ainda não tinha chegado), mas a janela de
+  // 2026-08 terminava em 01/09. Nem escolhendo a competência "certa" a tela
+  // alcançava o dia de hoje.
+  //
+  // A CORREÇÃO: a primeira competência sob a regra nova absorve esses dias --
+  // ela começa no dia 1, e não no dia do ciclo. O primeiro ciclo fica mais
+  // longo UMA vez (01/09 a 28/10 no exemplo) e, do seguinte em diante, é
+  // 28 a 28 para sempre.
+  //
+  // A alternativa era esticar o FIM da última competência de calendário
+  // (2026-08 iria até 28/09). Recusada: aquele mês pode já ter sido premiado, e
+  // mudar o conteúdo dele é exatamente o que `vigenteDesde` existe para
+  // impedir. Entre alongar um ciclo que está começando e reescrever um que já
+  // fechou, só a primeira é reversível.
+  const ehTransicao = !!valeAqui && comp === cfg.vigenteDesde;
+
   return {
-    inicio: new Date(ano, mes - 1, dia, hora, minuto, 0, 0),
+    inicio: ehTransicao
+      ? new Date(ano, mes - 1, PADRAO.dia, PADRAO.hora, PADRAO.minuto, 0, 0)
+      : new Date(ano, mes - 1, dia, hora, minuto, 0, 0),
     fim: new Date(ano, mes, dia, hora, minuto, 0, 0),
     // Para a tela dizer o intervalo por extenso, em vez de deixar quem lê
     // adivinhar se o dia 25 é o começo ou o fim.
     personalizada: !!valeAqui,
+    // A tela precisa poder explicar por que ESTE ciclo é mais longo que os
+    // outros -- sem isso, "01/09 a 28/10" parece defeito de cálculo.
+    transicao: ehTransicao,
   };
 }
 
@@ -120,6 +159,16 @@ function competenciaDe(agora = new Date(), cfg = PADRAO) {
   const comp = compDe(agora);
   const valeAqui = cfg.vigenteDesde && comp >= cfg.vigenteDesde;
   if (!valeAqui) return comp;
+
+  // NA COMPETÊNCIA DE TRANSIÇÃO O CICLO COMEÇOU NO DIA 1 (ver `janela`), então
+  // qualquer instante dela já pertence a ela. Sem esta linha, o dia 10/09
+  // respondia "2026-08" -- uma competência cuja janela terminava em 01/09, e
+  // que portanto não continha o próprio instante que a escolheu.
+  //
+  // Esta era a metade do defeito que nenhum teste pegava: os dois lados podiam
+  // discordar sem que nada reclamasse, porque `competenciaDe` era conferida
+  // pelo RÓTULO que devolvia, nunca contra a janela correspondente.
+  if (comp === cfg.vigenteDesde) return comp;
 
   const viradaDesteMes = new Date(
     agora.getFullYear(),

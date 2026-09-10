@@ -44,10 +44,32 @@ const MES_NOME = [
   'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
 ];
 
-const competenciaAtual = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-};
+/*
+ * NÃO EXISTE MAIS UM `competenciaAtual()` AQUI, e isso é o conserto.
+ *
+ * ── O DEFEITO (auditoria-ranking-zerado-10-09.md) ──────────────────────────
+ *
+ * Havia um `competenciaAtual()` que devolvia o mês do CALENDÁRIO, e ele era o
+ * valor inicial do seletor. Com o ciclo do ranking fechando no dia 28, "que mês
+ * está corrente" deixa de ser uma pergunta de calendário: no dia 10/09, o ciclo
+ * corrente é o que abriu antes -- e a competência `2026-09` significa 28/09 a
+ * 28/10, ou seja, uma janela que ainda não começou.
+ *
+ * O resultado em produção, em 10/09/2026: a tela abriu em "setembro/2026" e
+ * mostrou a equipe inteira com 0 pontos e 0 avaliados, enquanto o painel de
+ * parede mostrava 84 na mesma sala. Foi lido como "o ranking zerou os pontos" --
+ * mas zero era a resposta CORRETA para a pergunta errada.
+ *
+ * ── QUEM SABE A RESPOSTA É O SERVIDOR ──────────────────────────────────────
+ *
+ * `ranking.service` já resolve a competência corrente com `ciclo.competenciaDe`
+ * quando o pedido chega SEM competência, e devolve qual usou no campo
+ * `competencia`. A tela mandava sempre um valor -- e assim substituía a resposta
+ * certa por um palpite de calendário.
+ *
+ * Agora `competencia` nasce `null` (= "a corrente, seja qual for"), e a lista de
+ * meses é construída de trás para frente a partir do que o servidor respondeu.
+ */
 
 function rotuloCompetencia(comp) {
   const [ano, mes] = String(comp || '').split('-').map(Number);
@@ -69,20 +91,32 @@ function rotuloCompetencia(comp) {
  */
 const PRIMEIRA_COMPETENCIA = '2026-09';
 
-// Do mês corrente para trás, parando no primeiro mês do ranking. O teto de 18
+// Do mês CORRENTE para trás, parando no primeiro mês do ranking. O teto de 18
 // continua: é curto o bastante para caber num select sem virar rolagem.
-function mesesDisponiveis() {
+//
+// `corrente` VEM DO SERVIDOR (o campo `competencia` da resposta). Antes esta
+// função partia de `new Date()`, e com o ciclo fora do dia 1 isso produzia dois
+// erros de uma vez: oferecia um mês que ainda não começou e, quando o ciclo
+// corrente era o anterior, NÃO OFERECIA ele -- `PRIMEIRA_COMPETENCIA` cortava
+// justamente o mês que a pessoa precisava escolher. Não havia como chegar aos
+// próprios pontos pela tela.
+function mesesDisponiveis(corrente) {
+  if (!corrente) return [];
+  const [ano, mes] = String(corrente).split('-').map(Number);
+  if (!ano || !mes) return [];
   const out = [];
-  const d = new Date();
+  const d = new Date(ano, mes - 1, 1);
   for (let i = 0; i < 18; i += 1) {
     const comp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     if (comp < PRIMEIRA_COMPETENCIA) break;
     out.push(comp);
     d.setMonth(d.getMonth() - 1);
   }
-  // Antes do primeiro mês, a lista ficaria vazia e o select não teria o que
-  // mostrar -- nem o mês em que se está.
-  return out.length ? out : [PRIMEIRA_COMPETENCIA];
+  // O CORRENTE ENTRA SEMPRE, mesmo que seja anterior a `PRIMEIRA_COMPETENCIA`:
+  // a competência que o servidor está calculando agora não pode ficar de fora
+  // do seletor. Era exatamente esse o beco -- a tela mostrava um mês vazio e não
+  // oferecia o mês com os dados.
+  return out.length ? out : [corrente];
 }
 
 function iniciais(nome = '') {
@@ -425,7 +459,9 @@ function Historico({ dados }) {
 export default function Rankings() {
   const { usuario } = useAuth();
   const [aba, setAba] = useState('sede');
-  const [competencia, setCompetencia] = useState(competenciaAtual());
+  // `null` = "a competência corrente, seja qual for" -- quem decide é o
+  // servidor. Só passa a ter valor quando alguém escolhe um mês no seletor.
+  const [competencia, setCompetencia] = useState(null);
   const [dados, setDados] = useState(null);
   const [historico, setHistorico] = useState(null);
   const [carregando, setCarregando] = useState(true);
@@ -433,8 +469,14 @@ export default function Rankings() {
   const [abertas, setAbertas] = useState(() => new Set());
   const [limpando, setLimpando] = useState(false);
 
-  const meses = useMemo(mesesDisponiveis, []);
   const ehAdmin = usuario?.cargo === 'Administrador';
+
+  // A COMPETÊNCIA QUE ESTÁ NA TELA. Enquanto ninguém escolheu nada, é a que o
+  // servidor resolveu e devolveu -- e é ela que rotula os títulos, a premiação e
+  // o próprio seletor. Derivar em vez de guardar num estado evita a segunda
+  // busca que "salvar a resposta no estado" provocaria.
+  const compAtiva = competencia || dados?.competencia || '';
+  const meses = useMemo(() => mesesDisponiveis(compAtiva), [compAtiva]);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -476,7 +518,7 @@ export default function Rankings() {
    */
   const premiar = async (posicao) => {
     const premio = await pedirTexto(
-      `O que o ${posicao}º lugar de ${rotuloCompetencia(competencia)} recebeu?`,
+      `O que o ${posicao}º lugar de ${rotuloCompetencia(compAtiva)} recebeu?`,
       { titulo: 'Registrar premiação', placeholder: 'Ex.: Vale-presente, folga, bônus' }
     );
     if (!premio) return;
@@ -485,7 +527,7 @@ export default function Rankings() {
     });
     try {
       await RankingsAPI.registrarPremiacao({
-        ranking: aba, competencia, posicao, premio, valor: valor || null,
+        ranking: aba, competencia: compAtiva, posicao, premio, valor: valor || null,
       });
       await carregar();
     } catch (e) {
@@ -667,7 +709,7 @@ export default function Rankings() {
             <label htmlFor="ranking-mes" className="text-[11px] font-semibold text-texto-suave shrink-0">Mês</label>
             <select
               id="ranking-mes"
-              value={competencia}
+              value={compAtiva}
               onChange={(e) => setCompetencia(e.target.value)}
               className="bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto focus:outline-none focus:border-acao/50"
             >
@@ -956,7 +998,7 @@ export default function Rankings() {
       <div className="glass-panel border border-linha rounded-2xl p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
           <h3 className="text-sm font-bold text-texto">
-            {dados?.rotulo || ''}  {rotuloCompetencia(competencia)}
+            {dados?.rotulo || ''}  {rotuloCompetencia(compAtiva)}
           </h3>
           {/* QUEM VALIDA -- e a frase parou de dizer "não concorre".
               Ela era verdade enquanto havia uma marca de supervisor que excluía
@@ -1055,7 +1097,7 @@ export default function Rankings() {
             {ehAdmin && (
               <div className="mt-4 pt-4 border-t border-linha">
                 <p className="text-[11px] font-bold text-texto-suave mb-2 flex items-center gap-1.5">
-                  <Gift size={12} className="text-espera-400" /> Premiação de {rotuloCompetencia(competencia)}
+                  <Gift size={12} className="text-espera-400" /> Premiação de {rotuloCompetencia(compAtiva)}
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
                   {/* AS MESMAS VAGAS DO PÓDIO.

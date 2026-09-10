@@ -58,14 +58,95 @@ console.log("=== Ciclo do ranking ===");
 }
 
 // ── O ciclo configurado move a janela ────────────────────────────────────────
+//
+// A VIGENCIA AQUI E ANTIGA de proposito. Antes este caso usava
+// `vigenteDesde: "2026-09"` e pedia a janela de 2026-09 -- ou seja, media a
+// competencia de TRANSICAO acreditando medir um mes comum, e por isso travava a
+// regra errada para ela. O mes de transicao tem caso proprio, logo abaixo.
 {
-  const cfg = { dia: 25, hora: 18, minuto: 0, vigenteDesde: "2026-09" };
+  const cfg = { dia: 25, hora: 18, minuto: 0, vigenteDesde: "2026-01" };
   const problemas = [];
   const j = ciclo.janela(2026, 9, cfg);
   if (iso(j.inicio) !== "2026-09-25 18:00") problemas.push("inicio deveria ser 25/09 18:00, e " + iso(j.inicio));
   if (iso(j.fim) !== "2026-10-25 18:00") problemas.push("fim deveria ser 25/10 18:00, e " + iso(j.fim));
   if (!j.personalizada) problemas.push("deveria se declarar personalizada");
+  if (j.transicao) problemas.push("nao e mes de transicao (a vigencia e de janeiro)");
   check("o ciclo configurado vai do dia escolhido ao mesmo dia do mes seguinte", problemas);
+}
+
+// ── A COMPETENCIA DE TRANSICAO NAO PODE DEIXAR DIAS ORFAOS ───────────────────
+//
+// O defeito de producao de 10/09/2026, em teste. Com fechamento no dia 28 e
+// vigencia em setembro:
+//
+//   2026-08 -> 01/08 a 01/09  (calendario, e anterior a vigencia)
+//   2026-09 -> 28/09 a 28/10  <- era isto, e sobrava 01/09..28/09 sem dono
+//
+// O painel de parede (que usa o mes de calendario) mostrava 84 pontos e a tela
+// do Ranking do Time mostrava 0 -- lido como "o ranking zerou os pontos",
+// quando nada havia sido apagado.
+{
+  const cfg = { dia: 28, hora: 0, minuto: 0, vigenteDesde: "2026-09" };
+  const problemas = [];
+  const t = ciclo.janela(2026, 9, cfg);
+  if (iso(t.inicio) !== "2026-09-01 00:00") {
+    problemas.push("a transicao deveria comecar em 01/09 (onde o calendario parou), e " + iso(t.inicio));
+  }
+  if (iso(t.fim) !== "2026-10-28 00:00") problemas.push("e terminar na virada nova, 28/10; veio " + iso(t.fim));
+  if (!t.transicao) problemas.push("deveria se declarar transicao, para a tela poder explicar o ciclo mais longo");
+
+  // O ciclo SEGUINTE ja e o normal: 28 a 28. A transicao vale uma vez.
+  const seg = ciclo.janela(2026, 10, cfg);
+  if (iso(seg.inicio) !== "2026-10-28 00:00") problemas.push("outubro deveria comecar em 28/10, e " + iso(seg.inicio));
+  if (seg.transicao) problemas.push("outubro nao e transicao");
+
+  // E o passado segue intocado -- e o que `vigenteDesde` existe para garantir.
+  const ago = ciclo.janela(2026, 8, cfg);
+  if (iso(ago.inicio) !== "2026-08-01 00:00") problemas.push("agosto mudou de conteudo: " + iso(ago.inicio));
+  if (iso(ago.fim) !== "2026-09-01 00:00") problemas.push("agosto mudou de fim: " + iso(ago.fim));
+
+  check("a competencia de transicao absorve os dias entre o calendario e a virada nova", problemas);
+}
+
+// ── A INVARIANTE QUE FALTAVA: OS DOIS LADOS TEM DE CONCORDAR ─────────────────
+//
+// `competenciaDe` responde "em que competencia cai este instante" e `janela`
+// responde "que intervalo e esta competencia". Elas eram conferidas
+// SEPARADAMENTE -- uma pelo rotulo que devolvia, a outra pelas datas -- e por
+// isso podiam discordar sem que nenhum teste reclamasse. Foi assim que o vao
+// acima passou.
+//
+// A regra em uma linha: para QUALQUER instante, a janela da competencia que
+// `competenciaDe` escolher tem de CONTER aquele instante. Sem isso, existe dia
+// que nao pertence a ranking nenhum -- e o trabalho feito nele desaparece da
+// tela sem nada explicar.
+{
+  const problemas = [];
+  const configs = [
+    { dia: 1, hora: 0, minuto: 0, vigenteDesde: null },
+    { dia: 28, hora: 0, minuto: 0, vigenteDesde: "2026-09" },
+    { dia: 25, hora: 18, minuto: 0, vigenteDesde: "2026-09" },
+    { dia: 25, hora: 18, minuto: 0, vigenteDesde: "2026-01" },
+    { dia: 15, hora: 12, minuto: 30, vigenteDesde: "2026-06" },
+  ];
+  for (const cfg of configs) {
+    // Varre 18 meses dia a dia -- barato, e cobre viradas, meses curtos e o
+    // mes da vigencia inteiro.
+    for (let d = new Date(2025, 11, 1); d < new Date(2027, 5, 1); d.setDate(d.getDate() + 1)) {
+      const quando = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 13, 10, 0);
+      const comp = ciclo.competenciaDe(quando, cfg);
+      const [ano, mes] = comp.split("-").map(Number);
+      const j = ciclo.janela(ano, mes, cfg);
+      if (!(quando >= j.inicio && quando < j.fim)) {
+        problemas.push(
+          `ciclo ${JSON.stringify(cfg)}: ${iso(quando)} caiu em ${comp}, ` +
+            `cuja janela e ${iso(j.inicio)}..${iso(j.fim)} -- nao contem o instante`
+        );
+        break; // uma amostra por config basta para o diagnostico
+      }
+    }
+  }
+  check("todo instante pertence a uma competencia cuja janela o contem", problemas);
 }
 
 // ── O PASSADO NAO SE MEXE ────────────────────────────────────────────────────
@@ -92,7 +173,16 @@ console.log("=== Ciclo do ranking ===");
 
 // ── Que mes esta corrente ────────────────────────────────────────────────────
 {
-  const cfg = { dia: 25, hora: 18, minuto: 0, vigenteDesde: "2026-01" };
+  // A VIGENCIA E BEM ANTIGA de proposito: aqui se mede o regime NORMAL, em que
+  // todo mes ja usa o ciclo novo. Antes ela era "2026-01", e o ultimo caso
+  // ("comeco de janeiro pertence ao ciclo de dezembro") caia justamente no mes
+  // da vigencia -- ou seja, o proprio teste afirmava um rotulo cuja janela NAO
+  // continha o instante: `janela(2025-12)` terminava em 01/01 (calendario, por
+  // ser anterior a vigencia) e o caso pedia que 03/01 pertencesse a ela.
+  //
+  // Era o mesmo defeito que esta auditoria encontrou, escrito como expectativa.
+  // A transicao tem caso proprio logo abaixo.
+  const cfg = { dia: 25, hora: 18, minuto: 0, vigenteDesde: "2025-06" };
   const problemas = [];
   const casos = [
     [new Date(2026, 8, 7, 10, 0), "2026-08", "dia 7 ainda pertence ao ciclo aberto em 25/08"],
@@ -106,6 +196,31 @@ console.log("=== Ciclo do ranking ===");
     if (obtido !== esperado) problemas.push(`${porque}: esperava ${esperado}, veio ${obtido}`);
   }
   check("o mes corrente segue o ciclo, e nao o calendario", problemas);
+}
+
+// ── E NO MES DA VIGENCIA, O CORRENTE E ELE MESMO ─────────────────────────────
+//
+// O caso de producao: dia 28, vigencia em setembro, relogio em 10/09. A resposta
+// antiga era "2026-08" -- competencia cuja janela terminava em 01/09, e que
+// portanto nao continha o dia 10. Nem escolhendo a competencia "certa" a tela
+// alcançava o trabalho do dia.
+{
+  const cfg = { dia: 28, hora: 0, minuto: 0, vigenteDesde: "2026-09" };
+  const problemas = [];
+  const casos = [
+    [new Date(2026, 8, 1, 0, 0), "2026-09", "o primeiro dia da vigencia ja e da competencia nova"],
+    [new Date(2026, 8, 10, 13, 10), "2026-09", "10/09 (o caso da auditoria) pertence a transicao"],
+    [new Date(2026, 8, 27, 23, 59), "2026-09", "vespera da virada segue na transicao"],
+    [new Date(2026, 8, 28, 0, 0), "2026-09", "a transicao vai ATE 28/10, entao 28/09 continua nela"],
+    [new Date(2026, 9, 27, 23, 0), "2026-09", "27/10 e o ultimo dia do ciclo de transicao"],
+    [new Date(2026, 9, 28, 0, 0), "2026-10", "28/10 abre o primeiro ciclo normal"],
+    [new Date(2026, 7, 15, 9, 0), "2026-08", "agosto, anterior a vigencia, segue calendario"],
+  ];
+  for (const [quando, esperado, porque] of casos) {
+    const obtido = ciclo.competenciaDe(quando, cfg);
+    if (obtido !== esperado) problemas.push(`${porque}: esperava ${esperado}, veio ${obtido}`);
+  }
+  check("no mes da vigencia, o instante pertence a propria competencia de transicao", problemas);
 }
 
 // ── Valores que nao podem passar ─────────────────────────────────────────────
