@@ -135,8 +135,12 @@ console.log("\n=== 6. A TELA ESTA LIGADA NO CAMINHO CERTO ===\n");
   check(/onAbrirContato=\{conversarComContatoRecebido\}/.test(view),
     "o clique chega ate o handler da tela");
 
-  const handler = view.slice(view.indexOf("const conversarComContatoRecebido"));
-  check(/telefoneComparavel\(c\.telefone\) === tel/.test(handler.slice(0, 900)),
+  // A JANELA E A FUNCAO INTEIRA, e nao um recorte de N caracteres: comentario
+  // novo dentro dela empurrava as linhas para fora do recorte, e o teste
+  // reprovava um codigo que nao tinha mudado. `}, [` fecha o useCallback.
+  const handlerTodo = view.slice(view.indexOf("const conversarComContatoRecebido"));
+  const handler = handlerTodo.slice(0, handlerTodo.indexOf("}, ["));
+  check(/telefoneComparavel\(c\.telefone\) === tel/.test(handler),
     "conversa que ja existe e reaproveitada (nao duplica o fio do cliente)");
   // ── AS TRES CHECAGENS ABAIXO FORAM INVERTIDAS ─────────────────────────────
   //
@@ -156,11 +160,11 @@ console.log("\n=== 6. A TELA ESTA LIGADA NO CAMINHO CERTO ===\n");
   // Agora o handler abre o MODAL de conversa nova, ja preenchido, e quem escolhe
   // o setor e a pessoa. O modal ja tinha o seletor e a opcao de abrir sem
   // enviar; este caminho e que passava por fora dele.
-  check(/setNovaInicial\(\{ telefone: contato\.telefone/.test(handler.slice(0, 1400)),
+  check(/setNovaInicial\(\{ telefone: contato\.telefone/.test(handler),
     "o contato pre-preenche o modal (numero e nome ja vem)");
-  check(/setModalNova\(true\)/.test(handler.slice(0, 1400)),
+  check(/setModalNova\(true\)/.test(handler),
     "abre o modal para escolher o SETOR, em vez de criar direto");
-  check(!/setor: 'Geral'/.test(handler.slice(0, 1400)),
+  check(!/setor: 'Geral'/.test(handler),
     "nao ha mais setor cravado no codigo -- era isso que nascia SEM SETOR");
 
   // E A GARANTIA QUE NAO PODE SE PERDER NA TROCA: ninguem e notificado sem
@@ -191,7 +195,7 @@ console.log("\n=== 6. A TELA ESTA LIGADA NO CAMINHO CERTO ===\n");
   check(/setAbaAtual\('abertas'\)/.test(inicia.slice(0, 1600)), "a aba vai para Abertas");
   check(/return nova;/.test(inicia.slice(0, 1800)),
     "devolve a conversa criada (o cartao precisa saber se deu certo)");
-  check(/setNovaInicial\(\{ telefone: contato\.telefone/.test(handler.slice(0, 1400)),
+  check(/setNovaInicial\(\{ telefone: contato\.telefone/.test(handler),
     "falha cai no modal preenchido, onde o erro tem onde aparecer");
 }
 

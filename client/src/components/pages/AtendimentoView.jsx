@@ -4908,6 +4908,26 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     const tel = telefoneComparavel(contato.telefone);
     const existente = conversas.find(c => telefoneComparavel(c.telefone) === tel);
     if (existente) {
+      /**
+       * O SETOR ESCOLHIDO PREENCHE A LACUNA -- e só ela.
+       *
+       * Aqui a escolha feita no popup dos Contatos era simplesmente jogada
+       * fora: o fio já existia, então pulávamos para ele e a badge continuava
+       * SEM SETOR. Quem acabou de responder "Técnico" via a conversa abrir sem
+       * setor nenhum, sem nada explicando -- e, desde que a badge deixou de ser
+       * editável, sem nenhum outro caminho para corrigir.
+       *
+       * Aplica-se SÓ quando a conversa não tem setor. Tendo um, ele fica: essa
+       * é uma triagem que já aconteceu (o cliente escolheu no menu, ou alguém
+       * transferiu), e sobrescrevê-la a partir de um clique em "Conversar"
+       * mudaria quem enxerga a conversa sem que ninguém tivesse pedido isso.
+       * Mudança de setor com dono e motivo continua sendo a Transferência.
+       */
+      if (contato.setor && setorDaConversa(existente) === SEM_SETOR) {
+        try {
+          aplicarConversa(await ConversasAPI.atualizarSetor(existente.id, contato.setor));
+        } catch { /* segue para a conversa mesmo assim: abrir importa mais */ }
+      }
       if (existente.statusAtendimento === 'fechada') reabrirConversa(existente.id);
       else irParaConversa(existente.id);
       return;
@@ -4916,7 +4936,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     setErroNova('');
     setNovaInicial({ telefone: contato.telefone, nome: contato.nome || '', setor: contato.setor || '' });
     setModalNova(true);
-  }, [conversas, irParaConversa, reabrirConversa]);
+  }, [conversas, irParaConversa, reabrirConversa, aplicarConversa]);
 
   /**
    * Executa o `?abrir=` que veio de outra tela (hoje, o "Conversar" dos
