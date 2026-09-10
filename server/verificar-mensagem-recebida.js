@@ -39,10 +39,22 @@ async function main() {
   const eventos = [];
   bus.on("conversa", (e) => eventos.push(e));
 
+  // O RAMO `create` NUNCA RODAVA NA VM, E POR ISSO ESTAVA QUEBRADO EM DOIS.
+  //
+  // `findFirst` acha uma instancia em qualquer banco que ja tenha sido usado --
+  // e a VM sempre tem. O `create` era o caminho do banco VAZIO, e ninguem
+  // passava por ele: `webhookSecret` e obrigatorio no schema e faltava, e
+  // `telefone` nao existe no model `Instancia`. Duas linhas de erro do Prisma
+  // antes da primeira assercao.
+  //
+  // Consequencia pratica: este script nao rodava em maquina nova nem em banco
+  // limpo -- exatamente onde se quer rodar a verificacao antes de confiar numa
+  // mudanca. Os outros tres scripts que criam instancia (escopo-dados,
+  // grupos-nao-atendem, setores-extras) sempre fizeram certo; era so aqui.
   const instancia =
     (await prisma.instancia.findFirst()) ||
     (await prisma.instancia.create({
-      data: { nome: `verificacao-${Date.now()}`, telefone: "5527900000000" },
+      data: { nome: `verificacao-${Date.now()}`, webhookSecret: `verificacao-${Date.now()}` },
     }));
 
   const conversa = await prisma.conversa.create({
