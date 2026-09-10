@@ -797,7 +797,20 @@ function ModalNovaConversa({ onFechar, onEnviar, enviando, erro, inicial }) {
   // preenchidos, so falta escrever a mensagem.
   const [telefone, setTelefone] = useState(() => mascararTelefone(inicial?.telefone || ''));
   const [nome,     setNome]     = useState(inicial?.nome || '');
-  const [setor,    setSetor]    = useState('Geral');
+  // ── NENHUM SETOR VEM MARCADO, e isso é deliberado ─────────────────────────
+  //
+  // Vinha `'Geral'` pré-selecionado. Com um valor já marcado, "escolher o
+  // setor" virava "confirmar o que estava lá" -- e o que estava lá era
+  // justamente SEM SETOR. O botão abria a conversa sem ninguém ter decidido
+  // nada, que é o defeito relatado.
+  //
+  // É o mesmo raciocínio já escrito para o motivo de encerramento, algumas
+  // centenas de linhas acima: valor pré-marcado desanda para o primeiro item e
+  // enche o banco de dado que ninguém escolheu, com a tela continuando bonita.
+  //
+  // "Sem Setor" segue disponível na lista, e deve seguir: às vezes não se sabe
+  // ainda. A diferença é que agora é uma escolha, e não o padrão.
+  const [setor,    setSetor]    = useState('');
   const [texto,    setTexto]    = useState('');
 
   // Fechar com Esc, como os outros paineis desta tela.
@@ -821,7 +834,10 @@ function ModalNovaConversa({ onFechar, onEnviar, enviando, erro, inicial }) {
   // escrito; para isso e preciso limpar o campo. E o preco de ter dois
   // desfechos num controle so.
   const temTexto   = texto.trim().length > 0;
-  const podeAbrir  = numeroOk && !enviando;
+  // O SETOR ENTROU NA CONDIÇÃO: sem ele o botão não libera. Antes bastava o
+  // número, porque o setor já vinha preenchido -- era o que deixava a conversa
+  // nascer sem triagem.
+  const podeAbrir  = numeroOk && !!setor && !enviando;
 
   // `texto: ''` explicito quando vazio, e nao omitido: e o servidor que decide
   // o que fazer com a string vazia, e mandar o campo deixa a intencao legivel
@@ -888,8 +904,11 @@ function ModalNovaConversa({ onFechar, onEnviar, enviando, erro, inicial }) {
           </div>
 
           <div>
+            {/* O AVISO FICA VISÍVEL, e não só no `title` do botão: quem abre o
+                modal precisa saber que falta escolher antes de tentar clicar. */}
             <label className="text-[11px] font-semibold text-slate-300 block mb-1.5">
               Setor de atendimento
+              {!setor && <span className="text-espera-400 font-normal"> · escolha um para continuar</span>}
             </label>
             <div className="grid grid-cols-2 gap-2">
               {SETORES_ATENDIMENTO.map(s => {
@@ -961,9 +980,14 @@ function ModalNovaConversa({ onFechar, onEnviar, enviando, erro, inicial }) {
             title={
               !numeroOk
                 ? 'Informe DDD + número'
-                : temTexto
-                  ? 'Envia a mensagem e abre a conversa (Ctrl+Enter)'
-                  : 'Abre a conversa no painel sem mandar nada ao cliente'
+                // BOTÃO DESABILITADO TEM DE DIZER O QUE FALTA. Sem esta linha o
+                // clique não fazia nada e não explicava nada -- e um controle
+                // que ignora o clique em silêncio é indistinguível de defeito.
+                : !setor
+                  ? 'Escolha o setor de atendimento'
+                  : temTexto
+                    ? 'Envia a mensagem e abre a conversa (Ctrl+Enter)'
+                    : 'Abre a conversa no painel sem mandar nada ao cliente'
             }
             className="px-4 py-2 sm:py-1.5 rounded-lg bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-acao/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
             {enviando
@@ -4871,9 +4895,27 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
    * assim que a conversa nao pertence mais a aba visivel.
    *
    * Reabrir tambem preserva o SETOR, e por isso nao passamos por
-   * `iniciarConversaNova` aqui: aquele caminho manda `setor: 'Geral'`, e o
-   * servidor sobrescreve o setor do fio existente com ele -- uma conversa do
-   * Tecnico voltaria como Geral so por causa de um clique em "Conversar".
+   * `iniciarConversaNova` aqui: aquele caminho manda um setor, e o servidor
+   * sobrescreve o setor do fio existente com ele -- uma conversa do Tecnico
+   * voltaria como Geral so por causa de um clique em "Conversar".
+   *
+   * ── O TERCEIRO CASO PERGUNTA O SETOR, E ANTES NAO PERGUNTAVA ──────────────
+   *
+   * Ele criava a conversa direto com `setor: 'Geral'` cravado no codigo. Como
+   * "Geral" e o setor de quem ainda NAO foi triado, toda conversa iniciada pela
+   * equipe nascia com a badge SEM SETOR -- e ficava assim, porque a triagem que
+   * normalmente resolve isso e o cliente escolhendo no menu do bot, e aqui nao
+   * ha menu: fomos nos que chamamos o cliente.
+   *
+   * Consequencia pratica: quem trabalha em Financeiro ou Comercial NAO enxerga
+   * conversa de outro setor (`podeAcessarSetor`), e "Geral" tampouco pertence a
+   * eles. Uma conversa aberta pela agenda ficava visivel para o Tecnico e para
+   * o Administrador, e invisivel para quem talvez devesse atende-la.
+   *
+   * Agora abre o MODAL de conversa nova, ja preenchido com o contato: ele ja
+   * tinha o seletor de setor e a opcao de "abrir sem enviar mensagem" -- estava
+   * tudo pronto, e este caminho simplesmente nao passava por ele. Nao ha tela
+   * nova; ha uma tela que deixou de ser contornada.
    */
   const conversarComContatoRecebido = useCallback(async (contato) => {
     const tel = telefoneComparavel(contato.telefone);
@@ -4885,19 +4927,9 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     }
 
     setErroNova('');
-    const nova = await iniciarConversaNova({
-      telefone: contato.telefone,
-      nome: contato.nome || '',
-      setor: 'Geral',
-      texto: '',
-    });
-    // Falhou (numero recusado, WhatsApp fora do ar): cai no modal ja
-    // preenchido, que e onde o erro tem onde aparecer.
-    if (!nova) {
-      setNovaInicial({ telefone: contato.telefone, nome: contato.nome || '' });
-      setModalNova(true);
-    }
-  }, [conversas, irParaConversa, reabrirConversa, iniciarConversaNova]);
+    setNovaInicial({ telefone: contato.telefone, nome: contato.nome || '' });
+    setModalNova(true);
+  }, [conversas, irParaConversa, reabrirConversa]);
 
   /**
    * Executa o `?abrir=` que veio de outra tela (hoje, o "Conversar" dos

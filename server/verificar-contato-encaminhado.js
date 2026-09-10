@@ -138,16 +138,47 @@ console.log("\n=== 6. A TELA ESTA LIGADA NO CAMINHO CERTO ===\n");
   const handler = view.slice(view.indexOf("const conversarComContatoRecebido"));
   check(/telefoneComparavel\(c\.telefone\) === tel/.test(handler.slice(0, 900)),
     "conversa que ja existe e reaproveitada (nao duplica o fio do cliente)");
-  check(/texto: '',/.test(handler.slice(0, 1200)),
-    "abre SEM enviar mensagem: o contato nao e notificado");
-  check(/setor: 'Geral'/.test(handler.slice(0, 1200)),
-    "nasce sem triagem (Geral), como toda conversa nova");
+  // ── AS TRES CHECAGENS ABAIXO FORAM INVERTIDAS ─────────────────────────────
+  //
+  // Elas travavam o comportamento antigo: o handler criava a conversa direto,
+  // com `setor: 'Geral'` e `texto: ''` cravados no codigo. O `texto: ''` era
+  // bom (ninguem e notificado sem intencao); o `setor: 'Geral'` era o defeito
+  // relatado -- "Geral" e o setor de quem ainda NAO foi triado, e conversa
+  // iniciada pela equipe nascia com a badge SEM SETOR e ficava assim, porque a
+  // triagem que resolve isso e o cliente escolhendo no menu do bot, e aqui nao
+  // ha menu: fomos nos que chamamos o cliente.
+  //
+  // Isso tem consequencia de VISIBILIDADE, nao so de rotulo: Financeiro e
+  // Comercial nao enxergam setor alheio (`podeAcessarSetor`), e "Geral" tambem
+  // nao e deles -- a conversa ficava legivel para o Tecnico e o Administrador,
+  // e invisivel para quem talvez devesse atende-la.
+  //
+  // Agora o handler abre o MODAL de conversa nova, ja preenchido, e quem escolhe
+  // o setor e a pessoa. O modal ja tinha o seletor e a opcao de abrir sem
+  // enviar; este caminho e que passava por fora dele.
+  check(/setNovaInicial\(\{ telefone: contato\.telefone/.test(handler.slice(0, 1400)),
+    "o contato pre-preenche o modal (numero e nome ja vem)");
+  check(/setModalNova\(true\)/.test(handler.slice(0, 1400)),
+    "abre o modal para escolher o SETOR, em vez de criar direto");
+  check(!/setor: 'Geral'/.test(handler.slice(0, 1400)),
+    "nao ha mais setor cravado no codigo -- era isso que nascia SEM SETOR");
 
-  // A conversa precisa aparecer na aba Abertas -- que e o pedido literal. Quem
-  // faz isso e `iniciarConversaNova`, e por isso o handler passa por ela em vez
-  // de chamar a API direto.
-  check(/iniciarConversaNova\(\{/.test(handler.slice(0, 1200)),
-    "reaproveita iniciarConversaNova (e ela quem troca para a aba Abertas)");
+  // E A GARANTIA QUE NAO PODE SE PERDER NA TROCA: ninguem e notificado sem
+  // alguem ter escrito uma mensagem. O modal mantem o caminho de abrir em
+  // branco, e o botao anuncia qual das duas coisas vai fazer antes do clique.
+  const modal = view.slice(view.indexOf("function ModalNovaConversa"));
+  check(/texto: temTexto \? texto\.trim\(\) : '',/.test(modal.slice(0, 3000)),
+    "campo em branco continua abrindo a conversa sem mandar nada ao cliente");
+  check(/Deixe em branco para só abrir a conversa/.test(modal.slice(0, 14000)),
+    "e a tela diz isso, em vez de deixar a pessoa descobrir clicando");
+
+  // O SETOR PASSOU A SER OBRIGATORIO, e sem valor pre-marcado: com um valor ja
+  // escolhido, "escolher o setor" virava "confirmar o que estava la" -- e o que
+  // estava la era justamente SEM SETOR.
+  check(/const \[setor,\s+setSetor\]\s+= useState\(''\)/.test(modal.slice(0, 3000)),
+    "nenhum setor vem pre-marcado no modal");
+  check(/podeAbrir\s+= numeroOk && !!setor/.test(modal.slice(0, 3000)),
+    "o botao so libera depois de escolher o setor");
   const inicia = view.slice(view.indexOf("const iniciarConversaNova"));
   check(/setAbaAtual\('abertas'\)/.test(inicia.slice(0, 1600)), "a aba vai para Abertas");
   check(/return nova;/.test(inicia.slice(0, 1800)),
