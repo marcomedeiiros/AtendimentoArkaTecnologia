@@ -36,7 +36,7 @@ disso, o pódio configurável tem um caminho que o servidor recusa, e a legenda 
 | 2 | Pódio acima de 3 lugares: a tela oferece o botão, o servidor recusa | os dois | **alta** · ✅ corrigido (§11) |
 | 3 | A legenda do "Fora da Sede" está escrita no front -- e já mente | **front** | média · ✅ corrigido (§13) |
 | 4 | "1 de 3" no externo: o mínimo é chute do cliente | **front** | média · ✅ corrigido (§13) |
-| 5 | "A caminho da nota" ignora o mínimo configurado | servidor | média |
+| 5 | "A caminho da nota" ignora o mínimo configurado | servidor | média · ✅ corrigido (§14) |
 | 6 | Mudar o ciclo pela segunda vez reescreve os ciclos do primeiro | servidor | média |
 | 7 | O histórico e a tabela podem discordar da posição da mesma pessoa | servidor | média · ✅ fechou junto com o 1 (§11.1) |
 | 8 | `PUT /dashboard/regras` é a única escrita de ranking sem validação na borda | servidor | média |
@@ -660,3 +660,57 @@ Do levantamento do §"O front-end guarda dado ou decide regra?", **restou um
 item**: `PRIMEIRA_COMPETENCIA = '2026-09'`, e ele está registrado como decisão
 consciente (a data de início da operação não é dedutível do banco). Os dois ❌
 da tabela viraram ✅.
+
+---
+
+## 14. O que foi feito (o achado 5)
+
+Uma linha: `p.notas.length < minimoNotas` no lugar da constante de fábrica, em
+`painel.service._ranking`. O que vale registrar é **por que ela passou tanto
+tempo ali** e por que o teste novo tem a forma que tem.
+
+### 14.1 Os dois lados do mesmo aviso discordavam
+
+A parcela da nota respeitava o mínimo **configurado** (`minimoNotas`, doze
+linhas acima). A lista "a caminho da nota" -- que existe justamente para
+explicar por que aquela parcela está zerada -- filtrava pela **constante**.
+
+| mínimo configurado | quem tem | parcela da nota | "a caminho" |
+| --- | --- | --- | --- |
+| 5 | 4 notas | não conta | **não aparecia** -- a explicação sumia justo quando era necessária |
+| 2 | 2 notas | já conta | **aparecia** -- "2 de 2", uma frase impossível |
+
+E a frase impossível era garantida: a parede escreve `{amostra} de {minimo}`
+com o mínimo **configurado** (ela lê `minimoAvaliacoes` da resposta), então
+filtrar por outro número produzia texto que não fecha com ele mesmo.
+
+Enquanto o mínimo esteve em 3 -- o valor de fábrica -- os dois lados
+concordavam, e o defeito ficou invisível. Ele nasceu no dia em que o campo virou
+configurável, e só apareceria no dia em que alguém o mexesse. **É o mesmo
+formato do engano da auditoria anterior:** a divergência fica latente até alguém
+mudar a configuração, e o defeito aparece longe da mudança que o causou.
+
+### 14.2 A verificação, e a prova de que ela não é decorativa
+
+`verificar-pontuacao-sede` ganhou a invariante em uma linha:
+
+> "A caminho" é **exatamente** quem tem nota e ainda não conta.
+
+Ela varre mínimo de 1 a 6 contra 0 a 8 notas -- porque o defeito só existe
+**fora** do 3 de fábrica --, e confere os dois lados no mesmo passe:
+`nota.conta` e o aviso nunca podem concordar entre si (um é a negação do
+outro), e o mínimo devolvido para a tela é o mesmo que filtrou.
+
+Antes de dar isto por bom, a correção foi **desfeita** e a suíte rodada de novo:
+
+```
+FALHA 'a caminho da nota' e exatamente quem ainda nao conta, no minimo configurado
+      minimo 1 com 1 nota(s): "a caminho" deveria ser false e foi true
+      minimo 1 com 1 nota(s): a parcela conta=true e o aviso diz true -- os dois lados discordam
+```
+
+Um teste que passa nos dois estados não trava nada -- e este arquivo de
+auditoria já registrou dois casos disso hoje (o "continua de 0 a 100" da nota
+geral e o "a sede também para em 100"). Valia conferir.
+
+Suíte completa: `TUDO PASSOU`. Build do cliente limpo.

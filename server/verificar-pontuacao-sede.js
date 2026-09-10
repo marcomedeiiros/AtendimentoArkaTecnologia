@@ -211,6 +211,66 @@ console.log("=== Pontuacao da sede: acumula, e nao satura ===");
   check("mexer na unidade muda a pontuacao na proporcao esperada", problemas);
 }
 
+// ── OS DOIS LADOS DO MESMO AVISO NAO PODEM DISCORDAR ────────────────────────
+//
+// O DEFEITO (auditoria-tela-rankings-10-09.md, achado 5): a parcela da nota
+// respeitava o minimo CONFIGURADO e a lista "a caminho da nota" filtrava pela
+// constante de fabrica. Com o minimo em 5, quem tinha 4 notas pontuava zero em
+// qualidade e NAO aparecia em "a caminho" -- a explicacao desaparecia justo
+// quando era necessaria. Com o minimo em 2, quem tinha 2 ja pontuava e a parede
+// continuava anunciando que faltava.
+//
+// A regra em uma linha: "a caminho" e EXATAMENTE quem tem nota e ainda nao
+// conta. Varre minimo de 1 a 6 contra 0 a 8 notas, porque o defeito so aparece
+// quando o minimo sai do 3 de fabrica -- e ele saiu do 3 no dia em que o campo
+// virou configuravel.
+{
+  const problemas = [];
+  const comNotas = (quantas) => {
+    const a = [];
+    for (let i = 0; i < quantas; i++) {
+      a.push({
+        atendenteNome: "Fulano",
+        status: "fechada",
+        avaliacao: 5,
+        abertoEm: new Date("2026-09-01T10:00:00Z"),
+        atendidoEm: new Date("2026-09-01T10:00:10Z"),
+      });
+    }
+    return a;
+  };
+
+  for (let minimo = 1; minimo <= 6; minimo += 1) {
+    for (let notas = 0; notas <= 8; notas += 1) {
+      const regras = { ...padrao, minimoAvaliacoes: minimo };
+      const r = painel._ranking(comNotas(notas), { limite: 99, incluirZerados: true, regras });
+      const pessoa = r.classificacao[0];
+      const anunciado = r.aCaminho.some((x) => x.nome === "Fulano");
+      const deveria = notas > 0 && notas < minimo;
+      if (anunciado !== deveria) {
+        problemas.push(
+          `minimo ${minimo} com ${notas} nota(s): "a caminho" deveria ser ${deveria} e foi ${anunciado}`
+        );
+      }
+      // E o OUTRO lado do aviso: quem nao aparece em "a caminho" (tendo nota) e
+      // porque a parcela ja conta. Os dois lados saem do mesmo minimo, ou o
+      // texto da parede fica impossivel ("2 de 2").
+      if (notas > 0 && pessoa && pessoa.nota.conta === anunciado) {
+        problemas.push(
+          `minimo ${minimo} com ${notas} nota(s): a parcela conta=${pessoa.nota.conta} e o aviso diz ${anunciado} -- os dois lados discordam`
+        );
+      }
+      // O minimo que a tela ESCREVE ("3 de 5") e o mesmo que filtrou.
+      if (r.minimoAvaliacoes !== minimo) {
+        problemas.push(`o minimo devolvido para a tela deveria ser ${minimo}, e e ${r.minimoAvaliacoes}`);
+      }
+      if (problemas.length > 3) break;
+    }
+    if (problemas.length > 3) break;
+  }
+  check("'a caminho da nota' e exatamente quem ainda nao conta, no minimo configurado", problemas);
+}
+
 console.log("");
 if (erros.length) {
   console.log(`${erros.length} FALHA(S)`);

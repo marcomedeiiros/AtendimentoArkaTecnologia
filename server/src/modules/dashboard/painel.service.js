@@ -697,8 +697,24 @@ class PainelService {
     // A NOTA DE QUEM AINDA NAO ENTROU NAO SAI DAQUI. Mandar a media de quem tem
     // uma avaliacao so seria o mesmo que abolir o minimo: a parede mostraria o
     // numero, e o numero e o que a equipe compara. Vai a CONTAGEM, e mais nada.
+    //
+    // ── O MINIMO AQUI E O CONFIGURADO, E NAO A CONSTANTE ────────────────────
+    //
+    // Este filtro usava `MINIMO_AVALIACOES` -- o valor de FABRICA -- enquanto a
+    // parcela da nota, doze linhas acima, ja respeitava `minimoNotas`, que e o
+    // que o administrador definiu. Os dois lados do MESMO aviso discordavam:
+    //
+    //   minimo em 5, quem tem 4 notas   pontuava zero em qualidade e NAO
+    //                                   aparecia em "a caminho" -- a explicacao
+    //                                   sumia justo quando era necessaria;
+    //   minimo em 2, quem tem 2 notas   ja pontuava e a parede continuava
+    //                                   anunciando que faltava ("2 de 2").
+    //
+    // A tela escreve "${amostra} de ${minimo}" com o minimo CONFIGURADO (a
+    // parede le `minimoAvaliacoes` da resposta), entao usar outro numero aqui
+    // produzia frase impossivel. (auditoria-tela-rankings-10-09.md, achado 5)
     const aCaminho = pessoas
-      .filter((p) => p.notas.length > 0 && p.notas.length < MINIMO_AVALIACOES)
+      .filter((p) => p.notas.length > 0 && p.notas.length < minimoNotas)
       .map((p) => ({ nome: p.nome, amostra: p.notas.length }))
       .sort((a, b) => b.amostra - a.amostra || a.nome.localeCompare(b.nome))
       .slice(0, TOP);
