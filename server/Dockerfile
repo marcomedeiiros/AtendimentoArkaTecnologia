@@ -26,7 +26,19 @@ COPY docker-entrypoint.sh ./
 # coisa -- ele precisa estar onde o BANCO esta, e o banco vive no volume deste
 # container. Sem isto, a unica forma de rodar um era colar o codigo inteiro num
 # `node -e` -- que e exatamente o tipo de coisa que se digita errado as 23h.
+#
+# CADA UM POR NOME, e nao `COPY *.js`: o glob varreria os `verificar-*` para
+# dentro da imagem de producao, que e justamente o que o paragrafo acima
+# recusa. O preco e uma linha nova a cada ferramenta -- e ela foi esquecida
+# uma vez (11/09/2026): o `recomecar-contagem.js` foi entregue com um comando
+# `docker compose exec` que nao podia funcionar, porque o arquivo nao estava na
+# imagem. "Cannot find module /app/..." e o sintoma dessa falta.
 COPY corrigir-sessoes-orfas.js ./
+# Recomeca a contagem de UMA competencia do ranking, e desfaz.
+COPY recomecar-contagem.js ./
+# So leitura: lista as avaliacoes por estado de atribuicao (com dono, sem dono,
+# e OS discordando da conversa).
+COPY conferir-credito-avaliacoes.js ./
 # O projeto e editado no Windows; se o arquivo chegar com CRLF o shell reclama
 # de "bad interpreter". Normaliza antes de tornar executavel.
 RUN sed -i 's/\r$//' docker-entrypoint.sh && chmod +x docker-entrypoint.sh
