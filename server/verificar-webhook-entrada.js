@@ -607,6 +607,45 @@ console.log("=== Entrada do webhook ===");
     const alvos = lote.filter((x) => x.metodo === "_processarProtocolo").map((x) => x.arg.waMessageId);
     check("lote apaga cada mensagem uma unica vez", JSON.stringify(alvos) === '["A1","A2"]' ? [] : [`alvos: ${JSON.stringify(alvos)}`]);
 
+    // ── A EDICAO, pelas duas vias que tem nome de evento ─────────────────────
+    const edicoes = {
+      "achatada (o payload E a mensagem)": {
+        event: "messages.edited",
+        data: { key: { id: "ALVO1", remoteJid: JID, fromMe: false }, message: { conversation: "texto corrigido" } },
+      },
+      "com protocolMessage": {
+        event: "messages.edited",
+        data: {
+          key: { id: "X", remoteJid: JID },
+          message: { protocolMessage: { key: { id: "ALVO1" }, type: 14, editedMessage: { conversation: "texto corrigido" } } },
+        },
+      },
+      "MAIUSCULAS": {
+        event: "MESSAGES_EDITED",
+        data: { key: { id: "ALVO1", remoteJid: JID, fromMe: false }, message: { conversation: "texto corrigido" } },
+      },
+    };
+    const pEditar = [];
+    for (const [nome, body] of Object.entries(edicoes)) {
+      const t = await rotear(body);
+      const foi = t.find((x) => x.metodo === "_processarProtocolo");
+      if (!foi) pEditar.push(`${nome}: nao chegou em _processarProtocolo`);
+      else if (foi.arg?.acao !== "editar") pEditar.push(`${nome}: acao ${foi.arg?.acao}, esperado "editar"`);
+      else if (foi.arg?.waMessageId !== "ALVO1") pEditar.push(`${nome}: alvo ${foi.arg?.waMessageId}`);
+      else if (foi.arg?.texto !== "texto corrigido") pEditar.push(`${nome}: texto "${foi.arg?.texto}"`);
+    }
+    check("a edicao do cliente e reconhecida nas tres formas com nome de evento", pEditar);
+
+    // MIDIA SEM LEGENDA: melhor nao tocar na bolha do que esvazia-la.
+    const semTexto = await rotear({
+      event: "messages.edited",
+      data: { key: { id: "ALVO1", remoteJid: JID }, message: { imageMessage: { mimetype: "image/jpeg" } } },
+    });
+    check(
+      "edicao sem texto legivel NAO sobrescreve a bolha",
+      semTexto.some((x) => x.metodo === "_processarProtocolo") ? ["chamou _processarProtocolo sem texto"] : []
+    );
+
     // E o que NAO pode acontecer: uma mensagem comum virar exclusao.
     const comum = await rotear({
       event: "messages.upsert",

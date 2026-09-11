@@ -474,6 +474,35 @@ class WhatsAppService {
   }
 
   /**
+   * A edicao que chegou com nome de evento, sem `protocolMessage`.
+   *
+   * O ALVO e o `key.id` da propria mensagem: diferente do `protocolMessage` --
+   * onde a chave de fora e do evento e a de dentro e da mensagem editada --,
+   * aqui o payload E a mensagem, ja com o texto novo.
+   *
+   * SEM TEXTO NAO SE TOCA NA BOLHA. Editar uma midia sem legenda, ou um formato
+   * que nao sabemos ler, devolveria string vazia -- e substituir o conteudo por
+   * nada e pior do que deixar a versao anterior, que pelo menos e uma mensagem
+   * que existiu. Mesma regra que `extrairProtocolo` ja aplica no ramo da edicao.
+   */
+  async _processarEdicao(body) {
+    const data = body?.data || body;
+    const alvo = data?.key?.id || data?.key?.ID || data?.id || null;
+    const texto = this.extrairTexto(body);
+
+    if (!alvo || !texto) {
+      logger.warn("messages.edited recebido sem alvo ou sem texto legivel", {
+        temAlvo: !!alvo,
+        // A ESTRUTURA, nunca os valores: aqui dentro mora a conversa do cliente.
+        forma: formaDo(body),
+      });
+      return { recebido: true, processado: false, motivo: "edicao_sem_dados" };
+    }
+
+    return this._processarProtocolo({ acao: "editar", waMessageId: String(alvo), texto });
+  }
+
+  /**
    * Empurra a CAUDA da conversa para a tela. Mesmo formato do motor: o front
    * reconstroi o resto pelo merge (ver findByIdParaEvento e mesclarConversa).
    */
@@ -731,6 +760,21 @@ class WhatsAppService {
     // chegam juntas, a embrulhada e a mais especifica e deve vencer.
     if (event === "messages.delete" || event === "MESSAGES_DELETE") {
       return this._processarExclusao(body);
+    }
+
+    // ── EDICAO QUE CHEGA PELO NOME DO EVENTO ─────────────────────────────────
+    //
+    // Mesma historia do vizinho de cima, com uma diferenca que importa: aqui o
+    // conteudo NOVO vem no payload como uma mensagem comum, entao quem le e o
+    // `extrairTexto` de sempre -- inclusive a legenda de midia.
+    //
+    // Ha uma TERCEIRA via de edicao, e ela nao da para pegar neste ponto: a que
+    // chega por `messages.upsert`, sem nome proprio e sem `protocolMessage`. Ali
+    // a edicao e indistinguivel de uma mensagem nova ate consultarmos o banco --
+    // quem a resolve e o motor, pela colisao de `waMessageId` com texto
+    // diferente (ver chatbot.engine._processarMensagemEntrada).
+    if (event === "messages.edited" || event === "MESSAGES_EDITED") {
+      return this._processarEdicao(body);
     }
 
     if (event === "messages.update" || event === "MESSAGES_UPDATE") {
