@@ -3870,6 +3870,9 @@ class ChatbotEngine {
     encaminhada = null,
     // { stanzaId, texto } do "responder" do WhatsApp. Ver extrairCitacao.
     citacao = null,
+    // `messageSecret` desta mensagem: a chave da EDICAO que talvez venha depois.
+    // Ver edicaoCifrada.helper e o comentario em whatsapp.service.
+    segredo = null,
   }) {
     const textoLimpo = this.extrairTextoMensagem(texto);
     const ehMidia = !!midia && midia.tipo && midia.tipo !== "texto";
@@ -4032,12 +4035,14 @@ class ChatbotEngine {
 
     // A marca de encaminhamento, o botaoId e o trecho citado entram no metadata.
     const metadata =
-      ehMidia || encaminhada || botaoId || citacaoResumo
+      ehMidia || encaminhada || botaoId || citacaoResumo || segredo
         ? {
             ...(ehMidia ? midia : {}),
             ...(encaminhada || {}),
             ...(botaoId ? { botaoId } : {}),
             ...(citacaoResumo ? { citacao: citacaoResumo } : {}),
+            // A chave da edicao futura. Nunca vai para a tela (ver mapper).
+            ...(segredo ? { segredo } : {}),
           }
         : null;
     const respondendoPesquisa =

@@ -13,6 +13,7 @@ const env = require("../../config/env");
 const AppError = require("../../shared/errors/AppError");
 const { limparTelefone } = require("../../shared/helpers/cnpj.helper");
 const { motivoParaIgnorarJid } = require("../../shared/helpers/jid.helper");
+const { decifrarEdicao } = require("../../shared/helpers/edicaoCifrada.helper");
 
 // Teto da midia RECEBIDA do WhatsApp. O remetente e externo, entao este limite e
 // o que impede alguem de encher o disco mandando arquivos enormes. O proprio
@@ -560,7 +561,7 @@ class WhatsAppService {
    * quando ela chegou. Confiar no `fromMe` daqui faria a edicao ser ignorada
    * justamente nas conversas em que ela acontece.
    */
-  async _processarEdicaoCifrada(no) {
+  async _processarEdicaoCifrada(no, key) {
     const alvoId = no?.targetMessageKey?.id || no?.targetMessageKey?.ID || null;
     if (!alvoId) {
       logger.warn("Edicao cifrada sem alvo -- nao ha o que marcar", { forma: formaDo(no) });
@@ -575,16 +576,55 @@ class WhatsAppService {
       return { recebido: true, processado: false, motivo: "edicao_cifrada_sem_alvo_local" };
     }
 
-    // A Evolution reentrega: remarcar subiria a versao da conversa a toa.
+    // ── PRIMEIRO TENTA LER DE VERDADE ───────────────────────────────────────
+    //
+    // A chave e o `messageSecret` da mensagem ORIGINAL, guardado quando ela
+    // chegou. Mensagem anterior a essa guarda nao tem como ser decifrada -- e
+    // e por isso que o rotulo continua existindo, como plano B e nao como
+    // resposta padrao.
+    const texto = decifrarEdicao({
+      segredo: alvo.metadata?.segredo || null,
+      encIv: no.encIv,
+      encPayload: no.encPayload,
+      alvoId: String(alvoId),
+      // A ordem importa pouco (a tag do GCM e quem decide), mas o primeiro da
+      // lista e o que acertou em producao: o jid de quem mandou o evento.
+      jids: [key?.remoteJid, key?.remoteJidAlt, key?.participant, no.targetMessageKey?.remoteJid],
+    });
+
+    if (texto != null && texto !== String(alvo.texto || "")) {
+      await conversaRepository.editarMensagem(alvo.id, texto);
+      await this._emitirConversa(alvo.conversaId);
+      logger.info("Edicao do cliente DECIFRADA e aplicada", {
+        conversaId: alvo.conversaId,
+        waMessageId: String(alvoId),
+      });
+      return {
+        recebido: true,
+        processado: true,
+        motivo: "edicao_decifrada",
+        conversaId: alvo.conversaId,
+      };
+    }
+
+    // Texto identico: a Evolution reentrega o mesmo evento.
+    if (texto != null) {
+      return { recebido: true, processado: false, motivo: "edicao_repetida" };
+    }
+
+    // ── PLANO B: NAO DEU PARA LER, ENTAO PELO MENOS NAO MINTA ───────────────
     if (alvo.metadata?.edicaoIlegivel) {
       return { recebido: true, processado: false, motivo: "edicao_cifrada_repetida" };
     }
 
     await conversaRepository.marcarEdicaoIlegivel(alvo.id);
     await this._emitirConversa(alvo.conversaId);
-    logger.info("Edicao do cliente marcada (conteudo cifrado, nao legivel)", {
+    logger.info("Edicao do cliente marcada (nao foi possivel decifrar)", {
       conversaId: alvo.conversaId,
       waMessageId: String(alvoId),
+      // A causa quase sempre e esta, e ela se resolve sozinha com o tempo: a
+      // mensagem original chegou antes de guardarmos a chave.
+      temSegredo: !!alvo.metadata?.segredo,
     });
     return {
       recebido: true,
@@ -1237,7 +1277,9 @@ class WhatsAppService {
     // ele aparece para ser identificado, foi assim que este aqui apareceu.
     const cifrado = this._semEnvelope(data?.message)?.secretEncryptedMessage;
     if (cifrado && Number(cifrado.secretEncType) === 2) {
-      return this._processarEdicaoCifrada(cifrado);
+      // `key` vai junto porque a chave de decifracao e derivada dos JIDs de
+      // quem mandou o evento -- ver edicaoCifrada.helper.
+      return this._processarEdicaoCifrada(cifrado, key);
     }
 
     if (this._semEnvelope(data?.message)?.albumMessage) {
@@ -1396,6 +1438,21 @@ class WhatsAppService {
       return { recebido: true, processado: false, motivo: "dados_incompletos" };
     }
 
+    // ── A CHAVE QUE TORNA A EDICAO LEGIVEL, E POR QUE ELA E GUARDADA ────────
+    //
+    // `messageSecret` chega junto de cada mensagem e era descartado. Ele e a
+    // chave da EDICAO que talvez venha depois: o WhatsApp cifra o texto novo
+    // com uma derivacao dele (ver edicaoCifrada.helper), e sem ele a edicao e
+    // indecifravel para sempre -- nao ha como pedir de novo.
+    //
+    // Guardar so quando a edicao chegar e impossivel: a mensagem original ja
+    // passou. Ou se guarda na chegada, ou se perde.
+    //
+    // NAO E CREDENCIAL de conta nem de sessao: e uma chave por mensagem, que o
+    // proprio aparelho do cliente guarda do mesmo jeito. Fica fora do que vai
+    // para a tela -- ver a limpeza no mapper.
+    const segredo = this._semEnvelope(data?.message)?.messageContextInfo?.messageSecret || null;
+
     const result = await chatbotService.processar({
       telefone,
       texto,
@@ -1406,6 +1463,7 @@ class WhatsAppService {
       midia,
       encaminhada,
       citacao,
+      segredo,
     });
 
     return { recebido: true, ...result };

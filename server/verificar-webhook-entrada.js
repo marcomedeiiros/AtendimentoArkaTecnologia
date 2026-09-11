@@ -761,6 +761,73 @@ console.log("=== Entrada do webhook ===");
     svc._processarEdicaoCifrada = originalCifrada;
   }
 
+  // ── A DECIFRACAO DA EDICAO ────────────────────────────────────────────────
+  //
+  // O esquema foi confirmado com dado real de producao em 11/09/2026 (o cliente
+  // editou para "123" e a derivacao devolveu "123"). O que este teste trava e o
+  // nosso lado: a derivacao HKDF, o GCM e o passeio pelo protobuf.
+  //
+  // Cifra aqui do mesmo jeito que o WhatsApp cifra, e exige que o helper leia de
+  // volta. Se alguem trocar o `info`, a ordem dos JIDs ou o caminho no protobuf,
+  // isto quebra -- que e o unico jeito de perceber, ja que a falha real e muda
+  // (a bolha volta a mostrar o texto velho, e ninguem estranha).
+  {
+    const cripto = require("crypto");
+    const { decifrarEdicao } = require(path.join(__dirname, "src/shared/helpers/edicaoCifrada.helper"));
+
+    // Protobuf na mao: so campos de comprimento delimitado, todos < 128 bytes.
+    const campo = (n, buf) => Buffer.concat([Buffer.from([(n << 3) | 2]), Buffer.from([buf.length]), buf]);
+    const texto = (s) => Buffer.from(s, "utf8");
+
+    const ALVO = "3EB09064A99A61B8643CC9";
+    const JID = "152188055777283@lid";
+    const segredo = cripto.randomBytes(32);
+
+    const cifrar = (corpoDaMensagem, jidUsado = JID) => {
+      // Message.protocolMessage(12) { key(1), editedMessage(14) { ... } }
+      const plano = campo(12, Buffer.concat([campo(1, texto("chave")), campo(14, corpoDaMensagem)]));
+      const info = Buffer.concat([texto(ALVO), texto(jidUsado), texto(jidUsado), texto("Message Edit")]);
+      const chave = Buffer.from(cripto.hkdfSync("sha256", segredo, Buffer.alloc(0), info, 32));
+      const iv = cripto.randomBytes(12);
+      const c = cripto.createCipheriv("aes-256-gcm", chave, iv);
+      const corpo = Buffer.concat([c.update(plano), c.final()]);
+      return { encIv: iv.toString("base64"), encPayload: Buffer.concat([corpo, c.getAuthTag()]).toString("base64") };
+    };
+
+    const ler = (extra = {}) =>
+      decifrarEdicao({ segredo: segredo.toString("base64"), alvoId: ALVO, jids: [JID], ...extra });
+
+    // Mensagem simples: Message.conversation(1)
+    const simples = cifrar(campo(1, texto("123")));
+    check("a edicao cifrada e decifrada e o texto novo sai inteiro", [
+      ...(ler(simples) === "123" ? [] : [`veio ${JSON.stringify(ler(simples))}, esperado "123"`]),
+    ]);
+
+    // Com formatacao/link: Message.extendedTextMessage(2) { text(1) }
+    const formatada = cifrar(campo(2, campo(1, texto("olha o *link* aqui"))));
+    check("edicao com formatacao/link tambem e lida", [
+      ...(ler(formatada) === "olha o *link* aqui" ? [] : [`veio ${JSON.stringify(ler(formatada))}`]),
+    ]);
+
+    // O JID certo esta no meio de candidatos errados -- e o caso real, porque a
+    // instalacao mistura @lid e @s.whatsapp.net para o mesmo contato.
+    check("acha o JID certo no meio dos candidatos", [
+      ...(ler({ ...simples, jids: ["5527997819294@s.whatsapp.net", null, JID] }) === "123"
+        ? []
+        : ["nao achou com o jid certo em segundo lugar"]),
+    ]);
+
+    // E O QUE NAO PODE ACONTECER: chave errada devolvendo texto. A tag do GCM e
+    // quem garante -- sem ela, uma derivacao errada viraria lixo na bolha.
+    check("chave errada NAO produz texto", [
+      ...(decifrarEdicao({ ...simples, segredo: cripto.randomBytes(32).toString("base64"), alvoId: ALVO, jids: [JID] }) === null
+        ? []
+        : ["decifrou com a chave errada"]),
+      ...(ler({ ...simples, jids: ["outro@lid"] }) === null ? [] : ["decifrou com o jid errado"]),
+      ...(ler({ ...simples, segredo: null }) === null ? [] : ["decifrou sem segredo"]),
+    ]);
+  }
+
   // A marca precisa CHEGAR na tela: sem ela a bolha diz so "editada", que afirma
   // que o texto ao lado e a versao nova -- justamente o que nao e.
   {

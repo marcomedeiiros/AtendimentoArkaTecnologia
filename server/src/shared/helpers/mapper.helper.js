@@ -20,6 +20,13 @@ function urlDaMidia(mensagemId, meta) {
   return rota || url;
 }
 
+/** O metadata sem a chave de decifracao -- ela nunca sai do servidor. */
+function semSegredo(meta) {
+  if (!meta || typeof meta !== "object") return meta;
+  const { segredo, ...resto } = meta;
+  return resto;
+}
+
 function mapMensagem(m) {
   const meta = m.metadata || {};
   const tipo = meta.tipo || "texto";
@@ -110,7 +117,11 @@ function mapMensagem(m) {
     // Dados da midia (url, mimetype, nome, legenda, coords, contato) quando a
     // mensagem nao for de texto puro. `url` vai como link curto (ver urlDaMidia),
     // nunca mais como base64 gigante dentro do payload.
-    midia: tipo !== "texto" ? { ...meta, url: urlDaMidia(m.id, meta) } : null,
+    // `segredo` sai FORA: e a chave que decifra a edicao desta mensagem (ver
+    // edicaoCifrada.helper), mora no mesmo `metadata` da midia e iria junto no
+    // espalhamento abaixo -- indo parar no payload do SSE e no console de
+    // qualquer navegador aberto na Central. Nada na tela precisa dela.
+    midia: tipo !== "texto" ? { ...semSegredo(meta), url: urlDaMidia(m.id, meta) } : null,
   };
 }
 
