@@ -19,6 +19,12 @@ const { motivoParaIgnorarJid } = require("../../shared/helpers/jid.helper");
 // WhatsApp ja limita perto disso.
 const MAX_MIDIA_RECEBIDA = 20 * 1024 * 1024;
 
+// Tempo minimo entre duas importacoes da agenda da MESMA instancia. Seis horas
+// e uma escolha de bom senso: agenda nao muda de hora em hora, e o que motiva o
+// teto e uma reconexao a cada dois minutos, nao a dois dias. Ver a justificativa
+// medida em `_processarConexao`.
+const INTERVALO_MINIMO_AGENDA = 6 * 60 * 60 * 1000;
+
 // Os nos que EMBRULHAM a mensagem de verdade, sem mudar o conteudo dela. Ver
 // `_semEnvelope`, que e quem os abre.
 const ENVELOPES = [
@@ -89,6 +95,10 @@ class WhatsAppService {
   constructor() {
     // instancia -> timestamp em que a vimos conectar (para "tempo online").
     this._conectadoDesde = {};
+    // instancia -> quando a agenda foi importada pela ultima vez. Ver o teto em
+    // `_processarConexao`; em memoria de proposito (um restart reimporta uma
+    // vez, que e justamente quando vale reimportar).
+    this._agendaEm = {};
   }
 
   extrairTelefone(remoteJid) {
@@ -897,13 +907,41 @@ class WhatsAppService {
     // Acabou de parear: o WhatsApp envia a agenda logo apos a conexao, entao
     // importamos os contatos reais. Roda em segundo plano e com um atraso para
     // dar tempo da Evolution receber a sincronizacao do aparelho.
-    if (conectado && !eraConectado) {
+    //
+    // ── POR QUE HA UM TETO AQUI, E NAO SO O `!eraConectado` ─────────────────
+    //
+    // `!eraConectado` significa "estava marcada como offline no NOSSO banco", e
+    // isso e verdade a cada oscilacao do socket -- porque o proprio `close`
+    // grava `conectado: false` tres linhas acima. Numa instalacao estavel isso
+    // acontece uma vez; em 11/09/2026 o log de producao mostrou o socket caindo
+    // e voltando a cada ~1min45, e CADA volta reimportando os 732 contatos:
+    //
+    //   18:28:30 Online  ->  18:28:34 Agenda importada  total: 732
+    //   18:30:15 Online  ->  18:30:18 Agenda importada  total: 732
+    //
+    // Nessa cadencia sao ~700 varreduras da agenda inteira por dia, todas contra
+    // a mesma Evolution cujo socket esta instavel -- trabalho inutil no melhor
+    // caso e realimentacao da instabilidade no pior.
+    //
+    // O teto nao substitui o `!eraConectado`, soma-se a ele: reconexao nao e
+    // pareamento novo, e agenda nao muda de hora em hora. O que se perde e um
+    // contato que entrou no celular logo depois de uma importacao aparecer com
+    // atraso -- e ele ja aparece sozinho na primeira conversa (ver a adocao do
+    // `pushName` no motor).
+    const desdeAUltima = Date.now() - (this._agendaEm[instanceName] || 0);
+    if (conectado && !eraConectado && desdeAUltima > INTERVALO_MINIMO_AGENDA) {
+      this._agendaEm[instanceName] = Date.now();
       setTimeout(() => {
         contatoService
           .sincronizarDoWhatsApp(instanceName)
           .then((r) => logger.info("Agenda do WhatsApp importada", r))
           .catch((e) => logger.warn("Falha ao importar agenda", { message: e.message }));
       }, 15000);
+    } else if (conectado && !eraConectado) {
+      logger.debug("Agenda nao reimportada: reconexao recente, nao pareamento novo", {
+        instancia: instanceName,
+        haMinutos: Math.round(desdeAUltima / 60000),
+      });
     }
 
     // AUTO-RECONEXAO: quem religa e o `whatsapp.reconexao`, e so ele. Aqui

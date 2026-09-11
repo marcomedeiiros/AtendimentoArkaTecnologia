@@ -915,6 +915,49 @@ function liberarBackoff(vigia) {
 
   montarDubles(cofre18); // devolve os dubles padrao para quem vier depois
 
+  // ── A AGENDA NAO PODE SER REIMPORTADA A CADA OSCILACAO ────────────────────
+  //
+  // `!eraConectado` significa "estava offline no nosso banco", e isso e verdade
+  // a cada queda -- porque o `close` grava `conectado: false`. Em 11/09/2026 o
+  // socket caia e voltava a cada ~1min45 em producao, e cada volta reimportava
+  // os 732 contatos: ~700 varreduras por dia contra a mesma Evolution instavel.
+  console.log("\nAgenda: reconexao nao e pareamento novo");
+  {
+    const svc = require("./src/modules/whatsapp/whatsapp.service");
+    const contatoService = require("./src/modules/contatos/contato.service");
+    const originalSync = contatoService.sincronizarDoWhatsApp;
+    contatoService.sincronizarDoWhatsApp = async () => ({ total: 0 });
+
+    const evento = (state) => ({ event: "connection.update", instance: "agenda-teste", data: { state } });
+    svc._agendaEm["agenda-teste"] = 0;
+
+    await svc._processarConexao(evento("open"), "agenda-teste");
+    const primeira = svc._agendaEm["agenda-teste"];
+    check(!!primeira, "a primeira conexao importa a agenda");
+
+    for (let i = 0; i < 5; i++) {
+      await svc._processarConexao(evento("close"), "agenda-teste");
+      await svc._processarConexao(evento("open"), "agenda-teste");
+    }
+    check(
+      svc._agendaEm["agenda-teste"] === primeira,
+      "cinco oscilacoes seguidas NAO reimportam a agenda"
+    );
+
+    // Passado o teto, um pareamento novo volta a valer -- o limite e de
+    // frequencia, nao um desligamento do recurso.
+    svc._agendaEm["agenda-teste"] = Date.now() - 7 * 60 * 60 * 1000;
+    await svc._processarConexao(evento("close"), "agenda-teste");
+    await svc._processarConexao(evento("open"), "agenda-teste");
+    check(
+      Date.now() - svc._agendaEm["agenda-teste"] < 5000,
+      "passado o teto de 6h, a agenda volta a ser importada"
+    );
+
+    contatoService.sincronizarDoWhatsApp = originalSync;
+    delete svc._agendaEm["agenda-teste"];
+  }
+
   // ── RESUMO ────────────────────────────────────────────────────────────────
   console.log("\n" + "=".repeat(70));
   if (erros.length) {
