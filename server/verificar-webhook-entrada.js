@@ -702,6 +702,75 @@ console.log("=== Entrada do webhook ===");
     );
 
     for (const [m, fn] of Object.entries(originais)) svc[m] = fn;
+
+    // ── A EDICAO QUE CHEGA CIFRADA ──────────────────────────────────────────
+    //
+    // Medido em producao (11/09/2026): o cliente editou "teste um" e chegou um
+    // `secretEncryptedMessage` com `secretEncType: 2` e o `targetMessageKey`
+    // apontando para a mensagem dele. O conteudo novo vem cifrado; o ALVO vem em
+    // claro. Ate entao isso morria em `dados_incompletos`, e a bolha seguia
+    // mostrando o texto antigo sem nenhum sinal.
+    //
+    // Aqui roda o `_processarMensagem` DE VERDADE (o desvio mora nele), com so
+    // o tratamento final dublado -- entao nada toca o banco.
+    const originalCifrada = svc._processarEdicaoCifrada;
+    let alvosMarcados = [];
+    svc._processarEdicaoCifrada = async (no) => {
+      alvosMarcados.push(no?.targetMessageKey?.id || null);
+      return { recebido: true, processado: true, motivo: "edicao_cifrada" };
+    };
+
+    const cifrado = (tipo) => ({
+      event: "messages.upsert",
+      data: {
+        key: { id: "EV1", remoteJid: JID, fromMe: false },
+        messageType: "secretEncryptedMessage",
+        message: {
+          messageContextInfo: {},
+          secretEncryptedMessage: {
+            secretEncType: tipo,
+            encIv: "x",
+            encPayload: "y",
+            targetMessageKey: { id: "ALVO-EDITADO", fromMe: true, remoteJid: "46038257807430@lid" },
+          },
+        },
+      },
+    });
+
+    alvosMarcados = [];
+    await svc.processarWebhook(cifrado(2), "i");
+    check(
+      "edicao cifrada (secretEncType 2) marca a mensagem alvo",
+      JSON.stringify(alvosMarcados) === '["ALVO-EDITADO"]' ? [] : [`alvos: ${JSON.stringify(alvosMarcados)}`]
+    );
+
+    // SO O TIPO 2. Este envelope carrega mais de um tipo de evento, e tratar
+    // tudo como edicao carimbaria "editada" numa mensagem que ninguem editou.
+    alvosMarcados = [];
+    const r1 = await svc.processarWebhook(cifrado(1), "i");
+    const r5 = await svc.processarWebhook(cifrado(5), "i");
+    check("outros secretEncType NAO viram edicao", [
+      ...(alvosMarcados.length ? [`marcou indevidamente: ${JSON.stringify(alvosMarcados)}`] : []),
+      // Continuam no aviso de payload ilegivel -- e onde aparecem para serem
+      // identificados, que foi exatamente como o tipo 2 apareceu.
+      ...(r1?.motivo === "dados_incompletos" && r5?.motivo === "dados_incompletos"
+        ? []
+        : [`motivos: ${r1?.motivo} / ${r5?.motivo}`]),
+    ]);
+
+    svc._processarEdicaoCifrada = originalCifrada;
+  }
+
+  // A marca precisa CHEGAR na tela: sem ela a bolha diz so "editada", que afirma
+  // que o texto ao lado e a versao nova -- justamente o que nao e.
+  {
+    const mapper = require(path.join(__dirname, "src/shared/helpers/mapper.helper"));
+    const linha = (meta) => mapper.mapMensagem({ id: "m1", origem: "cliente", texto: "x", metadata: meta, editadaEm: new Date() });
+    check("a edicao ilegivel chega a tela separada da edicao normal", [
+      ...(linha({ edicaoIlegivel: true }).edicaoIlegivel === true ? [] : ["nao marcou a ilegivel"]),
+      ...(linha({}).edicaoIlegivel === false ? [] : ["marcou uma edicao normal como ilegivel"]),
+      ...(linha({ edicaoIlegivel: true }).editada === true ? [] : ["perdeu o 'editada' no caminho"]),
+    ]);
   }
 
   console.log(

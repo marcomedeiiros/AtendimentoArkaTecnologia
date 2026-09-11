@@ -85,6 +85,13 @@ function mapMensagem(m) {
           }
         : null,
     editada: !!m.editadaEm,
+    // EDITADA, MAS O TEXTO EXIBIDO E O ANTIGO.
+    //
+    // Parte das edicoes do cliente chega cifrada (`secretEncryptedMessage`), e a
+    // Evolution 2.4.0 nao decifra: sabemos QUAL mensagem mudou, nunca para o
+    // que. Sem este campo a bolha diria so "editada" -- e "editada" sozinho
+    // afirma que o texto ao lado e a versao nova, que e justamente o que nao e.
+    edicaoIlegivel: !!meta.edicaoIlegivel,
     // Marcada por "Apagar para todos": some do WhatsApp do cliente e vira aviso
     // no chat ao vivo, mas segue no Registro (o texto original continua aqui).
     deletada: !!meta.deletada,

@@ -550,6 +550,51 @@ class WhatsAppService {
   }
 
   /**
+   * A edicao que chegou CIFRADA: marca o fato, ja que o conteudo nao da.
+   *
+   * `targetMessageKey.fromMe` NAO e usado, e isso e deliberado. Nas duas
+   * amostras de producao ele veio `true` para mensagens que o nosso banco
+   * registra como `origem: "cliente"` -- e o `remoteJid` do alvo era um `@lid`,
+   * o endereçamento novo do WhatsApp, onde esse campo notoriamente se perde.
+   * Quem decide de quem e a mensagem e o nosso proprio banco, que a gravou
+   * quando ela chegou. Confiar no `fromMe` daqui faria a edicao ser ignorada
+   * justamente nas conversas em que ela acontece.
+   */
+  async _processarEdicaoCifrada(no) {
+    const alvoId = no?.targetMessageKey?.id || no?.targetMessageKey?.ID || null;
+    if (!alvoId) {
+      logger.warn("Edicao cifrada sem alvo -- nao ha o que marcar", { forma: formaDo(no) });
+      return { recebido: true, processado: false, motivo: "edicao_cifrada_sem_alvo" };
+    }
+
+    const alvo = await conversaRepository.findMensagemPorWaId(String(alvoId));
+    // Alvo desconhecido e caso NORMAL, como na reacao e no protocolo: o cliente
+    // pode editar algo anterior a integracao.
+    if (!alvo) {
+      logger.debug("Edicao cifrada sobre mensagem desconhecida", { waMessageId: alvoId });
+      return { recebido: true, processado: false, motivo: "edicao_cifrada_sem_alvo_local" };
+    }
+
+    // A Evolution reentrega: remarcar subiria a versao da conversa a toa.
+    if (alvo.metadata?.edicaoIlegivel) {
+      return { recebido: true, processado: false, motivo: "edicao_cifrada_repetida" };
+    }
+
+    await conversaRepository.marcarEdicaoIlegivel(alvo.id);
+    await this._emitirConversa(alvo.conversaId);
+    logger.info("Edicao do cliente marcada (conteudo cifrado, nao legivel)", {
+      conversaId: alvo.conversaId,
+      waMessageId: String(alvoId),
+    });
+    return {
+      recebido: true,
+      processado: true,
+      motivo: "edicao_cifrada",
+      conversaId: alvo.conversaId,
+    };
+  }
+
+  /**
    * A edicao que chegou com nome de evento, sem `protocolMessage`.
    *
    * O ALVO e o `key.id` da propria mensagem: diferente do `protocolMessage` --
@@ -1166,6 +1211,35 @@ class WhatsAppService {
     // `dados_incompletos` agora grita, e gritar a cada album ensinaria todo
     // mundo a ignorar o aviso -- que e o comeco de um log inutil. O que sobra
     // ali passa a ser so o que ninguem sabe ler.
+    // ── A EDICAO DO CLIENTE CHEGA CIFRADA, E SO O ALVO VEM EM CLARO ──────────
+    //
+    // Medido em producao (11/09/2026): o cliente editou "teste um" e chegou
+    //
+    //   messageType: "secretEncryptedMessage"
+    //   secretEncType: 2
+    //   targetMessageKey: { id: "3EB09064A99A61B8643CC9" }   <- a mensagem dele
+    //
+    // O alvo casou com a linha do nosso banco; `editada_em` estava vazio. Ou
+    // seja: a edicao NAO se perde na Evolution -- ela chega, e se perdia aqui,
+    // porque `extrairTexto` nao tem o que ler num payload cifrado e a mensagem
+    // morria em `dados_incompletos`.
+    //
+    // O texto novo vai em `encPayload`, cifrado com chave derivada do
+    // `messageSecret` da mensagem ORIGINAL, e a Evolution 2.4.0 nao decifra.
+    // Nao da para mostrar o conteudo. Da para mostrar o FATO -- e e o fato que
+    // evita o dano: sem ele o atendente le a versao antiga sem saber que existe
+    // outra. Mesmo principio do `citacao: { desconhecida: true }`.
+    //
+    // SO O TIPO 2, e nao qualquer `secretEncryptedMessage`: este envelope
+    // carrega mais de um tipo de evento (voto de enquete e outros), e tratar
+    // tudo como edicao carimbaria "editada" numa mensagem que ninguem editou.
+    // O que nao for 2 continua caindo no aviso de payload ilegivel -- que e onde
+    // ele aparece para ser identificado, foi assim que este aqui apareceu.
+    const cifrado = this._semEnvelope(data?.message)?.secretEncryptedMessage;
+    if (cifrado && Number(cifrado.secretEncType) === 2) {
+      return this._processarEdicaoCifrada(cifrado);
+    }
+
     if (this._semEnvelope(data?.message)?.albumMessage) {
       logger.debug("Anuncio de album ignorado; as fotos vem em mensagens proprias", {
         waMessageId: key?.id || null,

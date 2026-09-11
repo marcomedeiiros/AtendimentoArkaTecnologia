@@ -3276,7 +3276,16 @@ function PainelChat({
           // que vale para um dado que já esteja sujo no banco.
           const relogio = (
             <>
-              {m.editada && <span className="italic">editada</span>}
+              {/* "editada" sozinho AFIRMA que o texto ao lado é a versão nova.
+                  Quando a edição chegou cifrada isso é falso: sabemos que o
+                  cliente mudou a mensagem, e o que está na tela é a versão
+                  ANTERIOR. Dizer só "editada" ali seria pior que não dizer nada
+                  -- o atendente confiaria num texto velho por causa do selo. */}
+              {m.editada && (
+                m.edicaoIlegivel
+                  ? <span className="italic" title="O cliente editou esta mensagem. O WhatsApp enviou o novo texto criptografado e não foi possível lê-lo -- o texto acima é a versão anterior.">editada (versão anterior)</span>
+                  : <span className="italic">editada</span>
+              )}
               <span>{m.hora}</span>
               {m.de !== 'cliente' && <StatusMensagem status={m.status} escuro />}
             </>

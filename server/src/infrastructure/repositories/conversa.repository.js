@@ -876,6 +876,36 @@ class ConversaRepository {
     return msg;
   }
 
+  /**
+   * O CLIENTE EDITOU, E NAO CONSEGUIMOS LER O TEXTO NOVO.
+   *
+   * Marca o FATO sem tocar no texto. Parece pouco e nao e: sem isto, a bolha
+   * mostra a versao ANTIGA sem nenhum sinal, e quem atende le o texto errado
+   * acreditando estar lendo o certo -- o e-mail que o cliente corrigiu, o numero
+   * de serie, o "nao" que virou "sim". Com a marca, o atendente sabe que aquele
+   * texto envelheceu e pergunta.
+   *
+   * Por que nao da para ler: em parte das conversas o WhatsApp manda a edicao
+   * como `secretEncryptedMessage` -- o alvo vem em claro, o conteudo novo vem
+   * cifrado com uma chave derivada do `messageSecret` da mensagem original, e a
+   * Evolution 2.4.0 nao decifra. Ver docs/auditoria-perda-mensagens-11-09.md.
+   *
+   * `editadaEm` e carimbado junto de proposito: e o mesmo fato que a edicao
+   * legivel registra, e a tela ja sabe desenhar "editada". O que a flag
+   * acrescenta e a honestidade -- "editada, e o que voce esta lendo e a versao
+   * anterior".
+   */
+  async marcarEdicaoIlegivel(id) {
+    const msg = await prisma.mensagem.findUnique({ where: { id }, select: { metadata: true } });
+    const metadata = { ...(msg?.metadata || {}), edicaoIlegivel: true };
+    const atualizada = await prisma.mensagem.update({
+      where: { id },
+      data: { metadata, editadaEm: new Date() },
+    });
+    await this._tocarConversaDaMensagem(id);
+    return atualizada;
+  }
+
   removerMensagem(id) {
     return prisma.mensagem.delete({ where: { id } });
   }
