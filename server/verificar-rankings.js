@@ -342,10 +342,22 @@ async function main() {
      */
     const antesDoBot = await painelService.obter();
 
-    // Uma resolucao HUMANA: hoje, em 1 hora, com motivo escolhido na Central.
+    // Uma resolucao HUMANA: fechada AGORA, com 1 hora de duracao e motivo
+    // escolhido na Central.
+    //
+    // ── ANCORADA EM AGORA, E NAO EM "UMA HORA ATRAS" ──────────────────────
+    //
+    // "fechados hoje" filtra `fechadoEm >= inicio do dia`. Com o fechamento
+    // uma hora atras, este teste reprovava entre 00:00 e 01:00 -- aquela hora
+    // caia em ONTEM -- e a falha aparecia sem nada de errado no codigo, o que
+    // e o pior tipo de teste vermelho: manda procurar defeito onde nao ha.
+    // Aconteceu em 11/09/2026, as 00:11.
+    //
+    // A DURACAO continua 1 hora (e dela que sai o "tempo ate resolver"): o que
+    // mudou e o instante de referencia, que agora e o fechamento.
     await os(cBot.id, ana.nome, {
       status: "fechada", motivo: "Suporte técnico", avaliacao: 5,
-      abertoEm: hAtras(2), atendidoEm: hAtras(2), fechadoEm: hAtras(1),
+      abertoEm: hAtras(1), atendidoEm: hAtras(1), fechadoEm: agora,
     });
     const comHumano = await painelService.obter();
     check(
@@ -1303,6 +1315,134 @@ async function main() {
 
     check(problemas.length === 0, "nenhum marco corta os rankings, e o payload nao o anuncia");
     for (const p of problemas) console.log("        " + p);
+  }
+
+  /**
+   * 10b. RECOMECAR A CONTAGEM DE UMA COMPETENCIA -- e so dela.
+   *
+   * O "Limpar dados" saiu porque cortava de agora em diante, PARA SEMPRE, as
+   * duas telas e a equipe inteira (§10). A acao continua fazendo sentido de vez
+   * em quando -- o pedido veio no mesmo dia da remocao --, e o que este bloco
+   * trava sao as tres coisas que tornam a versao nova defensavel:
+   *
+   *   1. o corte pertence a UMA competencia: a seguinte nasce limpa;
+   *   2. as QUATRO telas que mostram o ciclo corrente concordam (parede, Visao
+   *      Geral e os dois rankings) -- uma delas ignorando o piso seria a TV e a
+   *      mesa discordando sobre quem esta em primeiro;
+   *   3. desfazer devolve tudo, porque nada foi apagado.
+   */
+  titulo("10b. RECOMECAR A CONTAGEM DE UMA COMPETENCIA");
+  {
+    const piso = require("./src/modules/rankings/piso.competencia");
+    const pontosDe = (r) => r.classificacao.reduce((t, x) => t + x.pontos, 0);
+
+    // O cenario ja montou atendimentos NESTE ciclo, com nota -- e por isso a
+    // sede pontua antes do recomeco.
+    const antes = await rankingService.obter("sede", COMP);
+    const antesExterno = await rankingService.obter("externo", COMP);
+    const antesParede = await painelService.obter(null);
+    check(pontosDe(antes) > 0, `a sede pontua antes do recomeco (${pontosDe(antes)} pts)`);
+    check(antes.recomecouEm === null, "e o payload nao anuncia recomeco nenhum");
+
+    // ── RECOMECA A SEDE ────────────────────────────────────────────────────
+    //
+    // O piso e o instante de AGORA, e os atendimentos do cenario sao de dias
+    // atras: depois disto, a sede tem de ficar em zero.
+    await piso.definir("sede", COMP, "teste");
+    const depois = await rankingService.obter("sede", COMP);
+    check(pontosDe(depois) === 0, `a sede recomeca do zero (${pontosDe(depois)} pts)`);
+    check(
+      depois.recomecouEm !== null,
+      `e a tela recebe QUANDO recomecou (${depois.recomecouEm})`
+    );
+    check(
+      depois.classificacao.length === antes.classificacao.length,
+      "a equipe continua listada, com zero -- e nao desaparece da tabela"
+    );
+
+    // O EXTERNO NAO FOI TOCADO: sao trabalhos diferentes, e recomecar os dois e
+    // uma decisao tomada duas vezes.
+    const externoDepois = await rankingService.obter("externo", COMP);
+    check(
+      pontosDe(externoDepois) === pontosDe(antesExterno),
+      `o externo nao e afetado (${pontosDe(antesExterno)} -> ${pontosDe(externoDepois)} pts)`
+    );
+    check(externoDepois.recomecouEm === null, "e o payload dele nao anuncia recomeco");
+
+    // AS QUATRO TELAS CONCORDAM. A parede e a Visao Geral leem o MESMO piso.
+    const parede = await painelService.obter(null);
+    const doTime = await painelService.rankingEquipe();
+    check(
+      parede.ranking.classificacao.every((x) => x.pontos === 0),
+      "a parede recomeca junto -- a TV e a mesa nao podem discordar"
+    );
+    check(
+      parede.periodo.rotulo === "desde o recomeço" && !!parede.periodo.recomecouEm,
+      `e o rotulo da parede diz isso ('${parede.periodo.rotulo}')`
+    );
+    check(
+      doTime.classificacao.every((x) => x.pontos === 0) && !!doTime.periodo.recomecouEm,
+      "e o Ranking do Time tambem"
+    );
+    check(
+      antesParede.csat.total > 0 && parede.csat.total === 0,
+      `o CSAT da parede acompanha (${antesParede.csat.total} -> ${parede.csat.total})`
+    );
+
+    // ── A COMPETENCIA ANTERIOR NAO SE MEXE ─────────────────────────────────
+    const anterior = rankingService.competenciaAnterior(COMP);
+    const noAnterior = await rankingService.obter("sede", anterior);
+    check(
+      noAnterior.recomecouEm === null,
+      `a competencia anterior (${anterior}) nao herda o recomeco`
+    );
+
+    // ── E A SEGUINTE NASCE LIMPA ───────────────────────────────────────────
+    //
+    // E a diferenca que permite este recurso existir depois do outro ter saido:
+    // o corte morre na virada do ciclo, em vez de seguir a equipe.
+    const [aa, mm] = COMP.split("-").map(Number);
+    const seguinte = `${mm === 12 ? aa + 1 : aa}-${String(mm === 12 ? 1 : mm + 1).padStart(2, "0")}`;
+    const noSeguinte = await rankingService.obter("sede", seguinte);
+    check(
+      noSeguinte.recomecouEm === null,
+      `a competencia seguinte (${seguinte}) nasce limpa -- o corte nao a alcanca`
+    );
+
+    // ── DESFAZER DEVOLVE TUDO ──────────────────────────────────────────────
+    await piso.remover("sede", "teste");
+    const desfeito = await rankingService.obter("sede", COMP);
+    check(
+      pontosDe(desfeito) === pontosDe(antes),
+      `desfazer devolve a pontuacao inteira (${pontosDe(antes)} -> ${pontosDe(desfeito)} pts)`
+    );
+    check(desfeito.recomecouEm === null, "e o aviso sai da tela");
+
+    // ── PISO DE OUTRA COMPETENCIA NAO CORTA ESTA ───────────────────────────
+    //
+    // A competencia guardada e parte da chave da resposta, e nao um detalhe:
+    // sem essa conferencia, um piso antigo cortaria o mes de hoje para sempre --
+    // que era, literalmente, o defeito do recurso anterior.
+    const chave = piso.chaveDe("sede");
+    await prisma.configuracao.upsert({
+      where: { chave },
+      update: { valor: JSON.stringify({ competencia: anterior, desde: new Date().toISOString() }) },
+      create: { chave, valor: JSON.stringify({ competencia: anterior, desde: new Date().toISOString() }) },
+    });
+    const comPisoVelho = await rankingService.obter("sede", COMP);
+    check(
+      pontosDe(comPisoVelho) === pontosDe(antes) && comPisoVelho.recomecouEm === null,
+      "piso de outra competencia nao corta a competencia corrente"
+    );
+
+    // Valor ilegivel no banco tambem nao pode esconder o placar.
+    await prisma.configuracao.update({ where: { chave }, data: { valor: "nao-e-json" } });
+    const comLixo = await rankingService.obter("sede", COMP);
+    check(
+      pontosDe(comLixo) === pontosDe(antes),
+      "valor corrompido e ignorado, e a pontuacao continua visivel"
+    );
+    await prisma.configuracao.deleteMany({ where: { chave } });
   }
 
   /**

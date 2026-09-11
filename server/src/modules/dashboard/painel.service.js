@@ -30,6 +30,11 @@ const { ehAtendenteReal } = require("../../shared/helpers/atendimentoSintetico.h
 const { nomesDaEquipe } = require("../../shared/helpers/equipeRanking.helper");
 const sedeRegras = require("./sede.regras");
 const ciclo = require("../rankings/ciclo");
+// O piso de UMA competencia -- ver `rankings/piso.competencia`. As quatro telas
+// que mostram o ciclo corrente (parede, Visao Geral, e os dois rankings) leem o
+// MESMO piso: uma delas ignorando seria a TV e a mesa discordando sobre quem
+// esta em primeiro, que e o defeito que esta classe existe para nao ter.
+const piso = require("../rankings/piso.competencia");
 const logger = require("../../config/logger");
 
 // Quantos tecnicos entram no ranking. Tres cabe na tela e ainda e disputavel:
@@ -212,7 +217,20 @@ const cicloCorrente = async () => {
   const cfg = await ciclo.obter();
   const comp = ciclo.competenciaDe(new Date(), cfg);
   const [ano, mes] = comp.split("-").map(Number);
-  return ciclo.janela(ano, mes, cfg);
+  return { ...ciclo.janela(ano, mes, cfg), competencia: comp };
+};
+
+/**
+ * A janela do ciclo corrente COM o piso da competencia, se houver um.
+ *
+ * O piso vale para uma competencia so (ver `piso.competencia`), e e por isso
+ * que ele entra aqui e nao dentro de `ciclo.janela`: a janela e a regra do
+ * calendario, e esta e uma decisao de operacao sobre um mes especifico.
+ */
+const cicloCorrenteComPiso = async (ranking = "sede") => {
+  const janela = await cicloCorrente();
+  const desde = await piso.obter(ranking, janela.competencia);
+  return { ...janela, inicio: desde && desde > janela.inicio ? desde : janela.inicio, piso: desde };
 };
 
 const media = (lista) => (lista.length ? lista.reduce((a, b) => a + b, 0) / lista.length : 0);
@@ -314,9 +332,12 @@ class PainelService {
     // `fim` entra na consulta porque a competencia de transicao pode terminar
     // no mes seguinte: sem ele, a parede somaria dias de um ciclo que ainda nao
     // fechou junto com os do proximo assim que a virada passasse.
-    const { inicio: inicioCiclo, fim: fimCiclo } = await cicloCorrente();
+    const { inicio: inicioCiclo, fim: fimCiclo, piso: pisoDaSede } = await cicloCorrenteComPiso("sede");
     const desdeMes = inicioCiclo;
-    const desdeHoje = inicioDoDia();
+    // "Fechados hoje" acompanha o piso: um numero sobrevivente no meio de um
+    // placar recomecado parece defeito. Se o piso for de ontem, hoje conta
+    // inteiro -- e o mais RECENTE dos dois que vale.
+    const desdeHoje = pisoDaSede && pisoDaSede > inicioDoDia() ? pisoDaSede : inicioDoDia();
 
     const [regras, daSede, doMes, fechadosDeHoje, fila, equipe, meta, carga] = await Promise.all([
       // Os pesos que o administrador definiu. Lidos UMA vez por chamada: sao os
@@ -392,7 +413,11 @@ class PainelService {
       // zerava o painel -- e o zeramento saiu (ver o topo do arquivo).
       periodo: {
         desde: desdeMes.toISOString(),
-        rotulo: "mês corrente",
+        // O ROTULO DIZ QUANDO A CONTAGEM RECOMECOU, se recomecou. Continuar
+        // dizendo "mês corrente" com os numeros comecando no meio do mes faria
+        // a parede mentir -- e quem olha a TV nao tem como saber.
+        rotulo: pisoDaSede ? "desde o recomeço" : "mês corrente",
+        recomecouEm: pisoDaSede ? pisoDaSede.toISOString() : null,
       },
       // A PAREDE MOSTRA QUEM ESTA ZERADO TAMBEM -- a pedido de quem usa a tela.
       //
@@ -726,7 +751,7 @@ class PainelService {
     // O MESMO ciclo da parede -- ver `cicloCorrente`. Aqui tambem era
     // `inicioDoMes()`, e as duas telas divergiam do Ranking do Time no dia em
     // que o ciclo saiu do dia 1.
-    const { inicio: inicioCiclo, fim: fimCiclo } = await cicloCorrente();
+    const { inicio: inicioCiclo, fim: fimCiclo, piso: pisoDaSede } = await cicloCorrenteComPiso("sede");
     const desdeMes = inicioCiclo;
 
     const doMes = await prisma.atendimento.findMany({
@@ -763,10 +788,12 @@ class PainelService {
 
     return {
       geradoEm: new Date().toISOString(),
-      // O ROTULO E SEMPRE O CICLO -- ver o mesmo campo em `obter`.
+      // O MESMO rotulo de `obter`: as duas telas mostram a mesma classificacao,
+      // e um recomeco que valesse so numa delas seria pior do que nao existir.
       periodo: {
         desde: desdeMes.toISOString(),
-        rotulo: "mês corrente",
+        rotulo: pisoDaSede ? "desde o recomeço" : "mês corrente",
+        recomecouEm: pisoDaSede ? pisoDaSede.toISOString() : null,
       },
       classificacao: comUltimo,
       minimoAvaliacoes,
@@ -810,9 +837,11 @@ class PainelService {
     // A janela vem do ciclo configurado -- ver `rankings/ciclo`. Com o padrao
     // (dia 1, meia-noite) ela e exatamente o mes do calendario de antes.
     const { inicio, fim } = ciclo.janela(ano, mes, await ciclo.obter());
-    // A JANELA E A DO CICLO, e nada mais a recorta. Havia aqui o piso da
-    // limpeza do painel, e ele saiu com o recurso (ver o topo do arquivo).
-    const desde = inicio;
+    // O PISO DESTA COMPETENCIA, se houver. Pedido de outra competencia recebe
+    // `null` e a janela fica como o ciclo manda -- e o que impede o corte de
+    // vazar para os meses seguintes, diferente do "Limpar dados" que saiu.
+    const recomecouEm = await piso.obter("sede", `${ano}-${String(mes).padStart(2, "0")}`);
+    const desde = recomecouEm && recomecouEm > inicio ? recomecouEm : inicio;
 
     const doMes = await prisma.atendimento.findMany({
       where: { abertoEm: { gte: desde, lt: fim } },
@@ -831,6 +860,8 @@ class PainelService {
     // equipe de tres pessoas.
     return {
       periodo: { inicio: inicio.toISOString(), fim: fim.toISOString() },
+      // Para a tela poder escrever "esta competencia conta a partir de ...".
+      recomecouEm: recomecouEm ? recomecouEm.toISOString() : null,
       ...this._ranking(doMes, { limite: Number.MAX_SAFE_INTEGER, incluirZerados: true, regras: await this.regras() }),
     };
   }

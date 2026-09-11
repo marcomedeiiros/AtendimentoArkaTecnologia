@@ -1005,6 +1005,34 @@ export default function Rankings() {
         </div>
       )}
 
+      {/* POR QUE A TABELA PODE PARECER VAZIA.
+          Uma competência que recomeçou a contar é indistinguível de uma equipe
+          que não atendeu -- e foi exatamente essa confusão que fez alguém achar
+          que havia perdido a pontuação (docs/auditoria-ranking-zerado-10-09.md,
+          §11). O aviso diz desde quando está contando, lembra que nada foi
+          apagado e diz que a próxima competência nasce limpa -- porque a
+          pergunta seguinte é sempre "isso vale para sempre?".
+
+          Quem gravou isso foi um script no servidor, não um botão: ver
+          `server/recomecar-contagem.js`. Por isso a tela só informa. */}
+      {dados?.recomecouEm && (
+        <div className="flex items-start gap-2 p-3 rounded-xl bg-espera/10 border border-espera/30 text-espera-400 text-xs">
+          <AlertCircle size={14} className="shrink-0 mt-0.5" />
+          <span>
+            Esta competência está contando a partir de{' '}
+            <strong>
+              {new Date(dados.recomecouEm).toLocaleString('pt-BR', {
+                timeZone: FUSO_BR,
+                dateStyle: 'short',
+                timeStyle: 'short',
+              })}
+            </strong>
+            {' '}o que veio antes não foi apagado, só deixou de ser somado nesta
+            competência. A próxima começa limpa.
+          </span>
+        </div>
+      )}
+
       <div className="glass-panel border border-linha rounded-2xl p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
           <h3 className="text-sm font-bold text-texto">

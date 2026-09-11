@@ -45,6 +45,7 @@ const { pontuarExterno, reguaEmVigor } = require("./pontuacao.externa");
 const regrasRelatorio = require("./relatorio.regras");
 const ciclo = require("./ciclo");
 const premiados = require("./premiados");
+const piso = require("./piso.competencia");
 const AppError = require("../../shared/errors/AppError");
 const logger = require("../../config/logger");
 
@@ -276,10 +277,12 @@ class RankingService {
     // o mes tem de ser o mesmo mes -- dois calendarios diferentes na mesma
     // tela seria o pior dos dois mundos.
     const { inicio, fim } = ciclo.janela(ano, mes, await ciclo.obter());
-    // A JANELA E A DO CICLO, e nada mais a recorta. Havia aqui o piso da
-    // limpeza ("Limpar dados de atendimento fora da sede"), e o recurso saiu em
-    // 11/09/2026 -- ver o topo de `painel.service`.
-    const desde = inicio;
+    // O PISO DESTA COMPETENCIA, se houver -- ver `piso.competencia`. Vale para
+    // uma competencia so: pedido de outro mes recebe `null` e a janela fica como
+    // o ciclo manda. E o que diferencia isto do "Limpar dados" que saiu em
+    // 11/09/2026, e que cortava deste mes em diante para sempre.
+    const recomecouEm = await piso.obter("externo", `${ano}-${String(mes).padStart(2, "0")}`);
+    const desde = recomecouEm && recomecouEm > inicio ? recomecouEm : inicio;
 
     // Recortado pela DATA DA VISITA, e nao pela entrega: o mes em que o
     // trabalho foi feito e o mes que ele conta. Ancorar na entrega deixaria uma
@@ -482,9 +485,16 @@ class RankingService {
       // desenhava três lugares fixos, o que numa equipe de três premiava até o
       // último colocado.
       premiados: premiados.quantos(classificacao.length, (await premiados.obter())[equipeChave]),
-      // `zeradoEm` e `zeradoNoMes` sairam daqui com o "Limpar dados" (11/09):
-      // nao ha mais nada que corte a contagem de um ciclo, entao nao ha o que a
-      // tela precise avisar.
+      // ── QUANDO ESTA COMPETENCIA RECOMECOU A CONTAR ────────────────────────
+      //
+      // `null` no caso normal. Com valor, a tela ESCREVE a data em cima da
+      // tabela -- e essa linha nao e enfeite: placar recomecado sem aviso e
+      // indistinguivel de dado perdido, e foi assim que o "Limpar dados" antigo
+      // (removido em 11/09) acabou virando "perdi a pontuacao".
+      //
+      // Sai da MESMA funcao que recorta a janela, e nao de uma segunda leitura:
+      // a tela nao pode dizer uma coisa e a conta fazer outra.
+      recomecouEm: (await piso.obter(equipeChave, comp))?.toISOString() || null,
       supervisores: equipes.supervisores.map((u) => ({ id: u.id, nome: u.nome })),
       classificacao,
       premiacoes,

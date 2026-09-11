@@ -528,3 +528,67 @@ o que se guarda agora é que ele **não voltou**:
 A versão honesta não é esta. Seria **por competência** -- desconsiderar um mês
 específico --, visível na tela e reversível, e não um corte global que vale para
 sempre e para todo mundo. Fica como gatilho, não como algo a construir agora.
+
+---
+
+## 12. E voltou, menor: recomeçar UMA competência (11/09/2026)
+
+Uma hora depois da remoção do §11, o pedido foi *"pode zerar a pontuação"* --
+e a resposta a "igual estava zerada mesmo" foi: o estado de volta, não o botão
+de volta.
+
+Vale registrar a contradição aparente, porque ela não é uma: **o que saiu e o
+que entrou não são a mesma coisa.**
+
+| | o "Limpar dados" (removido no §11) | o recomeço por competência |
+| --- | --- | --- |
+| escopo | deste mês **em diante, para sempre** | **uma** competência; a seguinte nasce limpa |
+| como dispara | botão na tela de gestão | script no servidor, com autoria no log |
+| desfazer | um segundo botão, que aparecia no lugar do primeiro | `--desfazer`, e o aviso na tela diz que dá |
+| a tela avisa? | sim, e ainda assim foi lido como perda de dados | sim -- e diz também que **a próxima começa limpa** |
+
+As três diferenças são o motivo de o segundo poder existir depois de o primeiro
+ter saído. A que mais importa é a primeira: **o corte morre na virada do ciclo,
+em vez de seguir a equipe.** Era disso que vinha o custo do antigo -- um clique
+em setembro ainda cortava dezembro.
+
+### 12.1 O que foi construído
+
+* `rankings/piso.competencia` -- guarda `{ competencia, desde }` por ranking. A
+  competência faz parte da chave da resposta: pedido de outro mês recebe
+  `null`. **Valor de outra competência, ou ilegível, não corta nada** -- e há
+  teste para os dois casos, porque um piso vazado seria o defeito antigo de
+  volta, agora sem nem um clique para explicá-lo;
+* `recomecar-contagem.js` -- sem argumento **mostra o estado e não muda nada**;
+  `--ranking=sede` recomeça; `--desfazer` volta. Não existe "ambos" de
+  propósito: os dois rankings medem trabalhos diferentes, e recomeçar os dois é
+  uma decisão tomada duas vezes;
+* **as quatro telas leem o mesmo piso** -- parede, Visão Geral e os dois
+  rankings. Uma delas ignorando seria a TV e a mesa discordando sobre quem está
+  em primeiro, que é o defeito que `_ranking` existe para não ter. O rótulo do
+  período passa a dizer "desde o recomeço";
+* e o aviso na tela do ranking: *"esta competência está contando a partir de …
+  o que veio antes não foi apagado, só deixou de ser somado nesta competência.
+  A próxima começa limpa."* É a linha que faltava no recurso antigo -- ele
+  avisava desde quando, mas não que valia para sempre.
+
+### 12.2 A verificação
+
+Seção **10b** de `verificar-rankings`, 17 checagens. As que carregam a decisão:
+a sede recomeça do zero e **a equipe continua listada** (com zero, em vez de
+desaparecer); o externo não é afetado; a parede e o Ranking do Time recomeçam
+**junto**; a competência anterior não herda e **a seguinte nasce limpa**;
+desfazer devolve os 270 pontos do cenário; e piso de outra competência (ou
+corrompido) não corta a competência corrente.
+
+### 12.3 Um vermelho que não era meu, e vale anotar
+
+A suíte reprovou em `verificar-rankings` §1c -- *"um fechamento humano SOMA em
+fechados hoje (0 -> 0)"* -- e a causa era o **relógio**: a fixture fechava uma OS
+"uma hora atrás", e eram 00:11. Aquela hora caía em ontem, e "fechados hoje"
+filtra `fechadoEm >= início do dia`.
+
+Teste que reprova entre 00:00 e 01:00 é pior que teste ausente: manda procurar
+defeito onde não há, e no meio de uma mudança o suspeito natural é a mudança. A
+fixture passou a ancorar no **fechamento** (agora), mantendo a duração de uma
+hora -- que é o que o teste mede.
