@@ -1165,6 +1165,31 @@ class WhatsAppService {
     }
 
     if (!telefone || (!texto && !midia && !botaoId)) {
+      // ── O DESCARTE MAIS CARO DO SISTEMA ERA O UNICO SEM LOG ────────────────
+      //
+      // Esta linha decide sozinha se uma mensagem do cliente existe ou nao, e
+      // ate 11/09 ela decidia em silencio absoluto. O efeito foi medido: a perda
+      // real e de 0,9% (nove mensagens em mil), mas o relato de quem usa era "o
+      // sistema nao registra a conversa do cliente" -- e as duas coisas sao
+      // compativeis justamente por causa do silencio. Sem rastro, cada mensagem
+      // que alguem procura e nao acha e indistinguivel de uma falha geral.
+      //
+      // Foi preciso uma auditoria inteira, comparando o banco da Evolution com o
+      // nosso, para descobrir o que caia aqui: `secretEncryptedMessage` e
+      // `albumMessage`. Com esta linha, a proxima descoberta custa um `grep`.
+      // Ver docs/auditoria-perda-mensagens-11-09.md §4 e §10.
+      //
+      // SO OS NOMES DOS NOS, nunca o conteudo: `conversation` e `quotedMessage`
+      // carregam conversa de cliente, e log nao e lugar para isso. O nome do no
+      // e o que diz qual ramo falta em `extrairTexto`/`extrairMidia` -- que e a
+      // unica pergunta que este log precisa responder.
+      logger.warn("Mensagem recebida e DESCARTADA: nao sabemos ler este payload", {
+        instance: instanceName,
+        waMessageId: key?.id || null,
+        temTelefone: !!telefone,
+        messageType: data?.messageType || null,
+        nos: Object.keys(data?.message || {}),
+      });
       return { recebido: true, processado: false, motivo: "dados_incompletos" };
     }
 
