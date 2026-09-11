@@ -78,7 +78,11 @@ console.log("=== Aviso de mensagem nova ===");
     // A funcao estar certa nao basta: o disparo precisa USA-LA. Sem esta linha,
     // tirar o corte do AppContext passava despercebido -- a checagem mediria a
     // ferramenta, e nao o lugar onde ela e usada.
-    if (!app.includes("if (!estaOlhando()) {")) {
+    // O `&& paraMeuOuvido.length > 0` entrou junto com o recorte por dono
+    // (11/09/2026): o cartao do sistema segue a mesma regra do som. A parte que
+    // esta checagem protege continua sendo o `!estaOlhando()` -- cartao por cima
+    // do painel em foco e ruido, porque a conversa ja entrou na lista.
+    if (!app.includes("if (!estaOlhando() && paraMeuOuvido.length > 0) {")) {
       problemas.push("o disparo nao usa `!estaOlhando()`: o cartao aparece por cima do painel em foco");
     }
     check("so avisa quem NAO esta olhando", problemas);
@@ -117,8 +121,39 @@ console.log("=== Aviso de mensagem nova ===");
   if (!/if \(novas\.length > 0\)/.test(app)) {
     problemas.push("o bloco que dispara o aviso mudou de gatilho");
   }
-  if (!/\}\s*else\s*\{\s*\n\s*tocarSomMensagem\(\);/.test(app)) {
-    problemas.push("fora do Modo TV o som deixou de ser incondicional");
+  // ── O SOM DA CENTRAL PASSOU A TER DONO (11/09/2026) ─────────────────────
+  //
+  // Esta checagem exigia que, fora do Modo TV, o som fosse INCONDICIONAL. Ela
+  // estava certa enquanto a pergunta era "alguem pode me deixar mudo sem eu
+  // saber?" -- e continua sendo essa a pergunta para PREFERENCIA. O que mudou e
+  // que o som passou a ter DONO, a pedido:
+  //
+  //   "o som aparece para todos os perfis; eu queria que so tocasse para quem
+  //    atendeu. Ficar na plataforma ouvindo notificacao o tempo todo sendo que
+  //    nao fui eu que atendi o chamado nao faz sentido."
+  //
+  // E som que nao e meu e som que eu aprendo a ignorar -- inclusive quando for
+  // meu. Entao a garantia trocou de forma, e nao de natureza: nada de gosto
+  // pessoal no caminho, mas o CONTEXTO decide (de quem e a conversa), como ja
+  // decidia no Modo TV.
+  //
+  // O que se trava agora:
+  if (!app.includes("const paraMeuOuvido = novas.filter(")) {
+    problemas.push("o recorte do som por dono desapareceu");
+  }
+  // A FILA CONTINUA TOCANDO PARA TODOS. E a metade que um "so quem atendeu"
+  // literal quebraria: conversa sem dono e chamado novo esperando, e silenciar
+  // trocaria um incomodo por um cliente sem resposta.
+  if (!app.includes("!n.atendenteId || n.atendenteId === usuario?.id")) {
+    problemas.push("o som deixou de tocar para a FILA (conversa sem dono) ou de olhar o dono");
+  }
+  if (!app.includes("} else if (paraMeuOuvido.length > 0) {")) {
+    problemas.push("o som da Central nao esta mais condicionado APENAS ao dono/fila");
+  }
+  // E O AVISO DO SISTEMA segue a mesma regra: cartao sobre conversa que nao e
+  // minha e o mesmo incomodo em outro formato, e fica na tela ate alguem fechar.
+  if (!app.includes("!estaOlhando() && paraMeuOuvido.length > 0")) {
+    problemas.push("o aviso do sistema deixou de seguir a mesma regra do som");
   }
   // ── UMA TELA, UM SOM: a regra e SO o Modo TV ────────────────────────────
   //
@@ -133,10 +168,34 @@ console.log("=== Aviso de mensagem nova ===");
   //
   // Por isso a checagem trava a condicao EXATA, sem `&&`: qualquer condicao a
   // mais ali e o caminho de volta para os dois defeitos acima.
-  if (!/if \(modoTvRef\.current\) \{\s*\n\s*tocarSomMonitoramento\(\);\s*\n\s*\} else \{\s*\n\s*tocarSomMensagem\(\);/.test(app)) {
+  // O MODO TV TOCA SEMPRE, e essa parte nao mudou: e tela de parede, nao tem
+  // dono, e blipar por dono ali deixaria a TV muda -- o defeito que as duas
+  // tentativas contadas acima produziram. A condicao dele continua sendo UMA
+  // (`modoTvRef.current`), sem `&&`: qualquer condicao a mais ali e o caminho
+  // de volta.
+  if (!/if \(modoTvRef\.current\) \{\s*\n\s*tocarSomMonitoramento\(\);/.test(app)) {
     problemas.push(
-      "a escolha do som deixou de ser SO a tela -- Modo TV toca Monitoramento, Central toca blip, sem condicao extra"
+      "a TV deixou de tocar o Monitoramento sem condicao -- uma tela, um som"
     );
+  }
+  if (/if \(modoTvRef\.current && /.test(app)) {
+    problemas.push("voltou uma condicao extra no som do Modo TV (ela nunca foi pedida)");
+  }
+  if (!app.includes("tocarSomMensagem();")) {
+    problemas.push("o som da Central desapareceu");
+  }
+  // ── VER NAO E OUVIR, e esta e a invariante nova ─────────────────────────
+  //
+  // O recorte e do SOM. A lista de notificacoes, o pulso do sino e os
+  // contadores continuam recebendo `novas` -- tudo que chega no setor --,
+  // porque acompanhar o que a equipe esta recebendo e util e nao incomoda
+  // ninguem. Recortar a lista junto seria tirar visibilidade para resolver
+  // barulho, e ai a tela passaria a esconder trabalho da equipe.
+  if (!app.includes("setNotificacoes(prev => [...novas,")) {
+    problemas.push("a LISTA de avisos passou a ser recortada -- o recorte e so do som");
+  }
+  if (app.includes("registrarNoHistorico(paraMeuOuvido)")) {
+    problemas.push("o historico de avisos passou a ser recortado -- ele mostra o setor inteiro");
   }
   if (/houveChamadoNovo/.test(app.replace(/\/\/[^\n]*/g, ""))) {
     problemas.push("voltou a distincao 'chamado novo' na decisao do som (ela nunca foi pedida)");
@@ -175,7 +234,9 @@ console.log("=== Aviso de mensagem nova ===");
 // ── Uma notificação, e não uma pilha ────────────────────────────────────────
 {
   const problemas = [];
-  if (!/const primeira = novas\[0\];/.test(app)) {
+  // `paraMeuOuvido[0]` e nao `novas[0]` desde o recorte por dono: o cartao
+  // fala das conversas que fazem som para esta pessoa.
+  if (!/const primeira = paraMeuOuvido\[0\];/.test(app)) {
     problemas.push("nao achei o agrupamento -- varias conversas virariam varios cartoes empilhados");
   }
   if (/novas\.forEach\([^)]*notificar/.test(app)) {

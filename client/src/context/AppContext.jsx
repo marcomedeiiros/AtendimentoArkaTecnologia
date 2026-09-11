@@ -616,7 +616,10 @@ export function AppProvider({ children }) {
           fotoUrl: c.fotoUrl || null,
           texto: ultima?.texto || 'Nova mensagem',
           em: Date.now(),
-          lida: false
+          lida: false,
+          // DE QUEM E A CONVERSA -- e o que decide se ISTO faz som (ver abaixo).
+          // `null` = sem dono, ou seja, a fila.
+          atendenteId: c.atendenteId || null
         });
       });
       if (novas.length > 0) {
@@ -647,9 +650,35 @@ export function AppProvider({ children }) {
         // UM TOQUE POR RAJADA, não por mensagem: `novas` pode trazer várias
         // conversas na mesma passada, e cinco sons sobrepostos não informam mais
         // do que um. Era assim antes e continua.
+        // ── E DE QUEM E O SOM: DE QUEM ATENDEU, E DA FILA ───────────────────
+        //
+        // O RELATO: na Central o som tocava para TODO MUNDO, em qualquer
+        // conversa visivel. Quem nao atendeu aquele chamado passava o dia
+        // ouvindo barulho pelo trabalho de outra pessoa -- e som que nao e meu e
+        // som que eu aprendo a ignorar, inclusive quando for meu.
+        //
+        // Tres casos, e nenhum pode ser esquecido:
+        //
+        //   conversa COM dono    toca so para o dono;
+        //   conversa SEM dono    toca para todos que a enxergam -- e a FILA
+        //                        chamando, e silenciar aqui deixaria chamado
+        //                        novo entrar sem ninguem perceber. Trocaria um
+        //                        incomodo por um cliente esperando;
+        //   Modo TV              toca SEMPRE. E tela de parede, nao tem dono, e
+        //                        ja foi defeito duas vezes (ver as duas
+        //                        tentativas contadas acima).
+        //
+        // O RECORTE E DO SOM, e nao do aviso: a lista, o sino e os contadores
+        // continuam mostrando tudo que chega no setor. Ver o que acontece com a
+        // equipe e util; OUVIR e que e intrusivo, e e so isso que muda aqui.
+        const paraMeuOuvido = novas.filter(
+          (n) => !n.atendenteId || n.atendenteId === usuario?.id
+        );
+
+        // UM TOQUE POR RAJADA, não por mensagem (era assim antes e continua).
         if (modoTvRef.current) {
           tocarSomMonitoramento();
-        } else {
+        } else if (paraMeuOuvido.length > 0) {
           tocarSomMensagem();
         }
 
@@ -665,15 +694,19 @@ export function AppProvider({ children }) {
         //
         // Só quando a pessoa NÃO está olhando: um cartão do sistema por cima do
         // painel em foco é ruído, porque a conversa já entrou na lista dela.
-        if (!estaOlhando()) {
+        //
+        // E SEGUE A MESMA REGRA DO SOM (`paraMeuOuvido`): um cartão do sistema
+        // sobre conversa que não é minha é o mesmo incômodo em outro formato --
+        // e pior, porque fica na tela até alguém fechar.
+        if (!estaOlhando() && paraMeuOuvido.length > 0) {
           // UMA notificação, mesmo com várias conversas. Cinco cartões
           // empilhados para quem voltou do café é pior que um: ninguém lê
           // cinco, e a pilha esconde o resto da área de trabalho.
-          const primeira = novas[0];
-          const outras = novas.length - 1;
+          const primeira = paraMeuOuvido[0];
+          const outras = paraMeuOuvido.length - 1;
           notificar({
             titulo: outras > 0
-              ? `${novas.length} conversas com mensagem nova`
+              ? `${paraMeuOuvido.length} conversas com mensagem nova`
               : (primeira.cliente || 'Nova mensagem'),
             corpo: outras > 0
               ? `${primeira.cliente || 'Cliente'} e mais ${outras}`
