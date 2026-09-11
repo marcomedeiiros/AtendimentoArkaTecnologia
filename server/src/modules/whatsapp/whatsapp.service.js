@@ -582,7 +582,11 @@ class WhatsAppService {
     // chegou. Mensagem anterior a essa guarda nao tem como ser decifrada -- e
     // e por isso que o rotulo continua existindo, como plano B e nao como
     // resposta padrao.
+    // Preenchido pelo decifrador quando ele NAO consegue: diz em qual etapa
+    // parou, que e o que separa consertos opostos. Ver o log de falha abaixo.
+    const diag = {};
     const texto = decifrarEdicao({
+      diag,
       segredo: alvo.metadata?.segredo || null,
       encIv: no.encIv,
       encPayload: no.encPayload,
@@ -625,11 +629,11 @@ class WhatsAppService {
       // A causa quase sempre e esta, e ela se resolve sozinha com o tempo: a
       // mensagem original chegou antes de guardarmos a chave.
       temSegredo: !!alvo.metadata?.segredo,
-      // A FORMA do segredo, e nao ele: base64, {type:"Buffer"}, array... Cada
-      // uma exige uma leitura diferente, e a errada produz exatamente o mesmo
-      // sintoma de "nao temos a chave" (ver `paraBuffer`).
-      formatoDoSegredo: formaDo(alvo.metadata?.segredo),
-      formatoDaCarga: formaDo({ encIv: no.encIv, encPayload: no.encPayload }),
+      // EM QUAL ETAPA PAROU -- e o campo que decide o proximo passo:
+      //   bytesDaChave 0      -> a forma no JSON nao foi reconhecida
+      //   bytesDaChave 32 e   -> os bytes estao certos e o problema e o JID
+      //   "nenhum JID derivou"   (ou o tipo de uso na derivacao)
+      ...diag,
       // ── COM A CHAVE NA MAO, O QUE SOBRA E O JID ────────────────────────────
       //
       // A derivacao usa o JID de quem mandou, e "qual JID" e a unica parte do

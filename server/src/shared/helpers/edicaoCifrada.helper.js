@@ -192,19 +192,47 @@ function candidatos(jids) {
  * @param {string}   p.alvoId     id da mensagem original no WhatsApp
  * @param {string[]} p.jids       JIDs candidatos a remetente/editor
  */
-function decifrarEdicao({ segredo, encIv, encPayload, alvoId, jids = [] }) {
-  if (!segredo || !encIv || !encPayload || !alvoId) return null;
+function decifrarEdicao({ segredo, encIv, encPayload, alvoId, jids = [], diag = null }) {
+  if (!segredo || !encIv || !encPayload || !alvoId) {
+    if (diag) diag.faltou = "campo obrigatorio ausente";
+    return null;
+  }
 
   const chave = paraBuffer(segredo);
   const iv = paraBuffer(encIv);
   const carga = paraBuffer(encPayload);
-  if (!chave || !iv || !carga) return null;
+
+  // ── O DIAGNOSTICO QUE FALTAVA NA PRIMEIRA VEZ ──────────────────────────────
+  //
+  // Duas falhas diferentes produziam a MESMA mensagem: "nao foi possivel
+  // decifrar". Ou os bytes nao foram lidos (forma inesperada no JSON), ou foram
+  // lidos e nenhum JID derivou a chave certa. Os consertos sao opostos, e sem
+  // esta contagem cada tentativa custava um deploy para descobrir qual era.
+  //
+  // Sao TAMANHOS, nunca conteudo: 32/12/N e o que separa "converteu" de "nao
+  // converteu" sem colocar uma chave de decifracao no log.
+  if (diag) {
+    diag.bytesDaChave = chave ? chave.length : 0;
+    diag.bytesDoIv = iv ? iv.length : 0;
+    diag.bytesDaCarga = carga ? carga.length : 0;
+  }
+
+  if (!chave || !iv || !carga) {
+    if (diag) diag.faltou = "nao consegui ler os bytes (forma inesperada)";
+    return null;
+  }
   // GCM: os 16 últimos bytes são a tag de autenticação.
   if (carga.length <= 16 || !chave.length || !iv.length) return null;
 
   const cifrado = carga.slice(0, carga.length - 16);
   const tag = carga.slice(carga.length - 16);
   const lista = candidatos(jids);
+  if (diag) {
+    diag.jidsTentados = lista.length;
+    // Os JIDs em si ja saem no log de quem chama; aqui basta saber que a lista
+    // nao chegou vazia -- lista vazia e "nunca tentei", nao "tentei e falhei".
+    diag.faltou = "nenhum JID derivou a chave";
+  }
 
   for (const remetente of lista) {
     for (const editor of lista) {
@@ -224,7 +252,11 @@ function decifrarEdicao({ segredo, encIv, encPayload, alvoId, jids = [] }) {
         const bytes = Buffer.concat([decifrador.update(cifrado), decifrador.final()]);
 
         const texto = textoDaEdicao(bytes);
-        if (texto != null) return texto;
+        if (texto != null) {
+          if (diag) diag.faltou = null;
+          return texto;
+        }
+        if (diag) diag.faltou = "decifrou, mas o texto nao estava onde se espera";
 
         // Decifrou e não soubemos ler: o formato mudou. Vale registrar, porque
         // e a diferenca entre "nao temos a chave" e "temos e nao entendemos".
