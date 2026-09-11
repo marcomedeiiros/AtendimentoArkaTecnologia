@@ -3878,8 +3878,68 @@ class ChatbotEngine {
 
     // A Evolution API reentrega webhooks; sem isso a mesma mensagem rodava o
     // fluxo duas vezes e o cliente recebia tudo duplicado.
-    if (waMessageId && (await this.deps.conversaRepository.existeMensagemWa(waMessageId))) {
-      return { processado: false, motivo: "mensagem_duplicada" };
+    //
+    // ── MESMO ID COM TEXTO DIFERENTE NAO E REENTREGA: E EDICAO ──────────────
+    //
+    // O `waMessageId` e unico POR MENSAGEM no WhatsApp. Entao "ja existe uma
+    // linha com este id, e o texto que chegou agora e outro" so tem uma leitura
+    // possivel: o cliente editou a mensagem no aparelho.
+    //
+    // Isso importa porque a edicao nem sempre chega embrulhada num
+    // `protocolMessage` (que e o caminho que `extrairProtocolo` cobre). Em parte
+    // das versoes a Evolution entrega a edicao ACHATADA -- uma mensagem comum,
+    // com o id da original e o texto novo. Ela caia exatamente aqui, e este
+    // `return` a descartava.
+    //
+    // E o descarte era o pior tipo possivel: silencioso E convincente. A bolha
+    // continuava mostrando o texto ANTERIOR, sem etiqueta nenhuma, e quem
+    // atendia lia a versao errada acreditando estar lendo a certa -- o e-mail
+    // que o cliente corrigiu, o numero de serie, o "nao" que virou "sim".
+    // Ver a bancada de payloads em docs/auditoria-perda-mensagens-11-09.md §4.
+    //
+    // ── POR QUE SO TEXTO PURO ───────────────────────────────────────────────
+    //
+    // `ehMidia` e `botaoId` ficam de fora de proposito, e nao por preguica: o
+    // texto da bolha desses dois e REESCRITO depois de gravado (o rotulo da
+    // opcao substitui o id tecnico, o rotulo do tipo substitui a midia sem
+    // legenda). Comparar o texto cru de agora com o texto ja reescrito no banco
+    // acusaria "edicao" numa reentrega qualquer -- e ai o conserto passaria a
+    // corromper a bolha em vez de corrigi-la. Com texto puro nao ha reescrita,
+    // e a comparacao diz a verdade.
+    //
+    // `origem === "cliente"` e a segunda trava: o que sai daqui tem o seu
+    // proprio caminho de edicao, pela Central.
+    if (waMessageId) {
+      const repo = this.deps.conversaRepository;
+      // `findMensagemPorWaId` traz o texto (que e o que decide); `existeMensagemWa`
+      // so diz que existe. O fallback mantem os stubs do simulador funcionando.
+      const jaGravada = repo.findMensagemPorWaId
+        ? await repo.findMensagemPorWaId(waMessageId)
+        : await repo.existeMensagemWa(waMessageId);
+
+      if (jaGravada) {
+        const ehEdicao =
+          !ehMidia &&
+          !botaoId &&
+          !!textoLimpo &&
+          jaGravada.origem === "cliente" &&
+          String(jaGravada.texto || "") !== textoLimpo;
+
+        if (ehEdicao) {
+          await repo.editarMensagem(jaGravada.id, textoLimpo);
+          await this._emitirConversa(jaGravada.conversaId);
+          logger.info("Edicao do cliente aplicada pela via achatada", {
+            conversaId: jaGravada.conversaId,
+            waMessageId,
+          });
+          return {
+            processado: true,
+            motivo: "edicao_aplicada",
+            conversaId: jaGravada.conversaId,
+          };
+        }
+        return { processado: false, motivo: "mensagem_duplicada" };
+      }
     }
 
     // Texto exibido na bolha/preview + metadata da midia (quando houver).

@@ -377,6 +377,11 @@ async function main() {
         return m;
       },
       findMensagemPorWaId: async (waId) => conv.mensagens.find((m) => m.waMessageId === waId) || null,
+      editarMensagem: async (id, texto) => {
+        const m = conv.mensagens.find((x) => x.id === id);
+        if (m) { m.texto = texto; m.editadaEm = new Date(); }
+        return m;
+      },
       // ── ARMADILHA DELIBERADA ────────────────────────────────────────────
       //
       // A consulta foi removida do repositorio junto com a citacao derivada. O
@@ -513,6 +518,46 @@ async function main() {
       !citouDeVerdade?.metadata?.citacao?.derivada,
     JSON.stringify(citouDeVerdade?.metadata?.citacao)
   );
+
+  console.log("\n9. Edicao ACHATADA: mesmo waMessageId com texto novo e edicao, nao reentrega");
+
+  // ── O QUE ESTAS CHECAGENS TRAVAM ──────────────────────────────────────────
+  //
+  // Parte das versoes da Evolution entrega a edicao do cliente SEM
+  // `protocolMessage`: uma mensagem comum, com o id da original e o texto novo.
+  // Ela batia no dedupe e saia como `mensagem_duplicada` -- em silencio, com a
+  // bolha continuando a mostrar o texto ANTERIOR. Ver
+  // docs/auditoria-perda-mensagens-11-09.md §4, caso F.
+  //
+  // A terceira checagem e a mais importante das tres: ela garante que o
+  // conserto nao vire corrupcao. O texto de midia e de botao e REESCRITO depois
+  // de gravado (rotulo no lugar do id), entao comparar texto cru com texto
+  // reescrito acusaria "edicao" em qualquer reentrega -- e ai a bolha passaria a
+  // ser sobrescrita com o id tecnico. Por isso so texto puro edita.
+  const r1 = await motor.processarMensagemEntrada({
+    instanciaId: "i1", instanceName: "v", telefone: conv.telefone,
+    texto: "isso mesmo, corrigido", nomeCliente: "F", waMessageId: "W4",
+    botaoId: null, midia: null, encaminhada: null, citacao: null,
+  });
+  const editada = conv.mensagens.find((m) => m.waMessageId === "W4");
+  conferir("texto diferente no mesmo id -> a mensagem e EDITADA", r1?.motivo === "edicao_aplicada", r1?.motivo);
+  conferir("e a bolha passa a mostrar o texto novo", editada?.texto === "isso mesmo, corrigido", editada?.texto);
+  conferir("com o carimbo de editada", !!editada?.editadaEm);
+
+  const r2 = await motor.processarMensagemEntrada({
+    instanciaId: "i1", instanceName: "v", telefone: conv.telefone,
+    texto: "isso mesmo, corrigido", nomeCliente: "F", waMessageId: "W4",
+    botaoId: null, midia: null, encaminhada: null, citacao: null,
+  });
+  conferir("texto IGUAL continua sendo reentrega descartada", r2?.motivo === "mensagem_duplicada", r2?.motivo);
+
+  const r3 = await motor.processarMensagemEntrada({
+    instanciaId: "i1", instanceName: "v", telefone: conv.telefone,
+    texto: "mp_1", nomeCliente: "F", waMessageId: "W4",
+    botaoId: "mp_1", midia: null, encaminhada: null, citacao: null,
+  });
+  conferir("resposta de BOTAO nunca edita (o rotulo reescreve o texto)", r3?.motivo === "mensagem_duplicada", r3?.motivo);
+  conferir("e o texto editado continua intacto", editada?.texto === "isso mesmo, corrigido", editada?.texto);
 
   await prisma.mensagem.deleteMany({ where: { conversaId: conversa.id } });
   await prisma.conversa.delete({ where: { id: conversa.id } });
