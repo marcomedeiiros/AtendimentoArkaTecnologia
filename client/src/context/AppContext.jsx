@@ -619,7 +619,11 @@ export function AppProvider({ children }) {
           lida: false,
           // DE QUEM E A CONVERSA -- e o que decide se ISTO faz som (ver abaixo).
           // `null` = sem dono, ou seja, a fila.
-          atendenteId: c.atendenteId || null
+          atendenteId: c.atendenteId || null,
+          // ESTA ESPERANDO NA FILA? -- e o que decide o som do Modo TV (ver
+          // abaixo). Mesma conta da aba "Pendentes" e da `filaModoTv`, para que
+          // o som da TV nao possa discordar do que a propria TV mostra.
+          pendente: c.statusAtendimento === 'pendente'
         });
       });
       if (novas.length > 0) {
@@ -660,12 +664,10 @@ export function AppProvider({ children }) {
         // Dois casos:
         //
         //   conversa COM dono    toca so para o dono, na Central;
-        //   Modo TV              toca SEMPRE, inclusive na fila. E tela de
-        //                        parede, nao tem dono, e a condicao dele e UMA
-        //                        (`modoTvRef.current`, sem `&&`) -- ja foi
-        //                        defeito duas vezes por causa de condicao extra
-        //                        que ninguem pediu (ver as duas tentativas
-        //                        contadas acima).
+        //   Modo TV              toca so pela FILA -- tela de parede nao tem
+        //                        dono, mas tambem nao tem por que anunciar
+        //                        conversa que ja esta na mao de alguem (ver o
+        //                        bloco `paraATv`, logo abaixo).
         //
         // ── A FILA SAIU DAQUI (11/09/2026), E PARA ONDE ELA FOI ─────────────
         //
@@ -674,9 +676,10 @@ export function AppProvider({ children }) {
         // incomodo por um cliente esperando.
         //
         // A FILA PASSOU A SER DO MODO TV, a pedido: e a tela feita para vigiar
-        // exatamente isso, e ela continua tocando em tudo. Som de chamado novo
-        // para quem nao vai pega-lo era a ultima poluicao que sobrava depois do
-        // recorte por dono.
+        // exatamente isso. Som de chamado novo para quem nao vai pega-lo era a
+        // ultima poluicao que sobrava depois do recorte por dono. E, no mesmo
+        // pedido, a TV deixou de tocar por qualquer outra coisa: a fila e o que
+        // ela mostra, e passou a ser tudo o que ela diz.
         //
         // O PRECO, dito em voz alta: com a TV desligada -- ou sem ninguem na
         // sala -- um chamado novo nao emite som em lugar nenhum. Isso inclui a
@@ -688,9 +691,31 @@ export function AppProvider({ children }) {
         // O RECORTE E DO SOM, e nao do aviso. Ver nao e ouvir.
         const paraMeuOuvido = novas.filter((n) => n.atendenteId === usuario?.id);
 
+        // ── E NA TV, SO A FILA. NAO O ATENDIMENTO EM CURSO ──────────────────
+        //
+        // O RELATO (11/09/2026): "no Modo TV ele fica notificando sem parar".
+        // Estava certo. A condicao aqui era UMA -- `modoTvRef.current` -- e
+        // entao QUALQUER mensagem de cliente tocava o alarme alto: inclusive a
+        // vigesima mensagem de uma conversa que um atendente ja esta tocando,
+        // ao vivo, naquele momento. Uma conversa comum rende dezenas de
+        // mensagens, e cada uma virava um alarme de parede. Som que toca o
+        // tempo todo nao avisa nada -- ele so ensina a sala a ignorar o som.
+        //
+        // A TV existe para vigiar QUEM NAO ESTA SENDO ATENDIDO. E o que a tela
+        // mostra: a fila de Pendentes, e mais nada (ver `filaModoTv`, na
+        // Central). O som passa a dizer a mesma coisa que a tela -- alguem
+        // chegou, ou alguem que espera voltou a falar -- e cala no resto.
+        //
+        // Por que `pendente` e nao "chamado novo": conversa que VOLTOU para a
+        // fila, ou que espera ha dez minutos e o cliente cobra de novo, tem de
+        // soar. Ela esta na fila da mesma forma. Ja tentei duas vezes recortar
+        // isto por "conversa nova" e errei as duas (ver acima) -- o criterio
+        // que vale e o estado da conversa AGORA, o mesmo da tela.
+        const paraATv = novas.filter((n) => n.pendente);
+
         // UM TOQUE POR RAJADA, não por mensagem (era assim antes e continua).
         if (modoTvRef.current) {
-          tocarSomMonitoramento();
+          if (paraATv.length > 0) tocarSomMonitoramento();
         } else if (paraMeuOuvido.length > 0) {
           tocarSomMensagem();
         }
