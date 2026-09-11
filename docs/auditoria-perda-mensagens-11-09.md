@@ -51,7 +51,7 @@ A conta certa é por **id**, e ela nomeia cada mensagem que falta (§7). Janela 
 | --- | --- | --- |
 | `reactionMessage` | 20 | **Por decisão.** Reação vira `metadata` da mensagem alvo, nunca linha própria (`_processarReacao`) |
 | `protocolMessage` | 2 | **Por decisão.** Editar/apagar são eventos SOBRE uma mensagem, não mensagens |
-| `secretEncryptedMessage` | 5 | **Descarte mudo.** Tipo desconhecido → `dados_incompletos` |
+| `secretEncryptedMessage` | 5 | **Não eram mensagens: eram as EDIÇÕES do cliente**, chegando cifradas. Identificado horas depois, ver §6 |
 | `albumMessage` | 2 | **Descarte mudo.** Várias fotos de uma vez |
 | `conversation` | 2 | **Sem explicação.** Texto puro que a Evolution tem e nós não |
 
@@ -59,9 +59,17 @@ A conta certa é por **id**, e ela nomeia cada mensagem que falta (§7). Janela 
 ausentes                     31
 − descarte por decisão      −22   ← reação (20) + protocolo (2)
 = perda real                  9   (0,9%)
-− causa nomeada              −7   ← secretEncrypted (5) + album (2)
+− edições, não mensagens     −5   ← secretEncrypted: perda REAL, mas de edição (§6)
+− causa nomeada              −2   ← albumMessage
 sem explicação                2   (0,2%)
 ```
+
+**Correção posterior, no mesmo dia:** os 5 `secretEncryptedMessage` não eram
+mensagens perdidas -- eram **edições** perdidas. Isso derruba a perda de MENSAGEM
+para **4 em 1.009 (0,4%)**, e ao mesmo tempo revela um defeito maior do que o que
+se estava caçando: *toda* edição feita por esses clientes era descartada. Uma
+mensagem perdida é uma ausência, que se percebe; uma edição perdida é um texto
+**errado** na tela, que não se percebe.
 
 **O fato que orienta todo o resto: essas mensagens ESTÃO no banco da Evolution.**
 Ela recebeu do WhatsApp e guardou. Isso elimina todos os filtros do nosso código
@@ -218,7 +226,41 @@ registrada (793 de 188.250, todas de toque em menu).
 
 ## 6 · Editar e apagar
 
-### Editar -- provavelmente FUNCIONANDO, e a conta ingênua engana
+### Editar -- ERA A QUARTA VIA, e ela chega CIFRADA
+
+**Esta seção foi reescrita horas depois de publicada.** A conclusão original
+("provavelmente funcionando") estava certa sobre os números e errada sobre o
+mundo: as três vias conhecidas de edição realmente funcionavam, e mesmo assim a
+edição do cliente não aparecia -- porque existia uma quarta que ninguém tinha
+visto, justamente por ser a única sem rastro.
+
+Teste feito na mão, com o log novo ligado: cliente manda "teste um", edita, e
+chega
+
+```
+messageType:      "secretEncryptedMessage"
+secretEncType:    2
+targetMessageKey: { id: "3EB09064A99A61B8643CC9" }
+```
+
+O id casa com a linha do nosso banco -- `cliente | "teste um"`, `editada_em`
+vazio. **A edição não se perde na Evolution: ela chega, e se perdia aqui**, em
+`dados_incompletos`, que até `010ad33` não registrava nada.
+
+O texto novo vai em `encPayload`, cifrado com chave derivada do `messageSecret`
+da mensagem original, e a 2.4.0 não decifra. O **alvo** vem em claro -- e é o
+suficiente para marcar a bolha como "editada (versão anterior)" (`8840a1e`).
+
+Duas armadilhas que ficam registradas:
+
+* **`targetMessageKey.fromMe` mente.** Veio `true` nas três amostras, para
+  mensagens que o nosso banco registra como `origem: "cliente"` -- o alvo estava
+  em `@lid`, onde esse campo se perde. Quem sabe de quem é a mensagem é o nosso
+  banco, que a gravou quando ela chegou;
+* **só o `secretEncType: 2`.** O envelope carrega mais de um tipo de evento;
+  tratar todos como edição carimbaria "editada" em mensagem que ninguém editou.
+
+### A conta ingênua que quase enterrou isto
 
 O primeiro número parece um escândalo: **113** `protocolMessage` do cliente na
 Evolution contra **1** mensagem com `editada_em` e `origem = "cliente"` no
@@ -232,6 +274,11 @@ deploy, contra **1** registrado. Está dentro do esperado.
 
 O buraco do caso "edição achatada" (§4) continua real no código, mas **não há
 evidência de que esteja sendo acionado nesta instalação**.
+
+E é exatamente aqui que a conta ingênua quase encerrou a investigação: os números
+batiam, a conclusão "está funcionando" era defensável, e estava errada. O que
+salvou foi um teste manual com o log ligado -- não mais uma consulta. **Números
+consistentes provam que a hipótese não foi refutada, nunca que ela é verdadeira.**
 
 ### Apagar -- AINDA NÃO É POSSÍVEL CONCLUIR
 
@@ -341,6 +388,9 @@ migration: `deletada` mora no `metadata`, que já existe.
 | `010ad33` | `dados_incompletos` passa a **registrar** o que descartou (só os nomes dos nós) | §4, §9 item 1 |
 | `69eecc1` | Abre os **envelopes** (`ephemeralMessage`, `viewOnce*`, `associatedChildMessage`) | §4, §9 item 4 |
 | `c26c46f` | Anúncio de álbum sai marcado, para o aviso novo não virar ruído | §9 item 2 |
+| `8b0f18c` | Agenda deixa de reimportar a cada oscilação do socket (teto de 6h) | §3 |
+| `c821497` | O alarme `WEBHOOK AUSENTE` para de gritar falso todo boot; confirmação passa a vir do tráfego | — |
+| `8840a1e` | **A edição cifrada do cliente passa a marcar a bolha** ("editada (versão anterior)") | §6 |
 
 **Cobertura:** `verificar-webhook-entrada.js` foi de 11 para 17 checagens e
 `verificar-mensagem-recebida.js` de 37 para 43. As duas suítes passam inteiras.
@@ -356,9 +406,9 @@ texto legível não esvazia a bolha.
 * **as 2 mensagens `conversation` sem explicação** (§2) -- 0,2%, indistinguível
   de ruído de borda. O log novo as identifica na próxima vez que acontecer, que é
   mais barato do que caçá-las agora;
-* **`secretEncryptedMessage`** -- continua caindo no aviso de propósito: é metade
-  da perda real medida e ninguém sabe o que há dentro dele. Silenciar agora seria
-  esconder a única pista;
+* **`secretEncryptedMessage`** -- *(resolvido horas depois: era a edição do
+  cliente, ver §6. A decisão de deixá-lo gritando no aviso foi o que permitiu
+  identificá-lo no mesmo dia, com um teste manual de dois minutos.)*
 * **o flapping da conexão** -- é problema de disponibilidade, não de perda de
   mensagem (§3). Merece investigação própria, não esta.
 
