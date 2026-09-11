@@ -699,17 +699,13 @@ export const DashboardAPI = {
   // Ranking do time inteiro (a mesma pontuacao da parede), com o ultimo
   // atendimento de cada pessoa.
   rankingEquipe: () => request('/dashboard/ranking-equipe'),
-  // Zera a contagem de UM ranking a partir de agora ('sede' ou 'externo').
-  // NAO apaga atendimento nem mapeamento nenhum -- ver
-  // painel.service.marcoDeZeragem. Restrito a administrador no servidor.
-  limparPainel: (ranking = 'sede') =>
-    request('/dashboard/painel/limpar', { method: 'POST', body: JSON.stringify({ ranking }) }),
-  // CONFIGURACAO da pontuacao do atendimento na SEDE -- so administrador nos
-  // dois verbos, inclusive na leitura (a tela expoe a regua exata).
+  // A regua da pontuacao da sede (e o ciclo, e o podio -- um formulario, um
+  // pedido). Restrito a administrador no servidor, nos dois verbos.
   regrasSede: () => request('/dashboard/regras'),
   salvarRegrasSede: (regras) => request('/dashboard/regras', { method: 'PUT', body: JSON.stringify(regras) }),
-  restaurarPainel: (ranking = 'sede') =>
-    request('/dashboard/painel/restaurar', { method: 'POST', body: JSON.stringify({ ranking }) }),
+  // LIMPAR/RESTAURAR O PAINEL SAIU (11/09/2026). O ciclo configuravel ja da o
+  // recomeco a cada virada, e o corte manual era global e permanente -- ver o
+  // topo de `painel.service`.
 };
 
 // ── n8n API ──

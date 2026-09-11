@@ -268,83 +268,40 @@ const mediana = (lista) => {
 };
 
 /**
- * O MARCO DE ZERAMENTO DO PAINEL -- "Limpar dados do painel da equipe".
+ * ── NAO EXISTE MAIS "LIMPAR DADOS DO PAINEL" ───────────────────────────────
  *
- * ── O QUE ELE FAZ, E O QUE ELE DELIBERADAMENTE NAO FAZ ─────────────────────
+ * Havia aqui um MARCO DE ZERAMENTO: dois botoes na tela de Rankings gravavam um
+ * instante (`painel.zeradoEm.sede` / `.externo`) e todas as telas passavam a
+ * contar dali. Ele nunca apagou atendimento -- e era justamente por isso que
+ * existia, em vez de um DELETE.
  *
- * Ele NAO apaga atendimento nenhum. Guarda um INSTANTE, e o painel passa a
- * contar dali para a frente -- na tela o efeito e o pedido: classificacao,
- * destaque, CSAT, tempos e "fechados hoje" voltam a zero.
+ * ── POR QUE SAIU (11/09/2026) ──────────────────────────────────────────────
  *
- * Apagar as linhas de verdade era a leitura literal do pedido, e o preco seria
- * pago em telas que ninguem mencionou:
+ * Porque ele resolvia um problema que o ciclo passou a resolver sozinho. O
+ * fechamento configuravel (`rankings/ciclo`) da um recomeco a cada virada, no
+ * dia que a empresa escolher -- um reset manual, global e permanente em cima
+ * disso e redundante.
  *
- *   Relatorios Clientes (CNPJ)  le as MESMAS OS. O relatorio de agosto de um
- *                               cliente voltaria vazio -- e ele ja recebeu o
- *                               documento com os numeros antigos.
- *   Avaliacoes / Registro /     mesma origem. O historico de CSAT do ano
- *   Help Desk                   sumiria junto com o ranking do mes.
- *   O fio da conversa           a mensagem sobrevive (`onDelete: SetNull`),
- *                               mas perde o carimbo da OS: o historico deixa
- *                               de se separar por atendimento na Central.
- *   O numero da OS              #OS00062 ja foi dito ao cliente e nao teria
- *                               mais registro do outro lado.
+ * E era caro: um clique cortava a contagem das DUAS telas para a equipe
+ * inteira, e quem clicava sem entender ficava achando que havia perdido a
+ * pontuacao. Foi o que aconteceu -- o pedido de remocao veio com "perdi a
+ * pontuacao antiga, nao consegui recuperar".
  *
- * Nada disso e recuperavel depois. O marco entrega o resultado visivel que foi
- * pedido e pode ser desfeito com um clique -- que e o que um botao vermelho
- * numa tela de gestao precisa ter.
+ * ── E A PONTUACAO VOLTOU SO COM ISTO ───────────────────────────────────────
  *
- * Guardado na tabela de configuracao por acesso direto, e nao pelo
- * `configuracaoService`: aquele so grava chaves da tela de Configuracoes
- * (allowlist em DEFINICOES) e mantem cache -- isto aqui nao e um ajuste que
- * alguem edita num formulario.
+ * O marco nunca apagou nada: ele impedia a soma. Removida a leitura, os
+ * atendimentos anteriores ao instante voltam a contar na hora, sem migracao e
+ * sem restaurar backup. As chaves que sobraram no banco ficam inertes, porque
+ * ninguem mais as le.
+ *
+ * ── SE UM DIA FIZER FALTA ──────────────────────────────────────────────────
+ *
+ * A versao honesta nao e esta: seria POR COMPETENCIA (desconsiderar um mes),
+ * visivel na tela e reversivel -- e nao um corte global que vale para sempre e
+ * para todo mundo. `pisoDoMes` foi deletado junto, e nao deixado sem uso: regra
+ * parada no arquivo e convite para alguem religa-la (foi o que aconteceu com o
+ * `inicioDoMes`, algumas linhas acima).
  */
-// UM MARCO POR RANKING. Limpar a sede nao pode zerar as visitas, e vice-versa:
-// sao equipes diferentes, medidas por criterios diferentes.
-const CHAVE_ZERAGEM = { sede: "painel.zeradoEm.sede", externo: "painel.zeradoEm.externo" };
-// A chave da PRIMEIRA versao, quando havia um marco so. Quem ja tinha clicado
-// em limpar antes desta mudanca continua com o painel zerado -- em vez de o
-// valor virar orfao e a limpeza se desfazer sozinha num deploy.
-const CHAVE_ZERAGEM_ANTIGA = "painel.zeradoEm";
-
-async function marcoDeZeragem(qual = "sede") {
-  const chaves = qual === "sede" ? [CHAVE_ZERAGEM.sede, CHAVE_ZERAGEM_ANTIGA] : [CHAVE_ZERAGEM[qual]];
-  const linhas = await prisma.configuracao.findMany({ where: { chave: { in: chaves.filter(Boolean) } } });
-  // Havendo os dois, vale o mais RECENTE: a chave nova e a decisao mais atual.
-  let marco = null;
-  for (const l of linhas) {
-    if (!l?.valor) continue;
-    const d = new Date(l.valor);
-    // Data invalida guardada nao pode esconder o painel inteiro: sem isto, um
-    // valor corrompido viraria `Invalid Date` e toda comparacao daria falso de
-    // um jeito dificil de diagnosticar.
-    if (Number.isNaN(d.getTime())) continue;
-    if (!marco || d > marco) marco = d;
-  }
-  return marco;
-}
-
-// O comeco da janela: o mais RECENTE entre o periodo natural e o zeramento.
-const maisRecente = (a, b) => (b && b > a ? b : a);
-
-/**
- * O piso de um MES especifico, dado o marco de zeramento.
- *
- * ── O DEFEITO QUE ISTO IMPEDE ──────────────────────────────────────────────
- *
- * "Limpar" significa RECOMECAR A CONTAR, e nao apagar o passado. Aplicando o
- * marco cru a qualquer mes, um mes inteiramente ANTERIOR a limpeza passaria a
- * ter piso no futuro dele proprio -- e apareceria zerado. Julho sumiria porque
- * alguem limpou em setembro, e a premiacao de julho ficaria apontando para um
- * ranking que a tela nao consegue mais mostrar.
- *
- * Entao o marco so vale para o mes que o CONTEM e para os seguintes. Meses
- * fechados antes dele ficam como estavam.
- */
-function pisoDoMes(inicio, fim, marco) {
-  if (!marco || marco >= fim) return inicio;
-  return maisRecente(inicio, marco);
-}
 
 class PainelService {
   /**
@@ -353,17 +310,13 @@ class PainelService {
    *   que e o proposito da tela.
    */
   async obter(acesso = null) {
-    const zerado = await marcoDeZeragem();
-    // O zeramento recorta as DUAS janelas. Recortar so a do mes deixaria
-    // "fechados hoje" contando atendimentos anteriores a limpeza -- um numero
-    // sobrevivente no meio de um painel zerado, que parece defeito.
     // A JANELA DO CICLO, e nao o mes do calendario -- ver `cicloCorrente`. O
     // `fim` entra na consulta porque a competencia de transicao pode terminar
     // no mes seguinte: sem ele, a parede somaria dias de um ciclo que ainda nao
     // fechou junto com os do proximo assim que a virada passasse.
     const { inicio: inicioCiclo, fim: fimCiclo } = await cicloCorrente();
-    const desdeMes = maisRecente(inicioCiclo, zerado);
-    const desdeHoje = maisRecente(inicioDoDia(), zerado);
+    const desdeMes = inicioCiclo;
+    const desdeHoje = inicioDoDia();
 
     const [regras, daSede, doMes, fechadosDeHoje, fila, equipe, meta, carga] = await Promise.all([
       // Os pesos que o administrador definiu. Lidos UMA vez por chamada: sao os
@@ -434,13 +387,12 @@ class PainelService {
 
     return {
       geradoEm: new Date().toISOString(),
-      // O ROTULO MUDA quando o painel foi zerado. Continuar dizendo "mes
-      // corrente" com os numeros comecando no meio do mes faria a tela mentir
-      // -- e quem olha a parede nao tem como saber que houve uma limpeza.
+      // O ROTULO E SEMPRE O CICLO, porque nao ha mais nada que o recorte.
+      // Havia um "desde a limpeza" aqui, para a parede nao mentir quando alguem
+      // zerava o painel -- e o zeramento saiu (ver o topo do arquivo).
       periodo: {
         desde: desdeMes.toISOString(),
-        rotulo: zerado ? "desde a limpeza" : "mês corrente",
-        zeradoEm: zerado ? zerado.toISOString() : null,
+        rotulo: "mês corrente",
       },
       // A PAREDE MOSTRA QUEM ESTA ZERADO TAMBEM -- a pedido de quem usa a tela.
       //
@@ -771,14 +723,11 @@ class PainelService {
    * arrastar o historico inteiro para achar um maximo por nome.
    */
   async rankingEquipe() {
-    // O MESMO recorte da parede: as duas telas mostram a mesma classificacao, e
-    // uma limpeza que valesse so numa delas seria pior do que nao existir.
-    const zerado = await marcoDeZeragem();
     // O MESMO ciclo da parede -- ver `cicloCorrente`. Aqui tambem era
     // `inicioDoMes()`, e as duas telas divergiam do Ranking do Time no dia em
     // que o ciclo saiu do dia 1.
     const { inicio: inicioCiclo, fim: fimCiclo } = await cicloCorrente();
-    const desdeMes = maisRecente(inicioCiclo, zerado);
+    const desdeMes = inicioCiclo;
 
     const doMes = await prisma.atendimento.findMany({
       where: { abertoEm: { gte: desdeMes, lt: fimCiclo } },
@@ -814,13 +763,10 @@ class PainelService {
 
     return {
       geradoEm: new Date().toISOString(),
-      // O ROTULO MUDA quando o painel foi zerado. Continuar dizendo "mes
-      // corrente" com os numeros comecando no meio do mes faria a tela mentir
-      // -- e quem olha a parede nao tem como saber que houve uma limpeza.
+      // O ROTULO E SEMPRE O CICLO -- ver o mesmo campo em `obter`.
       periodo: {
         desde: desdeMes.toISOString(),
-        rotulo: zerado ? "desde a limpeza" : "mês corrente",
-        zeradoEm: zerado ? zerado.toISOString() : null,
+        rotulo: "mês corrente",
       },
       classificacao: comUltimo,
       minimoAvaliacoes,
@@ -864,10 +810,9 @@ class PainelService {
     // A janela vem do ciclo configurado -- ver `rankings/ciclo`. Com o padrao
     // (dia 1, meia-noite) ela e exatamente o mes do calendario de antes.
     const { inicio, fim } = ciclo.janela(ano, mes, await ciclo.obter());
-    // A limpeza da SEDE vale aqui tambem -- era o pedido: "limpar dados de
-    // atendimento na sede". O `pisoDoMes` garante que ela recomeca a contagem
-    // sem apagar meses ja fechados (ver a nota la).
-    const desde = pisoDoMes(inicio, fim, await marcoDeZeragem("sede"));
+    // A JANELA E A DO CICLO, e nada mais a recorta. Havia aqui o piso da
+    // limpeza do painel, e ele saiu com o recurso (ver o topo do arquivo).
+    const desde = inicio;
 
     const doMes = await prisma.atendimento.findMany({
       where: { abertoEm: { gte: desde, lt: fim } },
@@ -906,70 +851,6 @@ class PainelService {
    */
   cicloCorrente() {
     return cicloCorrente();
-  }
-
-  pisoDoMes(inicio, fim, marco) {
-    return pisoDoMes(inicio, fim, marco);
-  }
-
-  marcoDe(qual) {
-    return marcoDeZeragem(qual);
-  }
-
-  /** Os marcos ativos, para a tela dizer o que esta zerado e desde quando. */
-  async marcosDeZeragem() {
-    const [sede, externo] = await Promise.all([marcoDeZeragem("sede"), marcoDeZeragem("externo")]);
-    return {
-      sede: sede ? sede.toISOString() : null,
-      externo: externo ? externo.toISOString() : null,
-    };
-  }
-
-  /**
-   * "Limpar dados de atendimento na sede" / "... fora da sede".
-   *
-   * Zera a contagem DAQUELE ranking a partir de agora -- e, no caso da sede, o
-   * painel de parede junto, porque e a mesma equipe e os mesmos numeros.
-   * Nenhum atendimento nem mapeamento e apagado: ver a nota em `marcoDeZeragem`
-   * e em `pisoDoMes`, que e quem impede a limpeza de comer meses ja fechados.
-   */
-  async limparPainel(qual = "sede", autor = null) {
-    const chave = CHAVE_ZERAGEM[qual];
-    if (!chave) throw new Error(`Ranking desconhecido para limpeza: ${qual}`);
-    const valor = new Date().toISOString();
-    await prisma.configuracao.upsert({
-      where: { chave },
-      update: { valor },
-      create: { chave, valor },
-    });
-    // Fica no log com AUTORIA: e uma acao que muda o que a equipe inteira ve, e
-    // "os numeros sumiram" sem rastro de quem e quando e uma manha perdida
-    // procurando defeito onde houve decisao.
-    logger.warn("Ranking zerado", {
-      ranking: qual,
-      zeradoEm: valor,
-      por: autor?.nome || autor?.email || autor?.sub || "desconhecido",
-    });
-    return { ranking: qual, zeradoEm: valor };
-  }
-
-  /**
-   * Desfaz a limpeza. So e possivel porque nada foi apagado -- e a razao de o
-   * marco existir em vez de um DELETE.
-   *
-   * Na sede apaga TAMBEM a chave antiga (`painel.zeradoEm`, de quando havia um
-   * marco unico). Sem isso, quem limpou antes desta mudanca clicaria em
-   * restaurar e continuaria com o painel vazio, sem nada na tela explicando por
-   * que -- o valor velho seguiria mandando.
-   */
-  async restaurarPainel(qual = "sede", autor = null) {
-    const chaves = qual === "sede" ? [CHAVE_ZERAGEM.sede, CHAVE_ZERAGEM_ANTIGA] : [CHAVE_ZERAGEM[qual]];
-    await prisma.configuracao.deleteMany({ where: { chave: { in: chaves.filter(Boolean) } } });
-    logger.warn("Ranking restaurado", {
-      ranking: qual,
-      por: autor?.nome || autor?.email || autor?.sub || "desconhecido",
-    });
-    return { ranking: qual, zeradoEm: null };
   }
 
   /**

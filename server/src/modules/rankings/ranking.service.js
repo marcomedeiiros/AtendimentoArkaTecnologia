@@ -276,10 +276,10 @@ class RankingService {
     // o mes tem de ser o mesmo mes -- dois calendarios diferentes na mesma
     // tela seria o pior dos dois mundos.
     const { inicio, fim } = ciclo.janela(ano, mes, await ciclo.obter());
-    // "Limpar dados de atendimento fora da sede" recomeca a contagem daqui. O
-    // piso e por MES (ver painelService.pisoDoMes): a limpeza nao apaga meses
-    // ja fechados, senao uma premiacao antiga apontaria para um ranking vazio.
-    const desde = painelService.pisoDoMes(inicio, fim, await painelService.marcoDe("externo"));
+    // A JANELA E A DO CICLO, e nada mais a recorta. Havia aqui o piso da
+    // limpeza ("Limpar dados de atendimento fora da sede"), e o recurso saiu em
+    // 11/09/2026 -- ver o topo de `painel.service`.
+    const desde = inicio;
 
     // Recortado pela DATA DA VISITA, e nao pela entrega: o mes em que o
     // trabalho foi feito e o mes que ele conta. Ancorar na entrega deixaria uma
@@ -444,9 +444,7 @@ class RankingService {
       return { ...p, anterior: { posicao: antesPos, pontos: pontosAntes.get(p.usuarioId) ?? null }, evolucao };
     });
 
-    const marco = await painelService.marcoDe(equipeChave);
     const janelaMes = ciclo.janela(ano, mes, await ciclo.obter());
-    const { inicio: inicioMes, fim: fimMes } = janelaMes;
 
     const premiacoes = await prisma.premiacaoRanking.findMany({
       where: { ranking: equipeChave, competencia: comp },
@@ -484,16 +482,9 @@ class RankingService {
       // desenhava três lugares fixos, o que numa equipe de três premiava até o
       // último colocado.
       premiados: premiados.quantos(classificacao.length, (await premiados.obter())[equipeChave]),
-      // Desde quando este ranking esta contando. `zeradoEm` e o marco (existe ou
-      // nao, e o que decide se a tela mostra "Limpar" ou "Restaurar");
-      // `zeradoNoMes` diz se ele realmente corta o mes que esta na tela.
-      //
-      // Sao coisas diferentes: em setembro, com uma limpeza feita em setembro,
-      // julho aparece INTEIRO -- e um aviso "contando a partir de 3/set" em
-      // cima da tabela de julho seria mentira. Quem sabe a regra e o servidor
-      // (`pisoDoMes`); a tela so exibe a resposta, em vez de reimplementa-la.
-      zeradoEm: marco ? marco.toISOString() : null,
-      zeradoNoMes: !!marco && painelService.pisoDoMes(inicioMes, fimMes, marco) > inicioMes,
+      // `zeradoEm` e `zeradoNoMes` sairam daqui com o "Limpar dados" (11/09):
+      // nao ha mais nada que corte a contagem de um ciclo, entao nao ha o que a
+      // tela precise avisar.
       supervisores: equipes.supervisores.map((u) => ({ id: u.id, nome: u.nome })),
       classificacao,
       premiacoes,

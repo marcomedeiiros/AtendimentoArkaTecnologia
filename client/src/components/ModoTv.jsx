@@ -232,10 +232,14 @@ function DestaqueDoMes({ item, minimo, periodo }) {
     <section className="min-h-0 glass-panel border border-linha rounded-2xl p-4 xl:p-5 flex flex-col gap-3 overflow-hidden">
       <div className="flex items-center justify-between gap-3 shrink-0">
         <Rotulo icon={Trophy} cor={medalha(ouro)}>Destaque do mês</Rotulo>
-        {/* O PERIODO VEM DO SERVIDOR, e nao escrito aqui: com o painel
-            zerado ele passa a dizer "desde a limpeza", e um "mês corrente"
-            chumbado no codigo continuaria afirmando o contrario logo abaixo do
-            cabecalho, que ja mostra o periodo certo. */}
+        {/* O PERIODO VEM DO SERVIDOR, e nao escrito aqui: quem sabe a janela
+            do ciclo e quem a calcula, e um "mês corrente" chumbado no codigo
+            passaria a mentir no dia em que o dia de fechamento mudar -- o
+            cabecalho, logo acima, mostra o periodo certo.
+
+            (Ele ja disse "desde a limpeza" tambem, quando existia o botao de
+            limpar o painel. O recurso saiu em 11/09/2026; o campo continua
+            vindo de fora pelo motivo acima, que nunca dependeu dele.) */}
         <span className="shrink-0 text-slate-500 truncate" style={T.apoio}>{periodo || "mês corrente"}</span>
       </div>
 
@@ -731,11 +735,11 @@ export default function ModoTv({ onFechar, fila = [] }) {
                 Painel da Equipe
               </h1>
               <p className="text-slate-400 mt-1 truncate" style={T.apoio}>
-                {/* Separado por ponto, e nao com "do" na frente: o rotulo mudou
-                    para poder dizer "desde a limpeza" quando o painel e zerado,
-                    e a preposicao fixa produzia "Ranking do desde a limpeza".
-                    Sem colar preposicao em texto que vem de fora, nao ha
-                    concordancia para quebrar. */}
+                {/* Separado por ponto, e nao com "do" na frente: o rotulo vem
+                    de fora, e preposicao colada em texto de fora quebra a
+                    concordancia no dia em que o texto muda. Ja aconteceu --
+                    "Ranking do desde a limpeza", quando existia o botao de
+                    limpar o painel (removido em 11/09/2026). */}
                 {dados
                   ? `Ranking · ${dados.periodo.rotulo} · atualiza sozinho a cada 30 segundos`
                   : 'atualiza sozinho a cada 30 segundos'}

@@ -55,29 +55,15 @@ router.get("/ranking-equipe", (req, res, next) =>
   dashboardController.rankingEquipe(req, res).catch(next)
 );
 
-/**
- * @openapi
- * /api/dashboard/painel/limpar:
- *   post:
- *     tags: [Dashboard]
- *     security: [{ bearerAuth: [] }]
- *     summary: Zera o painel da equipe a partir de agora (nao apaga atendimentos)
- *     responses:
- *       200:
- *         description: Instante do zeramento
- */
-// SO ADMINISTRADOR. Muda o que a equipe INTEIRA ve na parede -- inclusive a
-// propria classificacao de quem clicou. Esconder o botao no front nao basta:
-// sem este guarda, qualquer conta autenticada chamaria a rota no curl.
-// CONFIGURACAO DA PONTUACAO DA SEDE. So ADMINISTRADOR, nos dois verbos --
-// inclusive na leitura: a tela expoe a regua exata, e quem e avaliado saber
-// dela antes de a empresa anunciar e outra coisa.
 // A SATISFACAO DO CICLO. Nao e restrita a administrador: e o mesmo agregado
 // que o painel de parede mostra para a sala, e os cartoes de cima desta tela
 // sempre contaram a empresa inteira. O que ela substitui e uma conta que a tela
 // fazia sobre a lista da Central -- recortada por setor, e sem janela de tempo.
 router.get("/satisfacao", (req, res, next) => dashboardController.satisfacao(req, res).catch(next));
 
+// CONFIGURACAO DA PONTUACAO DA SEDE. So ADMINISTRADOR, nos dois verbos --
+// inclusive na leitura: a tela expoe a regua exata, e quem e avaliado saber
+// dela antes de a empresa anunciar e outra coisa.
 router.get("/regras", adminMiddleware, (req, res, next) => dashboardController.obterRegras(req, res).catch(next));
 // COM VALIDACAO NA BORDA, como a rota irma dos relatorios: o Zod barra a
 // forma aqui e os tres gravadores reconferem a regra (ver `dashboard.dto`).
@@ -86,23 +72,10 @@ router.put("/regras", adminMiddleware, validate(regrasSedeSchema), (req, res, ne
   dashboardController.salvarRegras(req, res).catch(next)
 );
 
-router.post("/painel/limpar", adminMiddleware, (req, res, next) =>
-  dashboardController.limparPainel(req, res).catch(next)
-);
-
-/**
- * @openapi
- * /api/dashboard/painel/restaurar:
- *   post:
- *     tags: [Dashboard]
- *     security: [{ bearerAuth: [] }]
- *     summary: Desfaz a limpeza e volta a contar o mes inteiro
- *     responses:
- *       200:
- *         description: Zeramento removido
- */
-router.post("/painel/restaurar", adminMiddleware, (req, res, next) =>
-  dashboardController.restaurarPainel(req, res).catch(next)
-);
+// AS ROTAS DE LIMPAR/RESTAURAR O PAINEL SAIRAM (11/09/2026).
+//
+// O recurso inteiro foi removido -- ver o topo de `painel.service`. Rota viva
+// com botao removido e pior que o botao: a mesma chamada sai no curl e continua
+// cortando a contagem de todos, agora sem nada na tela explicando.
 
 module.exports = router;

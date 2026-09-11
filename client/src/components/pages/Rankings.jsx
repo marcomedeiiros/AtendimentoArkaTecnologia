@@ -28,6 +28,16 @@
  * trabalha na rua?" -- continua respondida; o que saiu foi a media que ninguem
  * conseguia conferir. Ver `ranking.service`.
  *
+ * ── NAO HA MAIS "LIMPAR DADOS" AQUI ────────────────────────────────────────
+ *
+ * Esta tela tinha dois botoes de limpar (um por ranking) e um de restaurar. Eles
+ * gravavam um instante e todas as telas passavam a contar dali -- sem apagar
+ * nada, mas cortando a contagem da equipe inteira com um clique.
+ *
+ * Sairam em 11/09/2026: o ciclo configuravel ja da o recomeco a cada virada, e
+ * o corte manual era redundante e caro -- quem clicava sem entender ficava
+ * achando que havia perdido a pontuacao. Ver o topo de `painel.service`.
+ *
  * ── OS CRITERIOS APARECEM SEMPRE ───────────────────────────────────────────
  *
  * Cada linha abre e mostra de onde vieram os pontos. Ranking que so mostra o
@@ -39,7 +49,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Trophy, Medal, Building2, Car, ChevronDown, ChevronRight, Loader2, AlertCircle,
-  TrendingUp, TrendingDown, Minus, Sparkles, Gift, ClipboardList, Calendar, Eraser,
+  TrendingUp, TrendingDown, Minus, Sparkles, Gift, ClipboardList, Calendar,
   RotateCcw, SlidersHorizontal, Save,
 } from 'lucide-react';
 import { RankingsAPI, DashboardAPI } from '../../services/api';
@@ -560,7 +570,6 @@ export default function Rankings() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
   const [abertas, setAbertas] = useState(() => new Set());
-  const [limpando, setLimpando] = useState(false);
 
   const ehAdmin = usuario?.cargo === 'Administrador';
 
@@ -625,76 +634,6 @@ export default function Rankings() {
       await carregar();
     } catch (e) {
       avisar(e?.message || 'Não foi possível registrar.', { titulo: 'Premiação não registrada' });
-    }
-  };
-
-  /**
-   * UM BOTÃO DE LIMPAR POR RANKING -- o da aba que está aberta.
-   *
-   * Antes havia um só, e ele zerava a sede: quem estivesse na aba "Fora da
-   * Sede" clicava e via a OUTRA equipe zerar. Agora o botão pertence à aba e o
-   * texto diz o nome da equipe -- não dá para limpar a sede sem estar olhando
-   * para ela.
-   *
-   * Limpar NÃO APAGA NADA: grava um instante, e a contagem daquele ranking
-   * recomeça dali. Meses já encerrados antes do instante continuam inteiros (é
-   * o `pisoDoMes` no servidor), então uma premiação de julho não some porque
-   * alguém limpou em setembro.
-   */
-  const limparRanking = async () => {
-    const ok = await confirmar(
-      `A pontuação de "${rotuloAba}" volta a zero e passa a contar a partir de agora` +
-      (aba === 'sede' ? ', aqui e no Modo TV.' : '.') + '\n\n' +
-      'Nenhum atendimento, avaliação ou relatório é apagado, os meses já ' +
-      'encerrados continuam como estão, e dá para desfazer no botão "Restaurar".',
-      {
-        titulo: `Limpar os dados de ${rotuloAba.toLowerCase()}?`,
-        rotuloConfirmar: 'Limpar',
-        rotuloCancelar: 'Deixar como está',
-        perigo: true,
-      }
-    );
-    if (!ok) return;
-    setLimpando(true);
-    try {
-      await DashboardAPI.limparPainel(aba);
-      // Recarrega: o `zeradoEm` que vem junto é o que troca este botão pelo de
-      // restaurar e acende o aviso. Sem isto a tela só diria que está limpa no
-      // próximo F5.
-      await carregar();
-      avisar('A contagem recomeça a partir de agora. Nada foi apagado.', {
-        titulo: 'Dados limpos', tipo: 'info',
-      });
-    } catch (e) {
-      avisar(e?.message || 'Não foi possível limpar.', { titulo: 'Limpeza não concluída' });
-    } finally {
-      setLimpando(false);
-    }
-  };
-
-  /**
-   * Desfaz a limpeza -- o botão que faltava.
-   *
-   * Ele existia na tela anterior e não veio junto na mudança para cá; sem ele,
-   * quem clicasse em limpar ficava com o painel vazio e nenhum caminho de
-   * volta. Só aparece quando há o que desfazer.
-   */
-  const restaurarRanking = async () => {
-    const ok = await confirmar(
-      `Os dados anteriores de "${rotuloAba}" voltam a aparecer. Eles nunca foram apagados: ` +
-      'a limpeza só tinha marcado a partir de quando contar.',
-      { titulo: 'Restaurar os dados?', rotuloConfirmar: 'Restaurar' }
-    );
-    if (!ok) return;
-    setLimpando(true);
-    try {
-      await DashboardAPI.restaurarPainel(aba);
-      await carregar();
-      avisar('Os dados voltaram.', { titulo: 'Dados restaurados', tipo: 'info' });
-    } catch (e) {
-      avisar(e?.message || 'Não foi possível restaurar.', { titulo: 'Restauração não concluída' });
-    } finally {
-      setLimpando(false);
     }
   };
 
@@ -787,10 +726,6 @@ export default function Rankings() {
   // de abas -- a tela nao inventa nome de ranking em lugar nenhum.
   const rotuloOutroLado = aba === 'sede' ? 'Fora da sede' : 'Na sede';
   const rotuloAba = ABAS.find((a) => a.id === aba)?.rotulo || '';
-  // Desde quando ESTE ranking está contando. Vem do servidor junto com a
-  // classificação, e não de um estado local: quem limpou pode ter sido outro
-  // administrador, em outra máquina.
-  const zeradoEm = dados?.zeradoEm ? new Date(dados.zeradoEm) : null;
 
   return (
     // Sem padding nem título próprios: isto é o CONTEÚDO de uma aba da Visão
@@ -802,11 +737,10 @@ export default function Rankings() {
           Duas competições separadas as atividades e os indicadores são diferentes.
         </p>
 
-        {/* OS CONTROLES FICAM JUNTOS, no alto e à direita.
-            O botão de limpar estava numa faixa própria abaixo, e ali ele lia
-            como se pertencesse às abas -- que é justamente o que ele NÃO faz
-            (zera o Modo TV, não esta tela). Ao lado do seletor de mês fica
-            claro que os dois são controles do quadro, e não da lista. */}
+        {/* OS CONTROLES FICAM JUNTOS, no alto e à direita -- o seletor de mês,
+            o intervalo do ciclo e a Configuração são controles do QUADRO, e
+            não da lista. (Aqui também ficava o botão de limpar dados, que saiu
+            em 11/09/2026 com o recurso inteiro.) */}
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           <div className="flex items-center gap-2">
             <label htmlFor="ranking-mes" className="text-[11px] font-semibold text-texto-suave shrink-0">Mês</label>
@@ -842,25 +776,6 @@ export default function Rankings() {
             </span>
           )}
 
-          {/* O botão é o da ABA ABERTA, e some quando não há o que fazer: com o
-              ranking zerado, o que cabe ali é restaurar, não limpar de novo. */}
-          {ehAdmin && !zeradoEm && (
-            <button
-              onClick={limparRanking}
-              disabled={limpando}
-              title={`Zera a contagem de ${rotuloAba} a partir de agora nada é apagado, e dá para desfazer`}
-              className="px-3 py-2 rounded-xl bg-falha/15 border border-falha/40 text-falha-400 hover:bg-falha/25 text-[11px] font-bold flex items-center gap-1.5 transition-colors disabled:opacity-50"
-            >
-              {limpando ? <Loader2 size={12} className="animate-spin" /> : <Eraser size={12} />}
-              {/* No celular só o essencial: o nome inteiro da equipe é o que
-                  estoura a linha, e o `title` guarda a frase completa. */}
-              <span className="sm:hidden">Limpar</span>
-              <span className="hidden sm:inline">
-                {aba === 'sede' ? 'Limpar dados de atendimento na sede' : 'Limpar atendimento fora da sede'}
-              </span>
-            </button>
-          )}
-
           {/* CONFIGURAÇÃO -- só na aba da sede, e só para administrador.
               A do Fora da Sede já existe, dentro de Relatórios: ela configura
               prazo e leitura de PDF, que não têm equivalente aqui. */}
@@ -877,17 +792,6 @@ export default function Rankings() {
             </button>
           )}
 
-          {ehAdmin && zeradoEm && (
-            <button
-              onClick={restaurarRanking}
-              disabled={limpando}
-              title={`Faz os dados de ${rotuloAba} anteriores à limpeza voltarem a aparecer`}
-              className="px-3 py-2 rounded-xl bg-acao/15 border border-acao/40 text-acao-400 hover:bg-acao/25 text-[11px] font-bold flex items-center gap-1.5 transition-colors disabled:opacity-50"
-            >
-              {limpando ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
-              Restaurar dados
-            </button>
-          )}
         </div>
       </div>
 
@@ -1098,25 +1002,6 @@ export default function Rankings() {
               {salvandoCfg ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Salvar regras
             </button>
           </div>
-        </div>
-      )}
-
-      {/* POR QUE A TABELA ESTÁ VAZIA.
-          Um ranking zerado é indistinguível de uma equipe que não atendeu --
-          e foi exatamente essa confusão que fez alguém procurar defeito onde
-          houve um clique. O aviso diz desde quando está contando e lembra que
-          nada foi apagado. */}
-      {zeradoEm && dados?.zeradoNoMes && (
-        <div className="flex items-start gap-2 p-3 rounded-xl bg-espera/10 border border-espera/30 text-espera-400 text-xs">
-          <AlertCircle size={14} className="shrink-0 mt-0.5" />
-          <span>
-            Contando a partir de{' '}
-            <strong>
-              {zeradoEm.toLocaleString('pt-BR', { timeZone: FUSO_BR, dateStyle: 'short', timeStyle: 'short' })}
-            </strong>
-            {' '}o que veio antes não foi apagado, só deixou de ser somado.
-            {ehAdmin && ' Use "Restaurar dados" para voltar tudo.'}
-          </span>
         </div>
       )}
 

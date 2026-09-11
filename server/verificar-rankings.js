@@ -1254,77 +1254,55 @@ async function main() {
   check(!!hJoao && hJoao.meses.length === 3, "com uma linha por mes para cada pessoa");
 
   /**
-   * 10. LIMPAR E RESTAURAR -- um marco por ranking.
+   * 10. O "LIMPAR E RESTAURAR" SAIU -- e o que se guarda e a ausencia dele.
    *
-   * O que se verifica aqui e o que ja deu errado uma vez: um botao de limpar so,
-   * que zerava a sede mesmo com a outra aba aberta, e -- pior -- sem nenhum
-   * botao de voltar, o que deixou o painel da equipe vazio sem caminho de volta.
+   * Este bloco exercitava os dois botoes: um marco por ranking, limpar a sede
+   * sem tocar no externo, restaurar desfazendo, e o piso por mes que impedia a
+   * limpeza de comer meses ja fechados. Tudo isso estava certo para o recurso
+   * que existia.
    *
-   * Os testes rodam sobre a configuracao REAL, entao guardam o que estava la e
-   * devolvem no fim: rodar a verificacao nao pode zerar o painel de ninguem.
+   * O RECURSO SAIU em 11/09/2026 (ver o topo de `painel.service`): o ciclo
+   * configuravel ja da o recomeco a cada virada, e o corte manual era global e
+   * permanente. Quem clicou sem entender ficou achando que perdeu a pontuacao --
+   * e foi assim que o pedido de remocao chegou.
+   *
+   * O que se trava agora e que ele nao volte pela porta do EXTERNO, que era
+   * onde o piso dele entrava no ranking de visitas.
    */
-  titulo("10. LIMPAR E RESTAURAR");
-  const CHAVES_ZERAGEM = ["painel.zeradoEm", "painel.zeradoEm.sede", "painel.zeradoEm.externo"];
-  const antesDaLimpeza = await prisma.configuracao.findMany({ where: { chave: { in: CHAVES_ZERAGEM } } });
-  await prisma.configuracao.deleteMany({ where: { chave: { in: CHAVES_ZERAGEM } } });
-  try {
-    await painelService.limparPainel("sede", { nome: MARCA });
-    let marcos = await painelService.marcosDeZeragem();
-    check(!!marcos.sede, "limpar a sede grava o marco da sede");
-    check(marcos.externo === null, "limpar a sede NAO zera o ranking externo");
+  titulo("10. O \"LIMPAR DADOS\" NAO VOLTOU (nem pelo externo)");
+  {
+    const problemas = [];
 
-    await painelService.limparPainel("externo", { nome: MARCA });
-    marcos = await painelService.marcosDeZeragem();
-    check(!!marcos.externo, "limpar o externo grava o marco do externo");
-
-    // O piso: limpar e RECOMECAR A CONTAR, nao apagar o passado. Um mes fechado
-    // antes do marco tem de continuar inteiro -- senao a premiacao de julho
-    // apontaria para um ranking que a tela nao consegue mais mostrar.
-    const marco = new Date(marcos.sede);
-    const mesDoMarco = { i: new Date(marco.getFullYear(), marco.getMonth(), 1), f: new Date(marco.getFullYear(), marco.getMonth() + 1, 1) };
-    const mesAntes = { i: new Date(marco.getFullYear(), marco.getMonth() - 2, 1), f: new Date(marco.getFullYear(), marco.getMonth() - 1, 1) };
-    const mesDepois = { i: new Date(marco.getFullYear(), marco.getMonth() + 1, 1), f: new Date(marco.getFullYear(), marco.getMonth() + 2, 1) };
-    check(
-      painelService.pisoDoMes(mesAntes.i, mesAntes.f, marco).getTime() === mesAntes.i.getTime(),
-      "mes ja fechado ANTES do marco continua inteiro"
-    );
-    check(
-      painelService.pisoDoMes(mesDoMarco.i, mesDoMarco.f, marco).getTime() === marco.getTime(),
-      "o mes que contem o marco recomeca no marco"
-    );
-    check(
-      painelService.pisoDoMes(mesDepois.i, mesDepois.f, marco).getTime() === mesDepois.i.getTime(),
-      "mes seguinte ao marco conta o mes inteiro"
-    );
-
-    await painelService.restaurarPainel("sede", { nome: MARCA });
-    marcos = await painelService.marcosDeZeragem();
-    check(marcos.sede === null, "restaurar a sede desfaz a limpeza");
-    check(!!marcos.externo, "restaurar a sede NAO restaura o externo");
-    await painelService.restaurarPainel("externo", { nome: MARCA });
-    marcos = await painelService.marcosDeZeragem();
-    check(marcos.externo === null, "restaurar o externo desfaz a limpeza");
-
-    // A chave da primeira versao, quando havia um marco so: quem limpou antes
-    // desta mudanca continua com o painel zerado, e o botao de restaurar tem de
-    // dar conta dela -- senao o clique nao surtiria efeito nenhum.
-    const valorAntigo = new Date().toISOString();
-    await prisma.configuracao.create({ data: { chave: "painel.zeradoEm", valor: valorAntigo } });
-    marcos = await painelService.marcosDeZeragem();
-    check(marcos.sede === valorAntigo, "a chave antiga (painel.zeradoEm) ainda vale para a sede");
-    check(marcos.externo === null, "a chave antiga NAO vale para o externo");
-    await painelService.restaurarPainel("sede", { nome: MARCA });
-    marcos = await painelService.marcosDeZeragem();
-    check(marcos.sede === null, "restaurar apaga tambem a chave antiga");
-
-    let recusou = false;
-    try { await painelService.limparPainel("qualquer-coisa", { nome: MARCA }); } catch { recusou = true; }
-    check(recusou, "ranking desconhecido e recusado (nao cai na sede por engano)");
-  } finally {
-    await prisma.configuracao.deleteMany({ where: { chave: { in: CHAVES_ZERAGEM } } });
-    for (const c of antesDaLimpeza) {
-      await prisma.configuracao.create({ data: { chave: c.chave, valor: c.valor } });
+    // O PAYLOAD dos dois rankings nao anuncia mais zeramento.
+    for (const qual of ["sede", "externo"]) {
+      const r = await rankingService.obter(qual, COMP);
+      if ("zeradoEm" in r) problemas.push(`${qual}: o payload voltou a trazer zeradoEm`);
+      if ("zeradoNoMes" in r) problemas.push(`${qual}: o payload voltou a trazer zeradoNoMes`);
     }
+
+    // E A CHAVE GRAVADA NAO CORTA MAIS O EXTERNO. Era por `marcoDe("externo")`
+    // que o piso entrava no ranking de visitas -- este e o caminho que a
+    // remocao tinha de fechar junto, e o que prova que a pontuacao antiga volta.
+    const antesDaChave = await rankingService.obter("externo", COMP);
+    await prisma.configuracao.upsert({
+      where: { chave: "painel.zeradoEm.externo" },
+      update: { valor: new Date().toISOString() },
+      create: { chave: "painel.zeradoEm.externo", valor: new Date().toISOString() },
+    });
+    const comChave = await rankingService.obter("externo", COMP);
+    await prisma.configuracao.deleteMany({
+      where: { chave: { in: ["painel.zeradoEm", "painel.zeradoEm.sede", "painel.zeradoEm.externo"] } },
+    });
+
+    const pontosDe = (r) => r.classificacao.reduce((t, x) => t + x.pontos, 0);
+    if (pontosDe(comChave) !== pontosDe(antesDaChave)) {
+      problemas.push(
+        `a chave antiga voltou a cortar o externo (${pontosDe(antesDaChave)} -> ${pontosDe(comChave)} pts)`
+      );
+    }
+
+    check(problemas.length === 0, "nenhum marco corta os rankings, e o payload nao o anuncia");
+    for (const p of problemas) console.log("        " + p);
   }
 
   /**

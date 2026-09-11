@@ -445,3 +445,86 @@ consulta, então todos os ciclos anteriores agora aparecem com a régua nova, e 
 premiação já registrada pode apontar para quem não é mais o primeiro. Não há como
 evitar sem guardar o ranking fechado de cada ciclo, o que nunca existiu aqui.
 Vale conferir as premiações registradas antes de anunciar a mudança à equipe.
+
+---
+
+## 11. O "Limpar dados" foi removido (11/09/2026)
+
+O recurso que este documento descreve no §5 -- o marco de zeragem, que "recorta
+as duas janelas" -- **não existe mais**. Vale registrar aqui porque é este
+arquivo que alguém vai abrir quando encontrar uma referência a ele no código
+antigo.
+
+### 11.1 Por que saiu
+
+Pedido direto: *"remove o botão de limpar atendimentos fora da sede e o de
+dentro da sede, já que vai ser resetado automaticamente não precisa disso aí --
+e como eu perdi a pontuação antiga não consegui recuperar, seria melhor
+remover"*.
+
+As duas metades do pedido estão certas:
+
+* **é redundante.** O ciclo configurável (`rankings/ciclo`) já dá um recomeço a
+  cada virada, no dia que a empresa escolher. Um reset manual, global e
+  permanente em cima disso resolve um problema que não existe mais;
+* **é caro.** Um clique cortava a contagem das **duas telas** para a equipe
+  inteira -- inclusive a de quem clicou -- e o efeito era indistinguível de
+  perda de dados. Foi exatamente o que aconteceu.
+
+### 11.2 E a pontuação voltou só com a remoção
+
+A leitura do passo 1 do plano, na produção:
+
+```
+[ { chave: 'painel.zeradoEm.sede', valor: '2026-09-10T22:51:01.127Z' } ]
+```
+
+Era ele. **O marco nunca apagou nada** -- ele impedia a soma, e é o que este
+documento sempre disse (§5: *"ele nunca apaga atendimento -- grava um instante a
+partir do qual contar"*). Removida a leitura, os atendimentos anteriores a
+22:51 voltam a contar **na hora**: sem migração, sem restaurar backup, e sem
+tocar em nenhuma linha de atendimento.
+
+A chave continua no banco e ficou **inerte**, porque ninguém mais a lê. Apagá-la
+é arrumação, não conserto -- e há teste provando a inércia (ver §11.4).
+
+### 11.3 O que foi removido, ponta a ponta
+
+Botão escondido com rota viva é pior que o botão: a mesma chamada sai no `curl`
+e continua cortando a contagem de todos, agora sem nada na tela explicando.
+Então saiu o recurso inteiro:
+
+| onde | o que |
+| --- | --- |
+| `painel.service` | `marcoDeZeragem`, `pisoDoMes`, `maisRecente`, `limparPainel`, `restaurarPainel`, `marcoDe`, `marcosDeZeragem` e as chaves |
+| `ranking.service` | o piso do externo e os campos `zeradoEm` / `zeradoNoMes` do payload |
+| `dashboard.routes` / `controller` | `POST /painel/limpar` e `/painel/restaurar`, e a allowlist que só elas usavam |
+| `Rankings.jsx` | os dois botões, o "Restaurar dados", os handlers e o aviso "Contando a partir de…" |
+| `api.js` | `limparPainel` e `restaurarPainel` |
+| `ModoTv.jsx` | o rótulo "desde a limpeza" (o período continua vindo do servidor, que agora sempre diz "mês corrente") |
+
+**Deletado, e não deixado sem uso** -- é a lição registrada no §3 deste mesmo
+documento: régua parada no arquivo é convite para alguém religá-la, e foi assim
+que o `inicioDoMes` sobreviveu à centralização e produziu o defeito de 10/09.
+
+### 11.4 A verificação mudou de alvo
+
+Dois blocos exercitavam o recurso: a seção 7 de `verificar-ranking-equipe` e a
+seção 10 de `verificar-rankings`. As duas **trocaram de alvo** em vez de sair --
+o que se guarda agora é que ele **não voltou**:
+
+* o payload da parede, do Ranking do Time e dos dois rankings não anuncia mais
+  zeramento, e o rótulo do período é sempre "mês corrente";
+* os sete métodos do serviço continuam fora;
+* as rotas não voltaram (checado no fonte -- botão removido com rota viva é o
+  caminho do `curl`);
+* e **a chave gravada não corta mais nada**: o teste grava
+  `painel.zeradoEm.sede` com o instante de agora, confere que o CSAT e a
+  classificação não se mexem, e apaga. É a prova, com dados de teste, de que a
+  pontuação escondida em produção volta com o deploy.
+
+### 11.5 Se um dia fizer falta
+
+A versão honesta não é esta. Seria **por competência** -- desconsiderar um mês
+específico --, visível na tela e reversível, e não um corte global que vale para
+sempre e para todo mundo. Fica como gatilho, não como algo a construir agora.

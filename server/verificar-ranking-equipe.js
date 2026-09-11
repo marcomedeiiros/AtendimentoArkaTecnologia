@@ -323,78 +323,82 @@ async function main() {
     check(false, "nao consegui gerar o relatorio da empresa para conferir");
   }
 
-  titulo("7. LIMPAR O PAINEL ZERA A TELA SEM APAGAR NADA");
+  titulo("7. O \"LIMPAR DADOS\" NAO VOLTOU");
 
-  // O pedido foi "apaga os registros". A leitura literal seria um DELETE nas
-  // OS -- e o preco sairia em telas que ninguem mencionou: os relatorios por
-  // cliente leem as MESMAS linhas, e o documento de agosto de um cliente
-  // voltaria vazio depois de ele ja ter recebido a versao com numeros. O marco
-  // de zeramento entrega o resultado visivel e nao destroi nada; este bloco
-  // prova as duas metades.
-  const antesDeLimpar = await painelService.obter(null);
-  check(antesDeLimpar.ranking.classificacao.length > 0, "antes: o painel tem classificacao");
-  check(antesDeLimpar.csat.total > 0, `antes: CSAT com ${antesDeLimpar.csat.total} notas`);
-  check(antesDeLimpar.periodo.rotulo === "mês corrente", "antes: o rotulo diz 'mês corrente'");
-  check(antesDeLimpar.periodo.zeradoEm === null, "antes: sem marco de zeramento");
+  // ── O QUE ESTE BLOCO MEDIA, E POR QUE MUDOU DE ALVO ──────────────────────
+  //
+  // Aqui rodava o marco de zeramento: limpar zerava a tela sem apagar linha
+  // nenhuma, restaurar desfazia, e uma data corrompida no banco nao podia
+  // esconder o painel. Estava certo enquanto o recurso existia.
+  //
+  // O recurso SAIU em 11/09/2026 (ver o topo de `painel.service`): o ciclo
+  // configuravel ja da o recomeco a cada virada, e o corte manual era global,
+  // permanente e caro -- quem clicava sem entender ficava achando que havia
+  // perdido a pontuacao. Foi assim que o pedido chegou.
+  //
+  // Entao o que se guarda agora e o contrario: que ele nao voltou de fininho.
+  // Voltar significaria reintroduzir um caminho em que a pontuacao da equipe
+  // inteira desaparece com um clique, e o ranking tem premiacao registrada em
+  // cima dele.
+  {
+    const problemas = [];
 
-  const totalOsAntes = await prisma.atendimento.count();
-  // `limparPainel(qual, autor)` -- a assinatura ganhou o QUAL quando a limpeza
-  // passou a separar sede de externo, e este era o unico ponto que ainda
-  // chamava com um argumento so. O autor caia no lugar do ranking e o servico
-  // recusava, corretamente, com "Ranking desconhecido". Ver
-  // `verificar-rankings.js`, que ja usa a forma nova.
-  await painelService.limparPainel("sede", { nome: "teste" });
-  const depois = await painelService.obter(null);
+    // 1. O PAYLOAD nao volta a anunciar zeramento.
+    const painel = await painelService.obter(null);
+    if ("zeradoEm" in (painel.periodo || {})) {
+      problemas.push("o painel voltou a publicar `periodo.zeradoEm`");
+    }
+    if (painel.periodo?.rotulo !== "mês corrente") {
+      problemas.push(`o rotulo do periodo deveria ser 'mês corrente', e e '${painel.periodo?.rotulo}'`);
+    }
+    const doTime = await painelService.rankingEquipe();
+    if ("zeradoEm" in (doTime.periodo || {})) {
+      problemas.push("o Ranking do Time voltou a publicar `periodo.zeradoEm`");
+    }
 
-  check(depois.ranking.classificacao.length === 0, "depois: a classificacao zera");
-  check(depois.csat.total === 0, "depois: o CSAT zera");
-  check(depois.hoje.fechados === 0, "depois: 'fechados hoje' zera tambem (as duas janelas)");
-  check(depois.tempos.assumirAmostra === 0, "depois: os tempos zeram");
-  check(!!depois.periodo.zeradoEm, "depois: a resposta diz QUANDO foi zerado");
-  check(
-    depois.periodo.rotulo === "desde a limpeza",
-    `depois: o rotulo para de dizer 'mês corrente' (diz "${depois.periodo.rotulo}")`
-  );
+    // 2. OS METODOS do servico continuam fora.
+    for (const metodo of ["limparPainel", "restaurarPainel", "marcoDe", "marcosDeZeragem", "pisoDoMes"]) {
+      if (typeof painelService[metodo] === "function") {
+        problemas.push(`${metodo}() voltou a existir em painel.service`);
+      }
+    }
 
-  // A MESMA limpeza vale para a aba da Visao Geral -- valer so numa das telas
-  // seria pior do que nao existir.
-  const rankDepois = await painelService.rankingEquipe();
-  check(rankDepois.classificacao.length === 0, "a aba Ranking do Time zera junto");
+    // 3. E A CHAVE GRAVADA NAO PODE MAIS CORTAR NADA.
+    //
+    // Esta e a parte que importa para quem ja clicou no botao antes de ele sair:
+    // a chave continua no banco de producao, e o que garante que a pontuacao
+    // voltou e ninguem mais LER aquele valor.
+    const antesDaChave = await painelService.obter(null);
+    await prisma.configuracao.upsert({
+      where: { chave: "painel.zeradoEm.sede" },
+      update: { valor: new Date().toISOString() },
+      create: { chave: "painel.zeradoEm.sede", valor: new Date().toISOString() },
+    });
+    const comChave = await painelService.obter(null);
+    await prisma.configuracao.deleteMany({
+      where: { chave: { in: ["painel.zeradoEm.sede", "painel.zeradoEm.externo", "painel.zeradoEm"] } },
+    });
+    if (comChave.csat.total !== antesDaChave.csat.total) {
+      problemas.push(
+        `a chave antiga voltou a cortar o painel (CSAT ${antesDaChave.csat.total} -> ${comChave.csat.total})`
+      );
+    }
+    if (comChave.ranking.classificacao.length !== antesDaChave.ranking.classificacao.length) {
+      problemas.push("a chave antiga voltou a cortar a classificacao");
+    }
 
-  // E O QUE NAO PODE TER ACONTECIDO.
-  check(
-    (await prisma.atendimento.count()) === totalOsAntes,
-    `nenhuma OS foi apagada (${totalOsAntes} antes e depois)`
-  );
-  const relDepois = await relatorioService.relatorioEmpresa("11222333000181", {
-    periodo: "mes",
-    referencia: hoje.toISOString().slice(0, 10),
-  }).catch(() => null);
-  check(!!relDepois, "o relatorio do cliente continua sendo gerado");
+    // 4. E AS ROTAS tambem nao voltaram.
+    const rotas = fs.readFileSync(
+      path.join(__dirname, "src/modules/dashboard/dashboard.routes.js"),
+      "utf8"
+    );
+    if (/painel\/(limpar|restaurar)/.test(rotas)) {
+      problemas.push("as rotas de limpar/restaurar voltaram -- botao removido com rota viva sai no curl");
+    }
 
-  // RESTAURAR: so e possivel porque nada foi apagado. E o que torna o botao
-  // seguro -- um clique errado nao custa um mes de historico.
-  // Mesma correcao de assinatura do `limparPainel` acima: `(qual, autor)`.
-  await painelService.restaurarPainel("sede", { nome: "teste" });
-  const restaurado = await painelService.obter(null);
-  check(restaurado.ranking.classificacao.length > 0, "restaurar traz a classificacao de volta");
-  check(restaurado.csat.total === antesDeLimpar.csat.total, "e o CSAT volta ao mesmo numero");
-  check(restaurado.periodo.zeradoEm === null, "sem marco depois de restaurar");
-
-  // Marco corrompido nao pode esconder o painel: uma data invalida guardada
-  // viraria `Invalid Date`, toda comparacao daria falso e o painel ficaria
-  // vazio sem ninguem entender por que.
-  await prisma.configuracao.upsert({
-    where: { chave: "painel.zeradoEm" },
-    update: { valor: "nao-e-data" },
-    create: { chave: "painel.zeradoEm", valor: "nao-e-data" },
-  });
-  const comLixo = await painelService.obter(null);
-  check(
-    comLixo.ranking.classificacao.length > 0 && comLixo.periodo.zeradoEm === null,
-    "data invalida guardada e ignorada, e o painel volta ao mes inteiro"
-  );
-  await prisma.configuracao.deleteMany({ where: { chave: "painel.zeradoEm" } });
+    check(problemas.length === 0, "o marco de zeramento nao voltou, e chave antiga nao corta mais nada");
+    for (const p of problemas) console.log("        " + p);
+  }
 
   titulo("limpeza");
   await limpar();
