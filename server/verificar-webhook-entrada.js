@@ -830,12 +830,31 @@ console.log("=== Entrada do webhook ===");
       "{type:Buffer,data} (toJSON do Node)": { type: "Buffer", data: bytes },
       "array cru": bytes,
       Buffer: segredo,
+      // A forma que a Evolution 2.4.0 REALMENTE manda: `{"0":12,"1":240,...}`,
+      // que e o que JSON.stringify faz com um Uint8Array. Foi a unica das cinco
+      // que nao estava prevista, e custou dois deploys -- porque ela nao estoura:
+      // `Buffer.from` devolve vazio e o sintoma vira "nao temos a chave".
+      '{"0":n,"1":n,...} (Uint8Array no JSON)': { ...segredo },
     };
     const pFormas = [];
     for (const [nome, valor] of Object.entries(formas)) {
       if (ler({ ...simples, segredo: valor }) !== "123") pFormas.push(`${nome}: nao decifrou`);
     }
     check("a chave e lida em qualquer uma das formas que o JSON produz", pFormas);
+
+    // PONTA A PONTA NA FORMA REAL: os TRES binarios chegam como Uint8Array
+    // serializado, nao so a chave. Testar um campo de cada vez deixaria passar
+    // exatamente o caso de producao.
+    const comoObjeto = (b64) => ({ ...Buffer.from(b64, "base64") });
+    check("o payload inteiro na forma que a Evolution manda decifra ponta a ponta", [
+      ...(ler({
+        segredo: { ...segredo },
+        encIv: comoObjeto(simples.encIv),
+        encPayload: comoObjeto(simples.encPayload),
+      }) === "123"
+        ? []
+        : ["nao decifrou com os tres campos na forma real"]),
+    ]);
 
     // E O QUE NAO PODE ACONTECER: chave errada devolvendo texto. A tag do GCM e
     // quem garante -- sem ela, uma derivacao errada viraria lixo na bolha.

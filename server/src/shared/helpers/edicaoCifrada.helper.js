@@ -147,6 +147,21 @@ function paraBuffer(valor) {
   if (typeof valor === "object" && Array.isArray(valor.data)) {
     return valor.data.length ? Buffer.from(valor.data) : null;
   }
+  // `{"0":12,"1":240,...}` -- e o que `JSON.stringify` faz com um Uint8Array, e
+  // e a forma que a Evolution 2.4.0 realmente entrega no webhook (medido em
+  // producao, 11/09: segredo com 32 chaves, encIv com 12, encPayload com 99).
+  // Nao tem `type`, nao tem `data`, nao e array: so as chaves numericas.
+  if (typeof valor === "object") {
+    const chaves = Object.keys(valor);
+    if (chaves.length && chaves.every((k) => /^\d+$/.test(k))) {
+      const bytes = chaves
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => Number(valor[k]));
+      if (bytes.every((b) => Number.isInteger(b) && b >= 0 && b <= 255)) {
+        return Buffer.from(bytes);
+      }
+    }
+  }
   if (typeof valor === "string") {
     // Base64 é o esperado; um buffer vazio significa que a string não era isso.
     const b = Buffer.from(valor, "base64");
