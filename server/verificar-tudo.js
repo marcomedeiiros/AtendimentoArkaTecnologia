@@ -135,6 +135,16 @@ const VERIFICACOES = [
     resumo: "recado/foto/conta comercial, guarda de setor, e a Evolution fora do ar sem derrubar nada",
   },
   {
+    // A nota que o cliente da e um julgamento sobre UM trabalho. Em 10/09/2026
+    // uma nota 5 dada ao Lucas virou ponto do Rangel, que abriu a mesma conversa
+    // depois -- na tela e no ranking. Este vigia guarda a regra que fecha os
+    // dois caminhos: quem atendeu fica gravado na OS, e ciclo ja avaliado nao
+    // se mexe mais.
+    arquivo: "verificar-credito-avaliacao.js",
+    titulo: "De quem e a nota do cliente",
+    resumo: "atender respondendo registra na OS, e reabrir ciclo avaliado abre OS nova",
+  },
+  {
     // A Visao Geral e a parede ficam abertas ao mesmo tempo, uma na mesa e
     // outra na sala. Medalha de ouro para pessoas diferentes no mesmo minuto
     // destroi a confianca nas duas -- por isso a pontuacao e UMA funcao so, e

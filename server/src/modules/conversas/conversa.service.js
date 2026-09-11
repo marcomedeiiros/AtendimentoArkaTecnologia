@@ -1183,6 +1183,24 @@ class ConversaService {
    *
    * Silencioso por design: e efeito colateral de responder/reabrir, nao a acao
    * pedida. Se falhar, a mensagem do operador nao pode deixar de sair.
+   *
+   * ── E ESCREVE TAMBEM NA OS, QUE ERA O QUE FALTAVA ─────────────────────────
+   *
+   * Isto gravava so na CONVERSA. A OS -- que e onde a nota do cliente mora e de
+   * onde o ranking da sede tira os pontos -- ficava com `atendenteNome` vazio,
+   * e as consequencias eram duas, as duas silenciosas:
+   *
+   *   na tela de Feedbacks   a coluna "Atendente" caia no `ultimoAtendenteNome`
+   *                          da CONVERSA, que e mutavel: bastava outra pessoa
+   *                          abrir aquela conversa depois para a nota aparecer
+   *                          como sendo dela (relatado em 10/09/2026);
+   *   no ranking da sede     OS sem atendente e lida como atendimento do BOT
+   *                          (`ehAtendenteReal`), entao aquela nota nao pontuava
+   *                          para ninguem -- o trabalho desaparecia da conta.
+   *
+   * E atingia justamente o caminho mais comum: abrir a conversa e responder, que
+   * e como se atende de verdade -- quem clica em "Atender" ja passava por
+   * `atender()`, que escreve na OS desde sempre.
    */
   async _registrarAtendente(conversa, origem, autor) {
     if (origem !== "equipe" || !autor?.sub) return;
@@ -1190,10 +1208,19 @@ class ConversaService {
     try {
       const usuario = await usuarioRepository.findById(autor.sub);
       if (!usuario) return;
+      const atendidoEm = conversa.atendidoEm || new Date();
       await conversaRepository.update(conversa.id, {
         atendenteId: usuario.id,
         ultimoAtendenteNome: usuario.nome,
-        atendidoEm: conversa.atendidoEm || new Date(),
+        atendidoEm,
+      });
+      // A OS recebe o MESMO registro. `atualizarAtendimentoAtual` recusa
+      // reescrever a autoria de um ciclo ja avaliado, entao isto nunca rouba o
+      // credito de uma nota que ja foi dada.
+      await conversaRepository.atualizarAtendimentoAtual(conversa.id, {
+        atendenteId: usuario.id,
+        atendenteNome: usuario.nome,
+        atendidoEm,
       });
     } catch (e) {
       logger.warn("Nao foi possivel registrar o atendente", { id: conversa.id, message: e.message });
@@ -1260,8 +1287,11 @@ class ConversaService {
       dataOS.fechadoEm = data.fechadoEm;
     } else if (status === "aberta") {
       // Reabertura: limpa o fechamento e garante marca de atendimento. REABRIR
-      // continua na MESMA OS (e a continuacao do atendimento); OS nova so
-      // quando o cliente inicia um ciclo novo depois do fechamento.
+      // continua na MESMA OS (e a continuacao do atendimento) -- EXCETO quando
+      // aquele ciclo ja foi avaliado pelo cliente, e aí ele nao se mexe mais:
+      // ver `reabrirEmCicloNovoSeAvaliado` logo abaixo, e o defeito de 10/09
+      // que ela fecha. OS nova tambem quando o cliente inicia um ciclo novo
+      // depois do fechamento.
       data.fechadoEm = null;
       dataOS.fechadoEm = null;
       // O MOTIVO SAI JUNTO COM O FECHAMENTO.
@@ -1291,9 +1321,30 @@ class ConversaService {
       dataOS.atendenteId = null;
     }
 
-    // Linha antiga (de antes das OS) ainda nao tem atendimento nenhum: cria o
-    // primeiro para o espelho abaixo ter onde escrever. Nao abre ciclo novo --
-    // "Reabrir" continua a MESMA OS, so limpando o fechamento.
+    // ── CICLO JA AVALIADO NAO E REABERTO: ELE FICA COMO FOI JULGADO ─────────
+    //
+    // A nota, o comentario e o AUTOR daquele trabalho estao naquela linha.
+    // Continuar nela apagaria o motivo do fechamento, tiraria o status de
+    // "fechada" (e a nota deixaria de pontuar no ranking, que so conta OS
+    // fechada) e trocaria o atendente por quem reabriu -- que foi exatamente o
+    // que aconteceu em 10/09/2026: a nota 5 dada ao Lucas virou ponto do Rangel.
+    //
+    // Entao a continuacao do atendimento ganha OS propria, como ja acontece
+    // quando o cliente volta a escrever sozinho. Feito ANTES do espelho abaixo
+    // de proposito: e a OS nova que recebe o status, o responsavel e o
+    // `atendidoEm` deste reabrir.
+    if (status === "aberta") {
+      await conversaRepository.reabrirEmCicloNovoSeAvaliado(id, {
+        setor: conversa.setor,
+        atendenteId: data.atendenteId || conversa.atendenteId || null,
+        atendenteNome: data.ultimoAtendenteNome || conversa.ultimoAtendenteNome || null,
+      });
+    }
+
+    // Linha antiga (de antes das OS) ainda nao tem atendimento nenhum: cria a
+    // primeira para o espelho abaixo ter onde escrever. Nao abre ciclo novo --
+    // fora do caso avaliado acima, "Reabrir" continua a MESMA OS, so limpando o
+    // fechamento.
     await conversaRepository.garantirAtendimento(id);
     await conversaRepository.update(id, data);
     await conversaRepository.atualizarAtendimentoAtual(id, dataOS);

@@ -143,8 +143,20 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
       avaliacaoStatus: a.avaliacaoStatus ?? null,
       feedback: a.feedback ?? null,
       fechadoEm: a.fechadoEm,
+      // ── O ATENDENTE DE UMA AVALIACAO SAI DA OS, E DE MAIS NENHUM LUGAR ──
+      //
+      // Havia um `|| c.ultimoAtendenteNome` aqui, e ele era o defeito relatado
+      // em 10/09/2026: aquele campo e da CONVERSA e e mutavel -- muda quando
+      // outra pessoa abre o mesmo fio depois. O resultado era a nota 5 que o
+      // cliente deu ao Lucas aparecendo como sendo do Rangel, so porque ele
+      // tocou a conversa em seguida.
+      //
+      // A pergunta e por OS ("quem fez o trabalho que o cliente avaliou?"), e o
+      // dado por OS existe. Faltando ele, a tela escreve "nao registrado" ou
+      // "Bot" logo abaixo -- que e verdade -- em vez de um nome errado. Nome
+      // errado numa avaliacao e pior que nome nenhum: ninguem desconfia dele.
       atendenteNome: a.atendenteNome || null,
-      ultimoAtendenteNome: a.atendenteNome || c.ultimoAtendenteNome || null,
+      ultimoAtendenteNome: a.atendenteNome || null,
     }));
   }), [conversas]);
 

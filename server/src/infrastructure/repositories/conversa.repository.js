@@ -1,6 +1,10 @@
 const prisma = require("../database/prisma.client");
 const { comLock } = require("../../shared/helpers/lock.helper");
 const { ATENDENTE_HISTORICO_IMPORTADO } = require("../../shared/helpers/atendimentoSintetico.helper");
+// Para avisar quando uma reescrita de autoria e recusada -- ver
+// `atualizarAtendimentoAtual`. Se isso aparecer no log, alguem esta tentando
+// mudar de quem era um atendimento que o cliente ja avaliou.
+const logger = require("../../config/logger");
 
 // Proximo numero da sequencia. Incremento atomico por linha: criacoes
 // simultaneas nunca recebem o mesmo numero.
@@ -497,15 +501,104 @@ class ConversaRepository {
   // Espelha na OS atual o que mudou na conversa (status, responsavel, nota).
   // Silencioso quando a conversa ainda nao tem OS: bases antigas so ganham a
   // primeira no proximo ciclo, e nada disso pode derrubar a operacao pedida.
+  //
+  // ── A AUTORIA DE UM CICLO JA AVALIADO NAO SE REESCREVE ────────────────────
+  //
+  // O DEFEITO (relatado em 10/09/2026): o cliente avaliou o atendimento do
+  // Lucas com 5 estrelas; outro atendente abriu a mesma conversa depois, e a
+  // nota do Lucas passou a aparecer como sendo do Rangel -- na tela de
+  // Feedbacks e, pior, no ranking da sede, que agrupa os pontos justamente por
+  // `atendenteNome`.
+  //
+  // A nota e um julgamento do cliente sobre um trabalho ESPECIFICO. Quem fez
+  // aquele trabalho e um fato encerrado no instante em que o cliente respondeu,
+  // e nenhuma acao posterior pode mudar de quem era.
+  //
+  // A trava e AQUI porque esta e a porta unica: todo espelho de conversa para
+  // OS passa por este metodo. Os outros campos continuam passando (a propria
+  // pesquisa escreve `avaliacao` e `avaliacaoStatus` por aqui) -- o que para de
+  // passar e a AUTORIA.
+  //
+  // Isto e a segunda barreira. A primeira e nao reabrir um ciclo avaliado (ver
+  // `reabrirEmCicloNovoSeAvaliado`): quando ela funciona, esta nem e alcancada.
   async atualizarAtendimentoAtual(conversaId, data) {
     const conversa = await prisma.conversa.findUnique({
       where: { id: conversaId },
       select: { atendimentoAtualId: true },
     });
     if (!conversa?.atendimentoAtualId) return null;
+
+    let campos = data;
+    const mexeNaAutoria = data && ("atendenteId" in data || "atendenteNome" in data);
+    if (mexeNaAutoria) {
+      const atual = await prisma.atendimento.findUnique({
+        where: { id: conversa.atendimentoAtualId },
+        select: { avaliacao: true, atendenteNome: true },
+      });
+      if (atual && atual.avaliacao != null) {
+        const { atendenteId, atendenteNome, ...resto } = data;
+        campos = resto;
+        logger.warn("Autoria de OS avaliada preservada", {
+          conversaId,
+          atendimentoId: conversa.atendimentoAtualId,
+          mantido: atual.atendenteNome,
+          recusado: atendenteNome ?? null,
+        });
+      }
+    }
+    if (!Object.keys(campos).length) return null;
+
     return prisma.atendimento.update({
       where: { id: conversa.atendimentoAtualId },
-      data,
+      data: campos,
+    });
+  }
+
+  /**
+   * REABRIR UM CICLO JA AVALIADO ABRE OS NOVA -- e nao continua a mesma.
+   *
+   * ── POR QUE A REGRA MUDOU ─────────────────────────────────────────────────
+   *
+   * "Reabrir continua a MESMA OS" era certo enquanto reabrir significava
+   * "aquele atendimento nao tinha acabado". Deixa de ser certo quando o ciclo
+   * JA FOI JULGADO pelo cliente: a nota, o comentario e o autor daquele
+   * trabalho estao gravados naquela linha, e continuar nela reescreve os tres
+   * -- o motivo do fechamento e apagado, o status sai de "fechada" (e a nota
+   * para de pontuar no ranking, que so conta OS fechada) e o atendente passa a
+   * ser quem reabriu.
+   *
+   * Era o defeito de 10/09/2026: a nota 5 dada ao Lucas virou ponto do Rangel.
+   *
+   * O ciclo avaliado fica intacto, e a continuacao do atendimento vira uma OS
+   * propria -- exatamente o que ja acontece quando o CLIENTE volta a escrever
+   * num fio fechado (ver `garantirAtendimentoAberto`). Duas jornadas de
+   * atendimento dividindo uma linha so e o que produzia o crédito errado.
+   *
+   * Devolve a OS nova, ou `null` quando nao havia nada a preservar (ciclo sem
+   * nota, ou conversa sem OS) -- e ai reabrir continua na mesma, como antes.
+   */
+  reabrirEmCicloNovoSeAvaliado(conversaId, { setor = null, atendenteId = null, atendenteNome = null } = {}) {
+    // Mesma fila por conversa do resto do arquivo: dois cliques simultaneos em
+    // "Reabrir" nao podem abrir duas OS para o mesmo ciclo.
+    return comLock(`conversa:${conversaId}`, async () => {
+      const conversa = await prisma.conversa.findUnique({
+        where: { id: conversaId },
+        select: { atendimentoAtualId: true, setor: true },
+      });
+      if (!conversa?.atendimentoAtualId) return null;
+
+      const atual = await prisma.atendimento.findUnique({
+        where: { id: conversa.atendimentoAtualId },
+        select: { avaliacao: true },
+      });
+      if (!atual || atual.avaliacao == null) return null;
+
+      return this.abrirAtendimento(conversaId, {
+        setor: setor || conversa.setor || null,
+        status: "aberta",
+        atendenteId,
+        atendenteNome,
+      });
     });
   }
 
