@@ -16,6 +16,8 @@
 // atras justamente para quem esta atendendo neste instante.
 //
 // Usa o banco de verdade e limpa o que criou.
+const fs = require("fs");
+const path = require("path");
 const prisma = require("./src/infrastructure/database/prisma.client");
 const painelService = require("./src/modules/dashboard/painel.service");
 
@@ -190,6 +192,82 @@ async function main() {
   check(por("Bruno")?.nota.conta === false, "quem nao tem o minimo de notas nao pontua por nota");
   check(por("Bruno")?.nota.pontos === 0, "e a parcela vale 0, nao a media de uma amostra pequena");
   check(typeof r.minimoAvaliacoes === "number", `o minimo vai para a tela (${r.minimoAvaliacoes})`);
+
+  titulo("5b. A SATISFACAO DA VISAO GERAL SAI DO SERVIDOR");
+
+  // O DEFEITO (auditoria-regra-no-front-end-10-09.md, F1): a tela montava o
+  // painel de satisfacao a partir de `conversas`, a lista da Central -- que o
+  // servidor recorta por SETOR para quem nao e Administrador. A "media geral"
+  // era a media do setor de quem olhava, com rotulo de media geral e nada
+  // dizendo isso: duas pessoas na mesma tela liam numeros diferentes. E nao
+  // havia janela de tempo, enquanto a parede somava o ciclo.
+  //
+  // E a regua (quem e promotor, quem e detrator) existia SO no cliente.
+  {
+    const dashboardService = require("./src/modules/dashboard/dashboard.service");
+    const sat = await dashboardService.satisfacao();
+
+    // A JANELA E A DO CICLO -- a mesma da parede e do ranking, e vai declarada.
+    const cicloAgora = await painelService.cicloCorrente();
+    check(
+      sat.janela.inicio === cicloAgora.inicio.toISOString() &&
+        sat.janela.fim === cicloAgora.fim.toISOString(),
+      "a janela da satisfacao e a do ciclo corrente, e vai no payload"
+    );
+
+    // A REGUA VIAJA, para a tela explicar o numero sem repetir a regra.
+    check(
+      sat.regua?.promotorMinimo === 4 && sat.regua?.detratorMaximo === 2,
+      `a regua de promotor/detrator vem do servidor (${JSON.stringify(sat.regua)})`
+    );
+    check(sat.escopo === "empresa", "e o payload diz de que escopo esta falando");
+
+    // AS NOTAS DESTE CENARIO estao todas dentro do ciclo (o fixture usa `min()`,
+    // minutos atras), entao elas tem de aparecer na conta.
+    check(sat.total > 0, `as avaliacoes do ciclo entram na conta (${sat.total})`);
+    check(sat.media != null, `e a media existe quando ha nota (${sat.media})`);
+    const somaDistribuicao = sat.distribuicao.reduce((t, d) => t + d.qtd, 0);
+    check(somaDistribuicao === sat.total, "a distribuicao soma o total, sem nota perdida");
+    check(
+      sat.promotores + sat.neutros + sat.detratores === sat.total,
+      "e promotor + neutro + detrator fecha o total -- a nota 3 nao entra nos dois lados"
+    );
+
+    // NOTA FORA DO CICLO NAO CONTA. Antes nao havia janela nenhuma: a tela
+    // somava a historia inteira e nunca coincidia com a parede.
+    const cAntiga = await conversa("antiga", "EMPRESA ANTIGA LTDA");
+    const foraDoCiclo = new Date(cicloAgora.inicio.getTime() - 40 * 24 * 3600 * 1000);
+    await os(cAntiga.id, {
+      atendenteNome: `${MARCA} Ana`,
+      status: "fechada",
+      avaliacao: 1,
+      abertoEm: foraDoCiclo,
+      fechadoEm: foraDoCiclo,
+    });
+    const depois = await dashboardService.satisfacao();
+    check(
+      depois.total === sat.total && depois.detratores === sat.detratores,
+      `nota de 40 dias atras nao entra no ciclo (${sat.total} -> ${depois.total})`
+    );
+
+    // E A TELA PAROU DE CALCULAR: a regua nao volta para o cliente.
+    const tela = fs.readFileSync(
+      path.join(__dirname, "../client/src/components/pages/Dashboard.jsx"),
+      "utf8"
+    );
+    check(
+      !tela.includes("d.nota >= 4") && !tela.includes("d.nota <= 2"),
+      "os limiares de promotor/detrator nao estao mais cravados na tela"
+    );
+    check(
+      tela.includes("DashboardAPI.satisfacao()"),
+      "e os cartoes leem o resumo do servidor"
+    );
+    check(
+      tela.includes("Os feedbacks que você acessa"),
+      "e a tabela diz que o recorte dela e outro (por acesso)"
+    );
+  }
 
   titulo("6. O HISTORICO IMPORTADO NAO E UMA PESSOA");
 

@@ -27,6 +27,17 @@ class DashboardController {
     return success(res, data);
   }
 
+  /**
+   * A SATISFACAO DO CICLO, pronta -- ver `dashboardService.satisfacao`.
+   *
+   * Sem recorte por acesso, e de proposito: e agregado, nao conteudo, e o mesmo
+   * numero que a parede mostra para a sala inteira. O recorte acidental que
+   * existia (herdado da listagem da Central) era o defeito.
+   */
+  async satisfacao(req, res) {
+    return success(res, await dashboardService.satisfacao());
+  }
+
   // Painel de parede: um GET so devolve tudo que a TV desenha. A tela recarrega
   // sozinha e nao tem interacao -- varias chamadas por atualizacao dariam
   // metades do painel de instantes diferentes.

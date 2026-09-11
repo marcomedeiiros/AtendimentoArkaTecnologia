@@ -26,11 +26,11 @@ duplicações que envelhecem.
 
 | # | Achado | Onde | Gravidade |
 | --- | --- | --- | --- |
-| F1 | A Visão Geral calcula a satisfação inteira no cliente, sobre uma lista recortada por setor | `Dashboard.jsx` | **alta** |
+| F1 | A Visão Geral calcula a satisfação inteira no cliente, sobre uma lista recortada por setor | `Dashboard.jsx` | **alta** · ✅ corrigido (§7) |
 | F2 | A importação de fluxo converte semântica de bot no cliente, e o servidor grava o que vem | `fluxoJson.js` | média |
-| F3 | A completude do relatório de visita é recalculada no cliente, com o limiar cravado | `Mapeamentos.jsx` | média |
-| F4 | Relatos de Bugs decide acesso por cargo cravado; o servidor decide por módulo configurável | `BugsPage.jsx` | média/baixa |
-| F5 | Listas canônicas duplicadas -- e uma delas na MESMA tela que já lê a do servidor | 4 lugares | baixa |
+| F3 | A completude do relatório de visita é recalculada no cliente, com o limiar cravado | `Mapeamentos.jsx` | média · ✅ corrigido (§7) |
+| F4 | Relatos de Bugs decide acesso por cargo cravado; o servidor decide por módulo configurável | `BugsPage.jsx` | média/baixa · ✅ corrigido (§7) |
+| F5 | Listas canônicas duplicadas -- e uma delas na MESMA tela que já lê a do servidor | 4 lugares | baixa · ⚠️ parcial (§7) |
 | F6 | Tetos espelhados (20 MB, 3 imagens, 60/30 motivos, primeira competência) | 5 lugares | baixa |
 
 ---
@@ -286,3 +286,104 @@ servidor. O que não foi verificado, e fica dito: as 5.800 linhas de
 `AtendimentoView.jsx` foram varridas por padrão (constantes, checagens de cargo,
 cálculo), e não linha a linha -- um cálculo de negócio escondido no meio de
 lógica de interface pode ter escapado.
+
+---
+
+## 7. O que foi feito
+
+Quatro dos seis fechados, e um deles parcial -- com o motivo dito.
+
+### 7.1 F1: a satisfação saiu da tela
+
+Um endpoint novo, `GET /api/dashboard/satisfacao`, devolve o painel pronto:
+média, total, distribuição, promotores, detratores, neutros e média por setor.
+Três coisas mudaram de natureza:
+
+* **a janela é o ciclo corrente** -- a MESMA da parede e do ranking, publicada
+  no payload (`janela`), e a tela escreve "ciclo de 01/09 a 30/09". Antes não
+  havia janela: a tela somava a história inteira enquanto a parede somava o
+  ciclo, e os dois números nunca coincidiam;
+* **o escopo é a empresa inteira, e agora é deliberado.** O recorte por setor
+  protege o CONTEÚDO da conversa; um agregado de satisfação não expõe conteúdo,
+  e já é público nesta operação (a parede mostra o CSAT para a sala, e
+  `/api/dashboard` sempre contou a empresa toda). O defeito não era o escopo --
+  era o escopo **acidental**, herdado de uma listagem feita para outra
+  finalidade, e invisível;
+* **a régua foi para o servidor.** `PROMOTOR_MINIMO = 4` e
+  `DETRATOR_MAXIMO = 2` eram a única definição desses dois no sistema, e viviam
+  num `.jsx`. Agora viajam no payload (`regua`), e a tela as **escreve** na
+  legenda em vez de aplicá-las.
+
+**E não ficou uma cópia no cliente.** A tentação era manter a conta local como
+fallback enquanto a resposta não chega -- e o teste pegou isso: cópia de régua é
+o que envelhece calado. O que sobrou na tela é um placeholder neutro (média
+`null`, contagens zero) que não afirma nada, e a média nula aparece como "–".
+
+**A tabela de Feedbacks continua local, e agora diz isso**: "os feedbacks que
+você acessa, de todo o período". Os cartões respondem "como está a satisfação da
+empresa neste ciclo"; a tabela responde "quais feedbacks eu consigo abrir". São
+perguntas diferentes, e era de misturá-las que vinha a sensação de número errado.
+
+### 7.2 F3: o limiar do resumo vem do servidor
+
+`MINIMO_RESUMO = 20` passou a ser constante nomeada em `pontuacao.externa`,
+viaja em `reguaEmVigor` e é publicada em `GET /rankings/regras`. A prévia de
+completude da tela lê de lá. O mesmo 20 que estava em três lugares (a conta do
+servidor, o service e a tela) agora está em um.
+
+### 7.3 F4: Relatos de Bugs pergunta o módulo
+
+`cargo === 'Administrador'` virou `permissoes.includes('bugs')` -- a mesma
+pergunta que o servidor faz (`exigirModulo("bugs")`) e que o menu já fazia. A
+contradição que isso fecha: conceder "Relatos de Bugs" ao cargo Técnico fazia o
+menu mostrar o item e a página recusar abrir. O texto do bloqueio também mudou:
+em vez de "só administradores", explica que a área é liberada por perfil.
+
+### 7.4 F5: parcial, e o que ficou de fora
+
+**Os cargos** passaram a vir de `perm.cargosEditaveis` -- que esta mesma tela já
+usava na matriz de permissões, três linhas ao lado. Ficou uma lista local como
+**último recurso**, para o instante entre abrir a tela e a resposta chegar, e ela
+está marcada como isso no comentário: sem ela, o seletor apareceria vazio por um
+segundo e um `value` sem `option` correspondente rende um campo em branco.
+
+**Os setores e a sentinela do histórico não foram tocados**, e é decisão: nos dois
+casos a lista é constante de código **também no servidor**, então uma mudança
+exige deploy dos dois lados de qualquer forma -- não há divergência possível em
+runtime. Movê-las custaria um endpoint novo para resolver um risco que não
+existe enquanto ninguém as tornar configuráveis. Fica registrado como o gatilho:
+**no dia em que setor virar configuração, esta lista tem de vir do servidor.**
+
+### 7.5 F2 continua aberto, de propósito
+
+A importação de fluxo converte semântica de bot no navegador, e o servidor grava
+quase sem olhar. O conserto não é "validar mais" -- é o servidor **conferir o que
+recebeu** depois de gravar ("este fluxo dispara? há bloco inicial? o gatilho
+casa?") e dizer na resposta, em vez de deixar a descoberta para o primeiro
+cliente que escrever no WhatsApp. Isso é desenho de uma funcionalidade nova, com
+tela para mostrar o resultado -- e merece uma sessão própria, não uma emenda no
+fim de outra.
+
+### 7.6 A verificação
+
+`verificar-ranking-equipe` ganhou a seção **5b**: a janela da satisfação é a do
+ciclo (comparada com `painelService.cicloCorrente()`), a régua vem do servidor,
+promotor + neutro + detrator fecha o total (a nota 3 não entra nos dois lados),
+nota de 40 dias atrás **não** entra no ciclo -- e três checagens de tela: os
+limiares não voltaram ao cliente, os cartões leem o servidor, e a tabela declara
+o recorte dela.
+
+Suíte completa: `TUDO PASSOU`. Build do cliente limpo.
+
+### 7.7 O que ainda é calculado no cliente, e fica dito
+
+A Visão Geral **inteira** sai de `conversas`: os cartões do topo
+(`calcularMetricas`) e o resumo do PDF também. Só o painel de satisfação foi
+movido -- era o que tinha régua de negócio e escopo invisível. Os contadores
+restantes são contagens de status sobre a mesma lista recortada, e têm o mesmo
+viés por cargo; o PDF ainda escreve "Período: últimos 7 dias" sobre números que
+são de todo o período.
+
+Não foram movidos porque isso é reescrever a tela, e não corrigir um defeito:
+`/api/dashboard` já devolve os contadores da empresa (e ninguém os consome
+hoje). Quando essa tela for mexida, o caminho está pronto.

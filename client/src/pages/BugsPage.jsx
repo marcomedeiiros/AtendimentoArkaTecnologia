@@ -316,7 +316,20 @@ function ModalEditarRelato({ relato, onSalvar, onFechar, salvando, erro }) {
 
 export default function BugsPage() {
   const { usuario } = useAuth();
-  const ehAdmin = usuario?.cargo === 'Administrador';
+  // ── QUEM PODE VER: A MESMA PERGUNTA QUE O SERVIDOR FAZ ──────────────────
+  //
+  // Isto era `cargo === 'Administrador'`, cravado -- e o servidor decide por
+  // MODULO (`exigirModulo("bugs")`), que é configurável por cargo na matriz de
+  // permissões. Duas regras para a mesma pergunta, e a do cliente mais estrita:
+  // no dia em que um administrador concedesse "Relatos de Bugs" ao cargo
+  // Técnico, o MENU passaria a mostrar o item (ele lê `usuario.permissoes`, do
+  // servidor) e a PÁGINA recusaria abrir.
+  //
+  // Lista ausente (sessão antiga) mostra a tela: o servidor ainda barra o que
+  // não for permitido, e esconder nunca foi a proteção -- é a mesma regra que
+  // o menu aplica, e está escrita lá.
+  const permissoes = usuario?.permissoes;
+  const podeVer = !Array.isArray(permissoes) || permissoes.includes('bugs');
 
   const [relatos, setRelatos] = useState([]);
   const [carregando, setCarregando] = useState(true);
@@ -349,9 +362,9 @@ export default function BugsPage() {
   }
 
   useEffect(() => {
-    if (ehAdmin) carregar();
+    if (podeVer) carregar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtro, ehAdmin]);
+  }, [filtro, podeVer]);
 
   async function mudarStatus(relato, status) {
     setLoadingId(relato.id);
@@ -410,13 +423,14 @@ export default function BugsPage() {
     }
   }
 
-  if (!ehAdmin) {
+  if (!podeVer) {
     return (
       <div className="fade-in flex flex-col items-center justify-center gap-3 py-24 text-center">
         <ShieldAlert size={32} className="text-espera-400" />
         <h1 className="text-lg font-bold text-white">Acesso restrito</h1>
         <p className="max-w-sm text-xs text-texto-suave">
-          Os relatos de bugs só podem ser vistos por administradores.
+          Esta área é liberada por perfil de acesso. Um administrador pode conceder
+          "Relatos de Bugs" ao seu cargo em Configurações.
         </p>
       </div>
     );

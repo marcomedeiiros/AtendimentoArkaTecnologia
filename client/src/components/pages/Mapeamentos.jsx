@@ -255,7 +255,7 @@ function ModalDetalhe({ id, itensRegra, onFechar, onEditar, podeEditar }) {
 }
 
 /** Formulário do mapeamento. Mostra o efeito de cada campo na pontuação. */
-function ModalMapeamento({ itensRegra, inicial, onFechar, onSalvo }) {
+function ModalMapeamento({ itensRegra, minimoResumo, inicial, onFechar, onSalvo }) {
   const edicao = !!inicial?.id;
   const [empresa, setEmpresa] = useState(inicial?.empresa || '');
   const [cnpj, setCnpj] = useState(inicial?.cnpj || '');
@@ -311,7 +311,15 @@ function ModalMapeamento({ itensRegra, inicial, onFechar, onSalvo }) {
     ).length;
     // Com PDF lido o resumo é escrito pelo servidor quando a pessoa não escreve
     // um -- então ele conta de qualquer jeito.
-    const comResumo = analise?.lido || resumo.trim().length >= 20 ? 1 : 0;
+    // O LIMIAR VEM DO SERVIDOR (`minimoResumo`), e nao cravado aqui.
+    //
+    // Era um 20 escrito nesta linha, e o mesmo 20 vivia em
+    // `pontuacao.externa.completudeDe`. Duas copias da mesma regra: mudar a do
+    // servidor deixava esta previa explicando uma conta que nao roda mais -- e
+    // e por ela que a pessoa decide se o relatorio esta pronto para entregar.
+    // (auditoria-regra-no-front-end-10-09.md, F3)
+    const minimo = minimoResumo ?? 20;
+    const comResumo = analise?.lido || resumo.trim().length >= minimo ? 1 : 0;
     return Math.round(((cobertos + comResumo) / (itensRegra.length + 1)) * 100);
   }, [itens, resumo, itensRegra, analise]);
 
@@ -1400,6 +1408,7 @@ export default function Mapeamentos() {
       {editando && regras && (
         <ModalMapeamento
           itensRegra={regras.itens}
+          minimoResumo={regras.minimoResumo}
           inicial={editando.novo ? null : editando}
           onFechar={() => setEditando(null)}
           onSalvo={() => { setEditando(null); carregar(); }}

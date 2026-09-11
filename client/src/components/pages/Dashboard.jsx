@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import {
   Users, ShieldCheck, Clock, TrendingUp,
   Download, ArrowRight, Activity, CheckCircle2, Inbox,
@@ -17,6 +17,7 @@ import RegistroConversas from './RegistroConversas';
 import RelatoriosClientes from './RelatoriosClientes';
 import Rankings from './Rankings';
 import { avisar } from '../../utils/dialogo';
+import { DashboardAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
@@ -118,6 +119,27 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
   const podeVerRankings = !Array.isArray(usuario?.permissoes) || usuario.permissoes.includes('rankings');
   const graficosRef = useRef(null);
 
+  // ── O RESUMO DA SATISFACAO VEM DO SERVIDOR ──────────────────────────────
+  //
+  // Os quatro numeros do alto (media, total, % de promotores, detratores) e a
+  // distribuicao eram calculados aqui, sobre `conversas` -- a lista da Central,
+  // que o servidor recorta por setor para quem nao e Administrador. O numero
+  // mudava com QUEM estava logado, sem nada na tela dizendo isso, e nao tinha
+  // janela de tempo (a parede somava o ciclo; aqui somava tudo).
+  //
+  // Agora vem pronto, com a janela e a regua declaradas.
+  // (auditoria-regra-no-front-end-10-09.md, F1)
+  const [satisfacao, setSatisfacao] = useState(null);
+  useEffect(() => {
+    let vivo = true;
+    DashboardAPI.satisfacao()
+      .then(d => { if (vivo) setSatisfacao(d); })
+      // Falhar aqui nao pode derrubar a tela: sem o resumo, a aba cai no
+      // calculo local de antes -- que e impreciso, mas nao e branco.
+      .catch(() => {});
+    return () => { vivo = false; };
+  }, []);
+
   // Filtros da aba de avaliacoes: nota (0 = todas), texto e setor.
   const [filtroNota, setFiltroNota] = useState(0);
   const [buscaAval, setBuscaAval] = useState('');
@@ -165,32 +187,73 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
       .filter(c => c.avaliacao != null && c.avaliacao > 0)
       // Mais recentes primeiro quando houver data de fechamento.
       .sort((a, b) => new Date(b.fechadoEm || 0) - new Date(a.fechadoEm || 0));
+    // ── AQUI SO FICA O QUE A TABELA PRECISA ─────────────────────────────
+    //
+    // Esta conta produzia tambem a media, a distribuicao, a media por setor e
+    // -- o pior -- QUEM E PROMOTOR E QUEM E DETRATOR (`nota >= 4`, `nota <= 2`).
+    // Aquela era a unica definicao desses dois no sistema inteiro: definicao de
+    // negocio morando num `.jsx`, calculada sobre uma lista recortada por setor
+    // e sem janela de tempo. Foi para o servidor
+    // (`dashboardService.satisfacao`), e NAO ficou uma copia aqui: copia de
+    // regua e o que envelhece calado.
+    //
+    // O que sobra e o material da TABELA: as linhas, quantas sao, e os setores
+    // que aparecem no filtro -- tudo sobre o que esta na tela, e nao sobre como
+    // a empresa mede satisfacao.
     const total = avaliadas.length;
-    const soma = avaliadas.reduce((s, c) => s + c.avaliacao, 0);
-    const media = total > 0 ? (soma / total) : 0;
-    const distribuicao = [1, 2, 3, 4, 5].map(n => ({
-      nota: n,
-      qtd: avaliadas.filter(c => c.avaliacao === n).length
-    }));
-    const maxQtd = Math.max(1, ...distribuicao.map(d => d.qtd));
-    const promotores = distribuicao.filter(d => d.nota >= 4).reduce((s, d) => s + d.qtd, 0);
-    const detratores = distribuicao.filter(d => d.nota <= 2).reduce((s, d) => s + d.qtd, 0);
+    const setores = [...new Set(avaliadas.map(c => c.setor || 'Geral'))].sort();
 
-    // Media por setor: onde a satisfacao esta boa e onde precisa de atencao.
-    const mapaSetor = {};
-    for (const c of avaliadas) {
-      const setor = c.setor || 'Geral';
-      if (!mapaSetor[setor]) mapaSetor[setor] = { setor, soma: 0, qtd: 0 };
-      mapaSetor[setor].soma += c.avaliacao;
-      mapaSetor[setor].qtd += 1;
-    }
-    const porSetor = Object.values(mapaSetor)
-      .map(s => ({ setor: s.setor, qtd: s.qtd, media: s.soma / s.qtd }))
-      .sort((a, b) => b.media - a.media);
-    const setores = porSetor.map(s => s.setor);
-
-    return { avaliadas, total, media, distribuicao, maxQtd, promotores, detratores, porSetor, setores };
+    return { avaliadas, total, setores };
   }, [avaliacoesPorOS]);
+
+  // OS CARTOES LEEM O SERVIDOR; A TABELA CONTINUA LOCAL.
+  //
+  // Sao perguntas diferentes: o cartao responde "como esta a satisfacao da
+  // empresa neste ciclo" (agregado, igual ao da parede) e a tabela responde
+  // "quais feedbacks EU consigo abrir" -- essa e por acesso, e a legenda diz.
+  //
+  // Enquanto a resposta nao chega, os cartoes usam a conta local de antes: um
+  // numero aproximado por dois segundos e melhor que quatro caixas vazias.
+  // Placeholder NEUTRO enquanto a resposta nao chega -- e nao uma segunda
+  // implementacao da conta. Zero aqui nao afirma nada: a media vai `null`, e a
+  // tela escreve "–" no lugar de um numero inventado.
+  const resumo = satisfacao || {
+    media: null,
+    total: 0,
+    distribuicao: [1, 2, 3, 4, 5].map(nota => ({ nota, qtd: 0 })),
+    promotores: 0,
+    detratores: 0,
+    neutros: 0,
+    porSetor: [],
+  };
+  // A barra mais alta do grafico. Isto e DESENHO (a escala do grafico), e nao
+  // regra -- por isso continua sendo calculado aqui.
+  const maxQtd = Math.max(1, ...resumo.distribuicao.map(d => d.qtd));
+  const janelaResumo = satisfacao?.janela || null;
+
+  // "01/09 a 30/09" -- o ciclo por extenso.
+  //
+  // O `fim` que o servidor manda e EXCLUSIVO (e o instante em que o ciclo
+  // seguinte comeca), entao escreve-se o dia ANTERIOR a ele: sem isso o rotulo
+  // erra por um dia inteiro. Mesmo cuidado do intervalo na tela de Rankings.
+  const intervaloSatisfacao = useMemo(() => {
+    if (!janelaResumo?.inicio || !janelaResumo?.fim) return null;
+    const dia = (iso, recuar = false) => {
+      const d = new Date(iso);
+      if (recuar) d.setDate(d.getDate() - 1);
+      return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: FUSO_BR });
+    };
+    return `${dia(janelaResumo.inicio)} a ${dia(janelaResumo.fim, true)}`;
+  }, [janelaResumo]);
+
+  // A LEGENDA QUE FALTAVA: escopo, janela e regua, escritos.
+  //
+  // O numero antigo nao era so impreciso -- ele nao dizia do que era. Duas
+  // pessoas de cargos diferentes liam valores diferentes com o mesmo rotulo,
+  // e nao havia como desconfiar. Agora o proprio painel diz de onde vem.
+  const legendaSatisfacao = satisfacao && intervaloSatisfacao
+    ? `Empresa inteira · ciclo de ${intervaloSatisfacao} · promotor é nota ${satisfacao.regua.promotorMinimo} ou mais, detrator é ${satisfacao.regua.detratorMaximo} ou menos`
+    : null;
 
   // Aplica os filtros da aba sobre a lista de avaliacoes.
   const feedbacksFiltrados = useMemo(() => {
@@ -422,7 +485,11 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                 </button>
               </div>
 
-              {avaliacoes.total === 0 ? (
+              {legendaSatisfacao && (
+                <p className="text-[10px] text-slate-500 -mt-1 mb-2 leading-relaxed">{legendaSatisfacao}</p>
+              )}
+
+              {resumo.total === 0 ? (
                 <p className="text-xs text-slate-400 leading-relaxed">
                   Ainda não há avaliações elas aparecem aqui assim que os clientes avaliarem os atendimentos.
                 </p>
@@ -430,24 +497,24 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                 <>
                   <div className="flex items-end gap-5">
                     <div>
-                      <div className="flex items-center gap-0.5 mb-1">{renderEstrelas(Math.round(avaliacoes.media))}</div>
+                      <div className="flex items-center gap-0.5 mb-1">{renderEstrelas(Math.round(resumo.media ?? 0))}</div>
                       <div className="text-3xl font-bold text-white font-display leading-none">
-                        {avaliacoes.media.toFixed(1)}<span className="text-sm text-slate-500 font-normal"> / 5</span>
+                        {resumo.media == null ? "–" : resumo.media.toFixed(1)}<span className="text-sm text-slate-500 font-normal"> / 5</span>
                       </div>
                     </div>
                     <div className="flex-1 grid grid-cols-3 gap-2 text-center">
                       <div>
-                        <div className="text-lg font-bold text-yellow-300 font-display">{avaliacoes.total}</div>
+                        <div className="text-lg font-bold text-yellow-300 font-display">{resumo.total}</div>
                         <div className="text-[10px] text-slate-400">avaliações</div>
                       </div>
                       <div>
                         <div className="text-lg font-bold text-ativo-400 font-display">
-                          {Math.round((avaliacoes.promotores / avaliacoes.total) * 100)}%
+                          {Math.round((resumo.promotores / resumo.total) * 100)}%
                         </div>
                         <div className="text-[10px] text-slate-400">satisfação</div>
                       </div>
                       <div>
-                        <div className="text-lg font-bold text-falha-400 font-display">{avaliacoes.detratores}</div>
+                        <div className="text-lg font-bold text-falha-400 font-display">{resumo.detratores}</div>
                         <div className="text-[10px] text-slate-400">1-2 ⭐</div>
                       </div>
                     </div>
@@ -456,8 +523,8 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                   {/* Mini barra de distribuição (5→1) */}
                   <div className="flex h-2.5 rounded-full overflow-hidden border border-linha/40 bg-grafite-600/40">
                     {[5, 4, 3, 2, 1].map(n => {
-                      const item = avaliacoes.distribuicao.find(d => d.nota === n);
-                      const pct = avaliacoes.total > 0 ? (item.qtd / avaliacoes.total) * 100 : 0;
+                      const item = resumo.distribuicao.find(d => d.nota === n);
+                      const pct = resumo.total > 0 ? (item.qtd / resumo.total) * 100 : 0;
                       const cor = n >= 4 ? '#10b981' : n === 3 ? '#f59e0b' : '#ef4444';
                       return pct > 0 ? (
                         <div key={n} style={{ width: `${pct}%`, background: cor }} title={`${n}★ ${item.qtd} (${pct.toFixed(0)}%)`} />
@@ -549,41 +616,44 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
       {/* ============= ABA: AVALIAÇÕES ============= */}
       {abaAtiva === 'avaliacoes' && (
         <>
+          {legendaSatisfacao && (
+            <p className="text-[11px] text-slate-500 leading-relaxed">{legendaSatisfacao}</p>
+          )}
           {/* Cards de resumo */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="glass-panel rounded-2xl p-6 border border-linha text-center">
               <div className="flex items-center justify-center gap-1 mb-2">
-                {renderEstrelas(Math.round(avaliacoes.media))}
+                {renderEstrelas(Math.round(resumo.media ?? 0))}
               </div>
               <div className="text-3xl font-bold text-white font-display">
-                {avaliacoes.media.toFixed(1)}
+                {resumo.media == null ? "–" : resumo.media.toFixed(1)}
               </div>
               <div className="text-xs text-slate-400 mt-1">Média CSAT</div>
             </div>
             <div className="glass-panel rounded-2xl p-6 border border-linha text-center">
-              <div className="text-3xl font-bold text-yellow-300 font-display">{avaliacoes.total}</div>
+              <div className="text-3xl font-bold text-yellow-300 font-display">{resumo.total}</div>
               <div className="text-xs text-slate-400 mt-1">Avaliações recebidas</div>
             </div>
             <div className="glass-panel rounded-2xl p-6 border border-linha text-center">
               <div className="text-3xl font-bold text-ativo-400 font-display">
-                {avaliacoes.total > 0 ? Math.round((avaliacoes.promotores / avaliacoes.total) * 100) : 0}%
+                {resumo.total > 0 ? Math.round((resumo.promotores / resumo.total) * 100) : 0}%
               </div>
               <div className="text-xs text-slate-400 mt-1">Satisfação (4-5 ⭐)</div>
             </div>
             <div className="glass-panel rounded-2xl p-6 border border-linha text-center">
-              <div className="text-3xl font-bold text-falha-400 font-display">{avaliacoes.detratores}</div>
+              <div className="text-3xl font-bold text-falha-400 font-display">{resumo.detratores}</div>
               <div className="text-xs text-slate-400 mt-1">Precisam de atenção (1-2 ⭐)</div>
             </div>
           </div>
 
           {/* Média por setor */}
-          {avaliacoes.porSetor.length > 0 && (
+          {resumo.porSetor.length > 0 && (
             <div className="glass-panel rounded-2xl p-5 border border-linha">
               <h3 className="text-sm font-bold text-white font-display mb-4 flex items-center gap-2">
                 <Users size={15} className="text-acao-200" /> Média por Setor
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {avaliacoes.porSetor.map(s => (
+                {resumo.porSetor.map(s => (
                   <button
                     key={s.setor}
                     onClick={() => setFiltroSetor(filtroSetor === s.setor ? '' : s.setor)}
@@ -613,8 +683,8 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
             <p className="text-[11px] text-slate-500 mb-4">Clique numa nota para filtrar os feedbacks abaixo.</p>
             <div className="space-y-2">
               {[5, 4, 3, 2, 1].map(nota => {
-                const item = avaliacoes.distribuicao.find(d => d.nota === nota);
-                const pct = avaliacoes.total > 0 ? (item.qtd / avaliacoes.total) * 100 : 0;
+                const item = resumo.distribuicao.find(d => d.nota === nota);
+                const pct = resumo.total > 0 ? (item.qtd / resumo.total) * 100 : 0;
                 const ativo = filtroNota === nota;
                 return (
                   <button
@@ -652,6 +722,17 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                 <MessageCircle size={15} className="text-acao-200" /> Feedbacks
                 <span className="text-slate-500 font-normal">({feedbacksFiltrados.length})</span>
               </h3>
+              {/* O RECORTE DESTA TABELA E OUTRO, e agora ela diz isso.
+
+                  Os cartoes acima sao o agregado da empresa no ciclo, do
+                  servidor. Esta lista sai das conversas que ESTA pessoa
+                  acessa -- o servidor recorta por setor para quem nao e
+                  Administrador --, e sem a linha abaixo os dois blocos
+                  pareciam falar do mesmo conjunto. Era dai que vinha a
+                  impressao de numero errado. */}
+              <span className="text-[10px] text-slate-500 sm:order-last sm:w-full">
+                Os feedbacks que você acessa, de todo o período
+              </span>
               {avaliacoes.total > 0 && (
                 <div className="flex flex-wrap items-center gap-2">
                   <input

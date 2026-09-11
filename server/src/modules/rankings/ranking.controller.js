@@ -2,8 +2,15 @@ const rankingService = require("./ranking.service");
 const mapeamentoService = require("./mapeamento.service");
 const { success } = require("../../shared/helpers/response.helper");
 const regrasRelatorio = require("./relatorio.regras");
-const { ITENS_MAPEAMENTO, PESOS, FAIXAS_VOLUME, FAIXAS_EVIDENCIAS, CUSTO_POR_DEVOLUCAO, MINIMO_MAPEAMENTOS } =
-  require("./pontuacao.externa");
+const {
+  ITENS_MAPEAMENTO,
+  PESOS,
+  FAIXAS_VOLUME,
+  FAIXAS_EVIDENCIAS,
+  CUSTO_POR_DEVOLUCAO,
+  MINIMO_MAPEAMENTOS,
+  MINIMO_RESUMO,
+} = require("./pontuacao.externa");
 
 class RankingController {
   // Um ranking de um mes. `?competencia=2026-09`; sem ela, o mes corrente.
@@ -67,6 +74,10 @@ class RankingController {
         // formulário de visita a partir daqui, e com a lista fixa um item
         // criado pela empresa não teria campo para ser preenchido.
         itens: (await regrasRelatorio.obter()).itens,
+        // O LIMIAR DO RESUMO, porque a tela mostra a completude enquanto a
+        // pessoa digita e precisa da mesma regra que o servidor grava. Estava
+        // cravado no cliente (F3 da auditoria de front-end).
+        minimoResumo: MINIMO_RESUMO,
       },
     });
   }

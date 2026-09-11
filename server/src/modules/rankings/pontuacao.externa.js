@@ -51,6 +51,21 @@
 // Quantos mapeamentos entregues para as parcelas de qualidade valerem.
 const MINIMO_MAPEAMENTOS = 3;
 
+/**
+ * QUANTOS CARACTERES DE RESUMO CONTAM COMO "ESCREVEU ALGO".
+ *
+ * Era um `20` cravado dentro de `completudeDe` -- e cravado DE NOVO na tela de
+ * Relatorios, que mostra a completude enquanto a pessoa digita. Duas copias do
+ * mesmo limiar: mudar aqui deixava a previa da tela explicando uma regra que
+ * nao roda mais, e e por essa previa que a pessoa decide se pode entregar.
+ * (auditoria-regra-no-front-end-10-09.md, F3)
+ *
+ * Vinte caracteres nao medem qualidade -- medem INTENCAO. "ok" e "resolvido"
+ * passam por qualquer validacao de campo obrigatorio e nao dizem nada a quem
+ * ler o relatorio depois.
+ */
+const MINIMO_RESUMO = 20;
+
 const PESOS = { volume: 25, completude: 25, prazo: 20, evidencias: 15, retrabalho: 15 };
 
 // Faixas de volume: relatorios ENTREGUES no mes -> pontos. Lidas de cima para
@@ -117,7 +132,7 @@ function completudeDe(m, itens = ITENS_MAPEAMENTO) {
     const v = campos[i.chave];
     return typeof v === "string" ? v.trim().length > 0 : !!v;
   }).length;
-  const comResumo = String(m.resumo || "").trim().length >= 20 ? 1 : 0;
+  const comResumo = String(m.resumo || "").trim().length >= MINIMO_RESUMO ? 1 : 0;
   return itens.length ? (preenchidos + comResumo) / (itens.length + 1) : 0;
 }
 
@@ -182,6 +197,9 @@ function reguaEmVigor(regras = null) {
     teto: Object.values(parcelas).reduce((soma, v) => soma + (Number(v) || 0), 0),
     // Quantos relatorios entregues ja permitem julgar as parcelas de qualidade.
     minimo: regras?.minimoRelatorios ?? MINIMO_MAPEAMENTOS,
+    // O limiar do resumo vai junto porque a TELA precisa dele para a previa de
+    // completude -- e ele nao e configuravel, entao viaja como esta.
+    minimoResumo: MINIMO_RESUMO,
     custoPorDevolucao: regras?.custoPorDevolucao ?? CUSTO_POR_DEVOLUCAO,
   };
 }
@@ -328,6 +346,7 @@ module.exports = {
   noPrazo,
   ITENS_MAPEAMENTO,
   MINIMO_MAPEAMENTOS,
+  MINIMO_RESUMO,
   PESOS,
   FAIXAS_VOLUME,
   FAIXAS_EVIDENCIAS,

@@ -686,6 +686,15 @@ export const WhatsAppAPI = {
 // repetir o erro que custou 87 MB por chamada na listagem da Central.
 export const DashboardAPI = {
   metricas: () => request('/dashboard'),
+  // A SATISFACAO DO CICLO, calculada no SERVIDOR.
+  //
+  // A tela montava isto a partir das `conversas` que ela ja tinha -- e
+  // aquela lista e recortada por setor para quem nao e Administrador, entao
+  // a "media geral" era a media do setor de quem estava olhando, sem nada
+  // dizendo isso. E nao tinha janela de tempo, enquanto a parede somava o
+  // ciclo: mesma pergunta, dois numeros. E o mesmo motivo do aviso em cima
+  // de `RelatoriosAPI`, algumas linhas abaixo.
+  satisfacao: () => request('/dashboard/satisfacao'),
   painel: () => request('/dashboard/painel'),
   // Ranking do time inteiro (a mesma pontuacao da parede), com o ultimo
   // atendimento de cada pessoa.

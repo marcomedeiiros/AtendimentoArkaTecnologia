@@ -893,6 +893,21 @@ class PainelService {
   // Publicados para o modulo de rankings usar EXATAMENTE a mesma regra de piso
   // que a parede usa -- reimplementar "so vale do mes do marco em diante" do
   // outro lado seria a segunda copia de uma regra sutil.
+  /**
+   * A JANELA DO CICLO CORRENTE, publicada.
+   *
+   * Quem mais precisa dela e o painel de satisfacao da Visao Geral, que ate
+   * 10/09/2026 nao tinha janela nenhuma -- somava a historia inteira, enquanto a
+   * parede somava o ciclo. Mesma pergunta, dois numeros.
+   *
+   * Publicado em vez de reimplementado pelo motivo de sempre: `inicioDoMes` foi
+   * deletado justamente porque uma copia a mais desta regra e o comeco de duas
+   * respostas para "que mes e este?".
+   */
+  cicloCorrente() {
+    return cicloCorrente();
+  }
+
   pisoDoMes(inicio, fim, marco) {
     return pisoDoMes(inicio, fim, marco);
   }

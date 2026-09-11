@@ -31,7 +31,7 @@ const midiaStorage = require("../../infrastructure/storage/midia.storage");
 const AppError = require("../../shared/errors/AppError");
 const logger = require("../../config/logger");
 const bus = require("../../shared/events/event-bus");
-const { ITENS_MAPEAMENTO, completudeDe, noPrazo } = require("./pontuacao.externa");
+const { ITENS_MAPEAMENTO, completudeDe, noPrazo, MINIMO_RESUMO } = require("./pontuacao.externa");
 const { analisarRelatorio } = require("./analise.relatorio");
 const regrasRelatorio = require("./relatorio.regras");
 
@@ -300,7 +300,7 @@ class MapeamentoService {
         fotosRelatorio: analise.fotos,
         // O resumo so e escrito quando a pessoa nao escreveu um: o texto dela
         // vale mais que o meu, e sobrescrever apagaria o que ela digitou.
-        ...(String(resumoAtual || "").trim().length >= 20
+        ...(String(resumoAtual || "").trim().length >= MINIMO_RESUMO
           ? {}
           : { resumo: this._resumoDe(analise, regras.itens) }),
       },

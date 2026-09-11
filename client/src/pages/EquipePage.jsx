@@ -31,7 +31,26 @@ function vistoEm(iso) {
   return d === 1 ? 'ontem' : `há ${d} dias`;
 }
 
-const CARGOS = ['Administrador', 'Financeiro', 'Técnico', 'Comercial'];
+/**
+ * OS CARGOS QUE DÁ PARA ATRIBUIR -- e por que esta lista não é cravada.
+ *
+ * O servidor publica os cargos editáveis em `GET /permissoes`
+ * (`cargosEditaveis`), e esta MESMA tela já os usa na matriz de permissões. O
+ * seletor de cargo tinha a cópia local, e as duas podiam divergir: um cargo novo
+ * no servidor não apareceria aqui, e um removido seria oferecido para dar 400.
+ *
+ * "Administrador" entra na frente porque ele não é editável na matriz (tem tudo,
+ * por definição) mas é atribuível -- `CARGOS_VALIDOS`, no servidor, inclui ele.
+ * O `?? ` cobre a resposta antiga em cache, e some no primeiro carregamento.
+ */
+// A lista local e o ULTIMO RECURSO, e nao a fonte: ela cobre o instante entre
+// abrir a tela e a resposta de /permissoes chegar. Se ela e a resposta do
+// servidor divergirem, vale a do servidor -- e o servidor valida o cargo de
+// qualquer forma (CARGOS_VALIDOS, em equipe.dto).
+const CARGOS_ATE_CARREGAR = ['Administrador', 'Financeiro', 'Técnico', 'Comercial'];
+
+const cargosParaAtribuir = (perm) =>
+  perm?.cargosEditaveis?.length ? ['Administrador', ...perm.cargosEditaveis] : CARGOS_ATE_CARREGAR;
 
 // Os setores que uma conversa pode ter. Casa com `SETORES` no servidor
 // (setor.helper.js), que é quem realmente decide -- aqui é só o que a tela
@@ -350,7 +369,7 @@ export default function EquipePage() {
                   onChange={e => mudarCargo(m.id, e.target.value)}
                   className="bg-grafite-700 border border-linha rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-acao/50"
                 >
-                  {CARGOS.map(c => (
+                  {cargosParaAtribuir(perm).map(c => (
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>

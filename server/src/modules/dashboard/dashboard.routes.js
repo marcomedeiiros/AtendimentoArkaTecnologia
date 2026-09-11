@@ -72,6 +72,12 @@ router.get("/ranking-equipe", (req, res, next) =>
 // CONFIGURACAO DA PONTUACAO DA SEDE. So ADMINISTRADOR, nos dois verbos --
 // inclusive na leitura: a tela expoe a regua exata, e quem e avaliado saber
 // dela antes de a empresa anunciar e outra coisa.
+// A SATISFACAO DO CICLO. Nao e restrita a administrador: e o mesmo agregado
+// que o painel de parede mostra para a sala, e os cartoes de cima desta tela
+// sempre contaram a empresa inteira. O que ela substitui e uma conta que a tela
+// fazia sobre a lista da Central -- recortada por setor, e sem janela de tempo.
+router.get("/satisfacao", (req, res, next) => dashboardController.satisfacao(req, res).catch(next));
+
 router.get("/regras", adminMiddleware, (req, res, next) => dashboardController.obterRegras(req, res).catch(next));
 // COM VALIDACAO NA BORDA, como a rota irma dos relatorios: o Zod barra a
 // forma aqui e os tres gravadores reconferem a regra (ver `dashboard.dto`).
