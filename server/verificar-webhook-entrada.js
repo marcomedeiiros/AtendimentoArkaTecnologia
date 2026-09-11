@@ -817,6 +817,26 @@ console.log("=== Entrada do webhook ===");
         : ["nao achou com o jid certo em segundo lugar"]),
     ]);
 
+    // ── OS BINARIOS CHEGAM EM QUATRO FORMAS DIFERENTES ──────────────────────
+    //
+    // O caminho ate aqui e JSON, que nao tem binario. Cada camada serializa do
+    // seu jeito, e tratar so base64 falha SEM ESTOURAR: `Buffer.from(obj,
+    // "base64")` devolve vazio em vez de reclamar, e o sintoma final ("nao foi
+    // possivel decifrar") e identico ao de nao ter a chave. Foi exatamente o que
+    // aconteceu no primeiro teste em producao.
+    const bytes = [...segredo];
+    const formas = {
+      "base64 (banco da Evolution)": segredo.toString("base64"),
+      "{type:Buffer,data} (toJSON do Node)": { type: "Buffer", data: bytes },
+      "array cru": bytes,
+      Buffer: segredo,
+    };
+    const pFormas = [];
+    for (const [nome, valor] of Object.entries(formas)) {
+      if (ler({ ...simples, segredo: valor }) !== "123") pFormas.push(`${nome}: nao decifrou`);
+    }
+    check("a chave e lida em qualquer uma das formas que o JSON produz", pFormas);
+
     // E O QUE NAO PODE ACONTECER: chave errada devolvendo texto. A tag do GCM e
     // quem garante -- sem ela, uma derivacao errada viraria lixo na bolha.
     check("chave errada NAO produz texto", [

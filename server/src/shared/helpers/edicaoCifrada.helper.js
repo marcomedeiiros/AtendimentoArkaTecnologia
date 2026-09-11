@@ -121,6 +121,40 @@ function textoDaEdicao(bytes) {
   return texto ? texto.toString("utf8") : null;
 }
 
+/**
+ * BYTES, VENHAM COMO VIEREM.
+ *
+ * `messageSecret`, `encIv` e `encPayload` são campos BINÁRIOS, e o caminho até
+ * aqui é JSON -- que não tem binário. Cada camada resolve isso do seu jeito, e
+ * a mesma instalação entrega formas diferentes conforme a versão:
+ *
+ *   "TEnl91AR..."                    base64 (é como o banco da Evolution guarda)
+ *   { type: "Buffer", data: [...] }  o `toJSON()` do Buffer do Node
+ *   [12, 240, 8, ...]                array cru de bytes
+ *   Buffer / Uint8Array              quando nada serializou no meio
+ *
+ * Tratar só o primeiro caso é o tipo de erro que não estoura: `Buffer.from(obj,
+ * "base64")` devolve um buffer vazio em vez de reclamar, a derivação sai errada,
+ * o GCM recusa, e o sintoma final é "não foi possível decifrar" -- que se parece
+ * exatamente com não ter a chave. Foi o que aconteceu no primeiro teste em
+ * produção: `temSegredo: true` e nenhuma combinação funcionando.
+ */
+function paraBuffer(valor) {
+  if (!valor) return null;
+  if (Buffer.isBuffer(valor)) return valor.length ? valor : null;
+  if (valor instanceof Uint8Array) return valor.length ? Buffer.from(valor) : null;
+  if (Array.isArray(valor)) return valor.length ? Buffer.from(valor) : null;
+  if (typeof valor === "object" && Array.isArray(valor.data)) {
+    return valor.data.length ? Buffer.from(valor.data) : null;
+  }
+  if (typeof valor === "string") {
+    // Base64 é o esperado; um buffer vazio significa que a string não era isso.
+    const b = Buffer.from(valor, "base64");
+    return b.length ? b : null;
+  }
+  return null;
+}
+
 /** Os JIDs plausíveis para a derivação, do mais provável ao menos. */
 function candidatos(jids) {
   const limpos = jids.filter((j) => typeof j === "string" && j.length);
@@ -146,16 +180,10 @@ function candidatos(jids) {
 function decifrarEdicao({ segredo, encIv, encPayload, alvoId, jids = [] }) {
   if (!segredo || !encIv || !encPayload || !alvoId) return null;
 
-  let chave;
-  let iv;
-  let carga;
-  try {
-    chave = Buffer.from(segredo, "base64");
-    iv = Buffer.from(encIv, "base64");
-    carga = Buffer.from(encPayload, "base64");
-  } catch {
-    return null;
-  }
+  const chave = paraBuffer(segredo);
+  const iv = paraBuffer(encIv);
+  const carga = paraBuffer(encPayload);
+  if (!chave || !iv || !carga) return null;
   // GCM: os 16 últimos bytes são a tag de autenticação.
   if (carga.length <= 16 || !chave.length || !iv.length) return null;
 

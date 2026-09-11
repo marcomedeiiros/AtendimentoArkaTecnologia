@@ -625,6 +625,35 @@ class WhatsAppService {
       // A causa quase sempre e esta, e ela se resolve sozinha com o tempo: a
       // mensagem original chegou antes de guardarmos a chave.
       temSegredo: !!alvo.metadata?.segredo,
+      // A FORMA do segredo, e nao ele: base64, {type:"Buffer"}, array... Cada
+      // uma exige uma leitura diferente, e a errada produz exatamente o mesmo
+      // sintoma de "nao temos a chave" (ver `paraBuffer`).
+      formatoDoSegredo: formaDo(alvo.metadata?.segredo),
+      formatoDaCarga: formaDo({ encIv: no.encIv, encPayload: no.encPayload }),
+      // ── COM A CHAVE NA MAO, O QUE SOBRA E O JID ────────────────────────────
+      //
+      // A derivacao usa o JID de quem mandou, e "qual JID" e a unica parte do
+      // esquema que nao esta documentada de forma util para esta instalacao: o
+      // teste manual acertou com o `@lid` do cliente, lido do banco da
+      // Evolution, mas o WEBHOOK normaliza o endereco e entrega o telefone.
+      //
+      // Entao aqui saem os identificadores que CHEGARAM, para a proxima falha
+      // dizer de onde tirar o candidato que falta em vez de exigir outro
+      // experimento. Sao os mesmos identificadores que o log ja registra em
+      // outros pontos (ver "Mensagem ignorada: nao e conversa de atendimento").
+      chaveDoEvento: {
+        remoteJid: key?.remoteJid || null,
+        remoteJidAlt: key?.remoteJidAlt || null,
+        participant: key?.participant || null,
+        participantAlt: key?.participantAlt || null,
+        addressingMode: key?.addressingMode || null,
+        senderLid: key?.senderLid || null,
+        senderPn: key?.senderPn || null,
+      },
+      chaveDoAlvo: {
+        remoteJid: no.targetMessageKey?.remoteJid || null,
+        fromMe: no.targetMessageKey?.fromMe ?? null,
+      },
     });
     return {
       recebido: true,
