@@ -11,6 +11,23 @@
  * Nada nesta plataforma sabia disso. O webhook é a única via de entrada de
  * mensagem, e era a única peça que ninguém conferia.
  *
+ * ── E O QUE ESSA CONFERÊNCIA ERRAVA (corrigido em 11/09/2026) ──────────────
+ *
+ * A primeira versão perguntava `/webhook/find` e, sem resposta, gritava
+ * `error: WEBHOOK AUSENTE`. Só que nesta topologia quem entrega é o webhook
+ * **global** da Evolution, e o global **não aparece** nessa consulta. Resultado:
+ * o alarme saía a cada boot, com as mensagens entrando normalmente.
+ *
+ * Um alarme que grita todo dia é um alarme que ninguém lê no dia em que for
+ * verdade -- e este cobre a única via de entrada de mensagem do produto. Gastar
+ * a credibilidade dele era o defeito; o ruído era só o sintoma.
+ *
+ * A regra que ficou: **afirmar só o que dá para afirmar.** Ausência de webhook
+ * por instância vira `warn` (é o normal aqui); webhook que existe e está
+ * desligado continua `error` (isso é afirmável). E a pergunta que de fato
+ * importa -- "está entrando alguma coisa?" -- passou a ser respondida por
+ * EVIDÊNCIA, o tráfego real, e não por suposição. Ver `confirmarPeloTransito`.
+ *
  * ── POR QUE CONFERIR, E NÃO CONSERTAR SOZINHO ──────────────────────────────
  *
  * Este módulo AVISA; não reconfigura. Regravar o webhook no boot parece
@@ -40,10 +57,69 @@ const logger = require("../../config/logger");
 // duas, não a configuração.
 const ESPERA_MS = 20_000;
 
+// Quanto se espera por QUALQUER evento antes de dizer que a entrada está muda.
+//
+// Dez minutos é folgado de propósito: a pergunta que este relógio responde é "a
+// Evolution está chamando?", e ela chama por muito mais do que mensagem --
+// `connection.update`, `contacts.update`, `chats.update`. Uma instalação viva
+// dificilmente passa dez minutos em silêncio absoluto; uma instalação com o
+// webhook quebrado nunca sai dele.
+const ESPERA_TRANSITO_MS = 10 * 60 * 1000;
+
 /** Só o suficiente para comparar sem despejar o segredo no log. */
 function resumirUrl(url) {
   if (!url) return null;
   return String(url).replace(/token=[^&]*/i, "token=***");
+}
+
+/**
+ * A PROVA QUE FALTAVA: alguém chegou a bater na porta?
+ *
+ * Nenhuma pergunta feita à Evolution responde "as mensagens estão entrando?" --
+ * o webhook global não aparece em `/webhook/find`, e ela não tem como dizer se
+ * consegue nos alcançar. O tráfego responde, e é a única coisa que responde.
+ *
+ * Por isso o veredito fica em `warn`, e não em `error`: dez minutos de silêncio
+ * é FORTE indício, não prova. Se ninguém falou com o número e a conexão estava
+ * quieta, silêncio é normal -- e transformar isso num `error` recriaria, por
+ * outro caminho, exatamente o alarme falso que este módulo acabou de perder.
+ *
+ * Quando há tráfego, sai uma linha positiva. Ela vale mais do que parece: hoje,
+ * para saber que a entrada funciona, é preciso ir no log procurar por mensagem
+ * recebida. Uma linha dizendo "confirmado" é o que transforma uma investigação
+ * em uma leitura.
+ */
+function confirmarPeloTransito(instancia) {
+  // Import tardio: `whatsapp.service` carrega o mundo (repositórios, storage,
+  // motor do bot), e este módulo é chamado no boot -- exigi-lo no topo mudaria
+  // a ordem de carga por causa de uma conferência que é um confortável.
+  const whatsappService = require("./whatsapp.service");
+  const t0 = Date.now();
+
+  const t = setTimeout(() => {
+    const ultimo = whatsappService.ultimoEventoEm();
+    if (ultimo && ultimo >= t0) {
+      logger.info("Webhook confirmado pelo transito -- eventos estao entrando", {
+        instancia,
+        ultimoEventoHaSegundos: Math.round((Date.now() - ultimo) / 1000),
+      });
+      return;
+    }
+    logger.warn("Nenhum evento do WhatsApp chegou desde que a API subiu", {
+      instancia,
+      minutos: Math.round(ESPERA_TRANSITO_MS / 60000),
+      // As duas causas produzem o MESMO silencio e pedem consertos opostos. A
+      // segunda tem sintoma proprio, e dizer isso aqui poupa a investigacao.
+      seForQuebra:
+        "Confira WEBHOOK_GLOBAL_URL no compose da Evolution. Se o log tiver " +
+        "'Webhook RECUSADO', o problema e o WEBHOOK_SECRET divergente, nao a URL.",
+      seForCalmaria: "Se ninguem falou com o numero neste periodo, isto e normal.",
+    });
+  }, ESPERA_TRANSITO_MS);
+
+  // Nao segura o processo aberto: um `docker stop` durante a espera nao deve
+  // ficar aguardando este temporizador.
+  if (typeof t.unref === "function") t.unref();
 }
 
 async function conferir() {
@@ -65,10 +141,37 @@ async function conferir() {
   const url = config?.url || null;
   const ligado = config?.enabled === true;
 
-  if (!url || !ligado) {
-    logger.error("WEBHOOK AUSENTE -- nenhuma mensagem do WhatsApp vai entrar", {
+  // ── "SEM WEBHOOK POR INSTANCIA" NAO E "SEM WEBHOOK" ───────────────────────
+  //
+  // Aqui saia `error: WEBHOOK AUSENTE -- nenhuma mensagem do WhatsApp vai
+  // entrar`, e em producao ele saia A CADA BOOT -- com as mensagens entrando
+  // normalmente. O motivo: nesta topologia quem entrega e o webhook GLOBAL da
+  // Evolution (`WEBHOOK_GLOBAL_URL`, no compose dela), e o global NAO aparece em
+  // `/webhook/find`. Perguntar por instancia sempre devolveu vazio.
+  //
+  // Isso e pior do que um log errado. Esta e exatamente a frase que, em
+  // 07/09/2026, significou bot mudo por horas -- e uma frase que grita todo dia
+  // sem motivo e uma frase que ninguem le no dia em que for verdade. Gastar o
+  // unico alarme da unica via de entrada de mensagem e o defeito, nao o ruido.
+  //
+  // O que se pode afirmar daqui e so isto: nao ha webhook POR INSTANCIA. Quem
+  // decide se ha entrada e o TRANSITO -- e ele e verificado logo abaixo, com
+  // evidencia em vez de suposicao.
+  if (!url) {
+    logger.warn("Sem webhook POR INSTANCIA -- presumindo o global da Evolution", {
       instancia,
-      configurado: url ? resumirUrl(url) : "(nada)",
+      naoEErro: "Nesta topologia o global entrega, e ele nao aparece em /webhook/find.",
+      conferindo: `Aguardando ${Math.round(ESPERA_TRANSITO_MS / 60000)} min por qualquer evento para confirmar.`,
+    });
+    return confirmarPeloTransito(instancia);
+  }
+
+  // Webhook por instancia EXISTE e esta desligado: isto sim e afirmavel, e e
+  // uma configuracao quebrada -- alguem criou e desativou.
+  if (!ligado) {
+    logger.error("WEBHOOK DESLIGADO -- nenhuma mensagem do WhatsApp vai entrar", {
+      instancia,
+      configurado: resumirUrl(url),
       enabled: config?.enabled ?? null,
       // O que fazer, escrito aqui para nao depender de alguem lembrar.
       conserto: "Painel > Integracao WhatsApp > configurar webhook.",

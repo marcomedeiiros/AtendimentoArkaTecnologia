@@ -160,8 +160,21 @@ console.log("=== Entrada do webhook ===");
     };
     const conferencia = require(path.join(__dirname, "src/modules/whatsapp/whatsapp.conferirWebhook"));
 
+    // ── O CASO `null` MUDOU DE VEREDITO, E DE PROPOSITO ─────────────────────
+    //
+    // Ele exigia `error` ("WEBHOOK AUSENTE"). Mas nesta topologia quem entrega e
+    // o webhook GLOBAL, que NAO aparece em `/webhook/find` -- entao `null` e o
+    // estado NORMAL da VM, e o alarme saia a cada boot com tudo funcionando.
+    //
+    // A checagem nao foi apagada, foi INVERTIDA: `null` agora tem de sair em
+    // `warn`, nunca em `error`. Apagar deixaria o caminho livre para alguem
+    // "consertar" o alarme de volta na proxima leitura apressada do log -- e o
+    // custo de gritar todo dia e perder o alarme no dia em que importa.
+    //
+    // O que continua sendo `error` e so o afirmavel: webhook que EXISTE e esta
+    // desligado, ou que existe sem token.
     const casos = [
-      [null, true, "webhook ausente (o caso de 07/09)"],
+      [null, false, "sem webhook por instancia (o normal com o global)"],
       [{ enabled: false, url: "http://api:3000/api/webhook/v1/whatsapp?token=x" }, true, "webhook desligado"],
       [{ enabled: true, url: "http://api:3000/api/webhook/v1/whatsapp" }, true, "webhook sem token"],
       [{ enabled: true, url: "http://api:3000/api/webhook/v1/whatsapp?token=x", events: ["A"] }, false, "webhook saudavel"],
@@ -186,6 +199,18 @@ console.log("=== Entrada do webhook ===");
       }
     }
     check("a conferencia de boot grita quando o webhook nao serve", problemas);
+
+    // ...E NAO GRITA quando a ausencia e a normalidade. A linha precisa existir
+    // (alguem tem de saber que nao ha webhook por instancia), mas em `warn`.
+    resposta = null;
+    linhas.length = 0;
+    await conferencia.conferir();
+    const semInstancia = linhas.filter((l) => l.nivel === "warn");
+    check("sem webhook por instancia: avisa em warn, nunca em error", [
+      ...(linhas.some((l) => l.nivel === "error") ? ["saiu como error -- o alarme volta a gritar todo boot"] : []),
+      ...(semInstancia.length === 0 ? ["nao avisou nada -- a ausencia precisa aparecer em algum lugar"] : []),
+      ...(semInstancia.some((l) => /global/i.test(JSON.stringify(l))) ? [] : ["o aviso nao explica que o global e quem entrega"]),
+    ]);
 
     // E nao pode despejar o token na linha saudavel.
     resposta = { enabled: true, url: "http://api:3000/api/webhook/v1/whatsapp?token=SEGREDO-AQUI", events: ["A"] };

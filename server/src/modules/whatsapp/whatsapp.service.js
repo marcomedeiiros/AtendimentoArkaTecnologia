@@ -99,6 +99,19 @@ class WhatsAppService {
     // `_processarConexao`; em memoria de proposito (um restart reimporta uma
     // vez, que e justamente quando vale reimportar).
     this._agendaEm = {};
+    // Quando chegou o ULTIMO evento do webhook, de qualquer tipo.
+    //
+    // E a unica prova POSITIVA de que a via de entrada esta viva -- e ela nao
+    // existia. Ver whatsapp.conferirWebhook: nesta topologia quem entrega e o
+    // webhook GLOBAL da Evolution, que nao aparece em `/webhook/find`, entao
+    // perguntar a ela nunca respondeu "as mensagens estao entrando?". O transito
+    // responde.
+    this._ultimoEventoEm = null;
+  }
+
+  /** Quando chegou o ultimo evento do webhook (ms), ou null se nenhum ainda. */
+  ultimoEventoEm() {
+    return this._ultimoEventoEm;
   }
 
   extrairTelefone(remoteJid) {
@@ -769,6 +782,10 @@ class WhatsAppService {
   }
 
   async processarWebhook(body, instanceName) {
+    // Marcado ANTES de qualquer roteamento: o que interessa aqui e que a
+    // Evolution CHAMOU, e nao o que ela trouxe. Um `contacts.update` que nao
+    // roteamos prova a via de entrada tao bem quanto uma mensagem.
+    this._ultimoEventoEm = Date.now();
     const event = body?.event || body?.type || "";
     const instance = body?.instance || instanceName || env.evolutionApi.instance;
 

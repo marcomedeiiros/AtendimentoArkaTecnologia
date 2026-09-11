@@ -954,7 +954,14 @@ function liberarBackoff(vigia) {
       "passado o teto de 6h, a agenda volta a ser importada"
     );
 
-    contatoService.sincronizarDoWhatsApp = originalSync;
+    // O DUBLE FICA DE PE ATE O FIM DO PROCESSO, e isso e de proposito.
+    //
+    // A importacao e agendada com 15s de atraso (para a Evolution receber a
+    // sincronizacao do aparelho). Restaurar o original aqui faria esse timer
+    // cair no servico DE VERDADE depois que a suite terminou -- e o teste
+    // encerrava cuspindo um `ECONNREFUSED` contra a Evolution que nao existe
+    // neste ambiente, com cara de falha sem ser uma.
+    void originalSync;
     delete svc._agendaEm["agenda-teste"];
   }
 
