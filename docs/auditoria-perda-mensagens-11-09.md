@@ -280,7 +280,23 @@ batiam, a conclusão "está funcionando" era defensável, e estava errada. O que
 salvou foi um teste manual com o log ligado -- não mais uma consulta. **Números
 consistentes provam que a hipótese não foi refutada, nunca que ela é verdadeira.**
 
-### Apagar -- AINDA NÃO É POSSÍVEL CONCLUIR
+### Apagar -- FUNCIONANDO, e nunca esteve quebrado
+
+**Confirmado em produção (11/09, 19:10:07)**, com o teste manual que faltava:
+
+```
+Evento de protocolo do cliente aplicado   acao: apagar   waMessageId: 3EB09AED56ED7C980B93D6
+```
+
+A exclusão chega **embrulhada em `protocolMessage`** -- o caminho que já existia
+desde `f3f50c9`. Nenhum `messages.delete` apareceu como "não roteado", então os
+branches por nome (`a7177ba`) não chegaram a ser exercitados: eles cobrem formas
+que esta versão não usa, e ficam como rede para quando ela mudar.
+
+O que segue abaixo é a análise que se fazia **antes** do teste, preservada porque
+o raciocínio estava certo e a conclusão que ele permitia -- "não dá para saber
+daqui" -- era a honesta. O que decidiu não foi mais uma consulta ao banco: foi
+apagar uma mensagem com o log aberto.
 
 ```
 protocolMessage por tipo:   14 (MESSAGE_EDIT) → 293        0 (REVOKE) → 0
@@ -412,8 +428,10 @@ texto legível não esvazia a bolha.
 * **o flapping da conexão** -- é problema de disponibilidade, não de perda de
   mensagem (§3). Merece investigação própria, não esta.
 
-**O apagar continua sem veredito** (§6). Os dois branches novos o tornam
-autoverificável: a primeira exclusão real de um cliente responde sozinha, no log.
+**Verificado em produção no mesmo dia** (§6): editar e apagar foram testados à
+mão, com o log aberto, e os dois aparecem na Central. A citação de resposta
+digitada continua impossível nesta versão -- e essa é a única das três queixas
+iniciais que não tem conserto.
 
 ---
 
