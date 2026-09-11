@@ -11,6 +11,39 @@ class DashboardController {
   }
 
   /**
+   * RECOMECAR A CONTAGEM DA COMPETENCIA CORRENTE.
+   *
+   * ── O QUE ELE MUDA, E O QUE NAO ─────────────────────────────────────────
+   *
+   * Grava um piso para ESTA competencia: o ranking, o painel de parede e a
+   * Visao Geral passam a contar dali. Nenhum atendimento e apagado -- e piso de
+   * janela, e por isso da para desfazer.
+   *
+   * A COMPETENCIA E O INSTANTE SAO DO SERVIDOR, nunca do pedido. Aceita-los de
+   * fora deixaria pedir piso em mes ja premiado, e o passado e o que nem o
+   * ciclo mexe (ver o bloco das vigencias em `rankings/ciclo`).
+   *
+   * ── E ELE NAO ALCANCA A PROXIMA COMPETENCIA ────────────────────────────
+   *
+   * O reset que vale e o AUTOMATICO: na virada do ciclo a competencia seguinte
+   * nasce limpa, sem herdar este corte. E a diferenca em relacao ao "Limpar
+   * dados" que existiu até 11/09 e cortava deste mes em diante, para sempre
+   * (ver o §11 e o §12 de `docs/auditoria-ranking-zerado-10-09.md`).
+   *
+   * ── NAO HA ROTA PARA DESFAZER, E ISSO FOI PEDIDO ───────────────────────
+   *
+   * O botao de "Restaurar dados" nao volta: o pedido foi explicito ("sem botao
+   * de voltar essa pontuacao"). Desfazer continua possivel no servidor --
+   * `node recomecar-contagem.js --ranking=sede --desfazer` --, e e por isso que
+   * isto grava um piso em vez de apagar linha: a decisao de nao ter o botao nao
+   * pode virar a decisao de perder o dado.
+   */
+  async recomecarContagem(req, res) {
+    const data = await dashboardService.recomecarContagem(req.params.ranking, req.user);
+    return success(res, data);
+  }
+
+  /**
    * A SATISFACAO DO CICLO, pronta -- ver `dashboardService.satisfacao`.
    *
    * Sem recorte por acesso, e de proposito: e agregado, nao conteudo, e o mesmo

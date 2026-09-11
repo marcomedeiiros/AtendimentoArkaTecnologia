@@ -592,3 +592,71 @@ Teste que reprova entre 00:00 e 01:00 é pior que teste ausente: manda procurar
 defeito onde não há, e no meio de uma mudança o suspeito natural é a mudança. A
 fixture passou a ancorar no **fechamento** (agora), mantendo a duração de uma
 hora -- que é o que o teste mede.
+
+---
+
+## 13. O botão voltou -- um, e sem o de desfazer (11/09/2026)
+
+Pedido, logo depois do §12: *"cria um botão pra limpar o rank sem botão de voltar
+essa pontuação"*, e *"mas com ele limpando automaticamente"*.
+
+### 13.1 As duas metades do pedido
+
+**O botão volta** porque o script resolvia o problema pela metade: ele exige
+terminal do servidor, e a ação é de gestão -- quem decide recomeçar o mês é quem
+olha a tela, não quem tem acesso ao container.
+
+**O reset automático continua sendo o principal**, e é isso que "limpando
+automaticamente" garante: na virada do ciclo a competência seguinte nasce limpa,
+e **o corte manual não a alcança**. O botão é o extra; o ciclo é a regra.
+
+E ele limpa as três telas juntas -- ranking, parede e Visão Geral --, porque as
+três leem o mesmo piso. Uma delas discordando seria a TV e a mesa mostrando
+pódios diferentes no mesmo minuto.
+
+### 13.2 O botão de voltar NÃO volta, e o que fica no lugar dele
+
+Foi pedido assim, e é uma redução real de segurança: até o §11, quem clicasse
+tinha um segundo botão para desfazer. Agora não tem. Então três coisas passam a
+carregar esse peso:
+
+* **a confirmação diz tudo antes do clique** -- que nada é apagado, que os
+  outros meses continuam como estão, que a próxima competência começa limpa, e
+  **que não há botão para desfazer**. É a última chance de alguém desistir, e
+  por isso ela é explícita em vez de curta;
+* **nada é apagado.** Continua sendo piso de janela, e não `DELETE`. A decisão
+  de não ter o botão não pode virar a decisão de perder o dado;
+* **o desfazer existe, no servidor:**
+  `node recomecar-contagem.js --ranking=sede --desfazer`. A confirmação diz que
+  só um administrador consegue reverter, por lá -- quem clica sabe o custo do
+  arrependimento antes de pagá-lo.
+
+O botão **desaparece** quando a competência já foi recomeçada (não há como
+recomeçar duas vezes o mesmo mês), e o aviso em cima da tabela assume o lugar
+dele.
+
+### 13.3 E o Dockerfile, que era o furo por baixo de tudo
+
+O `recomecar-contagem.js` do §12 foi entregue com um comando que **não podia
+funcionar**: o Dockerfile copia os scripts de conserto **um por nome**, e o novo
+não estava na lista -- `Cannot find module /app/recomecar-contagem.js`.
+
+Entraram os dois que faltavam (o de recomeçar, que agora é o único caminho de
+desfazer, e o `conferir-credito-avaliacoes.js`). Continua um `COPY` por nome, e
+não `COPY *.js`: o glob varreria os `verificar-*` para dentro da imagem de
+produção. O preço é uma linha a cada ferramenta nova -- e ficou escrito ali que
+ela foi esquecida uma vez, para a próxima não ser.
+
+### 13.4 A verificação
+
+A seção 10b ganhou a parte da tela: a competência e o instante saem do **relógio
+do servidor** (não do pedido), ranking inventado é recusado no serviço, a rota
+existe e é **só de administrador**, **não há rota de desfazer**, a tela chama o
+recomeço da aba aberta, **não tem botão de restaurar** -- e a confirmação
+mantém as três frases que substituem o desfazer.
+
+Duas dessas checagens reprovaram na primeira versão por medirem o **comentário**
+em vez do código: o arquivo cita "Restaurar dados" e `--desfazer` justamente
+para explicar a decisão. Passaram a medir só as linhas de `router.` e o JSX sem
+comentários. É a terceira vez nesta semana que um vigia tropeça no texto que
+existe para explicá-lo -- e o padrão já está anotado no fim da auditoria da tela.

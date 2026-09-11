@@ -72,6 +72,29 @@ router.put("/regras", adminMiddleware, validate(regrasSedeSchema), (req, res, ne
   dashboardController.salvarRegras(req, res).catch(next)
 );
 
+/**
+ * @openapi
+ * /api/dashboard/ranking/{ranking}/recomecar:
+ *   post:
+ *     tags: [Dashboard]
+ *     security: [{ bearerAuth: [] }]
+ *     summary: Recomeca a contagem da competencia corrente (nao apaga atendimentos)
+ *     responses:
+ *       200:
+ *         description: Competencia e instante a partir do qual ela conta
+ */
+// SO ADMINISTRADOR. Muda o placar que a equipe INTEIRA ve -- no ranking, na
+// parede e na Visao Geral --, inclusive o de quem clicou. Esconder o botao no
+// front nao basta: sem este guarda, qualquer conta autenticada chamaria a rota
+// no curl.
+//
+// NAO HA rota de desfazer, a pedido ("sem botao de voltar essa pontuacao"). O
+// caminho existe no servidor: `node recomecar-contagem.js --ranking=X
+// --desfazer`. Ver o bloco no controller.
+router.post("/ranking/:ranking/recomecar", adminMiddleware, (req, res, next) =>
+  dashboardController.recomecarContagem(req, res).catch(next)
+);
+
 // AS ROTAS DE LIMPAR/RESTAURAR O PAINEL SAIRAM (11/09/2026).
 //
 // O recurso inteiro foi removido -- ver o topo de `painel.service`. Rota viva

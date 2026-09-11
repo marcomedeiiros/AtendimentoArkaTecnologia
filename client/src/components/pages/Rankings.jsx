@@ -637,6 +637,58 @@ export default function Rankings() {
     }
   };
 
+  /**
+   * RECOMECAR A CONTAGEM DESTA COMPETENCIA -- o botao da aba aberta.
+   *
+   * ── O QUE ELE NAO E ──────────────────────────────────────────────────────
+   *
+   * Nao e o "Limpar dados" que existiu aqui até 11/09/2026. Aquele cortava
+   * deste mes EM DIANTE, para sempre, e foi removido a pedido depois de alguem
+   * clicar e achar que havia perdido a pontuacao. Este corta UMA competencia: na
+   * virada do ciclo a proxima nasce limpa, sem herdar nada.
+   *
+   * ── E NAO HA BOTAO DE VOLTAR, A PEDIDO ───────────────────────────────────
+   *
+   * O par "Restaurar dados" nao existe mais na tela -- foi pedido assim. Por
+   * isso duas coisas importam mais do que antes: a confirmacao diz exatamente o
+   * que vai acontecer ANTES do clique, e nada e apagado no banco (e piso de
+   * janela). Desfazer continua possivel no servidor, e a confirmacao diz isso --
+   * decisao de nao ter o botao nao pode virar decisao de perder o dado.
+   */
+  const [recomecando, setRecomecando] = useState(false);
+  const recomecarContagem = async () => {
+    const ok = await confirmar(
+      `A pontuação de "${rotuloAba}" em ${rotuloCompetencia(compAtiva)} volta a zero e passa a ` +
+      `contar a partir de agora${aba === 'sede' ? ', aqui, no Modo TV e na Visão Geral.' : '.'}\n\n` +
+      'Nenhum atendimento, avaliação ou relatório é apagado, os outros meses continuam como estão, ' +
+      'e a próxima competência começa limpa na virada do ciclo.\n\n' +
+      'NÃO há botão para desfazer: só um administrador consegue reverter, pelo servidor.',
+      {
+        titulo: `Recomeçar a contagem de ${rotuloAba.toLowerCase()}?`,
+        rotuloConfirmar: 'Recomeçar agora',
+        rotuloCancelar: 'Deixar como está',
+        perigo: true,
+      }
+    );
+    if (!ok) return;
+    setRecomecando(true);
+    try {
+      await DashboardAPI.recomecarContagem(aba);
+      // Recarrega: o `recomecouEm` que vem junto e o que acende o aviso em cima
+      // da tabela. Sem isto, a tela so mostraria o recomeco no proximo F5.
+      await carregar();
+      avisar('A contagem desta competência recomeça agora. Nada foi apagado.', {
+        titulo: 'Contagem recomeçada', tipo: 'info',
+      });
+    } catch (e) {
+      avisar(e?.message || 'Não foi possível recomeçar a contagem.', {
+        titulo: 'Contagem não recomeçada',
+      });
+    } finally {
+      setRecomecando(false);
+    }
+  };
+
   const remover = async (p) => {
     const ok = await confirmar(`Remover o registro de premiação de ${p.usuarioNome}?`, {
       titulo: 'Remover premiação', rotuloConfirmar: 'Remover', perigo: true,
@@ -774,6 +826,23 @@ export default function Rankings() {
                 <span className="text-espera-400"> · ciclo de transição</span>
               )}
             </span>
+          )}
+
+          {/* RECOMEÇAR A CONTAGEM -- o botão é o da ABA ABERTA.
+              Só administrador, e o servidor confere de novo: esconder botão
+              nunca foi proteção. O rótulo diz o que faz e o texto completo fica
+              no `title`, porque no celular só cabe a primeira palavra. */}
+          {ehAdmin && !dados?.recomecouEm && (
+            <button
+              onClick={recomecarContagem}
+              disabled={recomecando}
+              title={`Zera a pontuação de ${rotuloAba} nesta competência e passa a contar a partir de agora -- nada é apagado, e a próxima competência começa limpa`}
+              className="px-3 py-2 rounded-xl bg-falha/15 border border-falha/40 text-falha-400 hover:bg-falha/25 text-[11px] font-bold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+            >
+              {recomecando ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
+              <span className="sm:hidden">Recomeçar</span>
+              <span className="hidden sm:inline">Recomeçar a contagem</span>
+            </button>
           )}
 
           {/* CONFIGURAÇÃO -- só na aba da sede, e só para administrador.

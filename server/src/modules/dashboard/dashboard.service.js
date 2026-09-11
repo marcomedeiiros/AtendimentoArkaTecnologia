@@ -3,6 +3,9 @@ const conversaRepository = require("../../infrastructure/repositories/conversa.r
 const parceiroRepository = require("../../infrastructure/repositories/parceiro.repository");
 const equipeService = require("../equipe/equipe.service");
 const painelService = require("./painel.service");
+const ciclo = require("../rankings/ciclo");
+const piso = require("../rankings/piso.competencia");
+const AppError = require("../../shared/errors/AppError");
 
 /**
  * QUEM E PROMOTOR E QUEM E DETRATOR -- a regua da satisfacao.
@@ -55,6 +58,24 @@ class DashboardService {
       totalEquipe: equipe.length,
       filaAguardando: mapStatus.pendente || 0,
     };
+  }
+
+  /**
+   * Recomeca a contagem da competencia CORRENTE de um ranking.
+   *
+   * A allowlist e aqui, e nao so na rota: este servico e chamado de dois
+   * caminhos (a rota e o script `recomecar-contagem.js`), e um ranking
+   * inventado nao pode criar uma terceira chave de configuracao no banco.
+   */
+  async recomecarContagem(ranking, autor = null) {
+    if (!piso.RANKINGS.includes(ranking)) {
+      throw new AppError("Ranking desconhecido", 400, "RANKING_INVALIDO");
+    }
+    // A COMPETENCIA SAI DO RELOGIO DO SERVIDOR, com o ciclo configurado -- e
+    // nao do pedido. Ver o bloco no controller.
+    const competencia = ciclo.competenciaDe(new Date(), await ciclo.obter());
+    const quem = autor?.nome || autor?.email || autor?.sub || null;
+    return piso.definir(ranking, competencia, quem);
   }
 
   /**

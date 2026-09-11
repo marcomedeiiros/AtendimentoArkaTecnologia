@@ -703,9 +703,20 @@ export const DashboardAPI = {
   // pedido). Restrito a administrador no servidor, nos dois verbos.
   regrasSede: () => request('/dashboard/regras'),
   salvarRegrasSede: (regras) => request('/dashboard/regras', { method: 'PUT', body: JSON.stringify(regras) }),
-  // LIMPAR/RESTAURAR O PAINEL SAIU (11/09/2026). O ciclo configuravel ja da o
-  // recomeco a cada virada, e o corte manual era global e permanente -- ver o
-  // topo de `painel.service`.
+  // RECOMECAR A CONTAGEM da competencia corrente ('sede' ou 'externo').
+  //
+  // NAO apaga atendimento nenhum: grava um piso de janela, e o ranking, a parede
+  // e a Visao Geral passam a contar dali. O corte vale para ESTA competencia --
+  // a proxima nasce limpa na virada do ciclo, que e o reset que vale.
+  //
+  // Nao ha par de "restaurar" aqui, a pedido. Desfazer e no servidor:
+  // `node recomecar-contagem.js --ranking=X --desfazer`. Restrito a
+  // administrador no servidor (ver a rota).
+  //
+  // (O "Limpar dados" que existia antes cortava deste mes EM DIANTE, para
+  // sempre, e saiu em 11/09/2026 -- ver o topo de `painel.service`.)
+  recomecarContagem: (ranking) =>
+    request(`/dashboard/ranking/${encodeURIComponent(ranking)}/recomecar`, { method: 'POST' }),
 };
 
 // ── n8n API ──

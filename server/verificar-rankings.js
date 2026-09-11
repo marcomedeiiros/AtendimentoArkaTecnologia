@@ -1443,6 +1443,89 @@ async function main() {
       "valor corrompido e ignorado, e a pontuacao continua visivel"
     );
     await prisma.configuracao.deleteMany({ where: { chave } });
+
+    // ── PELA TELA: O BOTAO EXISTE, E O DE VOLTAR NAO ───────────────────────
+    //
+    // O botao voltou em 11/09/2026, a pedido -- e SEM o par de "Restaurar
+    // dados", tambem a pedido ("cria um botao pra limpar o rank sem botao de
+    // voltar essa pontuacao"). As duas metades sao decisao, e por isso as duas
+    // ficam travadas aqui: sem isto, a ausencia do desfazer parece esquecimento,
+    // e alguem o traz de volta "consertando".
+    const dashboardService = require("./src/modules/dashboard/dashboard.service");
+
+    // A COMPETENCIA E O INSTANTE SAO DO SERVIDOR. Aceita-los do pedido deixaria
+    // pedir piso em mes ja premiado.
+    const gravado = await dashboardService.recomecarContagem("sede", { nome: MARCA });
+    check(gravado.competencia === COMP, `a competencia sai do relogio do servidor (${gravado.competencia})`);
+    check(!!gravado.desde, "e o instante tambem");
+    const zerado = await rankingService.obter("sede", COMP);
+    check(pontosDe(zerado) === 0, "e o efeito e o mesmo do script (sede em zero)");
+    await piso.remover("sede", MARCA);
+
+    let recusou = null;
+    try {
+      await dashboardService.recomecarContagem("inventado", { nome: MARCA });
+    } catch (e) {
+      recusou = e.code;
+    }
+    check(recusou === "RANKING_INVALIDO", `ranking inventado e recusado no servico (${recusou})`);
+
+    const rotas = fs.readFileSync(
+      path.join(__dirname, "src/modules/dashboard/dashboard.routes.js"),
+      "utf8"
+    );
+    check(
+      /router\.post\("\/ranking\/:ranking\/recomecar", adminMiddleware/.test(rotas),
+      "a rota existe e e SO de administrador"
+    );
+    // A ROTA, e nao a palavra: o comentario do arquivo CITA o `--desfazer` do
+    // script de proposito, para quem le a rota saber por onde se reverte. Uma
+    // checagem por palavra reprovaria justamente o texto que explica a decisao.
+    const rotasDeclaradas = rotas
+      .split(String.fromCharCode(10))
+      .filter((l) => l.trim().startsWith("router."))
+      .join(String.fromCharCode(10));
+    check(
+      !/restaurar|desfazer/i.test(rotasDeclaradas),
+      "e nao ha rota de desfazer -- o caminho e o script, no servidor"
+    );
+
+    const tela = fs.readFileSync(
+      path.join(__dirname, "../client/src/components/pages/Rankings.jsx"),
+      "utf8"
+    );
+    check(
+      tela.includes("DashboardAPI.recomecarContagem(aba)"),
+      "a tela chama o recomeco da aba aberta"
+    );
+    // SEM OS COMENTARIOS: o proprio arquivo explica que o par "Restaurar dados"
+    // saiu, e citar o rotulo antigo e o jeito de a proxima pessoa entender que
+    // a ausencia e DECISAO, e nao esquecimento. Medir o texto cru reprovaria a
+    // explicacao -- foi o que aconteceu na primeira versao desta checagem.
+    const telaSemComentarios = tela
+      .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/[^\n]*/g, "");
+    check(
+      !telaSemComentarios.includes("Restaurar dados"),
+      "e NAO tem botao de restaurar -- foi pedido assim, e nao e esquecimento"
+    );
+    // A confirmacao e o que substitui o desfazer na tela: ela tem de dizer as
+    // tres coisas antes do clique -- que nada e apagado, que a proxima
+    // competencia comeca limpa, e que nao ha botao de voltar.
+    for (const frase of [
+      "Nenhum atendimento, avaliação ou relatório é apagado",
+      "a próxima competência começa limpa",
+      "NÃO há botão para desfazer",
+    ]) {
+      if (!tela.includes(frase)) {
+        check(false, `a confirmacao perdeu a frase "${frase}"`);
+      }
+    }
+    check(
+      tela.includes("NÃO há botão para desfazer"),
+      "e a confirmacao avisa que nao ha volta pela tela"
+    );
   }
 
   /**
