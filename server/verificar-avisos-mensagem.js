@@ -96,7 +96,23 @@ console.log("=== Aviso de mensagem nova ===");
 // indistinguível de "não chegou mensagem".
 {
   const problemas = [];
-  if (/avisosRef|avisos\.som|avisos\.desktop/.test(app)) {
+
+  /**
+   * O CODIGO, SEM OS COMENTARIOS -- e para as checagens NEGATIVAS.
+   *
+   * Toda vez que uma regra sai, o arquivo passa a CITAR a regra antiga para
+   * explicar por que ela saiu -- e uma checagem do tipo "isto nao pode existir"
+   * medindo o texto cru reprova justamente a explicacao. Aconteceu quatro vezes
+   * nesta semana, em quatro arquivos diferentes: e a explicacao que faz a
+   * proxima pessoa entender que a ausencia e decisao, entao ela fica, e o
+   * medidor e que se ajusta.
+   */
+  const codigo = app
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "");
+
+  if (/avisosRef|avisos\.som|avisos\.desktop/.test(codigo)) {
     problemas.push("voltou uma preferencia condicionando o aviso");
   }
   // ── ESTA CHECAGEM TRAVAVA A FORMA, E NAO A GARANTIA ───────────────────────
@@ -141,11 +157,24 @@ console.log("=== Aviso de mensagem nova ===");
   if (!app.includes("const paraMeuOuvido = novas.filter(")) {
     problemas.push("o recorte do som por dono desapareceu");
   }
-  // A FILA CONTINUA TOCANDO PARA TODOS. E a metade que um "so quem atendeu"
-  // literal quebraria: conversa sem dono e chamado novo esperando, e silenciar
-  // trocaria um incomodo por um cliente sem resposta.
-  if (!app.includes("!n.atendenteId || n.atendenteId === usuario?.id")) {
-    problemas.push("o som deixou de tocar para a FILA (conversa sem dono) ou de olhar o dono");
+  // ── E A FILA SAIU DO SOM DA CENTRAL (11/09/2026) ────────────────────────
+  //
+  // Esta checagem travava o OPOSTO: exigia que conversa sem dono tocasse para
+  // todos, porque silenciar a fila trocaria um incomodo por um cliente
+  // esperando. A garantia estava certa enquanto a fila nao tinha outro vigia.
+  //
+  // Ela passou a ter: o MODO TV, que e a tela feita para isso e continua tocando
+  // em tudo. A fila saiu do som da Central a pedido, e o que sustenta a decisao
+  // e ela continuar VISIVEL ali (o badge do menu com a contagem de pendentes, a
+  // lista de avisos e o sino -- nenhum deles recortado).
+  //
+  // Agora se trava o contrario, nas duas direcoes: o dono ouve, e a fila NAO
+  // toca na Central.
+  if (!app.includes("novas.filter((n) => n.atendenteId === usuario?.id)")) {
+    problemas.push("o som da Central deixou de ser exatamente 'so o dono ouve'");
+  }
+  if (/!n\.atendenteId\s*\|\|/.test(codigo)) {
+    problemas.push("a fila voltou a tocar na Central -- ela e do Modo TV agora");
   }
   if (!app.includes("} else if (paraMeuOuvido.length > 0) {")) {
     problemas.push("o som da Central nao esta mais condicionado APENAS ao dono/fila");
@@ -168,7 +197,11 @@ console.log("=== Aviso de mensagem nova ===");
   //
   // Por isso a checagem trava a condicao EXATA, sem `&&`: qualquer condicao a
   // mais ali e o caminho de volta para os dois defeitos acima.
-  // O MODO TV TOCA SEMPRE, e essa parte nao mudou: e tela de parede, nao tem
+  // O MODO TV TOCA SEMPRE -- e desde 11/09/2026 isso pesa mais: com a fila fora
+  // do som da Central, ELE e o unico aviso sonoro de chamado novo no sistema.
+  // Uma condicao extra aqui deixa a operacao sem nenhum som para cliente novo.
+  //
+  // E essa parte nao mudou: e tela de parede, nao tem
   // dono, e blipar por dono ali deixaria a TV muda -- o defeito que as duas
   // tentativas contadas acima produziram. A condicao dele continua sendo UMA
   // (`modoTvRef.current`), sem `&&`: qualquer condicao a mais ali e o caminho
@@ -178,7 +211,7 @@ console.log("=== Aviso de mensagem nova ===");
       "a TV deixou de tocar o Monitoramento sem condicao -- uma tela, um som"
     );
   }
-  if (/if \(modoTvRef\.current && /.test(app)) {
+  if (/if \(modoTvRef\.current && /.test(codigo)) {
     problemas.push("voltou uma condicao extra no som do Modo TV (ela nunca foi pedida)");
   }
   if (!app.includes("tocarSomMensagem();")) {
@@ -197,7 +230,7 @@ console.log("=== Aviso de mensagem nova ===");
   if (app.includes("registrarNoHistorico(paraMeuOuvido)")) {
     problemas.push("o historico de avisos passou a ser recortado -- ele mostra o setor inteiro");
   }
-  if (/houveChamadoNovo/.test(app.replace(/\/\/[^\n]*/g, ""))) {
+  if (/houveChamadoNovo/.test(codigo)) {
     problemas.push("voltou a distincao 'chamado novo' na decisao do som (ela nunca foi pedida)");
   }
   if (/Notificações ligadas|Notificações bloqueadas|BellOff/.test(layout)) {

@@ -650,30 +650,43 @@ export function AppProvider({ children }) {
         // UM TOQUE POR RAJADA, não por mensagem: `novas` pode trazer várias
         // conversas na mesma passada, e cinco sons sobrepostos não informam mais
         // do que um. Era assim antes e continua.
-        // ── E DE QUEM E O SOM: DE QUEM ATENDEU, E DA FILA ───────────────────
+        // ── E DE QUEM E O SOM: NA CENTRAL, DE QUEM ATENDEU. E SO ────────────
         //
         // O RELATO: na Central o som tocava para TODO MUNDO, em qualquer
         // conversa visivel. Quem nao atendeu aquele chamado passava o dia
         // ouvindo barulho pelo trabalho de outra pessoa -- e som que nao e meu e
         // som que eu aprendo a ignorar, inclusive quando for meu.
         //
-        // Tres casos, e nenhum pode ser esquecido:
+        // Dois casos:
         //
-        //   conversa COM dono    toca so para o dono;
-        //   conversa SEM dono    toca para todos que a enxergam -- e a FILA
-        //                        chamando, e silenciar aqui deixaria chamado
-        //                        novo entrar sem ninguem perceber. Trocaria um
-        //                        incomodo por um cliente esperando;
-        //   Modo TV              toca SEMPRE. E tela de parede, nao tem dono, e
-        //                        ja foi defeito duas vezes (ver as duas
-        //                        tentativas contadas acima).
+        //   conversa COM dono    toca so para o dono, na Central;
+        //   Modo TV              toca SEMPRE, inclusive na fila. E tela de
+        //                        parede, nao tem dono, e a condicao dele e UMA
+        //                        (`modoTvRef.current`, sem `&&`) -- ja foi
+        //                        defeito duas vezes por causa de condicao extra
+        //                        que ninguem pediu (ver as duas tentativas
+        //                        contadas acima).
         //
-        // O RECORTE E DO SOM, e nao do aviso: a lista, o sino e os contadores
-        // continuam mostrando tudo que chega no setor. Ver o que acontece com a
-        // equipe e util; OUVIR e que e intrusivo, e e so isso que muda aqui.
-        const paraMeuOuvido = novas.filter(
-          (n) => !n.atendenteId || n.atendenteId === usuario?.id
-        );
+        // ── A FILA SAIU DAQUI (11/09/2026), E PARA ONDE ELA FOI ─────────────
+        //
+        // Havia um `!n.atendenteId ||` nesta conta: conversa sem dono tocava
+        // para todos que a enxergavam, porque silenciar a fila trocaria um
+        // incomodo por um cliente esperando.
+        //
+        // A FILA PASSOU A SER DO MODO TV, a pedido: e a tela feita para vigiar
+        // exatamente isso, e ela continua tocando em tudo. Som de chamado novo
+        // para quem nao vai pega-lo era a ultima poluicao que sobrava depois do
+        // recorte por dono.
+        //
+        // O PRECO, dito em voz alta: com a TV desligada -- ou sem ninguem na
+        // sala -- um chamado novo nao emite som em lugar nenhum. Isso inclui a
+        // conversa que VOLTOU para a fila: se o cliente responder, ninguem ouve.
+        // E decisao, nao esquecimento, e o que a sustenta e a fila continuar
+        // VISIVEL na Central: o badge do menu mostra a contagem de pendentes, e
+        // a lista de avisos e o sino seguem recebendo tudo do setor.
+        //
+        // O RECORTE E DO SOM, e nao do aviso. Ver nao e ouvir.
+        const paraMeuOuvido = novas.filter((n) => n.atendenteId === usuario?.id);
 
         // UM TOQUE POR RAJADA, não por mensagem (era assim antes e continua).
         if (modoTvRef.current) {
