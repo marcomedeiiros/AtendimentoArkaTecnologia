@@ -19,6 +19,16 @@ const { motivoParaIgnorarJid } = require("../../shared/helpers/jid.helper");
 // WhatsApp ja limita perto disso.
 const MAX_MIDIA_RECEBIDA = 20 * 1024 * 1024;
 
+// Os nos que EMBRULHAM a mensagem de verdade, sem mudar o conteudo dela. Ver
+// `_semEnvelope`, que e quem os abre.
+const ENVELOPES = [
+  "ephemeralMessage",
+  "viewOnceMessage",
+  "viewOnceMessageV2",
+  "viewOnceMessageV2Extension",
+  "associatedChildMessage",
+];
+
 /**
  * A FORMA do payload -- os nomes dos campos e os tipos, nunca os valores.
  *
@@ -87,11 +97,54 @@ class WhatsAppService {
     return limparTelefone(numero);
   }
 
-  extrairTexto(payload) {
-    const msg = payload?.data?.message || payload?.message || payload;
-    if (!msg) return null;
+  /**
+   * TIRA OS ENVELOPES em volta da mensagem de verdade.
+   *
+   * O WhatsApp nao muda o conteudo quando o cliente liga um recurso -- ele
+   * EMBRULHA. A mesma foto vira:
+   *
+   *   {imageMessage}                                    conversa normal
+   *   {ephemeralMessage: {message: {imageMessage}}}     mensagens temporarias
+   *   {viewOnceMessageV2: {message: {imageMessage}}}    visualizacao unica
+   *
+   * `extrairTexto` e `extrairMidia` so olhavam o topo. Resultado: com mensagem
+   * temporaria ligada, NENHUMA mensagem daquele cliente entrava -- nem texto,
+   * nem foto. Nao uma a menos: a conversa inteira, e em silencio, porque o
+   * descarte cai em `dados_incompletos`.
+   *
+   * Isto ainda nao mordeu esta instalacao (nenhum dos dois tipos aparece na
+   * base -- ver docs/auditoria-perda-mensagens-11-09.md §1), e e exatamente por
+   * isso que entra agora: o dia em que um cliente ligar o recurso no aparelho
+   * dele, a conversa some sem ninguem ficar sabendo. E o defeito mais barato de
+   * evitar e mais caro de descobrir.
+   *
+   * `associatedChildMessage` entra na lista pelo mesmo motivo de forma: e o que
+   * embrulha cada foto de um ALBUM (varias fotos mandadas de uma vez).
+   *
+   * A regra e conservadora de proposito: so desembrulha quando o no tem um
+   * `message` dentro. Envelope que nao siga essa forma passa intacto e o
+   * comportamento nao muda.
+   */
+  _semEnvelope(msg, profundidade = 0) {
+    if (!msg || typeof msg !== "object" || profundidade > 4) return msg;
+    for (const envelope of ENVELOPES) {
+      const dentro = msg[envelope]?.message;
+      if (dentro && typeof dentro === "object") {
+        // Recursivo: o WhatsApp empilha (uma visualizacao unica DENTRO de uma
+        // conversa temporaria embrulha duas vezes).
+        return this._semEnvelope(dentro, profundidade + 1);
+      }
+    }
+    return msg;
+  }
 
-    if (typeof msg === "string") return msg.trim();
+  extrairTexto(payload) {
+    const bruto = payload?.data?.message || payload?.message || payload;
+    if (!bruto) return null;
+
+    if (typeof bruto === "string") return bruto.trim();
+    // Mensagem temporaria / visualizacao unica embrulham o conteudo real.
+    const msg = this._semEnvelope(bruto);
     if (msg.conversation) return msg.conversation.trim();
     if (msg.extendedTextMessage?.text) return msg.extendedTextMessage.text.trim();
     // ── A LEGENDA DE QUALQUER MIDIA, E NAO SO DA IMAGEM ─────────────────────
@@ -192,7 +245,7 @@ class WhatsAppService {
   }
 
   extrairBotaoId(payload) {
-    const msg = payload?.data?.message || payload?.message || payload;
+    const msg = this._semEnvelope(payload?.data?.message || payload?.message || payload);
     if (!msg || typeof msg !== "object") return null;
 
     if (msg.buttonsResponseMessage?.selectedButtonId) {
@@ -249,7 +302,7 @@ class WhatsAppService {
    * removeu.
    */
   extrairReacao(payload) {
-    const msg = payload?.data?.message || payload?.message || null;
+    const msg = this._semEnvelope(payload?.data?.message || payload?.message || null);
     const r = msg?.reactionMessage;
     if (!r || typeof r !== "object") return null;
     const alvo = r.key?.id || r.key?.ID || null;
@@ -618,7 +671,7 @@ class WhatsAppService {
   // com `tipo` (imagem/video/audio/documento/localizacao/contato) ou null.
   // Os bytes NÃO vêm aqui: a `url` é criptografada; quem baixa é o webhook.
   extrairMidia(payload) {
-    const msg = payload?.data?.message || payload?.message;
+    const msg = this._semEnvelope(payload?.data?.message || payload?.message);
     if (!msg || typeof msg !== "object") return null;
 
     const doc = msg.documentMessage || msg.documentWithCaptionMessage?.message?.documentMessage;
@@ -1104,7 +1157,10 @@ class WhatsAppService {
     if (midia && midia.tipo !== "localizacao" && midia.tipo !== "contato") {
       // A Evolution acomoda o base64 em lugares diferentes conforme a versao e o
       // "Webhook Base64": no proprio audioMessage, na raiz da mensagem, ou solto.
-      const msg = data?.message || {};
+      // Desembrulhado pelo mesmo motivo de `extrairMidia`: com a foto dentro de
+      // um envelope, os bytes que vieram no payload nao eram encontrados e cada
+      // midia custava um download a mais (ou virava "[Midia indisponivel]").
+      const msg = this._semEnvelope(data?.message) || {};
       // `stickerMessage` entra na lista: sem ele o base64 embutido da
       // figurinha nunca era encontrado e a midia chegava vazia.
       const doMidia =

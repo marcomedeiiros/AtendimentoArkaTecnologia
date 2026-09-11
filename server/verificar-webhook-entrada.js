@@ -646,6 +646,26 @@ console.log("=== Entrada do webhook ===");
       semTexto.some((x) => x.metodo === "_processarProtocolo") ? ["chamou _processarProtocolo sem texto"] : []
     );
 
+    // ── ENVELOPES: o conteudo real embrulhado ────────────────────────────────
+    //
+    // Mensagem temporaria e visualizacao unica nao mudam o conteudo -- embrulham.
+    // Sem desembrulhar, TODA mensagem de um cliente com o recurso ligado cai em
+    // `dados_incompletos`: a conversa inteira some, em silencio.
+    const envelopados = [
+      ["temporaria (ephemeralMessage)", { ephemeralMessage: { message: { conversation: "sou temporaria" } } }, "texto"],
+      ["visualizacao unica v2", { viewOnceMessageV2: { message: { imageMessage: { mimetype: "image/jpeg" } } } }, "midia"],
+      ["visualizacao unica v1", { viewOnceMessage: { message: { imageMessage: { mimetype: "image/jpeg" } } } }, "midia"],
+      ["foto de album (associatedChild)", { associatedChildMessage: { message: { imageMessage: { mimetype: "image/jpeg" } } } }, "midia"],
+      ["empilhado (unica DENTRO de temporaria)", { ephemeralMessage: { message: { viewOnceMessageV2: { message: { conversation: "oi" } } } } }, "texto"],
+    ];
+    const pEnvelope = [];
+    for (const [nome, message, esperado] of envelopados) {
+      const p = { data: { key: { id: "M1", remoteJid: JID, fromMe: false }, message } };
+      const achou = esperado === "texto" ? svc.extrairTexto(p) : svc.extrairMidia(p)?.tipo;
+      if (!achou) pEnvelope.push(`${nome}: nada extraido (cairia em dados_incompletos)`);
+    }
+    check("envelopes sao abertos: a mensagem de dentro e lida", pEnvelope);
+
     // E o que NAO pode acontecer: uma mensagem comum virar exclusao.
     const comum = await rotear({
       event: "messages.upsert",
