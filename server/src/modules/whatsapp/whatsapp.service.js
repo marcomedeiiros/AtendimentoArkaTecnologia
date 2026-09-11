@@ -417,6 +417,63 @@ class WhatsAppService {
   }
 
   /**
+   * Os ids que um `messages.delete` esta mandando apagar.
+   *
+   * A FORMA VARIA, e por isso isto le todas em vez de apostar numa:
+   *
+   *   `{ data: { id, remoteJid, fromMe } }`      a chave crua (a mais comum)
+   *   `{ data: { key: { id, ... } } }`           a chave embrulhada
+   *   `{ data: [ { key: { id } }, ... ] }`       lote, quando o cliente apaga
+   *                                              varias de uma vez
+   *
+   * `it.id` so e lido aqui dentro porque neste evento ele E o id da mensagem no
+   * WhatsApp. Em outros eventos `data.id` pode ser o id interno da linha da
+   * Evolution, e confundir os dois faria apagar a bolha errada.
+   */
+  _idsParaApagar(body) {
+    const dados = body?.data ?? body;
+    const itens = Array.isArray(dados) ? dados : [dados];
+    const ids = [];
+    for (const item of itens) {
+      if (!item || typeof item !== "object") continue;
+      const id = item.key?.id || item.key?.ID || item.id || item.keyId || null;
+      if (id) ids.push(String(id));
+    }
+    // Dedupe: a Evolution reentrega, e o lote pode repetir a mesma chave.
+    return ids.filter((id, i) => ids.indexOf(id) === i);
+  }
+
+  /**
+   * O "apagar para todos" que chegou com nome de evento, sem `protocolMessage`.
+   *
+   * Nao ha nada de novo depois daqui: `_processarProtocolo` ja sabe marcar a
+   * mensagem, emitir a conversa e sair em silencio quando o alvo nao existe
+   * (caso NORMAL -- o cliente pode apagar algo anterior a integracao).
+   */
+  async _processarExclusao(body) {
+    const ids = this._idsParaApagar(body);
+    if (!ids.length) {
+      // Vale `warn`: o evento chegou, foi autorizado, e nao soubemos ler. E
+      // exatamente o tipo de silencio que custou a investigacao de 09/09.
+      logger.warn("messages.delete recebido sem id reconhecivel", { forma: formaDo(body) });
+      return { recebido: true, processado: false, motivo: "exclusao_sem_alvo" };
+    }
+
+    const resultados = [];
+    for (const waMessageId of ids) {
+      resultados.push(await this._processarProtocolo({ acao: "apagar", waMessageId }));
+    }
+    const aplicadas = resultados.filter((r) => r.processado).length;
+    return {
+      recebido: true,
+      processado: aplicadas > 0,
+      motivo: "apagar",
+      apagadas: aplicadas,
+      recebidas: ids.length,
+    };
+  }
+
+  /**
    * Empurra a CAUDA da conversa para a tela. Mesmo formato do motor: o front
    * reconstroi o resto pelo merge (ver findByIdParaEvento e mesclarConversa).
    */
@@ -657,6 +714,24 @@ class WhatsAppService {
 
     const protocolo = this.extrairProtocolo(body);
     if (protocolo) return this._processarProtocolo(protocolo);
+
+    // ── "APAGAR PARA TODOS" QUE CHEGA PELO NOME DO EVENTO ────────────────────
+    //
+    // O `extrairProtocolo` acima cobre a exclusao que vem EMBRULHADA num
+    // `protocolMessage`. Mas a Evolution tambem entrega `messages.delete` com a
+    // chave crua -- `{ id, remoteJid, fromMe }`, sem `protocolMessage` e sem
+    // `message`. Nessa forma o evento passava reto por todos os branches e
+    // morria no "Webhook recebido e nao roteado", que ate 09/09 nem era
+    // registrado em producao.
+    //
+    // Medido na bancada: docs/auditoria-perda-mensagens-11-09.md §4 -- das tres
+    // formas conhecidas de `messages.delete`, so UMA era tratada.
+    //
+    // Fica DEPOIS do `extrairProtocolo` de proposito: quando as duas formas
+    // chegam juntas, a embrulhada e a mais especifica e deve vencer.
+    if (event === "messages.delete" || event === "MESSAGES_DELETE") {
+      return this._processarExclusao(body);
+    }
 
     if (event === "messages.update" || event === "MESSAGES_UPDATE") {
       return this._processarAck(body);

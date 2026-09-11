@@ -550,6 +550,76 @@ console.log("=== Entrada do webhook ===");
     check("o retrato da citação chega à tela (mapper)", pMapper);
   }
 
+  // ── O ROTEADOR PRECISA RECONHECER O "APAGAR" EM TODAS AS FORMAS ───────────
+  //
+  // A exclusao feita pelo cliente chega de tres jeitos conforme a versao, e ate
+  // 11/09 so UM era tratado -- o que vem embrulhado em `protocolMessage`. Os
+  // outros dois morriam em "Webhook recebido e nao roteado", sem log em
+  // producao. Ver docs/auditoria-perda-mensagens-11-09.md §4.
+  //
+  // O teste dubla os `_processar*` e olha SO para onde o evento foi parar: o que
+  // se trava aqui e o roteamento, e nao o efeito no banco (esse tem dono em
+  // `_processarProtocolo`, ja coberto).
+  {
+    const svc = require(path.join(__dirname, "src/modules/whatsapp/whatsapp.service"));
+    const JID = "5527998189226@s.whatsapp.net";
+    let visto = [];
+    const originais = {};
+    for (const m of ["_processarProtocolo", "_processarMensagem", "_processarAck"]) {
+      originais[m] = svc[m];
+      svc[m] = async (arg) => {
+        visto.push({ metodo: m, arg });
+        return { recebido: true, processado: true };
+      };
+    }
+
+    const rotear = async (body) => {
+      visto = [];
+      await svc.processarWebhook(body, "i");
+      return visto;
+    };
+
+    const formas = {
+      "chave crua": { event: "messages.delete", data: { id: "ALVO1", remoteJid: JID, fromMe: false } },
+      "chave embrulhada": { event: "messages.delete", data: { key: { id: "ALVO1", remoteJid: JID, fromMe: false } } },
+      "protocolMessage REVOKE": {
+        event: "messages.delete",
+        data: { key: { id: "X", remoteJid: JID }, message: { protocolMessage: { key: { id: "ALVO1" }, type: "REVOKE" } } },
+      },
+      "MAIUSCULAS": { event: "MESSAGES_DELETE", data: { id: "ALVO1", remoteJid: JID, fromMe: false } },
+    };
+
+    const pApagar = [];
+    for (const [nome, body] of Object.entries(formas)) {
+      const t = await rotear(body);
+      const foi = t.find((x) => x.metodo === "_processarProtocolo");
+      if (!foi) pApagar.push(`${nome}: nao chegou em _processarProtocolo (foi para ${t.map((x) => x.metodo).join(",") || "lugar nenhum"})`);
+      else if (foi.arg?.acao !== "apagar") pApagar.push(`${nome}: acao ${foi.arg?.acao}, esperado "apagar"`);
+      else if (foi.arg?.waMessageId !== "ALVO1") pApagar.push(`${nome}: alvo ${foi.arg?.waMessageId}, esperado ALVO1`);
+    }
+    check("o 'apagar' do cliente e reconhecido nas quatro formas", pApagar);
+
+    // LOTE: o cliente que seleciona varias mensagens e apaga de uma vez.
+    const lote = await rotear({
+      event: "messages.delete",
+      data: [{ key: { id: "A1" } }, { key: { id: "A2" } }, { key: { id: "A1" } }],
+    });
+    const alvos = lote.filter((x) => x.metodo === "_processarProtocolo").map((x) => x.arg.waMessageId);
+    check("lote apaga cada mensagem uma unica vez", JSON.stringify(alvos) === '["A1","A2"]' ? [] : [`alvos: ${JSON.stringify(alvos)}`]);
+
+    // E o que NAO pode acontecer: uma mensagem comum virar exclusao.
+    const comum = await rotear({
+      event: "messages.upsert",
+      data: { key: { id: "M1", remoteJid: JID, fromMe: false }, message: { conversation: "bom dia" } },
+    });
+    check(
+      "mensagem comum continua indo para _processarMensagem",
+      comum.length === 1 && comum[0].metodo === "_processarMensagem" ? [] : [`foi para ${JSON.stringify(comum.map((x) => x.metodo))}`]
+    );
+
+    for (const [m, fn] of Object.entries(originais)) svc[m] = fn;
+  }
+
   console.log(
     "\n" +
       (erros.length
