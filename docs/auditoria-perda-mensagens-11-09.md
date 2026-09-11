@@ -248,8 +248,35 @@ vazio. **A edição não se perde na Evolution: ela chega, e se perdia aqui**, e
 `dados_incompletos`, que até `010ad33` não registrava nada.
 
 O texto novo vai em `encPayload`, cifrado com chave derivada do `messageSecret`
-da mensagem original, e a 2.4.0 não decifra. O **alvo** vem em claro -- e é o
-suficiente para marcar a bolha como "editada (versão anterior)" (`8840a1e`).
+da mensagem original, e a 2.4.0 não decifra.
+
+**E nós passamos a decifrar** (`31d1935` … `86ab27f`). O esquema não é segredo:
+está implementado às claras no whatsmeow (`msgsecret.go`), com um tipo de uso
+chamado literalmente "Message Edit".
+
+```
+chave = HKDF-SHA256(messageSecret, salt vazio, info, 32 bytes)
+        info = idDaOriginal ‖ remetente ‖ editor ‖ "Message Edit"
+texto = AES-256-GCM(chave, encIv, encPayload)          -- sem dados adicionais
+```
+
+Quatro armadilhas, e cada uma custou um deploy -- todas registradas porque três
+delas produzem **o mesmo sintoma**, "não foi possível decifrar":
+
+| Armadilha | O que era |
+| --- | --- |
+| A chave precisa ser guardada **na chegada** | `messageContextInfo.messageSecret` vem com a mensagem original e era descartado. Quando a edição chega, ela já passou -- ou se guarda antes, ou se perde |
+| O JID da derivação é o **`@lid`** do cliente | Vem em `remoteJidAlt`; o `remoteJid` do webhook é o telefone normalizado. Resolvido tentando os candidatos: a tag do GCM é infalsificável, então tentar é seguro |
+| Os binários chegam como **Uint8Array serializado** | `{"0":12,"1":240,…}`, não base64. `Buffer.from(objeto,"base64")` devolve vazio **sem reclamar** |
+| `extendedTextMessage` é o campo **6** | Eu li o 2 (`senderKeyDistributionMessage`). A decifração funcionava e mesmo assim não saía texto |
+
+A última é a mais instrutiva: ela **imitava um defeito de criptografia**. Duas
+rodadas foram gastas em chave, formato de bytes e JID -- nenhum com problema. O
+que desatou foi o log passar a dizer **em qual etapa** parou (`8311c42`), e não
+mais uma hipótese sobre a causa.
+
+O rótulo "editada (versão anterior)" (`8840a1e`) continua, como plano B: mensagem
+recebida antes de `31d1935` não tem a chave guardada e nunca será decifrável.
 
 Duas armadilhas que ficam registradas:
 
@@ -429,9 +456,17 @@ texto legível não esvazia a bolha.
   mensagem (§3). Merece investigação própria, não esta.
 
 **Verificado em produção no mesmo dia** (§6): editar e apagar foram testados à
-mão, com o log aberto, e os dois aparecem na Central. A citação de resposta
-digitada continua impossível nesta versão -- e essa é a única das três queixas
-iniciais que não tem conserto.
+mão, com o log aberto. O apagar aparece na Central, e a edição passou a mostrar
+**o texto novo**, decifrado. A citação de resposta digitada continua impossível
+nesta versão -- e é a única das três queixas iniciais que não tem conserto.
+
+| Commit | O quê |
+| --- | --- |
+| `31d1935` | Decifra a edição: guarda o `messageSecret` na chegada e aplica o texto novo |
+| `2529680` | Lê a chave em qualquer forma que o JSON produza; log diz o que faltou |
+| `d4bd301` | A forma real: `Uint8Array` serializado (`{"0":n,…}`) |
+| `8311c42` | O log passa a dizer **em qual etapa** a decifração parou |
+| `86ab27f` | `extendedTextMessage` é o campo 6 -- e era só isso |
 
 ---
 
