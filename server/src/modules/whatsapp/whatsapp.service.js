@@ -1100,6 +1100,24 @@ class WhatsAppService {
     const reacao = this.extrairReacao(body);
     if (reacao) return this._processarReacao(reacao, jid);
 
+    // ── O ANUNCIO DE ALBUM NAO E MENSAGEM ────────────────────────────────────
+    //
+    // Quando o cliente manda varias fotos de uma vez, o WhatsApp manda primeiro
+    // um `albumMessage` -- "vem um album de N fotos" -- e depois CADA foto, em
+    // mensagens proprias (embrulhadas em `associatedChildMessage`, que o
+    // `_semEnvelope` abre). O anuncio nao carrega imagem nenhuma.
+    //
+    // Ele sai marcado, e nao pelo caminho do descarte, por causa do aviso novo:
+    // `dados_incompletos` agora grita, e gritar a cada album ensinaria todo
+    // mundo a ignorar o aviso -- que e o comeco de um log inutil. O que sobra
+    // ali passa a ser so o que ninguem sabe ler.
+    if (this._semEnvelope(data?.message)?.albumMessage) {
+      logger.debug("Anuncio de album ignorado; as fotos vem em mensagens proprias", {
+        waMessageId: key?.id || null,
+      });
+      return { recebido: true, processado: false, motivo: "album_anunciado" };
+    }
+
     const telefone = this.extrairTelefone(jid);
     const texto = this.extrairTexto(body);
     const botaoId = this.extrairBotaoId(body);
