@@ -100,12 +100,36 @@ function campos(buf) {
 
 const acharCampo = (buf, numero) => campos(buf).find((c) => c.numero === numero)?.valor || null;
 
+/** Texto que sobreviveu à decodificação UTF-8 -- sem isso, lixo vira "mensagem". */
+function comoTexto(buf) {
+  if (!buf || !buf.length) return null;
+  const s = buf.toString("utf8");
+  // U+FFFD é o que o Node devolve para byte inválido: sinal de que aquele campo
+  // não era texto, e não de que o cliente escreveu um caractere estranho.
+  return s.includes("�") ? null : s;
+}
+
 /**
  * O texto novo dentro do protobuf decifrado.
  *
- * Caminho: Message.protocolMessage (12) → editedMessage (14) → o texto, que é
- * `conversation` (1) numa mensagem simples ou `extendedTextMessage.text` (2→1)
- * quando ela tem formatação, link ou menção.
+ * Caminho: Message.protocolMessage (12) → editedMessage (14) → o texto.
+ *
+ * ── O NÚMERO DO CAMPO IMPORTA, E EU ERREI ELE ──────────────────────────────
+ *
+ * A edição NÃO chega como `conversation`. Medido em produção (11/09): o texto
+ * novo vem em `extendedTextMessage`, que é o campo **6** do `Message` -- o 2 é
+ * `senderKeyDistributionMessage`, outra coisa completamente.
+ *
+ * O sintoma dessa confusão foi instrutivo: a decifração funcionava (chave certa,
+ * GCM autenticado, bytes na mão) e mesmo assim a resposta era "não foi possível
+ * decifrar". Só depois de o log passar a dizer EM QUAL ETAPA parou é que ficou
+ * claro que o problema não era criptografia nenhuma -- era ler o número errado.
+ *
+ * Por isso a varredura final: em vez de mapear a tabela inteira do WAProto, as
+ * duas formas conhecidas são tentadas por número e o resto é procurado como
+ * "qualquer submensagem cujo campo 1 seja texto legível". Um tipo novo de
+ * mensagem editável (legenda de mídia, por exemplo) passa a funcionar sem
+ * ninguém precisar descobrir o número dele.
  */
 function textoDaEdicao(bytes) {
   const protocolo = acharCampo(bytes, 12);
@@ -113,12 +137,22 @@ function textoDaEdicao(bytes) {
   const editada = acharCampo(protocolo, 14);
   if (!editada) return null;
 
-  const conversa = acharCampo(editada, 1);
-  if (conversa) return conversa.toString("utf8");
+  // Mensagem simples: Message.conversation
+  const conversa = comoTexto(acharCampo(editada, 1));
+  if (conversa) return conversa;
 
-  const estendida = acharCampo(editada, 2);
-  const texto = estendida && acharCampo(estendida, 1);
-  return texto ? texto.toString("utf8") : null;
+  // Com formatação, link ou menção: Message.extendedTextMessage.text
+  const estendida = acharCampo(editada, 6);
+  const texto = estendida && comoTexto(acharCampo(estendida, 1));
+  if (texto) return texto;
+
+  // Qualquer outro tipo que carregue o texto no primeiro campo.
+  for (const campo of campos(editada)) {
+    if (campo.numero === 1 || campo.numero === 6) continue;
+    const dentro = comoTexto(acharCampo(campo.valor, 1));
+    if (dentro) return dentro;
+  }
+  return null;
 }
 
 /**

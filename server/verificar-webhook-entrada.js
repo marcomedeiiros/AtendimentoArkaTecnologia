@@ -803,10 +803,21 @@ console.log("=== Entrada do webhook ===");
       ...(ler(simples) === "123" ? [] : [`veio ${JSON.stringify(ler(simples))}, esperado "123"`]),
     ]);
 
-    // Com formatacao/link: Message.extendedTextMessage(2) { text(1) }
-    const formatada = cifrar(campo(2, campo(1, texto("olha o *link* aqui"))));
-    check("edicao com formatacao/link tambem e lida", [
+    // A FORMA REAL, medida em producao: o texto novo vem em
+    // `extendedTextMessage`, que e o campo 6 do Message -- nao o 2, que e
+    // `senderKeyDistributionMessage`. Ler o numero errado fazia a decifracao
+    // funcionar (chave certa, GCM autenticado) e mesmo assim nao sair texto.
+    const formatada = cifrar(campo(6, campo(1, texto("olha o *link* aqui"))));
+    check("edicao em extendedTextMessage (campo 6) e lida -- e a forma real", [
       ...(ler(formatada) === "olha o *link* aqui" ? [] : [`veio ${JSON.stringify(ler(formatada))}`]),
+    ]);
+
+    // Tipo que ninguem mapeou: o texto no primeiro campo de uma submensagem
+    // qualquer (legenda de midia editada, por exemplo). A varredura final cobre
+    // sem precisar do numero.
+    const desconhecida = cifrar(campo(9, campo(1, texto("legenda nova"))));
+    check("tipo nao mapeado ainda entrega o texto", [
+      ...(ler(desconhecida) === "legenda nova" ? [] : [`veio ${JSON.stringify(ler(desconhecida))}`]),
     ]);
 
     // O JID certo esta no meio de candidatos errados -- e o caso real, porque a
