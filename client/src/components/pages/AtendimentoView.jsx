@@ -4292,6 +4292,38 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     return () => clearTimeout(t);
   }, [sinalMensagemNova]);
 
+  // ── O RASCUNHO É DE CADA CONVERSA, NÃO DA TELA ─────────────────────────────
+  //
+  // `texto` é um estado só, compartilhado por todas as conversas. O efeito
+  // apareceu em produção e é constrangedor: digitar para um cliente, abrir
+  // outra conversa, e o texto estar lá esperando para ser enviado para a pessoa
+  // errada. Num atendimento em que se pula de fio o tempo todo, isso é questão
+  // de tempo até alguém mandar.
+  //
+  // A correção óbvia seria limpar ao trocar. Não serve: quem dá uma olhada na
+  // conversa ao lado perde o que escreveu, e aí o conserto vira outra
+  // reclamação. O certo é o que qualquer aplicativo de conversa faz -- guardar
+  // um rascunho POR FIO e devolvê-lo ao voltar.
+  //
+  // `useRef` e não `useState` de propósito: o mapa não redesenha nada: ele é
+  // consultado nos dois instantes da troca. Guardá-lo em estado faria a tela
+  // inteira redesenhar a cada tecla.
+  const rascunhos = useRef({});
+  const fioDoRascunho = useRef(null);
+  useEffect(() => {
+    if (fioDoRascunho.current === selecionada) return;
+    // Guarda o que estava escrito para o fio ANTERIOR antes de trocar. `texto`
+    // aqui ainda é o dele: o efeito roda depois do render em que `selecionada`
+    // mudou, e a limpeza só acontece na linha seguinte.
+    if (fioDoRascunho.current) rascunhos.current[fioDoRascunho.current] = texto;
+    fioDoRascunho.current = selecionada;
+    setTexto(selecionada ? rascunhos.current[selecionada] || '' : '');
+    // `texto` fora das dependências DE PROPÓSITO: este efeito é sobre a TROCA de
+    // conversa, não sobre digitar. Incluí-lo o faria rodar a cada tecla e
+    // reescrever o campo com ele mesmo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selecionada]);
+
   // Ao abrir uma conversa com nao-lidas, marca como lida (zera o badge).
   useEffect(() => {
     if (!conversa) return;
@@ -5502,6 +5534,27 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
             <TelaSemConversa />
           ) : (
             <PainelChat
+              /* ── `key` POR CONVERSA: o estado do chat MORRE ao trocar de fio ──
+               *
+               * Sem ela o React reaproveita o mesmo componente, e tudo que o
+               * PainelChat guarda internamente sobrevive à troca: o "Respondendo"
+               * (citação), a edição em curso, o encaminhamento, a gravação de
+               * áudio. O sintoma que apareceu em produção foi o pior deles --
+               * clicar em "responder" numa conversa e abrir outra levava a
+               * citação junto, com o rótulo trocado para o cliente novo e o
+               * trecho citado do cliente antigo.
+               *
+               * E não era só feio: o `respondendoAId` daquela citação ia no
+               * envio, e o servidor gravava um vínculo entre fios diferentes
+               * (corrigido também no servidor -- ver conversa.service, a busca
+               * escopada da mensagem citada; as duas guardas são independentes
+               * de propósito).
+               *
+               * `key` é a ferramenta certa aqui em vez de um `useEffect` que
+               * zera cinco estados: o que se quer dizer é "este é OUTRO chat",
+               * e um estado novo que alguém adicionar amanhã já nasce coberto.
+               */
+              key={conversa.id}
               conversa={conversa}
               parceiros={parceiros}
               texto={texto}

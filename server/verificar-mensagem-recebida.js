@@ -559,6 +559,51 @@ async function main() {
   conferir("resposta de BOTAO nunca edita (o rotulo reescreve o texto)", r3?.motivo === "mensagem_duplicada", r3?.motivo);
   conferir("e o texto editado continua intacto", editada?.texto === "isso mesmo, corrigido", editada?.texto);
 
+  console.log("\n10. A citacao NAO atravessa conversas");
+
+  // ── O QUE ESTAS CHECAGENS TRAVAM ──────────────────────────────────────────
+  //
+  // O `respondendoAId` do envio vem da INTERFACE, e a interface ja errou: em
+  // 11/09/2026 o "Respondendo" vazava entre conversas (o PainelChat guardava a
+  // citacao e nao era remontado ao trocar de fio). O servidor aceitava o id
+  // solto e gravava o vinculo -- uma bolha citando mensagem que aquele cliente
+  // nunca viu.
+  //
+  // A guarda do front existe (`key` por conversa), e esta e a segunda: mesmo
+  // que a tela erre de novo, o vinculo nao se forma. Duas guardas independentes
+  // de proposito, que e a regra de validacao do projeto.
+  const outraConversa = await prisma.conversa.create({
+    data: {
+      instanciaId: instancia.id,
+      cliente: "Outro cliente",
+      telefone: `5511${Date.now().toString().slice(-9)}`,
+      statusAtendimento: "aberta",
+    },
+  });
+  const msgDaOutra = await prisma.mensagem.create({
+    data: { conversaId: outraConversa.id, origem: "cliente", texto: "mensagem de outro fio" },
+  });
+
+  conferir(
+    "mensagem de outra conversa e RECUSADA quando escopada",
+    (await conversaRepository.findMensagem(msgDaOutra.id, conversa.id)) === null
+  );
+  conferir(
+    "e a mesma mensagem e encontrada na conversa dela",
+    (await conversaRepository.findMensagem(msgDaOutra.id, outraConversa.id))?.id === msgDaOutra.id
+  );
+  conferir(
+    "sem escopo continua achando (os outros chamadores dependem disso)",
+    (await conversaRepository.findMensagem(msgDaOutra.id))?.id === msgDaOutra.id
+  );
+  conferir(
+    "id inexistente nao estoura",
+    (await conversaRepository.findMensagem("nao-existe", conversa.id)) === null
+  );
+
+  await prisma.mensagem.deleteMany({ where: { conversaId: outraConversa.id } });
+  await prisma.conversa.delete({ where: { id: outraConversa.id } });
+
   await prisma.mensagem.deleteMany({ where: { conversaId: conversa.id } });
   await prisma.conversa.delete({ where: { id: conversa.id } });
 

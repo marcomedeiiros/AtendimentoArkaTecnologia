@@ -380,8 +380,16 @@ class ConversaService {
     // mensagem local (a citacao na CENTRAL, que nao depende do WhatsApp).
     // A segunda vale mesmo quando a primeira nao e possivel.
     let quoted = null;
+    // O id da citação DEPOIS de conferido. `respondendoAId` é o que a tela
+    // mandou; este é o que sobreviveu à checagem de que pertence a esta
+    // conversa. Só ele vai para o banco -- ver a gravação mais abaixo.
+    let citadaNestaConversa = null;
     if (respondendoAId) {
-      const citada = await conversaRepository.findMensagem(respondendoAId);
+      // ESCOPADA NA CONVERSA, e não pelo id solto: o id vem da interface, e a
+      // interface já errou -- o "Respondendo" vazava entre conversas e o
+      // servidor aceitava, gravando uma citação para um fio diferente.
+      const citada = await conversaRepository.findMensagem(respondendoAId, id);
+      if (citada) citadaNestaConversa = citada.id;
       if (citada?.waMessageId) {
         quoted = {
           key: {
@@ -400,7 +408,9 @@ class ConversaService {
         logger.warn("Resposta sem citacao no WhatsApp: a mensagem citada nao tem waMessageId", {
           conversaId: id,
           mensagemCitadaId: respondendoAId,
-          existe: !!citada,
+          // `false` aqui passou a ter DOIS significados, e os dois interessam:
+          // a mensagem nao existe, ou existe em OUTRA conversa e foi recusada.
+          existeNestaConversa: !!citada,
         });
       }
     }
@@ -449,7 +459,10 @@ class ConversaService {
       texto.trim(),
       metadataExtra || null,
       null,
-      { status: "enviando", respondendoAId: respondendoAId || null }
+      // `citadaNestaConversa`, e NAO o `respondendoAId` cru: um id de outro fio
+      // seria gravado como vinculo permanente, e a bolha passaria a apontar
+      // para uma mensagem que este cliente nunca viu.
+      { status: "enviando", respondendoAId: citadaNestaConversa }
     );
 
     // A BOLHA APARECE ANTES DA IDA AO WHATSAPP.

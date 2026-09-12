@@ -432,7 +432,7 @@ migration: `deletada` mora no `metadata`, que já existe.
 | `69eecc1` | Abre os **envelopes** (`ephemeralMessage`, `viewOnce*`, `associatedChildMessage`) | §4, §9 item 4 |
 | `c26c46f` | Anúncio de álbum sai marcado, para o aviso novo não virar ruído | §9 item 2 |
 | `8b0f18c` | Agenda deixa de reimportar a cada oscilação do socket (teto de 6h) | §3 |
-| `c821497` | O alarme `WEBHOOK AUSENTE` para de gritar falso todo boot; confirmação passa a vir do tráfego | — |
+| `c821497` | O alarme `WEBHOOK AUSENTE` para de gritar falso todo boot; confirmação passa a vir do tráfego |
 | `8840a1e` | **A edição cifrada do cliente passa a marcar a bolha** ("editada (versão anterior)") | §6 |
 
 **Cobertura:** `verificar-webhook-entrada.js` foi de 11 para 17 checagens e

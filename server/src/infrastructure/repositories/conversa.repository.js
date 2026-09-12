@@ -806,8 +806,28 @@ class ConversaRepository {
     return { mensagem: atualizada, conversa };
   }
 
-  findMensagem(id) {
-    return prisma.mensagem.findUnique({ where: { id } });
+  /**
+   * Uma mensagem pelo id -- e, quando `conversaId` vem junto, SÓ se ela for dela.
+   *
+   * O escopo é opcional porque a maioria dos chamadores já tem a sua própria
+   * guarda (`_exigirAcessoMensagem`). Quem NÃO tinha nenhuma era a citação do
+   * envio, e ali o id vem da tela: bastava a interface passar o id de outra
+   * conversa para a citação atravessar fios, apontando para uma mensagem que
+   * aquele cliente nunca viu.
+   *
+   * Não é hipótese -- aconteceu: o rascunho e o "Respondendo" vazavam entre
+   * conversas na Central (11/09/2026), e o servidor aceitava.
+   *
+   * É a mesma proteção que `findMensagemPorWaId` já tinha, pela mesma razão,
+   * escrita no comentário dela: "casar sem escopo permitiria uma citação apontar
+   * para mensagem de outro fio". A regra vale nos dois sentidos da conversa;
+   * aqui ela faltava.
+   */
+  findMensagem(id, conversaId = null) {
+    if (!id) return Promise.resolve(null);
+    return conversaId
+      ? prisma.mensagem.findFirst({ where: { id, conversaId } })
+      : prisma.mensagem.findUnique({ where: { id } });
   }
 
   /**
