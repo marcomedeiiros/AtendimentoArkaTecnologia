@@ -1132,7 +1132,25 @@ const EMOJIS_REACAO = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
  * único lugar em que ela não disputa espaço com o texto nem com a seta de ações
  * (que mora dentro, no canto de cima).
  */
-function BotaoReacao({ mensagemId, ehPropria, jaReagiu, onReagir }) {
+/*
+ * ── A CARINHA NÃO FICA MARCADA, E ISSO MUDOU AQUI ──────────────────────────
+ *
+ * Ela recebia `jaReagiu` e, com ele, ficava âmbar e presa na tela depois que a
+ * equipe reagia. A intenção era boa -- mostrar "você já reagiu a esta" --, mas
+ * o WhatsApp não faz isso, e a diferença incomoda: a carinha dourada parece um
+ * estado ligado, um aviso, algo que exige atenção. É ruído permanente numa
+ * conversa que já tem risquinho, etiqueta de editada e selo de encaminhada.
+ *
+ * E a informação não se perde: quem reagiu já aparece no CHIP colado na bolha
+ * (`ReacoesDaBolha`), que fica destacado quando a reação é da equipe -- que é
+ * exatamente onde o WhatsApp mostra, e o mesmo lugar em que se clica para
+ * remover. Marcar nos dois lugares era dizer a mesma coisa duas vezes, sendo
+ * que uma delas mentia sobre a importância.
+ *
+ * `jaReagiu` saiu da assinatura em vez de virar um parâmetro ignorado: prop que
+ * ninguém lê é convite para alguém "consertar" religando o destaque.
+ */
+function BotaoReacao({ mensagemId, ehPropria, onReagir }) {
   const [aberto, setAberto] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const caixaRef = useRef(null);
@@ -1168,12 +1186,13 @@ function BotaoReacao({ mensagemId, ehPropria, jaReagiu, onReagir }) {
         disabled={enviando}
         title="Reagir a esta mensagem"
         aria-label="Reagir a esta mensagem"
-        className={`rounded-full p-1.5 transition-all disabled:opacity-40 ${
-          jaReagiu ? 'text-espera-400' : 'text-slate-500 hover:text-slate-200'
-        } ${
+        className={`rounded-full p-1.5 transition-all disabled:opacity-40 text-slate-500 hover:text-slate-200 ${
           // No celular não há "passar o mouse": lá ela fica sempre visível,
           // senão reagir viraria um recurso inalcançável no aparelho.
-          aberto || jaReagiu ? 'opacity-100' : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100'
+          //
+          // Ter reagido não a mantém mais presa aqui: para TIRAR a reação
+          // clica-se no chip, não nela -- então não havia o que alcançar.
+          aberto ? 'opacity-100' : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100'
         }`}
       >
         <Smile size={16} />
@@ -3564,7 +3583,6 @@ function PainelChat({
               <BotaoReacao
                 mensagemId={m.id}
                 ehPropria={m.de !== 'cliente'}
-                jaReagiu={(m.reacoes || []).some((r) => r.daEquipe)}
                 onReagir={onReagirMensagem}
               />
             )}
