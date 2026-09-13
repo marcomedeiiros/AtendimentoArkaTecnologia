@@ -3056,7 +3056,21 @@ function PainelChat({
 
   return (
     <>
-      <div ref={cabecalhoRef} className="p-4 bg-grafite-600/80 border-b border-linha">
+      {/* AS TRES BORDAS QUE DESENHAM A TELA.
+
+          Esta, mais as dos dois paineis, sempre existiram -- o que faltava era
+          CONTRASTE. `--linha` e rgb(42,57,66) sobre um painel rgb(24,34,41):
+          18 pontos de diferenca, que somem conforme o brilho e o angulo do
+          monitor. Os paineis pareciam derreter no fundo, e este cabecalho
+          parecia colado nas mensagens.
+
+          `--linha-forte` (rgb(59,74,84)) ja existe no tema, e e o token que o
+          projeto usa quando a borda TEM de ser notada. Vale nos dois temas.
+
+          SO NESTA TELA, de proposito: a Central e a unica em que o conteudo
+          vai ate a borda dos paineis o dia inteiro. Trocar o token no tema
+          mudaria todas as telas de uma vez, e nenhuma outra pediu isso. */}
+      <div ref={cabecalhoRef} className="p-4 bg-grafite-600/80 border-b border-linha-forte">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <button onClick={onVoltar} title="Voltar para a lista"
@@ -5471,7 +5485,9 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
         {/* Sem altura minima: o painel passa a ter a altura das conversas que
             existem. O teto de 70vh e o que mantem a rolagem DENTRO da lista
             quando a fila cresce, em vez de esticar a pagina inteira. */}
-        <div className={`${chatAberto ? 'hidden lg:flex' : 'flex'} lg:col-span-4 glass-panel rounded-2xl flex-col overflow-hidden border border-linha max-h-[70dvh] lg:max-h-none lg:min-h-0`}>
+        {/* `border-linha-forte`, e nao `border-linha`: ver o bloco AS TRES
+            BORDAS, no cabecalho da conversa. */}
+        <div className={`${chatAberto ? 'hidden lg:flex' : 'flex'} lg:col-span-4 glass-panel rounded-2xl flex-col overflow-hidden border border-linha-forte max-h-[70dvh] lg:max-h-none lg:min-h-0`}>
        
           {/* UMA FAIXA DE CABECALHO, E NAO DUAS.
 
@@ -5647,7 +5663,9 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
           </div>
         </div>
 
-        <div className={`${chatAberto ? 'flex' : 'hidden lg:flex'} lg:col-span-8 glass-panel rounded-2xl flex-col overflow-hidden border border-linha min-h-[70dvh] lg:min-h-0`}>
+        {/* Mesma borda do painel da lista: os dois emolduram a tela juntos, e
+            um mais forte que o outro leria como se um estivesse selecionado. */}
+        <div className={`${chatAberto ? 'flex' : 'hidden lg:flex'} lg:col-span-8 glass-panel rounded-2xl flex-col overflow-hidden border border-linha-forte min-h-[70dvh] lg:min-h-0`}>
           {!conversa ? (
             <TelaSemConversa />
           ) : (
