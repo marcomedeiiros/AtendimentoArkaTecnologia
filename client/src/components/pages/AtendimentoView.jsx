@@ -3070,13 +3070,10 @@ function PainelChat({
               <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
               {meta.label}
             </span>
-            {/* Numero da OS EM CURSO: e por ele que o operador cita o
-                atendimento. A conversa e a mesma para sempre; o que muda a cada
-                novo chamado do cliente e este numero. */}
-            <span className="inline-flex items-center text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-grafite-700 border border-linha text-acao-200"
-              title={`OS atual: ${conversa.ticket || ''} · Conversa ${conversa.id}`}>
-              #{conversa.ticket || idCurto(conversa.id)}
-            </span>
+            {/* O NUMERO DA OS DESCEU PARA A LINHA DE BAIXO -- ver o bloco de
+                metadados logo adiante. Ele continua na tela (e por ele que o
+                operador cita o atendimento), so deixou de disputar a linha do
+                nome com os cinco botoes de acao. */}
           </div>
         </div>
 
@@ -3185,12 +3182,27 @@ function PainelChat({
             {setorPedido.label}
           </span>
         )}
-        {atendente && (
-          <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 font-semibold"
-            title={`Conversa atribuida a ${atendente.nome}`}>
-            <UserCheck size={11} /> {atendente.nome}
-          </span>
-        )}
+        {/* METADADOS, EM TEXTO FINO: a OS em curso e quem atende.
+
+            Os dois eram badges, e os dois ja aparecem no separador do ciclo,
+            dentro do fio ("#OS00287 · 11/09/2026 16:37 · Rangel · EM CURSO").
+            Badge e enfase, e enfase repetida a dois palmos de distancia nao
+            enfatiza nada -- so gasta a linha que os selos de cliente e setor,
+            que NAO se repetem em lugar nenhum, precisam para ser vistos.
+
+            Continuam aqui, e nao no separador apenas, porque o separador
+            rola junto com o fio: numa conversa longa ele sai da tela, e a
+            pergunta "que OS e esta?" nao pode depender de rolar para cima. */}
+        <span className="inline-flex items-center gap-1.5 text-[10px] font-mono text-slate-500"
+          title={`OS atual: ${conversa.ticket || ''} · Conversa ${conversa.id}`}>
+          #{conversa.ticket || idCurto(conversa.id)}
+          {atendente && (
+            <>
+              <span className="w-0.5 h-0.5 rounded-full bg-slate-600" />
+              <span title={`Conversa atribuida a ${atendente.nome}`}>{atendente.nome}</span>
+            </>
+          )}
+        </span>
       </div>
       </div>
 
@@ -3198,7 +3210,7 @@ function PainelChat({
         onDragOver={(e) => { e.preventDefault(); if (!arrastando) setArrastando(true); }}
         onDragLeave={(e) => { e.preventDefault(); setArrastando(false); }}
         onDrop={(e) => { e.preventDefault(); setArrastando(false); const f = e.dataTransfer.files?.[0]; if (f) selecionarArquivo(f); }}
-        className="wp-chat flex-1 overflow-y-auto p-3 space-y-1.5 relative">
+        className="wp-chat flex-1 overflow-y-auto p-3 relative flex flex-col">
         {arrastando && (
           <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/70 border-2 border-dashed border-acao rounded-xl pointer-events-none">
             <div className="text-acao-200 font-bold text-sm flex items-center gap-2">
@@ -3206,6 +3218,25 @@ function PainelChat({
             </div>
           </div>
         )}
+
+        {/* O FIO ENCOSTA NO RODAPE.
+
+            Conversa curta ficava colada no TOPO, e a mensagem mais nova
+            terminava a meia tela de distancia da caixa de digitar -- que e
+            exatamente para onde o olho vai quando se abre a conversa.
+
+            O EMPURRAO E ESTE `mt-auto`, e NAO um `justify-end` no container
+            que rola. Com `justify-end`, quando o conteudo passa da altura da
+            caixa, o excedente sai pelo topo e o scroll nao alcanca: as
+            mensagens mais antigas ficam inacessiveis. E um problema classico
+            de flexbox com rolagem, e ele nao aparece em conversa curta --
+            aparece justamente nas longas, que sao a maioria.
+
+            O `space-y-1.5` mudou de lugar junto: ele espaca os IRMAOS, e os
+            irmaos agora sao filhos deste wrapper. Os filhos nao foram
+            reindentados de proposito -- sao ~390 linhas, e o diff de um
+            recuo inteiro esconderia a mudanca de duas linhas que isto e. */}
+        <div className="mt-auto space-y-1.5">
         {/* Atendimentos anteriores DESTE cliente, dentro da própria conversa.
             Antes cada chamado virava uma conversa separada e o histórico sumia
             da tela; agora ele está aqui, no mesmo fio, um atendimento por vez --
@@ -3593,6 +3624,7 @@ function PainelChat({
           </React.Fragment>
           );
         })}
+        </div>
       </div>
 
       {temNovas && (
@@ -5263,18 +5295,25 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
   return (
     <div className="fade-in space-y-4 h-full flex flex-col">
   
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-linha">
-        <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight font-display">
-            Central de Atendimentos
-          </h1>
-          <p className="text-slate-400 text-xs sm:text-sm mt-1">
-            Assuma conversas, consulte CNPJ e automatize respostas
-          </p>
-        </div>
+      {/* UMA LINHA, E NAO DUAS.
+
+          A frase de apoio ("Assuma conversas, consulte CNPJ e automatize
+          respostas") saiu. Ela descrevia a tela para quem ja esta dentro
+          dela -- a barra lateral ja marca "Central de Atendimento" em verde
+          -- e custava uma linha inteira de altura em TODA sessao, o dia
+          inteiro, numa tela cuja area util e a conversa.
+
+          NENHUM CONTROLE SAIU: iniciar conversa, Modo TV, o sino e o status
+          do WhatsApp continuam aqui, agora na mesma altura do titulo. O
+          `pb-2` no lugar do `pb-4` acompanha: sem a segunda linha, o respiro
+          de baixo tambem sobrava. */}
+      <div className="flex items-center justify-between gap-4 pb-2 border-b border-linha">
+        <h1 className="text-2xl font-bold text-white tracking-tight font-display truncate">
+          Central de Atendimentos
+        </h1>
 
         {/* Sino + status do WhatsApp lado a lado, no canto direito. */}
-        <div className="self-start sm:self-auto flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {/* Iniciar conversa: o unico caminho da Central que nao depende de o
               cliente escrever primeiro. */}
           <button
