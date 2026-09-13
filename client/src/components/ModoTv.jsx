@@ -82,7 +82,7 @@ const T = {
   indicador: corpo('0.95rem', 2.4, '1.7rem'),
   posicaoNome: corpo('0.95rem', 2.5, '1.8rem'),
   posicaoPontos: corpo('1.25rem', 3.4, '2.4rem'),
-  // O 2o lugar e menor DE PROPOSITO -- ver o cabecalho de `PodioEmPilha`.
+  // Prata e bronze usam letra menor que o ouro -- ver o cabecalho de `Podio`.
   posicaoNome2: corpo('0.8rem', 1.9, '1.35rem'),
   posicaoPontos2: corpo('1rem', 2.5, '1.75rem'),
   kpi: corpo('1.6rem', 4.8, '3.5rem'),
@@ -94,8 +94,15 @@ const T = {
 
 // Avatares tambem em vh -- eram eles que empurravam o resto para fora da tela.
 const AVATAR_DESTAQUE = 'clamp(3rem, 9.5vh, 6.5rem)';
-const AVATAR_POSICAO = 'clamp(1.9rem, 4.6vh, 3rem)';
-const AVATAR_SEGUNDO = 'clamp(1.4rem, 3.4vh, 2.2rem)';
+// O PODIO TEM DOIS TAMANHOS DE AVATAR, e nao tres: o de ouro maior, e prata e
+// bronze iguais. Prata e bronze disputam o mesmo degrau visual -- diferencia-los
+// por 2px so produziria uma hierarquia que ninguem le a tres metros.
+const AVATAR_PODIO_1 = 'clamp(2.1rem, 5.2vh, 3.4rem)';
+const AVATAR_PODIO_2 = 'clamp(1.6rem, 4vh, 2.6rem)';
+
+// Quantos sobem ao podio. Sao tres porque sao tres metais -- ver o cabecalho
+// de `Podio`. Do quarto em diante e linha de texto.
+const LUGARES_NO_PODIO = 3;
 
 // ── formatadores ───────────────────────────────────────────────────────────
 
@@ -326,170 +333,159 @@ function DestaqueDoMes({ item, minimo, periodo }) {
 }
 
 /**
- * O CONTEÚDO DE UMA POSIÇÃO: o número, o avatar com a medalha pendurada, o nome
- * com as parcelas e os pontos à direita.
+ * UM CARTÃO DO PÓDIO -- selo da posição, avatar com a medalha, nome, pontos e
+ * as parcelas embaixo.
  *
- * O `grande` é o 1º lugar. A diferença de TAMANHO entre ele e o 2º não é
- * enfeite: a três metros ninguém lê qual cartão está na frente do outro, mas
- * todo mundo lê qual é o maior.
+ * O `primeiro` muda tamanho, e não conteúdo: o cartão de ouro é maior em
+ * avatar, nome e pontos. A três metros o tamanho é a primeira coisa que se lê,
+ * muito antes do "1º" escrito.
+ *
+ * O SELO DA POSIÇÃO É DISCRETO, e de propósito. A medalha já diz o metal e a
+ * altura do cartão já diz o lugar; um "1º" grande no meio disso seria a
+ * terceira vez que a mesma informação aparece no mesmo palmo de tela.
  */
-function ConteudoPosicao({ posicao, item, minimo, detalhe, grande = false }) {
+function CartaoPodio({ posicao, item, minimo, detalhe, primeiro = false }) {
   const cor = MEDALHAS[posicao - 1] || '--quieto';
-  const tamAvatar = grande ? AVATAR_POSICAO : AVATAR_SEGUNDO;
-  const estiloNome = grande ? T.posicaoNome : T.posicaoNome2;
-  const estiloPontos = grande ? T.posicaoPontos : T.posicaoPontos2;
-
-  // Posicao sem dono vira "em aberto", e nao some: com uma pessoa so no ranking
-  // -- o comeco de qualquer mes -- um podio de um item nao se le como podio.
-  if (!item) {
-    return (
-      <>
-        <span
-          className="shrink-0 font-display font-extrabold tabular-nums text-center text-slate-700"
-          style={{ ...estiloPontos, minWidth: '2.2ch' }}
-        >
-          {posicao}º
-        </span>
-        <span className="flex-1 text-slate-600" style={T.apoio}>em aberto</span>
-      </>
-    );
-  }
+  const vago = !item;
+  const tamAvatar = primeiro ? AVATAR_PODIO_1 : AVATAR_PODIO_2;
 
   return (
-    <>
+    <div
+      className="min-h-0 rounded-2xl border flex flex-col items-center justify-center gap-0.5 px-2 xl:px-3 py-2 relative overflow-hidden"
+      style={{
+        // O CARTÃO DE OURO É MAIS ALTO -- é o degrau do pódio, e é o que faz a
+        // hierarquia ser lida sem number nenhum. Os outros dois ficam alinhados
+        // pela base (ver `items-end` na grade), como num pódio de verdade.
+        height: primeiro ? '100%' : '86%',
+        borderColor: vago ? 'rgb(var(--linha))' : medalha(cor, primeiro ? 0.5 : 0.34),
+        borderStyle: vago ? 'dashed' : 'solid',
+        background: vago
+          ? 'transparent'
+          : `linear-gradient(180deg, ${medalha(cor, primeiro ? 0.18 : 0.11)}, ${medalha(cor, 0.02)}), rgb(var(--grafite-700))`,
+        boxShadow: primeiro && !vago ? '0 1vh 2.4vh -0.8vh rgb(0 0 0 / 0.5)' : undefined,
+      }}
+    >
       <span
-        className="shrink-0 font-display font-extrabold tabular-nums text-center"
-        style={{ ...estiloPontos, color: medalha(cor), minWidth: '2.2ch' }}
+        className="absolute top-1.5 left-2.5 font-display font-extrabold tabular-nums leading-none"
+        style={{ ...(primeiro ? T.posicaoNome2 : T.apoio), color: vago ? 'rgb(var(--slate-700))' : medalha(cor) }}
       >
         {posicao}º
       </span>
 
-      {/* AVATAR + MEDALHA.
-          O `relative` existe so para pendurar o disco na base do circulo; o
-          tamanho do avatar continua definindo a altura da linha, entao a
-          medalha nao muda o desenho. */}
-      <span className="relative shrink-0" style={{ width: tamAvatar, height: tamAvatar }}>
-        <span
-          className="w-full h-full rounded-full border grid place-items-center font-display font-bold"
-          style={{
-            fontSize: `calc(${tamAvatar} * 0.36)`,
-            borderColor: medalha(cor, 0.5),
-            background: medalha(cor, 0.15),
-            color: medalha(cor),
-          }}
-          title={item.nome}
-        >
-          {iniciais(item.nome)}
-        </span>
+      {vago ? (
+        <span className="text-slate-600" style={T.apoio}>em aberto</span>
+      ) : (
+        <>
+          <span className="relative shrink-0" style={{ width: tamAvatar, height: tamAvatar }}>
+            <span
+              className="w-full h-full rounded-full border grid place-items-center font-display font-bold"
+              style={{
+                fontSize: `calc(${tamAvatar} * 0.36)`,
+                borderColor: medalha(cor, 0.5),
+                background: medalha(cor, 0.15),
+                color: medalha(cor),
+              }}
+              title={item.nome}
+            >
+              {iniciais(item.nome)}
+            </span>
 
-        {/* O ICONE DE MEDALHA (disco + fita), e nao um circulo chapado: e a
-            forma que se le como medalha sem precisar de legenda. O `fill` na
-            propria cor com pouca opacidade da corpo ao disco, para ele nao
-            virar so um contorno vazado sobre o fundo escuro.
+            {/* A MEDALHA PENDURADA -- disco + fita, a forma que se lê como
+                medalha sem legenda. Os dois números vêm medidos do desenho
+                anterior: -0.28 é o ponto em que ela sobrepõe o círculo o
+                bastante para ler como pendurada, sem cobrir as iniciais nem
+                estourar a borda de baixo na tela mais baixa. */}
+            <Medal
+              className="absolute left-1/2"
+              style={{
+                width: `calc(${tamAvatar} * 0.48)`,
+                height: `calc(${tamAvatar} * 0.48)`,
+                bottom: `calc(${tamAvatar} * -0.28)`,
+                transform: 'translateX(-50%)',
+                color: medalha(cor),
+                fill: medalha(cor, 0.22),
+                filter: 'drop-shadow(0 0 0.14em rgb(var(--grafite-900))) drop-shadow(0 0 0.14em rgb(var(--grafite-900)))',
+              }}
+              strokeWidth={2.2}
+              aria-label={`${posicao}º lugar`}
+            />
+          </span>
 
-            Sem numero dentro: a posicao ja esta escrita em tamanho grande a
-            esquerda da linha, e o que a medalha acrescenta e o METAL.
+          {/* A folga de cima acomoda a medalha, que desce para fora do avatar. */}
+          <span
+            className="w-full text-center truncate font-display font-semibold text-white leading-tight"
+            style={{ ...(primeiro ? T.posicaoNome : T.posicaoNome2), marginTop: `calc(${tamAvatar} * 0.34)` }}
+            title={item.nome}
+          >
+            {nomeCurto(item.nome)}
+          </span>
 
-            ESTES DOIS NUMEROS FORAM MEDIDOS, nao escolhidos no olho.
+          <span className="flex items-baseline gap-1 leading-none">
+            <span
+              className="font-display font-extrabold tabular-nums"
+              style={{ ...(primeiro ? T.posicaoPontos : T.posicaoPontos2), color: primeiro ? medalha(cor) : 'rgb(var(--texto))' }}
+            >
+              {item.pontos}
+            </span>
+            <span className="font-semibold text-slate-500" style={T.apoio}>pts</span>
+          </span>
 
-            A fita do icone aponta para CIMA: em 0.58/-0.18 ela cobria as
-            iniciais do avatar. Descendo a medalha o problema inverte -- em
-            -0.38 ela sobrava 0,3 px do fim da linha na tela BAIXA (avatar no
-            piso do clamp), ou seja, a um pixel de ser cortada.
-
-            -0.28 e o meio: 3,3 px de folga na linha apertada e 6 px de
-            sobreposicao com o circulo, que e o que faz a medalha ler como
-            PENDURADA no avatar em vez de solta embaixo dele. */}
-        <Medal
-          className="absolute left-1/2"
-          style={{
-            width: `calc(${tamAvatar} * 0.48)`,
-            height: `calc(${tamAvatar} * 0.48)`,
-            bottom: `calc(${tamAvatar} * -0.28)`,
-            transform: 'translateX(-50%)',
-            color: medalha(cor),
-            fill: medalha(cor, 0.22),
-            // A sombra na cor do fundo separa a medalha do avatar: sem ela, os
-            // dois contornos se encostam e viram uma mancha so a distancia --
-            // que e como esta tela e lida.
-            filter: 'drop-shadow(0 0 0.14em rgb(var(--grafite-900))) drop-shadow(0 0 0.14em rgb(var(--grafite-900)))',
-          }}
-          strokeWidth={2.2}
-          aria-label={`${posicao}º lugar`}
-        />
-      </span>
-
-      <span className="flex-1 min-w-0">
-        <span
-          className="block truncate font-display font-semibold text-white leading-tight"
-          style={estiloNome}
-          title={item.nome}
-        >
-          {nomeCurto(item.nome)}
-        </span>
-        <span className="block truncate text-slate-400 tabular-nums" style={T.apoio}>
-          {/* Cada ranking tem as suas parcelas. Com o texto da sede cravado
-              aqui, o bloco de fora da sede mostraria "0 aval. · 0 de 3 ★"
-              para quem entrega relatório de visita -- números de uma conta
-              que não é a dele. */}
-          {detalhe ? detalhe(item, minimo) : (
-            <>
-              {item.atendimentos.valor} aval. ·{' '}
-              {item.nota.conta ? `${nota1(item.nota.valor)} ★` : `${item.nota.amostra} de ${minimo} ★`} ·{' '}
-              {duracao(item.agilidade.medioSeg)}
-            </>
-          )}
-        </span>
-      </span>
-
-      <span className="shrink-0 flex items-baseline gap-1">
-        <span className="font-display font-extrabold text-white tabular-nums" style={estiloPontos}>
-          {item.pontos}
-        </span>
-        <span className="text-slate-500" style={T.apoio}>pts</span>
-      </span>
-    </>
+          <span className="w-full text-center truncate text-slate-400 tabular-nums" style={T.apoio}>
+            {/* Cada ranking tem as suas parcelas. Com o texto da sede cravado
+                aqui, o bloco de fora da sede mostraria "0 aval. · 0 de 3 ★"
+                para quem entrega relatório de visita -- números de uma conta
+                que não é a dele. */}
+            {detalhe ? detalhe(item, minimo) : (
+              <>
+                {item.atendimentos.valor} aval. ·{' '}
+                {item.nota.conta ? `${nota1(item.nota.valor)} ★` : `${item.nota.amostra} de ${minimo} ★`} ·{' '}
+                {duracao(item.agilidade.medioSeg)}
+              </>
+            )}
+          </span>
+        </>
+      )}
+    </div>
   );
 }
 
 /**
- * UM PÓDIO -- o 1º na frente, o 2º SAINDO POR TRÁS dele, e quem está atrás
- * numa linha de texto embaixo.
+ * UM PÓDIO -- 2 - 1 - 3, com o primeiro no meio e mais alto.
  *
- * ── POR QUE DOIS, E EMPILHADOS ─────────────────────────────────────────────
+ * ── POR QUE LADO A LADO, E NÃO EMPILHADO ───────────────────────────────────
  *
- * Eram três cartões soltos, um por posição, e dois pódios desses lado a lado
- * (sede e rua) comiam duas colunas da parede. O painel inteiro virou uma
- * parede de cartões concorrendo entre si, que é o oposto do que uma TV faz:
- * ela responde UMA pergunta de longe.
+ * Antes daqui houve um desenho em pilha: o 1º na frente e os outros saindo por
+ * trás, como carta de baralho. Ele coube enquanto eram dois. Com três, o 2º e o
+ * 3º encolheram a ponto de a linha de parcelas virar um borrão -- e borrão numa
+ * tela que se lê a três metros é o mesmo que não escrever.
  *
- * A pilha resolve as duas coisas de uma vez. Ocupa a altura de um cartão e
- * meio em vez de três, e o empilhamento JÁ É a hierarquia -- não é preciso ler
- * o "1º" para saber quem está ganhando, porque o cartão de cima está na
- * frente, é maior e projeta sombra sobre o outro.
+ * A razão é a do cabeçalho deste arquivo: O QUE APERTA UM PAINEL DE PAREDE É A
+ * ALTURA. Empilhar gasta exatamente o que falta (altura) e economiza o que
+ * sobra (a largura desta coluna). O pódio faz o contrário, e por isso os três
+ * cabem com tamanho de número de parede.
  *
- * ── O QUE APARECE DO 2º ────────────────────────────────────────────────────
+ * De quebra a parede passa a falar a mesma língua da Visão Geral, que já
+ * desenha o pódio assim (ver `Podio` em pages/Rankings.jsx).
  *
- * Só a FAIXA DE BAIXO do cartão, e é nela que ficam posição, avatar, nome e
- * pontos. Ele fica atrás sem perder nenhum dado -- a parte escondida é espaço
- * vazio, de propósito.
+ * ── A ORDEM É 2 - 1 - 3 ────────────────────────────────────────────────────
  *
- * Por isso o conteúdo é alinhado embaixo (`items-end`) em vez de recuado por
- * cima: `padding-top` em porcentagem, no CSS, é medido sobre a LARGURA do
- * elemento, e não sobre a altura. Num cartão largo e baixo como este, a conta
- * dá quatro vezes o recuo pretendido e o conteúdo cai para fora do bloco.
+ * E não 1 - 2 - 3. Numa fila crescente o olho lê ORDEM DE LEITURA; num pódio
+ * ele lê HIERARQUIA, de uma vez, porque o degrau do meio é mais alto. É o mesmo
+ * motivo pelo qual um pódio de verdade não é uma fila.
+ *
+ * ── O QUE SOBRA EMBAIXO ────────────────────────────────────────────────────
+ *
+ * Do 4º em diante, uma linha de texto: nome e pontos, sem as parcelas. A parede
+ * é lida de passagem, e sete linhas com parcelas viram um bloco de números que
+ * ninguém decifra em pé. Mas ninguém SOME -- quem está em 4º é justamente quem
+ * mais precisa saber que está em 4º.
  */
-function PodioEmPilha({ titulo, sublinha, itens, minimo, detalhe }) {
-  const primeiro = itens[0] || null;
-  const segundo = itens[1] || null;
-  // Do terceiro em diante a linha e compacta: nome e pontos, sem as parcelas.
-  // A parede e lida de longe e de passagem; sete linhas com parcelas viram um
-  // bloco de numeros que ninguem decifra em pe. Mas ninguem pode SUMIR -- quem
-  // esta em 4o e justamente quem mais precisa saber que esta em 4o.
-  const atras = itens.slice(2);
-
-  const ouro = MEDALHAS[0];
-  const prata = MEDALHAS[1];
+function Podio({ titulo, sublinha, itens, minimo, detalhe }) {
+  // Posicao sem dono vira cartao tracejado "em aberto", e nao some: com uma
+  // pessoa so no ranking -- o comeco de qualquer mes -- um podio de um item nao
+  // se le como podio.
+  const lugares = [0, 1, 2].map((i) => itens[i] || null);
+  const atras = itens.slice(LUGARES_NO_PODIO);
 
   return (
     <div className="min-h-0 flex flex-col gap-2">
@@ -501,48 +497,23 @@ function PodioEmPilha({ titulo, sublinha, itens, minimo, detalhe }) {
         <span className="shrink-0 text-slate-500 truncate" style={T.apoio}>{sublinha}</span>
       </div>
 
-      <div className="relative flex-1 min-h-0">
-        {/* O 2º, ATRÁS. Mais estreito nas laterais: é o que faz ler como um
-            cartão EMBAIXO da pilha, e não como uma faixa colada no de cima. */}
-        <div
-          className="absolute left-[2.5%] right-[2.5%] top-[44%] bottom-0 rounded-xl border flex items-end"
-          style={{
-            borderColor: segundo ? medalha(prata, 0.3) : 'rgb(var(--linha))',
-            borderStyle: segundo ? 'solid' : 'dashed',
-            background: segundo
-              ? `linear-gradient(90deg, ${medalha(prata, 0.12)}, ${medalha(prata, 0.02)}), rgb(var(--grafite-800))`
-              : 'transparent',
-          }}
-        >
-          <div
-            className="w-full min-w-0 flex items-center gap-2 xl:gap-3 px-3 xl:px-4"
-            style={{ paddingBottom: 'clamp(0.5rem, 1.6vh, 1.1rem)' }}
-          >
-            <ConteudoPosicao posicao={2} item={segundo} minimo={minimo} detalhe={detalhe} />
-          </div>
-        </div>
-
-        {/* O 1º, NA FRENTE. O fundo é OPACO (`--grafite-700`, o mesmo do
-            painel) porque ele cobre o cartão de trás: com a transparência do
-            vidro, o 2º aparecia por dentro do 1º e os dois viravam uma mancha
-            só. A sombra é o que separa os dois planos a três metros. */}
-        <div
-          className="absolute inset-x-0 top-0 h-[63%] rounded-xl border flex items-center gap-2 xl:gap-3 px-3 xl:px-4"
-          style={{
-            borderColor: primeiro ? medalha(ouro, 0.45) : 'rgb(var(--linha))',
-            borderStyle: primeiro ? 'solid' : 'dashed',
-            background: primeiro
-              ? `linear-gradient(90deg, ${medalha(ouro, 0.18)}, ${medalha(ouro, 0.03)}), rgb(var(--grafite-700))`
-              : 'rgb(var(--grafite-700))',
-            boxShadow: '0 0.8vh 2.2vh -0.7vh rgb(0 0 0 / 0.5)',
-          }}
-        >
-          <ConteudoPosicao posicao={1} item={primeiro} minimo={minimo} detalhe={detalhe} grande />
-        </div>
+      {/* A coluna do meio e um pouco mais larga: o nome do primeiro e o que
+          menos pode ser truncado, e e o unico que carrega os pontos grandes. */}
+      <div className="flex-1 min-h-0 grid grid-cols-[1fr_1.12fr_1fr] gap-2 xl:gap-3 items-end">
+        {[1, 0, 2].map((i) => (
+          <CartaoPodio
+            key={lugares[i]?.nome || `vago-${i}`}
+            posicao={i + 1}
+            item={lugares[i]}
+            minimo={minimo}
+            detalhe={detalhe}
+            primeiro={i === 0}
+          />
+        ))}
       </div>
 
       {atras.length > 0 && (
-        <div className="shrink-0 flex items-center gap-x-3 gap-y-1 flex-wrap">
+        <div className="shrink-0 flex items-center justify-center gap-x-3 gap-y-1 flex-wrap">
           {atras.map((p) => (
             <span key={p.nome} className="inline-flex items-baseline gap-1.5 text-slate-400" style={T.apoio}>
               <span className="tabular-nums text-slate-500">{p.posicao}º</span>
@@ -582,7 +553,7 @@ function Classificacao({ blocos }) {
         style={{ gridTemplateRows: `repeat(${blocos.length}, minmax(0, 1fr))` }}
       >
         {blocos.map((b) => (
-          <PodioEmPilha
+          <Podio
             key={b.chave}
             titulo={b.titulo}
             sublinha={b.sublinha}

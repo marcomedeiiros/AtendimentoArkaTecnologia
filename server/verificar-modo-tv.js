@@ -93,9 +93,9 @@ console.log("=== Modo TV: as duas competicoes ===");
     );
 
     check("a parede mostra quem ficou fora do podio", [
-      ...(tv.includes("const atras = itens.slice(2);")
+      ...(tv.includes("const atras = itens.slice(LUGARES_NO_PODIO);")
         ? []
-        : ["nao achei o corte a partir da 3a posicao -- o podio empilha DOIS, e o resto e linha de texto"]),
+        : ["nao achei o corte depois do podio -- do 4o em diante tem de virar linha de texto"]),
       ...(/\{atras\.map\(\(p\) => \(/.test(tv)
         ? []
         : ["quem esta atras nao e desenhado"]),
@@ -120,14 +120,30 @@ console.log("=== Modo TV: as duas competicoes ===");
         : ["o bloco externo nao passa o proprio detalhe"]),
     ]);
 
-    check("o podio empilha o 2o atras do 1o", [
-      ...(tv.includes("function PodioEmPilha(") ? [] : ["o componente da pilha sumiu"]),
-      ...(tv.includes("h-[63%]") && tv.includes("top-[44%]")
+    // ── O PODIO ──────────────────────────────────────────────────────────
+    //
+    // Houve aqui um desenho em PILHA (o 1o na frente, os outros saindo por
+    // tras). Ele coube enquanto eram dois; com tres, o 2o e o 3o encolheram a
+    // ponto de a linha de parcelas virar borrao -- e borrao, numa tela lida a
+    // tres metros, e o mesmo que nao escrever.
+    //
+    // O que trava aqui e a razao da troca, e nao o enfeite: empilhar gasta
+    // ALTURA, que e o que aperta um painel de parede (ver o cabecalho do
+    // ModoTv), e economiza a largura desta coluna, que e o que sobra.
+    check("o podio mostra os tres lado a lado, na ordem 2-1-3", [
+      ...(tv.includes("function Podio(") ? [] : ["o componente do podio sumiu"]),
+      ...(tv.includes("const LUGARES_NO_PODIO = 3;")
         ? []
-        : ["os dois cartoes nao estao mais sobrepostos -- o 2o voltou a ficar solto embaixo"]),
-      ...(/top-\[44%\][^>]*items-end/s.test(tv)
+        : ["o podio deixou de ter tres lugares -- sao tres porque sao tres metais"]),
+      // A ORDEM VISUAL. Numa fila 1-2-3 o olho le ordem de leitura; no 2-1-3
+      // ele le hierarquia, porque o degrau do meio e mais alto.
+      ...(tv.includes("{[1, 0, 2].map(")
         ? []
-        : ["o 2o nao alinha o conteudo embaixo: padding em % e medido sobre a LARGURA e joga o cartao para fora"]),
+        : ["a ordem virou fila crescente -- o primeiro tem de ficar no MEIO"]),
+      // E o degrau, que e o que sustenta a ordem acima.
+      ...(/items-end/.test(tv) && tv.includes("primeiro ? '100%' : '86%'")
+        ? []
+        : ["os cartoes perderam o degrau: sem o do meio mais alto, 2-1-3 vira so uma fila fora de ordem"]),
     ]);
 
     console.log(
