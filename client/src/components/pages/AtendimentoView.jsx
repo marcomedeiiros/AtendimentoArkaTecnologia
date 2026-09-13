@@ -1950,6 +1950,7 @@ const CardConversa = React.memo(function CardConversa({
                 )}
               </div>
             </div>
+          </div>
 
           {/* Linha 3: OS, cliente, setor e quem atende.
 
@@ -1984,7 +1985,6 @@ const CardConversa = React.memo(function CardConversa({
                 <UserCheck size={9} /> {atendente.nome.split(' ')[0]}
               </span>
             )}
-          </div>
           </div>
         </div>
       </div>
