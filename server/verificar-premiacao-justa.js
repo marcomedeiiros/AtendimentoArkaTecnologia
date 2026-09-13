@@ -251,6 +251,14 @@ function corpoDe(fonte, cabecalho, fechamento) {
 // podio de UM lugar e, logo abaixo, tres botoes oferecendo premio para 1o, 2o e
 // 3o. Nao e so feio -- registrar premio para quem a regra nao premia vira linha
 // no banco, e ninguem desfaz.
+//
+// O QUE MUDOU, E O QUE CONTINUA VALENDO. O podio deixou de seguir `premiados`
+// de proposito: ele mostra POSICAO (ouro, prata, bronze), e com o padrao em 1
+// a visao geral virava um podio de uma pessoa so. Quem leva PREMIO nao mudou
+// -- e o que estas asserçoes travam: os botoes continuam saindo de
+// `dados.premiados`, e a etiqueta no cartao continua saindo de `premiacoes`,
+// que so existe para posicao premiada. Um 2o lugar sem premio sobe ao podio
+// sem etiqueta, e nao ganha um botao.
 {
   const fs = require("fs");
   const tela = fs.readFileSync(
@@ -264,10 +272,17 @@ function corpoDe(fonte, cabecalho, fechamento) {
   if (!tela.includes("Array.from({ length: dados?.premiados ?? 1 }")) {
     problemas.push("os botoes de premio nao seguem o numero de premiados do servidor");
   }
-  if (!tela.includes("const vagas = Math.max(0, Number(premiados ?? 1));")) {
-    problemas.push("o podio nao le mais o numero de premiados do servidor");
+  if (!tela.includes("const vagas = Math.min(LUGARES_NO_PODIO, classificacao.length);")) {
+    problemas.push("o podio deixou de mostrar os tres primeiros -- ver LUGARES_NO_PODIO");
   }
-  check("os botoes de premio seguem o mesmo numero do podio", problemas);
+  // A ETIQUETA DE PREMIO NO CARTAO continua saindo da lista de premiacoes, e
+  // nao da posicao: sem isso, um podio de tres passaria a anunciar premio
+  // para quem a regra nao premia -- que e o defeito que este bloco existe
+  // para pegar, so que pelo outro lado.
+  if (!tela.includes("premiacoes?.find((x) => x.posicao === p.posicao)")) {
+    problemas.push("a etiqueta de premio no cartao nao sai mais da lista de premiacoes");
+  }
+  check("o podio mostra posicao; o premio segue o campo", problemas);
 }
 console.log(
   "\n" +

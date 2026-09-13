@@ -58,6 +58,9 @@ import { FUSO_BR } from '../../utils/data';
 import { avisar, confirmar, pedirTexto } from '../../utils/dialogo';
 
 const MEDALHAS = ['--medalha-1', '--medalha-2', '--medalha-3'];
+// Ouro, prata e bronze: sao TRES porque sao tres metais, e nao porque tres
+// pessoas ganham premio -- ver `MEDALHAS_NA_LISTA` e o podio.
+const LUGARES_NO_PODIO = 3;
 const medalha = (v, o = 1) => `rgb(var(${v}) / ${o})`;
 
 const ABAS = [
@@ -268,18 +271,33 @@ function Evolucao({ estado, anterior }) {
 }
 
 /**
- * O pódio -- com o número de lugares que o SERVIDOR decidiu.
+ * O pódio -- os três primeiros, sempre que houver três.
  *
- * Eram três, sempre. Na equipe externa, que tem três pessoas, isso premiava o
- * time inteiro: o "3º lugar" era o último colocado recebendo medalha. Pódio que
- * inclui todo mundo não premia ninguém.
+ * ── O PÓDIO MOSTRA POSIÇÃO; O PRÊMIO É OUTRA COISA ─────────────────────────
  *
- * A conta é do servidor (`rankings/premiados`) porque ela também decide quem
- * PODE receber prêmio registrado -- e uma regra dessas em dois lugares vira
- * duas regras. O `?? 1` cobre só a resposta antiga em cache, e 1 é o padrão.
+ * Até aqui o número de cartões seguia `premiados` (o campo de quantos ganham
+ * prêmio, que vem em 1 por padrão). O efeito era um "pódio" de uma pessoa só:
+ * a tela de visão geral mostrava o líder e mais ninguém, e quem ficou em 2º no
+ * mês não se via em lugar nenhum antes da tabela.
+ *
+ * São duas perguntas diferentes, e agora cada uma tem a sua resposta:
+ *
+ *   ONDE CADA UM CHEGOU -- ouro, prata e bronze. É o que o pódio responde, e
+ *   é `LUGARES_NO_PODIO`. Mesmo raciocínio que já valia para a medalha na
+ *   tabela (`MEDALHAS_NA_LISTA`, logo abaixo): posição não depende de prêmio.
+ *
+ *   QUEM LEVA PRÊMIO -- continua sendo `premiados`, decidido no servidor
+ *   (`rankings/premiados`), e continua valendo tanto para a etiqueta de
+ *   prêmio no cartão quanto para os botões de registrar. Um 2º lugar sem
+ *   prêmio configurado simplesmente sobe ao pódio sem etiqueta.
+ *
+ * EFEITO COLATERAL CONHECIDO: numa equipe de três pessoas -- o caso da equipe
+ * externa -- o pódio passa a incluir o time inteiro. Foi uma escolha
+ * consciente: ali o último lugar não ganha nada, porque `premiados` não
+ * mudou; o bronze diz só que a competição tem três pessoas.
  */
-function Podio({ classificacao, premiacoes, premiados }) {
-  const vagas = Math.max(0, Number(premiados ?? 1));
+function Podio({ classificacao, premiacoes }) {
+  const vagas = Math.min(LUGARES_NO_PODIO, classificacao.length);
   const top = classificacao.slice(0, vagas);
   if (!top.length) return null;
   // Ordem visual 2 - 1 - 3, como num pódio de verdade: o primeiro no meio e
@@ -350,7 +368,7 @@ function Podio({ classificacao, premiacoes, premiados }) {
  *
  * Vale para os dois rankings: esta linha desenha a sede e o fora da sede.
  */
-const MEDALHAS_NA_LISTA = 3;
+const MEDALHAS_NA_LISTA = LUGARES_NO_PODIO;
 
 function LinhaTabela({ p, aberta, onAlternar, temOutroLado = false, rotuloOutroLado = '' }) {
   const temMedalha = p.posicao <= MEDALHAS_NA_LISTA;
@@ -514,17 +532,35 @@ function Historico({ dados }) {
   const comDados = dados.pessoas.filter((p) => p.meses.some((m) => m.pontos > 0));
   if (!comDados.length) return null;
 
+  // SÓ OS MESES QUE JÁ CONTAM.
+  //
+  // A pontuação passou a valer em setembro/2026. Os meses anteriores existem
+  // no histórico -- com zero para todo mundo, porque ninguém pontuava ainda --
+  // e seis colunas de zero não dizem nada: pior, leem-se como um semestre em
+  // que a equipe não produziu. A coluna de um mês aparece sozinha, no mês em
+  // que a primeira pessoa pontua.
+  //
+  // O filtro é por DADO, e não pela data de setembro cravada aqui: uma data
+  // no código envelhece no dia em que o ciclo for zerado de novo (é o que o
+  // botão de recomeçar faz), e aí ela esconderia meses que voltaram a valer.
+  const competencias = dados.competencias.filter((c) =>
+    dados.pessoas.some((p) => p.meses.some((m) => m.competencia === c && m.pontos > 0))
+  );
+
   return (
     <div className="mt-5">
       <h4 className="text-xs font-bold text-texto flex items-center gap-2 mb-2">
-        <Calendar size={13} className="text-acao-200" /> Evolução dos últimos meses
+        <Calendar size={13} className="text-acao-200" />
+        {competencias.length > 1
+          ? 'Evolução dos últimos meses'
+          : `Pontuação de ${rotuloCompetencia(competencias[0])}`}
       </h4>
       <div className="overflow-x-auto rounded-xl border border-linha">
         <table className="w-full text-xs">
           <thead className="bg-grafite-700">
             <tr>
               <th className="text-left py-2 px-3 font-bold text-texto-suave">Funcionário</th>
-              {dados.competencias.map((c) => (
+              {competencias.map((c) => (
                 <th key={c} className="py-2 px-3 font-bold text-texto-suave text-right whitespace-nowrap">
                   {rotuloCompetencia(c)}
                 </th>
@@ -535,7 +571,7 @@ function Historico({ dados }) {
             {comDados.map((p) => (
               <tr key={p.usuarioId} className="border-t border-linha">
                 <td className="py-2 px-3 font-semibold text-texto whitespace-nowrap">{p.nome}</td>
-                {dados.competencias.map((c) => {
+                {competencias.map((c) => {
                   const m = p.meses.find((x) => x.competencia === c);
                   return (
                     <td key={c} className="py-2 px-3 text-right tabular-nums whitespace-nowrap">
@@ -1135,7 +1171,7 @@ export default function Rankings() {
           </div>
         ) : (
           <>
-            <Podio classificacao={lista} premiacoes={dados?.premiacoes} premiados={dados?.premiados} />
+            <Podio classificacao={lista} premiacoes={dados?.premiacoes} />
 
             <div className="overflow-x-auto rounded-xl border border-linha">
               <table className="w-full text-xs">
