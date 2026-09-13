@@ -1857,63 +1857,46 @@ const CardConversa = React.memo(function CardConversa({
               : 'bg-grafite-600/40 border-linha/60 hover:border-linha-forte'
       }`}
     >
-      {/* Cartao compacto de duas linhas ao lado do avatar. Linha de cima: nome,
-          #id e badges (CNPJ/setor). Linha de baixo: previa da ultima mensagem
-          com a data/hora dela ao lado, mais o nao lidas (que vira as acoes
-          rapidas ao passar o mouse). */}
+      {/* Cartao de TRES linhas ao lado do avatar:
+
+            1. estado, nome e a hora da ultima mensagem;
+            2. previa da ultima mensagem, o nao lidas (que vira as acoes
+               rapidas ao passar o mouse);
+            3. OS, cliente, setor e quem atende.
+
+          Eram duas, com as badges na linha do nome -- e la o nome era o unico
+          que cedia espaco, porque as badges eram `shrink-0`. "Luisa Abreu
+          Fidelis" chegava na tela como "Luisa Abreu Fi...", e o nome e
+          exatamente o que se procura numa lista de conversas. */}
       <div className="flex items-center gap-2 min-w-0">
         <Avatar contato nome={c.cliente} size="sm" fotoUrl={c.fotoUrl} online={whatsAppConectado} />
 
         <div className="min-w-0 flex-1">
-          {/* Linha 1: estado + nome + #id + badges */}
+          {/* Linha 1: estado + nome + hora da ultima mensagem */}
           <div className="flex items-center gap-1.5 min-w-0">
             <span className={`w-2 h-2 rounded-full shrink-0 ${meta.dot}`} title={meta.label} />
             {c.favorita && <Star size={11} className="text-espera-400 fill-current shrink-0" title="Favorita" />}
             {c.arquivada && <Archive size={11} className="text-slate-500 shrink-0" title="Arquivada" />}
             {c.oculta && <EyeOff size={11} className="text-slate-500 shrink-0" title="Oculta" />}
-            <span className={`min-w-0 truncate text-xs ${naoLidas > 0 ? 'font-extrabold text-white' : 'font-bold text-slate-300'}`}>
+            <span className={`flex-1 min-w-0 truncate text-xs ${naoLidas > 0 ? 'font-extrabold text-white' : 'font-bold text-slate-300'}`}>
               {c.cliente}
             </span>
-            <span className="shrink-0 text-[9px] font-mono font-bold text-acao-200/90" title={`OS ${c.ticket || ''} · Conversa ${c.id}`}>
-              #{c.ticket || idCurto(c.id)}
-            </span>
-            {/* Razao social pode ser longa: a badge trunca em vez de empurrar
-                as outras para fora do cartao. */}
-            <span className={`shrink-0 max-w-[11rem] truncate inline-flex items-center text-[9px] font-bold px-1.5 py-px rounded-md border ${chipCliente.classe}`}
-              title={chipCliente.titulo}>
-              {chipCliente.label}
-            </span>
-            {/* "escolhido pelo cliente" saiu do texto: o setor deixou de ter uma
-                origem só. Ele vem do menu do bot OU de quem abriu a conversa OU
-                da badge do cabeçalho -- e afirmar a origem errada é pior que não
-                afirmar nenhuma. */}
-            {setor && (
-              <span className={`shrink-0 inline-flex items-center text-[9px] font-bold px-1.5 py-px rounded-md border ${setor.classe}`}
-                title={setor.id === 'geral' ? 'Sem setor: esta conversa nao aparece para Financeiro nem Comercial' : `Setor: ${setor.setor}`}>
-                {setor.label}
-              </span>
-            )}
-            {atendente?.nome && (
-              <span className="shrink-0 inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-px rounded-md border bg-purple-500/15 text-purple-300 border-purple-500/30"
-                title={`Atendendo: ${atendente.nome}`}>
-                <UserCheck size={9} /> {atendente.nome.split(' ')[0]}
-              </span>
-            )}
-          </div>
 
-          {/* Linha 2: previa + data/hora da mensagem + nao lidas / acoes (hover) */}
-          <div className="flex items-center gap-1.5 min-w-0 mt-0.5">
-            <span className={`flex-1 min-w-0 truncate text-[11px] ${naoLidas > 0 ? 'text-slate-100 font-medium' : 'text-slate-400'}`}>
-              {ultimaMsg ? (ultimaMsg.deletada ? 'Mensagem apagada' : ultimaMsg.texto) : 'Sem mensagens'}
-            </span>
-
+            {/* A HORA SOBE PARA CA, ao lado do nome. Embaixo ela dividia a
+                linha com a previa da mensagem, e as duas se truncavam. */}
             {c.ultimaMensagemEm && (
-              // Tempo decorrido na lista; horário exato no title (hover).
               <span className="shrink-0 text-[9px] text-slate-500 font-mono whitespace-nowrap"
                 title={dataHoraCompleta(c.ultimaMensagemEm)}>
                 {tempoCurto(c.ultimaMensagemEm, agora)}
               </span>
             )}
+          </div>
+
+          {/* Linha 2: previa da ultima mensagem + nao lidas / acoes (hover) */}
+          <div className="flex items-center gap-1.5 min-w-0 mt-0.5">
+            <span className={`flex-1 min-w-0 truncate text-[11px] ${naoLidas > 0 ? 'text-slate-100 font-medium' : 'text-slate-400'}`}>
+              {ultimaMsg ? (ultimaMsg.deletada ? 'Mensagem apagada' : ultimaMsg.texto) : 'Sem mensagens'}
+            </span>
 
             {naoLidas > 0 && (
               <span className="shrink-0 min-w-[16px] h-[16px] px-1 rounded-full bg-espera text-grafite-900 text-[10px] font-extrabold flex items-center justify-center group-hover:hidden"
@@ -1967,6 +1950,41 @@ const CardConversa = React.memo(function CardConversa({
                 )}
               </div>
             </div>
+
+          {/* Linha 3: OS, cliente, setor e quem atende.
+
+              Estavam na linha do NOME, e la eram `shrink-0` -- ou seja, quem
+              cedia espaco era sempre o nome. Numa lista de conversas o nome e
+              justamente o que se procura, entao a prioridade estava invertida.
+
+              Aqui elas tem `flex-wrap`: razao social longa passa para a linha
+              de baixo em vez de ser cortada, e o cartao cresce um pouco em vez
+              de esconder informacao. */}
+          <div className="flex items-center gap-1 min-w-0 mt-1 flex-wrap">
+            <span className="shrink-0 text-[9px] font-mono font-bold text-acao-200/90" title={`OS ${c.ticket || ''} · Conversa ${c.id}`}>
+              #{c.ticket || idCurto(c.id)}
+            </span>
+            <span className={`max-w-full truncate inline-flex items-center text-[9px] font-bold px-1.5 py-px rounded-md border ${chipCliente.classe}`}
+              title={chipCliente.titulo}>
+              {chipCliente.label}
+            </span>
+            {/* "escolhido pelo cliente" saiu do texto: o setor deixou de ter uma
+                origem só. Ele vem do menu do bot OU de quem abriu a conversa OU
+                da badge do cabeçalho -- e afirmar a origem errada é pior que não
+                afirmar nenhuma. */}
+            {setor && (
+              <span className={`shrink-0 inline-flex items-center text-[9px] font-bold px-1.5 py-px rounded-md border ${setor.classe}`}
+                title={setor.id === 'geral' ? 'Sem setor: esta conversa nao aparece para Financeiro nem Comercial' : `Setor: ${setor.setor}`}>
+                {setor.label}
+              </span>
+            )}
+            {atendente?.nome && (
+              <span className="shrink-0 inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-px rounded-md border bg-purple-500/15 text-purple-300 border-purple-500/30"
+                title={`Atendendo: ${atendente.nome}`}>
+                <UserCheck size={9} /> {atendente.nome.split(' ')[0]}
+              </span>
+            )}
+          </div>
           </div>
         </div>
       </div>
@@ -5438,36 +5456,50 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
             quando a fila cresce, em vez de esticar a pagina inteira. */}
         <div className={`${chatAberto ? 'hidden lg:flex' : 'flex'} lg:col-span-4 glass-panel rounded-2xl flex-col overflow-hidden border border-linha max-h-[70dvh] lg:max-h-none lg:min-h-0`}>
        
-          <div className="grid bg-grafite-600/80 border-b border-linha"
-            style={{ gridTemplateColumns: `repeat(${Math.max(abasVisiveis.length, 1)}, minmax(0, 1fr))` }}>
-            {abasVisiveis.map(aba => {
-              const Icon  = aba.icon;
-              const count = contadores[aba.id];
-              const ativo = abaAtual === aba.id;
-              return (
-                <button key={aba.id} onClick={() => setAbaAtual(aba.id)}
-                  title={`${aba.label} (${count})`}
-                  className={`py-2 px-2 text-[11px] font-bold transition-all border-b-2 flex items-center justify-center gap-1 ${
-                    ativo
-                      ? `${aba.ativa} bg-grafite-700`
-                      : 'border-transparent text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Icon size={12} className="shrink-0" />
-                  <span className="truncate">{aba.label}</span>
-                  {/* O contador herda a cor da aba (`currentColor`) em vez de
-                      repetir a classe: com a cor escrita duas vezes, bastava
-                      trocar uma para o numero ficar verde numa aba vermelha. */}
-                  <span className={`text-[10px] font-semibold shrink-0 ${ativo ? '' : 'text-slate-500'}`}>
-                    ({count})
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          {/* UMA FAIXA DE CABECALHO, E NAO DUAS.
 
-          <div className="p-2 border-b border-linha flex items-center gap-2">
-            <div className="relative flex-1">
+              As abas ocupavam uma faixa inteira em largura total, e a busca
+              vinha numa segunda faixa embaixo. Sao dois controles pequenos
+              custando duas alturas numa coluna cuja razao de existir e
+              mostrar conversas.
+
+              Como PILULAS elas cabem ao lado da busca. O `flex-wrap` e a rede
+              de seguranca: em coluna estreita a busca desce sozinha para a
+              segunda linha e a tela volta a ser o que e hoje -- em vez de
+              espremer as tres coisas ate nenhuma ficar legivel.
+
+              A COR DE CADA ABA CONTINUA SENDO A DELA (`aba.ativa`): verde em
+              Abertas, ambar em Pendentes, vermelho em Fechadas. O que era
+              borda de baixo virou fundo, e nada mais. */}
+          <div className="p-2 border-b border-linha flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-0.5 bg-grafite-600/70 border border-linha rounded-xl p-0.5 shrink-0">
+              {abasVisiveis.map(aba => {
+                const Icon  = aba.icon;
+                const count = contadores[aba.id];
+                const ativo = abaAtual === aba.id;
+                return (
+                  <button key={aba.id} onClick={() => setAbaAtual(aba.id)}
+                    title={`${aba.label} (${count})`}
+                    className={`px-2 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 ${
+                      ativo
+                        ? `${aba.ativa} bg-grafite-700`
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Icon size={12} className="shrink-0" />
+                    <span className="truncate">{aba.label}</span>
+                    {/* O contador herda a cor da aba (`currentColor`) em vez de
+                        repetir a classe: com a cor escrita duas vezes, bastava
+                        trocar uma para o numero ficar verde numa aba vermelha. */}
+                    <span className={`text-[10px] font-semibold shrink-0 ${ativo ? '' : 'text-slate-500'}`}>
+                      ({count})
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="relative flex-1 min-w-[8rem]">
               <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
               <input
                 value={busca}
