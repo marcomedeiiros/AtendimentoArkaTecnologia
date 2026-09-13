@@ -5471,8 +5471,8 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               A COR DE CADA ABA CONTINUA SENDO A DELA (`aba.ativa`): verde em
               Abertas, ambar em Pendentes, vermelho em Fechadas. O que era
               borda de baixo virou fundo, e nada mais. */}
-          <div className="p-2 border-b border-linha flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-0.5 bg-grafite-600/70 border border-linha rounded-xl p-0.5 shrink-0">
+          <div className="p-2 border-b border-linha flex items-center gap-1.5">
+            <div className="flex items-center gap-0.5 bg-grafite-600/70 border border-linha rounded-xl p-0.5 min-w-0">
               {abasVisiveis.map(aba => {
                 const Icon  = aba.icon;
                 const count = contadores[aba.id];
@@ -5480,7 +5480,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
                 return (
                   <button key={aba.id} onClick={() => setAbaAtual(aba.id)}
                     title={`${aba.label} (${count})`}
-                    className={`px-2 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 ${
+                    className={`px-1.5 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 min-w-0 ${
                       ativo
                         ? `${aba.ativa} bg-grafite-700`
                         : 'text-slate-400 hover:text-slate-200'
@@ -5499,7 +5499,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
               })}
             </div>
 
-            <div className="relative flex-1 min-w-[8rem]">
+            <div className="relative flex-1 min-w-[4.5rem]">
               <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
               <input
                 value={busca}
