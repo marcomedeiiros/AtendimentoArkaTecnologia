@@ -5324,9 +5324,9 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
 
   const chatAberto = !!conversa;
 
-  // `space-y-2`, e nao `space-y-4`: o que separa a faixa de botoes do conteudo
-  // nao precisa do mesmo respiro que separava um titulo de 24px -- o titulo saiu
-  // no 25a8c49.
+  // `space-y-2`, e nao `space-y-4`: o titulo voltou, mas sem a borda embaixo
+  // dele -- e o respiro que o par titulo+borda pedia era maior do que o que o
+  // titulo sozinho pede.
   return (
     <div className="fade-in space-y-2 h-full flex flex-col">
   
@@ -5339,27 +5339,23 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
           inteiro, numa tela cuja area util e a conversa.
 
           NENHUM CONTROLE SAIU: iniciar conversa, Modo TV, o sino e o status
-          do WhatsApp continuam aqui, agora na mesma altura do titulo. O
-          `pb-2` no lugar do `pb-4` acompanha: sem a segunda linha, o respiro
-          de baixo tambem sobrava. */}
-      <div className="flex items-center justify-end gap-4">
-        {/* O TITULO SAIU DA TELA, E CONTINUA NO DOCUMENTO.
+          do WhatsApp continuam aqui, na mesma altura do titulo. */}
+      <div className="flex items-center justify-between gap-4">
+        {/* O TITULO, SEM A LINHA EMBAIXO.
 
-            "Central de Atendimentos" dizia, em corpo 24, onde a pessoa ja
-            estava: a barra lateral marca "Central de Atendimento" em verde, a
-            dois palmos dali. Com a frase de apoio ja removida antes, sobravam
-            um titulo redundante e uma linha separando um nada do conteudo --
-            numa tela cuja area util e a conversa.
+            Ele chegou a sair de vista (25a8c49) junto com a borda, pelo
+            argumento de que a barra lateral ja marca "Central de Atendimento"
+            em verde. Voltou a pedido: a lateral diz onde voce esta na
+            NAVEGACAO, e o titulo nomeia a tela -- e as outras paginas do
+            sistema (Agenda, Contatos, Envio em Massa) todas tem o seu, no
+            mesmo corpo 24.
 
-            `sr-only` EM VEZ DE APAGAR. Este e o unico h1 DA PAGINA (o do
-            AppLayout e a marca, "Arka Tecnologia"), e todas as outras telas
-            tem o seu. Apagando, quem navega por leitor de tela perderia o
-            cabecalho que diz em que pagina entrou, e esta seria a unica tela
-            sem um. Invisivel aos olhos, intacto para quem ouve.
-
-            A BORDA SAIU JUNTO: sem titulo, ela separava a faixa de botoes do
-            conteudo -- duas coisas que ja se distinguem sozinhas. */}
-        <h1 className="sr-only">Central de Atendimentos</h1>
+            A BORDA NAO VOLTOU, de proposito: ela separava a faixa do conteudo,
+            e os dois ja se distinguem sozinhos -- ainda mais agora que os
+            paineis abaixo tem contorno proprio (79a0303). */}
+        <h1 className="text-2xl font-bold text-white tracking-tight font-display truncate">
+          Central de Atendimentos
+        </h1>
 
         {/* Sino + status do WhatsApp lado a lado, no canto direito. */}
         <div className="flex items-center gap-2 shrink-0">
