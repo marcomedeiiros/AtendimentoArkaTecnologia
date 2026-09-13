@@ -92,10 +92,10 @@ console.log("=== Modo TV: as duas competicoes ===");
       "utf8"
     );
 
-    check("a parede mostra quem esta da quarta posicao em diante", [
-      ...(tv.includes("const atras = itens.slice(3);")
+    check("a parede mostra quem ficou fora do podio", [
+      ...(tv.includes("const atras = itens.slice(2);")
         ? []
-        : ["nao achei o corte a partir da 4a posicao -- a parede voltou a mostrar so tres"]),
+        : ["nao achei o corte a partir da 3a posicao -- o podio empilha DOIS, e o resto e linha de texto"]),
       ...(/\{atras\.map\(\(p\) => \(/.test(tv)
         ? []
         : ["quem esta atras nao e desenhado"]),
@@ -105,7 +105,7 @@ console.log("=== Modo TV: as duas competicoes ===");
       ...(tv.includes("dados?.rankingExterno?.classificacao?.length")
         ? []
         : ["a tela nao le `rankingExterno` do painel"]),
-      ...(tv.includes("{temExterno && (") ? [] : ["o painel externo nao e condicionado a existir equipe"]),
+      ...(tv.includes("...(temExterno ? [{") ? [] : ["o bloco externo nao e condicionado a existir equipe"]),
     ]);
 
     // As parcelas do externo sao outras. Com o texto da sede cravado na linha, o
@@ -115,9 +115,19 @@ console.log("=== Modo TV: as duas competicoes ===");
       ...(tv.includes("detalhe ? detalhe(item, minimo) : (")
         ? []
         : ["a linha voltou a cravar o texto da sede"]),
-      ...(/detalhe=\{\(item\) => \(/.test(tv)
+      ...(/detalhe: \(item\) => \(/.test(tv)
         ? []
-        : ["o painel externo nao passa o proprio detalhe"]),
+        : ["o bloco externo nao passa o proprio detalhe"]),
+    ]);
+
+    check("o podio empilha o 2o atras do 1o", [
+      ...(tv.includes("function PodioEmPilha(") ? [] : ["o componente da pilha sumiu"]),
+      ...(tv.includes("h-[63%]") && tv.includes("top-[44%]")
+        ? []
+        : ["os dois cartoes nao estao mais sobrepostos -- o 2o voltou a ficar solto embaixo"]),
+      ...(/top-\[44%\][^>]*items-end/s.test(tv)
+        ? []
+        : ["o 2o nao alinha o conteudo embaixo: padding em % e medido sobre a LARGURA e joga o cartao para fora"]),
     ]);
 
     console.log(
