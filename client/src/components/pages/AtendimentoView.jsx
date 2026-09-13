@@ -5310,8 +5310,11 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
 
   const chatAberto = !!conversa;
 
+  // `space-y-2`, e nao `space-y-4`: o que separa a faixa de botoes do conteudo
+  // nao precisa do mesmo respiro que separava um titulo de 24px -- o titulo saiu
+  // no 25a8c49.
   return (
-    <div className="fade-in space-y-4 h-full flex flex-col">
+    <div className="fade-in space-y-2 h-full flex flex-col">
   
       {/* UMA LINHA, E NAO DUAS.
 
@@ -5325,7 +5328,7 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
           do WhatsApp continuam aqui, agora na mesma altura do titulo. O
           `pb-2` no lugar do `pb-4` acompanha: sem a segunda linha, o respiro
           de baixo tambem sobrava. */}
-      <div className="flex items-center justify-end gap-4 pb-1">
+      <div className="flex items-center justify-end gap-4">
         {/* O TITULO SAIU DA TELA, E CONTINUA NO DOCUMENTO.
 
             "Central de Atendimentos" dizia, em corpo 24, onde a pessoa ja

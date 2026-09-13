@@ -540,6 +540,12 @@ export default function AppLayout() {
   }, [carregando, tema]);
 
   const isFluxos = location.pathname === '/fluxos';
+  // A CENTRAL TAMBEM TEM O SEU RESPIRO, pelo mesmo motivo do `baixa:lg:`
+  // logo abaixo: ela e a unica tela em que o conteudo E a altura -- a lista e
+  // o fio de mensagens usam cada pixel que sobra. Os 32px de cima e de baixo
+  // do desktop custavam 64px de conversa para comprar respiro em volta de uma
+  // fileira de quatro botoes.
+  const isAtendimento = location.pathname === '/atendimento';
 
   if (carregando) {
     return (
@@ -603,7 +609,9 @@ export default function AppLayout() {
                conteúdo, não respiro em volta dele. A largura continua folgada. */
             isFluxos
               ? 'p-0 overflow-hidden'
-              : 'p-4 sm:p-6 lg:p-8 baixa:lg:px-6 baixa:lg:py-4 overflow-y-auto'
+              : isAtendimento
+                ? 'px-4 py-3 sm:px-6 lg:px-8 baixa:lg:px-6 baixa:lg:py-2 overflow-y-auto'
+                : 'p-4 sm:p-6 lg:p-8 baixa:lg:px-6 baixa:lg:py-4 overflow-y-auto'
           }`}
         >
           {/* O limite envolve SO o conteudo da rota: uma tela que quebra deixa
