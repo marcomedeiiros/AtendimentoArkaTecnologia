@@ -5325,10 +5325,24 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
           do WhatsApp continuam aqui, agora na mesma altura do titulo. O
           `pb-2` no lugar do `pb-4` acompanha: sem a segunda linha, o respiro
           de baixo tambem sobrava. */}
-      <div className="flex items-center justify-between gap-4 pb-2 border-b border-linha">
-        <h1 className="text-2xl font-bold text-white tracking-tight font-display truncate">
-          Central de Atendimentos
-        </h1>
+      <div className="flex items-center justify-end gap-4 pb-1">
+        {/* O TITULO SAIU DA TELA, E CONTINUA NO DOCUMENTO.
+
+            "Central de Atendimentos" dizia, em corpo 24, onde a pessoa ja
+            estava: a barra lateral marca "Central de Atendimento" em verde, a
+            dois palmos dali. Com a frase de apoio ja removida antes, sobravam
+            um titulo redundante e uma linha separando um nada do conteudo --
+            numa tela cuja area util e a conversa.
+
+            `sr-only` EM VEZ DE APAGAR. Este e o unico h1 DA PAGINA (o do
+            AppLayout e a marca, "Arka Tecnologia"), e todas as outras telas
+            tem o seu. Apagando, quem navega por leitor de tela perderia o
+            cabecalho que diz em que pagina entrou, e esta seria a unica tela
+            sem um. Invisivel aos olhos, intacto para quem ouve.
+
+            A BORDA SAIU JUNTO: sem titulo, ela separava a faixa de botoes do
+            conteudo -- duas coisas que ja se distinguem sozinhas. */}
+        <h1 className="sr-only">Central de Atendimentos</h1>
 
         {/* Sino + status do WhatsApp lado a lado, no canto direito. */}
         <div className="flex items-center gap-2 shrink-0">
