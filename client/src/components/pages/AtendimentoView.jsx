@@ -5324,6 +5324,100 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
 
   const chatAberto = !!conversa;
 
+  // ── A DIVISORIA ARRASTAVEL ENTRE A LISTA E A CONVERSA ───────────────────
+  //
+  // A largura era fixa em 4/12 da grade. Quem passa o dia na lista quer ver a
+  // razao social inteira; quem passa o dia no fio quer a conversa larga. Os
+  // dois estao certos, e a diferenca e por PESSOA -- entao quem decide e ela.
+  //
+  // SO NO DESKTOP. Abaixo do `lg` os dois paineis se revezam em tela cheia (um
+  // esconde o outro), e nao existe divisoria a arrastar: arrastar algo que nao
+  // separa nada e um controle que mente.
+  const DIVISOR_MIN = 300;
+  const DIVISOR_PADRAO = 460;
+  const CHAVE_DIVISOR = 'central.larguraLista';
+
+  const [larguraLista, setLarguraLista] = useState(() => {
+    // O valor vive no navegador de quem usa, e nao no servidor: e preferencia
+    // de quem esta olhando a tela, nao configuracao da conta.
+    try {
+      const salvo = Number(localStorage.getItem(CHAVE_DIVISOR));
+      if (Number.isFinite(salvo) && salvo >= DIVISOR_MIN) return salvo;
+    } catch { /* modo privado, storage bloqueado: cai no padrao */ }
+    return DIVISOR_PADRAO;
+  });
+
+  // `matchMedia` e nao `window.innerWidth`: o breakpoint tem de ser o MESMO que
+  // o `lg` do Tailwind usa, e acompanhar o redimensionamento sem polling.
+  const [ehDesktop, setEhDesktop] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const aplicar = e => setEhDesktop(e.matches);
+    mq.addEventListener('change', aplicar);
+    return () => mq.removeEventListener('change', aplicar);
+  }, []);
+
+  const gradeRef = useRef(null);
+  const [arrastandoDivisor, setArrastandoDivisor] = useState(false);
+
+  // O TETO DEPENDE DA LARGURA DISPONIVEL, e nao e um numero fixo: num monitor
+  // de 1366 um teto de 900px deixaria a conversa como uma fresta.
+  const limitar = useCallback((px) => {
+    const total = gradeRef.current?.getBoundingClientRect().width || 0;
+    const teto = Math.max(DIVISOR_MIN, total ? total * 0.6 : DIVISOR_PADRAO);
+    return Math.round(Math.min(Math.max(px, DIVISOR_MIN), teto));
+  }, []);
+
+  const guardarLargura = useCallback((px) => {
+    try { localStorage.setItem(CHAVE_DIVISOR, String(px)); } catch { /* sem storage, vale so nesta sessao */ }
+  }, []);
+
+  // PONTEIRO, e nao mouse: o mesmo codigo serve para trackpad e caneta, e o
+  // `setPointerCapture` garante que o arraste continue mesmo quando o cursor
+  // sai da divisoria -- que e exatamente o que acontece quando se arrasta rapido.
+  const aoPegarDivisor = useCallback((e) => {
+    e.preventDefault();
+    const alvo = e.currentTarget;
+    alvo.setPointerCapture(e.pointerId);
+    setArrastandoDivisor(true);
+
+    const esquerda = gradeRef.current?.getBoundingClientRect().left || 0;
+    let ultimo = larguraLista;
+
+    const mover = (ev) => { ultimo = limitar(ev.clientX - esquerda); setLarguraLista(ultimo); };
+    const soltar = () => {
+      alvo.removeEventListener('pointermove', mover);
+      alvo.removeEventListener('pointerup', soltar);
+      alvo.removeEventListener('pointercancel', soltar);
+      setArrastandoDivisor(false);
+      guardarLargura(ultimo);
+    };
+    alvo.addEventListener('pointermove', mover);
+    alvo.addEventListener('pointerup', soltar);
+    alvo.addEventListener('pointercancel', soltar);
+  }, [larguraLista, limitar, guardarLargura]);
+
+  // Teclado: a divisoria e um `separator` focavel, entao as setas tem de mover.
+  const aoTeclarDivisor = useCallback((e) => {
+    const passo = e.shiftKey ? 48 : 12;
+    let nova = null;
+    if (e.key === 'ArrowLeft') nova = limitar(larguraLista - passo);
+    if (e.key === 'ArrowRight') nova = limitar(larguraLista + passo);
+    if (e.key === 'Home') nova = limitar(DIVISOR_PADRAO);
+    if (nova == null) return;
+    e.preventDefault();
+    setLarguraLista(nova);
+    guardarLargura(nova);
+  }, [larguraLista, limitar, guardarLargura]);
+
+  const reporDivisor = useCallback(() => {
+    const nova = limitar(DIVISOR_PADRAO);
+    setLarguraLista(nova);
+    guardarLargura(nova);
+  }, [limitar, guardarLargura]);
+
   // `space-y-2`, e nao `space-y-4`: o titulo voltou, mas sem a borda embaixo
   // dele -- e o respiro que o par titulo+borda pedia era maior do que o que o
   // titulo sozinho pede.
@@ -5476,14 +5570,22 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
           ao descer até o chat. Sem o piso, a Central usa a altura que existe
           (`flex-1 min-h-0`) e a rolagem fica DENTRO de cada painel, que é onde
           ela funciona. Em tela alta o piso continua valendo. */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 baixa:lg:gap-3 flex-1 min-h-0 items-start lg:items-stretch lg:min-h-[550px] baixa:lg:min-h-0">
+      {/* NO DESKTOP A GRADE E [lista][divisoria][conversa], e a largura da
+          primeira coluna e estado -- por isso vem por `style`, que vence as
+          classes. No celular o `style` nao e aplicado e valem as classes de
+          sempre (`grid-cols-1`), com os paineis se revezando em tela cheia. */}
+      <div
+        ref={gradeRef}
+        className="grid grid-cols-1 gap-4 baixa:lg:gap-3 flex-1 min-h-0 items-start lg:items-stretch lg:min-h-[550px] baixa:lg:min-h-0"
+        style={ehDesktop ? { gridTemplateColumns: `${larguraLista}px 14px minmax(0, 1fr)`, gap: 0 } : undefined}
+      >
 
         {/* Sem altura minima: o painel passa a ter a altura das conversas que
             existem. O teto de 70vh e o que mantem a rolagem DENTRO da lista
             quando a fila cresce, em vez de esticar a pagina inteira. */}
         {/* `border-linha-forte`, e nao `border-linha`: ver o bloco AS TRES
             BORDAS, no cabecalho da conversa. */}
-        <div className={`${chatAberto ? 'hidden lg:flex' : 'flex'} lg:col-span-4 glass-panel rounded-2xl flex-col overflow-hidden border border-linha-forte max-h-[70dvh] lg:max-h-none lg:min-h-0`}>
+        <div className={`${chatAberto ? 'hidden lg:flex' : 'flex'} min-w-0 glass-panel rounded-2xl flex-col overflow-hidden border border-linha-forte max-h-[70dvh] lg:max-h-none lg:min-h-0`}>
        
           {/* UMA FAIXA DE CABECALHO, E NAO DUAS.
 
@@ -5661,7 +5763,36 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
 
         {/* Mesma borda do painel da lista: os dois emolduram a tela juntos, e
             um mais forte que o outro leria como se um estivesse selecionado. */}
-        <div className={`${chatAberto ? 'flex' : 'hidden lg:flex'} lg:col-span-8 glass-panel rounded-2xl flex-col overflow-hidden border border-linha-forte min-h-[70dvh] lg:min-h-0`}>
+        {/* A DIVISORIA.
+
+            14px de area de pega para um risco de 2px: o alvo do ponteiro tem de
+            ser maior do que o desenho, senao acertar a divisoria vira pontaria.
+            O risco so acende no hover e no arraste -- parada, ela e o mesmo
+            respiro que havia entre os paineis antes.
+
+            `hidden lg:block` porque abaixo do `lg` nao ha dois paineis lado a
+            lado para separar. */}
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Arraste para mudar a largura da lista"
+          aria-valuenow={larguraLista}
+          tabIndex={0}
+          onPointerDown={aoPegarDivisor}
+          onKeyDown={aoTeclarDivisor}
+          onDoubleClick={reporDivisor}
+          title="Arraste para redimensionar · dois cliques para repor"
+          className="hidden lg:flex items-center justify-center cursor-col-resize group touch-none
+                     focus:outline-none focus-visible:ring-2 focus-visible:ring-acao/60 rounded-full"
+        >
+          <span
+            className={`w-0.5 h-10 rounded-full transition-colors ${
+              arrastandoDivisor ? 'bg-acao' : 'bg-transparent group-hover:bg-linha-forte'
+            }`}
+          />
+        </div>
+
+        <div className={`${chatAberto ? 'flex' : 'hidden lg:flex'} min-w-0 glass-panel rounded-2xl flex-col overflow-hidden border border-linha-forte min-h-[70dvh] lg:min-h-0`}>
           {!conversa ? (
             <TelaSemConversa />
           ) : (
