@@ -4451,7 +4451,13 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
     return conversas
       .filter(c => c.statusAtendimento === 'pendente' && !c.arquivada && !c.oculta)
       // Mais antiga primeiro: na fila, quem espera ha mais tempo vem antes.
-      .sort((a, b) => new Date(a.ultimaMensagemEm || 0) - new Date(b.ultimaMensagemEm || 0))
+      //
+      // ORDENAR PELA ULTIMA MENSAGEM FAZIA O CONTRARIO DO QUE PROMETIA. Aos 10
+      // minutos o sistema manda o aviso de demanda alta; a mensagem entra no fio,
+      // a conversa passa a ser a de mensagem mais RECENTE da fila e caia para o
+      // fim da lista -- quem mais esperou descia para baixo no instante seguinte
+      // ao sistema reconhecer que esperou demais.
+      .sort((a, b) => new Date(a.entrouNaFilaEm || a.ultimaMensagemEm || 0) - new Date(b.entrouNaFilaEm || b.ultimaMensagemEm || 0))
       .map(c => {
         const ultima = c.mensagens?.[c.mensagens.length - 1];
         return {
@@ -4463,9 +4469,15 @@ export default function AtendimentoView({ conversas, setConversas, fluxos, parce
           fotoUrl: c.fotoUrl,
           naoLidas: c.naoLidas || 0,
           ticket: c.ticket,
-          // Espera contada da ultima mensagem: e o que a lista mostra e o que
-          // responde "faz quanto tempo que ninguem atende isso?".
-          esperaDesde: c.ultimaMensagemEm,
+          // Espera contada de quando a conversa ENTROU NA FILA, e nao da ultima
+          // mensagem -- o aviso automatico de espera e uma mensagem, e zerava o
+          // relogio de quem estava esperando ha mais tempo. Ver, no servidor,
+          // shared/helpers/espera.
+          //
+          // O `||` cobre o payload antigo que ainda esteja em memoria entre o
+          // deploy e a primeira recarga: sem ele, a fila inteira ficaria "agora"
+          // por alguns segundos.
+          esperaDesde: c.entrouNaFilaEm || c.ultimaMensagemEm,
           previa: ultima ? (ultima.deletada ? 'Mensagem apagada' : ultima.texto) : 'Sem mensagens',
           chip: chipDoCliente(c, parceiros),
           setor: setorDaConversa(c),

@@ -24,6 +24,15 @@ async function proximoNumero(chave, cliente = prisma) {
 const INCLUDE_CONVERSA = {
   mensagens: { orderBy: { criadoEm: "asc" } },
   atendente: { select: { id: true, nome: true, cargo: true } },
+  // A SESSAO VEM EM TODO CAMINHO, e nao so nas duas listagens que a pediam.
+  //
+  // `sessao.concluidoEm` e o instante em que a conversa entrou na fila, e e
+  // dele que sai o `entrouNaFilaEm` do DTO (ver shared/helpers/espera). Um
+  // caminho sem a sessao nao devolve o campo errado: devolve um degrau abaixo
+  // na escada, e o painel passaria a mostrar uma espera MAIOR do que a real
+  // -- de forma intermitente, conforme o payload viesse de uma consulta ou de
+  // outra, que e o tipo de defeito que ninguem reproduz.
+  sessao: true,
   // Historico de OS do cliente (mais recente primeiro). Sao poucas linhas por
   // conversa e sem mensagens juntas: barato o bastante para vir na listagem e
   // evitar um round-trip extra so para desenhar o seletor de historico.
@@ -147,6 +156,11 @@ class ConversaRepository {
         mensagens: { orderBy: { criadoEm: "desc" }, take: limite },
         atendente: { select: { id: true, nome: true, cargo: true } },
         atendimentos: { orderBy: { abertoEm: "desc" } },
+        // PELO MESMO MOTIVO DO INCLUDE_CONVERSA -- e aqui o buraco seria pior:
+        // sem a sessao, todo evento de tempo real apagaria da tela um campo que
+        // o carregamento tinha trazido certo. E uma linha por conversa, nao o
+        // historico, entao nada disto contradiz o "so a cauda" acima.
+        sessao: true,
       },
     });
     if (!conversa) return null;

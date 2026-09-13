@@ -1,4 +1,5 @@
 const reacoes = require("./reacao.helper");
+const { entrouNaFilaISO } = require("./espera.helper");
 const { formatarHora } = require("../helpers/cnpj.helper");
 const { gerarTokenMidia } = require("./midiaToken.helper");
 
@@ -216,6 +217,10 @@ function mapConversa(c) {
     ultimaMensagemEm: ultima?.criadoEm
       ? ultima.criadoEm.toISOString?.() || ultima.criadoEm
       : null,
+    // DESDE QUANDO ESTA CONVERSA ESPERA UM ATENDENTE -- e nao "desde a ultima
+    // mensagem", que o proprio aviso automatico de espera zerava. A escada e
+    // a mesma do motor; o porque inteiro esta em shared/helpers/espera.
+    entrouNaFilaEm: entrouNaFilaISO(c),
     // ESTA LISTA PODE SER SO A CAUDA DO HISTORICO.
     //
     // Eventos de tempo real carregam apenas as ultimas mensagens (ver

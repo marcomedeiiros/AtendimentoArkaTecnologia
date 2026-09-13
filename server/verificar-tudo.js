@@ -322,6 +322,11 @@ const VERIFICACOES = [
     resumo: "quem esta atras, o ranking externo e a parede que nao cai",
   },
   {
+    arquivo: "verificar-espera-fila.js",
+    titulo: "Espera na fila",
+    resumo: "o aviso de demanda alta nao zera o relogio de quem mais esperou",
+  },
+  {
     arquivo: "verificar-premiacao-justa.js",
     titulo: "Premiacao justa",
     resumo: "podio do tamanho da equipe e a nota geral ponderada",

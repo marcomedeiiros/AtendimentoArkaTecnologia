@@ -23,6 +23,7 @@
  * nas duas.
  */
 const prisma = require("../../infrastructure/database/prisma.client");
+const { entrouNaFilaISO } = require("../../shared/helpers/espera.helper");
 const equipeService = require("../equipe/equipe.service");
 const configuracaoService = require("../configuracoes/configuracao.service");
 const { podeAcessarSetor } = require("../../shared/helpers/setor.helper");
@@ -390,9 +391,14 @@ class PainelService {
           setor: true,
           numeroTicket: true,
           criadoEm: true,
-          atualizadoEm: true,
+          // A ANCORA DA ESPERA. Sao tres campos pequenos -- a sessao e uma linha
+          // por conversa e a OS nao traz mensagem junto -- e sem eles a escada de
+          // `entrouNaFilaEm` desce direto para `criadoEm`, que num fio permanente
+          // por cliente e de meses atras.
+          atendimentoAtualId: true,
+          atendimentos: { select: { id: true, abertoEm: true }, orderBy: { abertoEm: "desc" } },
+          sessao: { select: { concluidoEm: true } },
         },
-        orderBy: { atualizadoEm: "asc" },
       }),
       equipeService.listar(),
       configuracaoService.metaDiariaPainel(),
@@ -1025,6 +1031,15 @@ class PainelService {
       !acesso || acesso.cargo === "Administrador"
         ? conversas
         : conversas.filter((c) => podeAcessarSetor(acesso, c.setor || "Geral"));
+    // A ORDEM SAI DAQUI, e nao do banco.
+    //
+    // O `orderBy: { atualizadoEm: "asc" }` que ficava na consulta ordenava pela
+    // ultima gravacao na linha -- inclusive a do aviso automatico de espera, que
+    // mandava a conversa mais antiga para o fim da fila. A ancora certa vive em
+    // duas RELACOES (sessao e OS), e isso o `orderBy` do Prisma nao alcanca:
+    // entao a lista sai mapeada e e ordenada aqui, pelo mesmo instante que a
+    // tela mostra. Sao as pendentes de um escritorio, nao um relatorio -- a
+    // ordenacao em memoria custa nada nesta escala.
     return visiveis.map((c) => ({
       id: c.id,
       cliente: c.empresa || c.cliente,
@@ -1037,9 +1052,12 @@ class PainelService {
       // escritorio, a vista de qualquer pessoa que passe (visitante incluido).
       setor: c.setor || "Geral",
       ticket: c.numeroTicket,
-      // Espera contada a partir da ULTIMA movimentacao, nao da criacao: a
-      // conversa e um fio permanente por cliente, e `criadoEm` e de meses atras.
-      esperaMin: Math.max(0, Math.round((agora - new Date(c.atualizadoEm)) / 60000)),
+      // Espera contada de quando a conversa ENTROU NA FILA.
+      //
+      // Era `atualizadoEm`, e ele anda a cada gravacao na linha da conversa --
+      // inclusive a do aviso automatico de espera, que assim zerava o relogio
+      // do cliente que mais esperou. Ver shared/helpers/espera.
+      esperaMin: Math.max(0, Math.round((agora - new Date(entrouNaFilaISO(c))) / 60000)),
       // O INSTANTE, e nao so o numero de minutos.
       //
       // A TV recarrega a cada 30 s, mas o relogio dela bate a cada 20 s. Com
@@ -1047,8 +1065,8 @@ class PainelService {
       // proxima carga -- numa tela que existe para dar sensacao de tempo real,
       // um numero que nao anda parece tela travada. Com o instante, o navegador
       // recalcula sozinho entre uma atualizacao e outra.
-      esperaDesde: new Date(c.atualizadoEm).toISOString(),
-    }));
+      esperaDesde: entrouNaFilaISO(c),
+    })).sort((a, b) => new Date(a.esperaDesde) - new Date(b.esperaDesde));
   }
 }
 
