@@ -60,16 +60,24 @@ const check = (ok, rotulo) => {
 // aqui. Copiar as regras para dentro deste arquivo faria o teste concordar com
 // ele mesmo enquanto a tela seguisse errada.
 function carregarBadge() {
-  const fonte = fs.readFileSync(
-    path.join(__dirname, "..", "client", "src", "components", "pages", "AtendimentoView.jsx"),
-    "utf8"
-  );
+  const ler = (...partes) => fs.readFileSync(path.join(__dirname, "..", ...partes), "utf8");
+  const tela = ler("client", "src", "components", "pages", "AtendimentoView.jsx");
+  // `empresaDaConversa` MUDOU DE CASA e este harness acompanhou.
+  //
+  // Ela saiu do AtendimentoView para `utils/empresa` quando a Visao Geral
+  // passou a fazer a mesma pergunta (a coluna Empresa da tabela de feedbacks):
+  // duas copias da regra envelheceriam separadas, e a que nao fosse corrigida
+  // mostraria outra empresa para o mesmo cliente. O recorte segue lendo o
+  // codigo REAL -- so que agora do arquivo onde a regra mora.
+  const util = ler("client", "src", "utils", "empresa.js");
   // Recorte por CONTAGEM DE CHAVES, e nao por um comentario que sirva de
   // marcador: marcador de texto quebra na primeira vez que alguem reescreve o
   // comentario vizinho, e o recorte passa a arrastar JSX junto.
-  const recorta = (nome) => {
+  const recorta = (nome, fonte = tela) => {
+    // Comeca no `function`, e nao no `export function`: o trecho e avaliado
+    // dentro de `new Function`, onde `export` e erro de sintaxe.
     const i = fonte.indexOf(`function ${nome}(`);
-    if (i === -1) throw new Error(`${nome} nao encontrada no AtendimentoView -- foi renomeada?`);
+    if (i === -1) throw new Error(`${nome} nao encontrada no front -- foi renomeada ou mudou de arquivo?`);
     const abre = fonte.indexOf("{", i);
     let nivel = 0;
     for (let j = abre; j < fonte.length; j++) {
@@ -82,7 +90,7 @@ function carregarBadge() {
     throw new Error(`nao consegui delimitar ${nome}`);
   };
   const trecho = [
-    recorta("empresaDaConversa"),
+    recorta("empresaDaConversa", util),
     recorta("tipoDoCliente"),
     recorta("chipDoCliente"),
   ].join("\n\n");
