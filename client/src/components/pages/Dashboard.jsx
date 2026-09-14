@@ -104,6 +104,34 @@ function exportarRelatorio(metricas) {
   a.click(); URL.revokeObjectURL(url);
 }
 
+/** O comentário do cliente, legível.
+ *
+ * O texto vinha cortado numa linha só, com o resto escondido no tooltip -- e
+ * tooltip não se lê de relance nem se copia. Aqui ele quebra em duas linhas e,
+ * quando há mais, um clique abre o comentário inteiro: a frase truncada ainda
+ * é a exceção, não o normal. Sem comentário, continua o traço discreto. */
+function CelulaComentario({ texto }) {
+  const [aberto, setAberto] = useState(false);
+  const limpo = (texto || '').trim();
+  if (!limpo) return <span className="text-slate-600">-</span>;
+
+  // ~110 caracteres é o que cabe nas duas linhas desta coluna; abaixo disso o
+  // botão só polui, porque não há nada escondido para revelar.
+  const longo = limpo.length > 110;
+  return (
+    <div className="leading-relaxed">
+      <p className={`whitespace-pre-line break-words ${aberto ? '' : 'line-clamp-2'}`}>{limpo}</p>
+      {longo && (
+        <button
+          onClick={() => setAberto(a => !a)}
+          className="mt-0.5 text-[10px] font-semibold text-acao-200 hover:text-white transition-colors">
+          {aberto ? 'menos' : 'ler tudo'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba }) {
   const metricas = useMemo(
     () => calcularMetricas(conversas, parceiros, equipe),
@@ -140,10 +168,21 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
     return () => { vivo = false; };
   }, []);
 
-  // Filtros da aba de avaliacoes: nota (0 = todas), texto e setor.
+  // Filtros da aba de avaliacoes: nota (0 = todas), texto, setor e comentario.
   const [filtroNota, setFiltroNota] = useState(0);
   const [buscaAval, setBuscaAval] = useState('');
   const [filtroSetor, setFiltroSetor] = useState('');
+  // '' = tanto faz | 'com' = so quem escreveu | 'sem' = so a nota seca.
+  const [filtroComentario, setFiltroComentario] = useState('');
+
+  // A LISTA NASCE CURTA E CRESCE A PEDIDO.
+  //
+  // Mostrar tudo de uma vez transformava a tabela numa rolagem sem fim: a
+  // pessoa perdia os graficos de vista e nao achava mais o rodape da pagina.
+  // A escada (10 -> 30 -> 50 -> +50) deixa o primeiro olhar curto e so cresce
+  // quando alguem pede -- que e quando o tamanho passa a ser util, nao estorvo.
+  const DEGRAUS_AVAL = [10, 30, 50];
+  const [limiteAval, setLimiteAval] = useState(DEGRAUS_AVAL[0]);
 
   // ---------- Avaliações ----------
   //
@@ -255,8 +294,12 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
     ? `Empresa inteira · ciclo de ${intervaloSatisfacao} · promotor é nota ${satisfacao.regua.promotorMinimo} ou mais, detrator é ${satisfacao.regua.detratorMaximo} ou menos`
     : null;
 
-  // Aplica os filtros da aba sobre a lista de avaliacoes.
-  const feedbacksFiltrados = useMemo(() => {
+  // Aplica os filtros da aba sobre a lista de avaliacoes -- menos o de
+  // comentario, que fica de fora para que os contadores "com/sem" sejam
+  // calculados sobre o MESMO recorte que o seletor oferece. Se o proprio
+  // filtro entrasse aqui, escolher "com comentário" zeraria o contador de
+  // "sem", e o seletor passaria a mentir sobre o que ainda existe.
+  const feedbacksBase = useMemo(() => {
     const termo = buscaAval.trim().toLowerCase();
     return avaliacoes.avaliadas.filter(c => {
       if (filtroNota && c.avaliacao !== filtroNota) return false;
@@ -269,6 +312,29 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
       return true;
     });
   }, [avaliacoes, filtroNota, filtroSetor, buscaAval]);
+
+  // Comentario vazio nao e so `null`: vem tambem como espaco em branco.
+  const temComentario = c => !!(c.feedback && c.feedback.trim());
+
+  const contagemComentario = useMemo(() => {
+    const com = feedbacksBase.filter(temComentario).length;
+    return { com, sem: feedbacksBase.length - com };
+  }, [feedbacksBase]);
+
+  const feedbacksFiltrados = useMemo(() => {
+    if (filtroComentario === 'com') return feedbacksBase.filter(temComentario);
+    if (filtroComentario === 'sem') return feedbacksBase.filter(c => !temComentario(c));
+    return feedbacksBase;
+  }, [feedbacksBase, filtroComentario]);
+
+  // Mudou o filtro, a lista volta ao primeiro degrau: continuar em 150 linhas
+  // depois de trocar de setor esconderia o fato de que o recorte mudou.
+  useEffect(() => {
+    setLimiteAval(DEGRAUS_AVAL[0]);
+  }, [filtroNota, filtroSetor, buscaAval, filtroComentario]);
+
+  // Proximo degrau: 10 -> 30 -> 50 e, dali em diante, de 50 em 50.
+  const proximoLimite = DEGRAUS_AVAL.find(d => d > limiteAval) ?? limiteAval + 50;
 
   const exportarPdf = useCallback(async () => {
     setGerandoPdf(true);
@@ -748,11 +814,22 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                     <option value="">Todos os setores</option>
                     {avaliacoes.setores.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
+                  {/* Nota seca e nota com recado sao leituras diferentes: uma
+                      da o numero, a outra da o motivo. Quem procura o motivo
+                      precisa conseguir jogar fora as linhas mudas. */}
+                  <select
+                    value={filtroComentario}
+                    onChange={e => setFiltroComentario(e.target.value)}
+                    className="bg-grafite-700 border border-linha rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-acao/50">
+                    <option value="">Com e sem comentário</option>
+                    <option value="com">Só com comentário ({contagemComentario.com})</option>
+                    <option value="sem">Só sem comentário ({contagemComentario.sem})</option>
+                  </select>
                 </div>
               )}
             </div>
 
-            {(filtroNota > 0 || filtroSetor || buscaAval) && (
+            {(filtroNota > 0 || filtroSetor || buscaAval || filtroComentario) && (
               <div className="flex flex-wrap items-center gap-2 mb-3">
                 {filtroNota > 0 && (
                   <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-yellow-500/15 text-yellow-300 border border-yellow-500/30">
@@ -766,8 +843,14 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                     <button onClick={() => setFiltroSetor('')} className="hover:text-white"><X size={10} /></button>
                   </span>
                 )}
+                {filtroComentario && (
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    {filtroComentario === 'com' ? 'Com comentário' : 'Sem comentário'}
+                    <button onClick={() => setFiltroComentario('')} className="hover:text-white"><X size={10} /></button>
+                  </span>
+                )}
                 <button
-                  onClick={() => { setFiltroNota(0); setFiltroSetor(''); setBuscaAval(''); }}
+                  onClick={() => { setFiltroNota(0); setFiltroSetor(''); setBuscaAval(''); setFiltroComentario(''); }}
                   className="text-[10px] text-slate-400 hover:text-white underline underline-offset-2">
                   limpar filtros
                 </button>
@@ -785,7 +868,8 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                 Nenhuma avaliação para os filtros selecionados.
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+                <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-linha text-slate-400">
@@ -799,7 +883,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                     </tr>
                   </thead>
                   <tbody>
-                    {feedbacksFiltrados.slice(0, 100).map(c => (
+                    {feedbacksFiltrados.slice(0, limiteAval).map(c => (
                       <tr key={c.linhaId || c.id} className={`border-b border-linha/40 hover:bg-grafite-600/40 transition-colors ${
                         c.avaliacao <= 2 ? 'bg-falha/5' : ''
                       }`}>
@@ -853,12 +937,49 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                             <span className="text-slate-600 text-[11px]">-</span>
                           )}
                         </td>
-                        <td className="py-2.5 px-3 text-slate-300 max-w-xs truncate" title={c.feedback || ''}>{c.feedback || '-'}</td>
+                        {/* O comentario e a unica coluna com texto livre, e
+                            era a unica espremida: `truncate` cortava a frase
+                            na primeira linha e o resto so existia no tooltip.
+                            Agora ela tem largura propria, quebra em duas
+                            linhas e abre inteira no clique. */}
+                        <td className="py-2.5 px-3 text-slate-300 align-top w-[28rem] min-w-[16rem]">
+                          <CelulaComentario texto={c.feedback} />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </div>
+                </div>
+
+                {/* A escada. O rodape sempre diz onde a lista esta -- sem
+                    isso, "ver mais" some no fim e ninguem sabe se acabou. */}
+                <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
+                  <span className="text-[11px] text-slate-500">
+                    Mostrando {Math.min(limiteAval, feedbacksFiltrados.length)} de {feedbacksFiltrados.length}
+                  </span>
+                  {feedbacksFiltrados.length > limiteAval && (
+                    <button
+                      onClick={() => setLimiteAval(proximoLimite)}
+                      className="px-3 py-1.5 rounded-xl text-[11px] font-semibold bg-grafite-700 border border-linha text-slate-200 hover:border-acao/50 hover:text-white transition-colors">
+                      Ver mais {Math.min(proximoLimite, feedbacksFiltrados.length) - limiteAval}
+                    </button>
+                  )}
+                  {feedbacksFiltrados.length > limiteAval && (
+                    <button
+                      onClick={() => setLimiteAval(feedbacksFiltrados.length)}
+                      className="text-[11px] text-slate-400 hover:text-white underline underline-offset-2">
+                      ver todas as {feedbacksFiltrados.length}
+                    </button>
+                  )}
+                  {limiteAval > DEGRAUS_AVAL[0] && (
+                    <button
+                      onClick={() => setLimiteAval(DEGRAUS_AVAL[0])}
+                      className="text-[11px] text-slate-400 hover:text-white underline underline-offset-2">
+                      recolher
+                    </button>
+                  )}
+                </div>
+              </>
             )}
           </div>
         </>
