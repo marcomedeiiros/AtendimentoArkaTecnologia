@@ -14,53 +14,12 @@ import { FUSO_BR } from '../utils/data';
 import { confirmar } from '../utils/dialogo';
 import VisualizadorMidia from '../components/VisualizadorMidia';
 
-// ── Constantes de imagem (espelham o servidor: bug.imagens.js) ─────────────
-// A barreira real fica no backend (whitelist de mime + magic bytes +
-// reserializacao); aqui evitamos converter arquivos obviamente errados.
-const MAX_IMAGENS  = 3;
-const MAX_BYTES    = 3 * 1024 * 1024; // 3 MB
-const TIPOS_ACEITOS = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
-const ACCEPT_ATTR  = TIPOS_ACEITOS.join(',');
-
-function lerComoDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload  = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error('Não foi possível ler o arquivo.'));
-    reader.readAsDataURL(file);
-  });
-}
-
-/**
- * Converte uma lista de File em objetos { id, dataUrl }, validando tipo e
- * tamanho antes. Devolve { novas, erro } erro é string ou ''.
- * `qtdAtual` é quantas imagens já existem na lista atual do modal.
- */
-async function prepararImagens(files, qtdAtual) {
-  const lista = Array.from(files || []).filter(Boolean);
-  if (lista.length === 0) return { novas: [], erro: '' };
-
-  let restantes = MAX_IMAGENS - qtdAtual;
-  if (restantes <= 0) return { novas: [], erro: `Máximo de ${MAX_IMAGENS} imagens atingido.` };
-
-  const novas = [];
-  let ultimoErro = '';
-
-  for (const file of lista) {
-    if (restantes <= 0) { ultimoErro = `Só foram adicionadas as primeiras ${MAX_IMAGENS - qtdAtual}.`; break; }
-    if (!TIPOS_ACEITOS.includes(file.type)) { ultimoErro = 'Só são aceitas imagens PNG, JPEG, WebP ou GIF.'; continue; }
-    if (file.size > MAX_BYTES)              { ultimoErro = 'Cada imagem deve ter no máximo 3 MB.'; continue; }
-    try {
-      const dataUrl = await lerComoDataUrl(file);
-      novas.push({ id: `edit-${file.name}-${file.size}-${novas.length}`, dataUrl });
-      restantes -= 1;
-    } catch {
-      ultimoErro = 'Não foi possível ler uma das imagens.';
-    }
-  }
-
-  return { novas, erro: ultimoErro };
-}
+// Limites e validacao de anexo vem do util compartilhado (`utils/imagem`), que
+// espelha o servidor (bug.imagens.js). Havia aqui uma copia inteira -- outra no
+// ReportarBug e uma terceira, nao usada, no proprio util. Com quatro lugares
+// guardando "3 imagens de 3 MB", o primeiro ajuste esquecido faria a tela
+// aceitar o que o backend recusa depois do upload.
+import { MAX_IMAGENS, ACCEPT_ATTR, prepararImagens } from '../utils/imagem';
 
 
 function quando(iso) {

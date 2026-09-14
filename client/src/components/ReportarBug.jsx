@@ -10,13 +10,11 @@ import { useLocation } from 'react-router-dom';
 import { Bug, X, Send, Loader2, CheckCircle2, ImagePlus } from 'lucide-react';
 import Portal from './Portal';
 import { BugsAPI } from '../services/api';
-
-// Espelha os limites do servidor (bug.imagens.js). Aqui e so conveniencia de
-// UX -- quem barra de verdade e o backend, que revalida tipo e magic bytes.
-const MAX_IMAGENS = 3;
-const MAX_BYTES = 3 * 1024 * 1024; // 3 MB
-const TIPOS_ACEITOS = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
-const ACCEPT_ATTR = TIPOS_ACEITOS.join(',');
+// Os limites e a validacao vem do util, e nao de constantes locais: eles
+// espelham o servidor (bug.imagens.js), e uma copia por tela divergiria dele no
+// primeiro ajuste -- a tela aceitaria o arquivo e o backend recusaria depois do
+// upload. Esta era a segunda das duas copias que o util existia para evitar.
+import { MAX_IMAGENS, ACCEPT_ATTR, prepararImagens } from '../utils/imagem';
 
 // Prioridade escolhida por quem reporta (o admin pode reajustar depois na tela
 // de gestão). As classes marcam a cor quando o nível está selecionado.
@@ -26,15 +24,6 @@ const PRIORIDADES = [
   { valor: 'alta',    label: 'Alta',    ativo: 'bg-espera/20 text-espera-400 border-espera/50' },
   { valor: 'critica', label: 'Crítica', ativo: 'bg-falha/20 text-falha-400 border-falha/50' },
 ];
-
-function lerComoDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error('Não foi possível ler o arquivo.'));
-    reader.readAsDataURL(file);
-  });
-}
 
 export default function ReportarBug() {
   const location = useLocation();
@@ -64,39 +53,10 @@ export default function ReportarBug() {
   // Recebe uma lista de File (do seletor ou do Ctrl+V), valida tipo/tamanho e
   // acrescenta as que passarem, respeitando o teto de MAX_IMAGENS.
   async function adicionarArquivos(files) {
-    const lista = Array.from(files || []).filter(Boolean);
-    if (lista.length === 0) return;
+    if (!files || files.length === 0) return;
     setErro('');
-
-    let restantes = MAX_IMAGENS - imagens.length;
-    if (restantes <= 0) {
-      setErro(`Você pode anexar no máximo ${MAX_IMAGENS} imagens.`);
-      return;
-    }
-
-    const novas = [];
-    for (const file of lista) {
-      if (restantes <= 0) {
-        setErro(`Você pode anexar no máximo ${MAX_IMAGENS} imagens.`);
-        break;
-      }
-      if (!TIPOS_ACEITOS.includes(file.type)) {
-        setErro('Só são aceitas imagens PNG, JPEG, WebP ou GIF.');
-        continue;
-      }
-      if (file.size > MAX_BYTES) {
-        setErro('Cada imagem deve ter no máximo 3 MB.');
-        continue;
-      }
-      try {
-        const dataUrl = await lerComoDataUrl(file);
-        novas.push({ id: `${file.name}-${file.size}-${novas.length}`, dataUrl });
-        restantes -= 1;
-      } catch {
-        setErro('Não foi possível ler uma das imagens.');
-      }
-    }
-
+    const { novas, erro } = await prepararImagens(files, imagens.length);
+    if (erro) setErro(erro);
     if (novas.length) setImagens(prev => [...prev, ...novas].slice(0, MAX_IMAGENS));
   }
 
