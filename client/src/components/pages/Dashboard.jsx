@@ -11,7 +11,7 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
 import { EmojiIcon } from './EmojiIcon';
 import { exportarRelatorioPdf } from '../../utils/exportarPdf';
-import { hojeISO, FUSO_BR } from '../../utils/data';
+import { hojeISO, dataISO, FUSO_BR } from '../../utils/data';
 import HelpDeskPainel from './HelpDeskPainel';
 import RegistroConversas from './RegistroConversas';
 import RelatoriosClientes from './RelatoriosClientes';
@@ -104,6 +104,52 @@ function exportarRelatorio(metricas) {
   a.click(); URL.revokeObjectURL(url);
 }
 
+/** Os recortes de tempo da tabela de feedbacks.
+ *
+ * `descricao` entra na legenda do painel: ela dizia "de todo o período" fixo e
+ * passava a mentir assim que houvesse um recorte. Quem lê a legenda precisa
+ * estar lendo o que a tabela realmente mostra. */
+const PERIODOS_AVAL = [
+  { id: '',           rotulo: 'Todo o período',     descricao: 'de todo o período' },
+  { id: '7d',         rotulo: 'Últimos 7 dias',     descricao: 'dos últimos 7 dias' },
+  { id: '30d',        rotulo: 'Últimos 30 dias',    descricao: 'dos últimos 30 dias' },
+  { id: 'mes',        rotulo: 'Este mês',           descricao: 'deste mês' },
+  { id: 'mesPassado', rotulo: 'Mês passado',        descricao: 'do mês passado' },
+];
+
+/** Recua dias de uma data YYYY-MM-DD sem sair do calendário de Brasília.
+ *
+ * Ancorar ao MEIO-DIA em UTC é o truque: o dia vira um ponto longe das duas
+ * bordas, então somar ou subtrair 24h nunca cai no dia vizinho por causa de
+ * fuso ou de horário de verão. É a mesma razão pela qual `dataISO` existe --
+ * contas de data feitas no fuso do navegador erram de noite. */
+function recuarDias(diaISO, dias) {
+  const d = new Date(`${diaISO}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - dias);
+  return d.toISOString().slice(0, 10);
+}
+
+/** A janela de um período, como duas datas YYYY-MM-DD (inclusivas).
+ *
+ * Datas nesse formato se comparam como texto -- "2026-09-14" < "2026-09-30"
+ * sempre --, o que evita converter cada linha da tabela para Date só para
+ * saber se ela cai dentro. `null` quer dizer "sem recorte". */
+function janelaDoPeriodo(id, hoje = hojeISO()) {
+  if (id === '7d')  return { de: recuarDias(hoje, 6),  ate: hoje };
+  if (id === '30d') return { de: recuarDias(hoje, 29), ate: hoje };
+  if (id === 'mes') return { de: `${hoje.slice(0, 7)}-01`, ate: hoje };
+  if (id === 'mesPassado') {
+    const [ano, mes] = hoje.split('-').map(Number);
+    const anterior = mes === 1
+      ? `${ano - 1}-12`
+      : `${ano}-${String(mes - 1).padStart(2, '0')}`;
+    // "-31" fecha qualquer mês: nenhum dia real passa disso, e assim não é
+    // preciso saber quantos dias o mês tinha.
+    return { de: `${anterior}-01`, ate: `${anterior}-31` };
+  }
+  return null;
+}
+
 /** O comentário do cliente, legível.
  *
  * O texto vinha cortado numa linha só, com o resto escondido no tooltip -- e
@@ -174,6 +220,8 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
   const [filtroSetor, setFiltroSetor] = useState('');
   // '' = tanto faz | 'com' = so quem escreveu | 'sem' = so a nota seca.
   const [filtroComentario, setFiltroComentario] = useState('');
+  // '' = todo o periodo. Ver PERIODOS_AVAL para os recortes.
+  const [filtroPeriodo, setFiltroPeriodo] = useState('');
 
   // A LISTA E PAGINADA, NAO EMPILHADA.
   //
@@ -303,9 +351,18 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
   // "sem", e o seletor passaria a mentir sobre o que ainda existe.
   const feedbacksBase = useMemo(() => {
     const termo = buscaAval.trim().toLowerCase();
+    const janela = janelaDoPeriodo(filtroPeriodo);
     return avaliacoes.avaliadas.filter(c => {
       if (filtroNota && c.avaliacao !== filtroNota) return false;
       if (filtroSetor && (c.setor || 'Geral') !== filtroSetor) return false;
+      if (janela) {
+        // Sem data de fechamento a linha fica FORA de qualquer recorte: não dá
+        // para afirmar que ela caiu na janela, e uma avaliação sem data
+        // aparecendo em "últimos 7 dias" seria uma afirmação falsa. Em "todo o
+        // período" ela continua na lista, que é onde ela de fato pertence.
+        const dia = c.fechadoEm ? dataISO(c.fechadoEm) : '';
+        if (!dia || dia < janela.de || dia > janela.ate) return false;
+      }
       if (termo) {
         // Inclui o atendente: permite filtrar as avaliacoes de uma pessoa.
         const alvo = `${c.cliente || ''} ${c.telefone || ''} ${c.feedback || ''} ${c.atendenteNome || c.ultimoAtendenteNome || ''}`.toLowerCase();
@@ -313,7 +370,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
       }
       return true;
     });
-  }, [avaliacoes, filtroNota, filtroSetor, buscaAval]);
+  }, [avaliacoes, filtroNota, filtroSetor, buscaAval, filtroPeriodo]);
 
   // Comentario vazio nao e so `null`: vem tambem como espaco em branco.
   const temComentario = c => !!(c.feedback && c.feedback.trim());
@@ -334,7 +391,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
   // explicacao -- pareceria "nenhum resultado" quando ha resultados de sobra.
   useEffect(() => {
     setPaginaAval(1);
-  }, [filtroNota, filtroSetor, buscaAval, filtroComentario, porPagina]);
+  }, [filtroNota, filtroSetor, buscaAval, filtroComentario, filtroPeriodo, porPagina]);
 
   // A PAGINA E DERIVADA, NAO GUARDADA.
   //
@@ -818,7 +875,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                     pareciam falar do mesmo conjunto. Era dai que vinha a
                     impressao de numero errado. */}
                 <p className="text-[10px] text-slate-500 mt-1">
-                  Os feedbacks que você acessa, de todo o período
+                  Os feedbacks que você acessa, {(PERIODOS_AVAL.find(p => p.id === filtroPeriodo) || PERIODOS_AVAL[0]).descricao}
                 </p>
               </div>
               {avaliacoes.total > 0 && (
@@ -829,6 +886,17 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                     placeholder="Buscar cliente, telefone ou comentário..."
                     className="bg-grafite-700 border border-linha rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 w-full sm:w-52 lg:w-64"
                   />
+                  {/* O RECORTE DE TEMPO QUE FALTAVA.
+                      Os cartoes acima sao do ciclo corrente, vindos do
+                      servidor; esta tabela era de TODO o periodo. Dois
+                      recortes diferentes lado a lado, sem como igualar --
+                      era dai que vinha a impressao de numero errado. */}
+                  <select
+                    value={filtroPeriodo}
+                    onChange={e => setFiltroPeriodo(e.target.value)}
+                    className="bg-grafite-700 border border-linha rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-acao/50 w-full sm:w-auto">
+                    {PERIODOS_AVAL.map(p => <option key={p.id} value={p.id}>{p.rotulo}</option>)}
+                  </select>
                   <select
                     value={filtroSetor}
                     onChange={e => setFiltroSetor(e.target.value)}
@@ -851,7 +919,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
               )}
             </div>
 
-            {(filtroNota > 0 || filtroSetor || buscaAval || filtroComentario) && (
+            {(filtroNota > 0 || filtroSetor || buscaAval || filtroComentario || filtroPeriodo) && (
               <div className="flex flex-wrap items-center gap-2 mb-3">
                 {filtroNota > 0 && (
                   <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-yellow-500/15 text-yellow-300 border border-yellow-500/30">
@@ -865,6 +933,12 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                     <button onClick={() => setFiltroSetor('')} className="hover:text-white"><X size={10} /></button>
                   </span>
                 )}
+                {filtroPeriodo && (
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-500/15 text-sky-300 border border-sky-500/30">
+                    {(PERIODOS_AVAL.find(p => p.id === filtroPeriodo) || {}).rotulo}
+                    <button onClick={() => setFiltroPeriodo('')} className="hover:text-white"><X size={10} /></button>
+                  </span>
+                )}
                 {filtroComentario && (
                   <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
                     {filtroComentario === 'com' ? 'Com comentário' : 'Sem comentário'}
@@ -872,7 +946,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                   </span>
                 )}
                 <button
-                  onClick={() => { setFiltroNota(0); setFiltroSetor(''); setBuscaAval(''); setFiltroComentario(''); }}
+                  onClick={() => { setFiltroNota(0); setFiltroSetor(''); setBuscaAval(''); setFiltroComentario(''); setFiltroPeriodo(''); }}
                   className="text-[10px] text-slate-400 hover:text-white underline underline-offset-2">
                   limpar filtros
                 </button>
