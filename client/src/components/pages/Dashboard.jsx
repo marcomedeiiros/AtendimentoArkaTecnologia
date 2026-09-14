@@ -797,34 +797,42 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
 
           {/* Tabela de feedbacks */}
           <div className="glass-panel rounded-2xl p-5 border border-linha">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-              <h3 className="text-sm font-bold text-white font-display flex items-center gap-2">
-                <MessageCircle size={15} className="text-acao-200" /> Feedbacks
-                <span className="text-slate-500 font-normal">({feedbacksFiltrados.length})</span>
-              </h3>
-              {/* O RECORTE DESTA TABELA E OUTRO, e agora ela diz isso.
+            {/* CABECALHO EM DOIS BLOCOS, nao em tres pecas soltas.
+                O titulo e a legenda falam da MESMA coisa -- o que a lista e --,
+                entao andam juntos a esquerda; os controles sao o outro assunto
+                e ficam inteiros a direita. Antes a legenda era um irmao com
+                `w-full` no meio de uma linha que nao quebrava: ela empurrava a
+                busca para longe e sobrava um buraco no meio do cabecalho. */}
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between mb-4">
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold text-white font-display flex items-center gap-2">
+                  <MessageCircle size={15} className="text-acao-200 shrink-0" /> Feedbacks
+                  <span className="text-slate-500 font-normal">({feedbacksFiltrados.length})</span>
+                </h3>
+                {/* O RECORTE DESTA TABELA E OUTRO, e agora ela diz isso.
 
-                  Os cartoes acima sao o agregado da empresa no ciclo, do
-                  servidor. Esta lista sai das conversas que ESTA pessoa
-                  acessa -- o servidor recorta por setor para quem nao e
-                  Administrador --, e sem a linha abaixo os dois blocos
-                  pareciam falar do mesmo conjunto. Era dai que vinha a
-                  impressao de numero errado. */}
-              <span className="text-[10px] text-slate-500 sm:order-last sm:w-full">
-                Os feedbacks que você acessa, de todo o período
-              </span>
+                    Os cartoes acima sao o agregado da empresa no ciclo, do
+                    servidor. Esta lista sai das conversas que ESTA pessoa
+                    acessa -- o servidor recorta por setor para quem nao e
+                    Administrador --, e sem a linha abaixo os dois blocos
+                    pareciam falar do mesmo conjunto. Era dai que vinha a
+                    impressao de numero errado. */}
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Os feedbacks que você acessa, de todo o período
+                </p>
+              </div>
               {avaliacoes.total > 0 && (
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 w-full lg:w-auto lg:justify-end">
                   <input
                     value={buscaAval}
                     onChange={e => setBuscaAval(e.target.value)}
                     placeholder="Buscar cliente, telefone ou comentário..."
-                    className="bg-grafite-700 border border-linha rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 w-full sm:w-64"
+                    className="bg-grafite-700 border border-linha rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-acao/50 w-full sm:w-52 lg:w-64"
                   />
                   <select
                     value={filtroSetor}
                     onChange={e => setFiltroSetor(e.target.value)}
-                    className="bg-grafite-700 border border-linha rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-acao/50">
+                    className="bg-grafite-700 border border-linha rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-acao/50 w-full sm:w-auto">
                     <option value="">Todos os setores</option>
                     {avaliacoes.setores.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
@@ -834,7 +842,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                   <select
                     value={filtroComentario}
                     onChange={e => setFiltroComentario(e.target.value)}
-                    className="bg-grafite-700 border border-linha rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-acao/50">
+                    className="bg-grafite-700 border border-linha rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-acao/50 w-full sm:w-auto">
                     <option value="">Com e sem comentário</option>
                     <option value="com">Só com comentário ({contagemComentario.com})</option>
                     <option value="sem">Só sem comentário ({contagemComentario.sem})</option>
@@ -956,7 +964,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                             na primeira linha e o resto so existia no tooltip.
                             Agora ela tem largura propria, quebra em duas
                             linhas e abre inteira no clique. */}
-                        <td className="py-2.5 px-3 text-slate-300 align-top w-[28rem] min-w-[16rem]">
+                        <td className="py-2.5 px-3 text-slate-300 align-top w-[28rem] min-w-[12rem] sm:min-w-[16rem]">
                           <CelulaComentario texto={c.feedback} />
                         </td>
                       </tr>
@@ -969,7 +977,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                     "Página 2 de 8". Sem isso, Anterior e Próximo viram dois
                     botoes cegos: da para andar, mas nao para saber onde se
                     esta nem quanto falta. */}
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-4">
+                <div className="flex flex-wrap items-center justify-center sm:justify-between gap-3 pt-4">
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] text-slate-500">
                       {inicioPagina + 1}–{inicioPagina + feedbacksPagina.length} de {feedbacksFiltrados.length}
