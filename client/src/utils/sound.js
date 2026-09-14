@@ -168,20 +168,44 @@ function tocarSom(nome, volume = 1.0) {
   let tocouSucesso = false;
 
   // Tentativa 1: Tocar via AudioBuffer decodificado (Web Audio API - mais potente)
+  //
+  // ── SUCESSO SE VERIFICA, NAO SE DECLARA (14/09/2026) ───────────────────
+  //
+  // Aqui se marcava `tocouSucesso = true` logo apos o `start(0)`, sem olhar o
+  // estado do contexto. So que `resume()` e ASSINCRONO e so resolve depois de
+  // um GESTO na pagina: enquanto isso o contexto segue `suspended`, o `start`
+  // entra numa fila que nao anda, e nao sai som nenhum.
+  //
+  // O estrago nao era so perder este toque -- era o `true` DESLIGAR as duas
+  // camadas abaixo, que existem exatamente para quando a primeira falha. O
+  // resultado e a pior falha possivel num alerta: silencio que se apresenta
+  // como sucesso, e ninguem tem o que investigar.
+  //
+  // Numa TV de parede isso e o caso NORMAL, e nao a excecao: a tela recarrega
+  // sozinha (deploy, queda de rede, reinicio) e ninguem passa para clicar.
+  // Na Central o mesmo codigo parecia certo porque quem atende clica o tempo
+  // todo, e o contexto ja esta `running` quando o som chega.
   try {
     const ctx = obterAudioContext();
     if (ctx && som.buffer) {
       if (ctx.state === 'suspended') {
+        // Pede, e segue. Se o navegador liberar, vale para o proximo toque.
         ctx.resume();
       }
-      const source = ctx.createBufferSource();
-      const gainNode = ctx.createGain();
-      source.buffer = som.buffer;
-      gainNode.gain.setValueAtTime(Math.min(1.0, Math.max(0, volume)), ctx.currentTime);
-      source.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      source.start(0);
-      tocouSucesso = true;
+      // SO conta como tocado se o contexto estiver rodando AGORA. Suspenso, o
+      // caminho segue para a tentativa 2 -- que, ao ser recusada, avisa no
+      // console e cai no chime. `somBloqueado()` continua respondendo que sim,
+      // e o Modo TV mantem o botao "Ativar som" na tela.
+      if (ctx.state === 'running') {
+        const source = ctx.createBufferSource();
+        const gainNode = ctx.createGain();
+        source.buffer = som.buffer;
+        gainNode.gain.setValueAtTime(Math.min(1.0, Math.max(0, volume)), ctx.currentTime);
+        source.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        source.start(0);
+        tocouSucesso = true;
+      }
     }
   } catch (e) {
     tocouSucesso = false;

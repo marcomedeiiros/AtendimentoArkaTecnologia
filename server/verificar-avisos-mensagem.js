@@ -184,35 +184,44 @@ console.log("=== Aviso de mensagem nova ===");
   if (!app.includes("!estaOlhando() && paraMeuOuvido.length > 0")) {
     problemas.push("o aviso do sistema deixou de seguir a mesma regra do som");
   }
-  // ── UMA TELA, UM SOM: a regra e SO o Modo TV ────────────────────────────
+  // ── A ESCOLHA DO SOM, E A FORMA QUE GARANTE QUE NINGUEM FICA MUDO ──────
   //
-  // A escolha do som depende UNICAMENTE de qual tela esta aberta. Duas versoes
-  // anteriores minhas erraram aqui, e as duas pelo mesmo motivo -- uma condicao
-  // extra que ninguem pediu ("a conversa e nova?"):
+  // Esta checagem ja travou TRES regras diferentes, e reprovou codigo CORRETO
+  // nas tres viradas -- porque media a FORMA da linha, e nao a garantia. A
+  // versao anterior exigia `if (modoTvRef.current) {` seguido de
+  // `tocarSomMonitoramento();` sem condicao: era a regra de c0d21df ("uma
+  // tela, um som"), que o proprio pedido mandou tirar em d31a754 ("no Modo TV
+  // ele fica notificando sem parar"). Ficou dias VERMELHA defendendo o
+  // contrario do que a operacao pediu -- e verificador que reprova codigo
+  // certo e verificador que a proxima pessoa aprende a ignorar.
   //
-  //   1. `if (modoTv) { if (chamadoNovo) toca; }` -- deixava o Modo TV MUDO na
-  //      maior parte do tempo, e silencio e indistinguivel de defeito;
-  //   2. `if (modoTv && chamadoNovo) monitoramento; else blip;` -- na TV o som
-  //      do Monitoramento praticamente nao saia, porque chamado novo e raro.
+  // A GARANTIA DE HOJE, escrita como afirmacao e nao como desenho:
   //
-  // Por isso a checagem trava a condicao EXATA, sem `&&`: qualquer condicao a
-  // mais ali e o caminho de volta para os dois defeitos acima.
-  // O MODO TV TOCA SEMPRE -- e desde 11/09/2026 isso pesa mais: com a fila fora
-  // do som da Central, ELE e o unico aviso sonoro de chamado novo no sistema.
-  // Uma condicao extra aqui deixa a operacao sem nenhum som para cliente novo.
+  //   1. na TV, o Monitoramento toca se e so se houver mensagem nova em
+  //      conversa PENDENTE (`paraATv`) -- e nao em atendimento em curso;
+  //   2. o dono OUVE o proprio blip com o Modo TV aberto ou fechado. As duas
+  //      regras sao independentes: a tela que esta aberta nao pode deixar
+  //      ninguem mudo.
   //
-  // E essa parte nao mudou: e tela de parede, nao tem
-  // dono, e blipar por dono ali deixaria a TV muda -- o defeito que as duas
-  // tentativas contadas acima produziram. A condicao dele continua sendo UMA
-  // (`modoTvRef.current`), sem `&&`: qualquer condicao a mais ali e o caminho
-  // de volta.
-  if (!/if \(modoTvRef\.current\) \{\s*\n\s*tocarSomMonitoramento\(\);/.test(app)) {
-    problemas.push(
-      "a TV deixou de tocar o Monitoramento sem condicao -- uma tela, um som"
-    );
+  // A (2) e o defeito de 14/09/2026, e ele era de FORMA: a condicao da TV
+  // estava ANINHADA (`if (modoTv) { if (paraATv...) }`), entao com a TV aberta
+  // e a fila parada o `else if` do dono nao era alcancado. COMBINADA num ramo
+  // so, o `else` volta a cobrir todo o resto. Por isso se trava a forma
+  // combinada: nao da para afirmar "nenhum caminho fica sem som" sem olhar a
+  // estrutura que garante isso.
+  //
+  // E se trava por TEXTO, e nao por regex: as tres versoes anteriores eram
+  // regex, e o que quebrou nas tres foi o padrao, nao a garantia.
+  if (!app.includes("const paraATv = novas.filter((n) => n.pendente);")) {
+    problemas.push("o recorte do som da TV pela FILA sumiu -- a TV volta a tocar em atendimento em curso");
   }
-  if (/if \(modoTvRef\.current && /.test(codigo)) {
-    problemas.push("voltou uma condicao extra no som do Modo TV (ela nunca foi pedida)");
+  if (!codigo.includes("if (modoTvRef.current && paraATv.length > 0) {")) {
+    problemas.push("a condicao do som da TV deixou de ser COMBINADA -- com a TV aberta, o dono pode ter voltado a ficar mudo");
+  }
+  // A forma ANINHADA de volta e exatamente o defeito de 14/09: um ramo so da
+  // TV, e o dono sem `else`.
+  if (codigo.includes("if (modoTvRef.current) {")) {
+    problemas.push("a condicao do Modo TV voltou a ser aninhada -- foi assim que o dono ficou sem o blip");
   }
   if (!app.includes("tocarSomMensagem();")) {
     problemas.push("o som da Central desapareceu");
@@ -279,6 +288,61 @@ console.log("=== Aviso de mensagem nova ===");
     problemas.push("a `tag` nao agrupa por conversa -- mensagens seguidas do mesmo cliente empilham");
   }
   check("varias conversas viram UM aviso", problemas);
+}
+
+// ── E AGORA A REGRA E EXECUTADA, e nao so lida ─────────────────────────
+//
+// Tudo acima e grep, e grep foi o que falhou tres vezes: a garantia ficava
+// de pe e a checagem reprovava a forma nova. As duas auditorias dos sons
+// dizem que o ideal seria exercitar a decisao, e que nao dava porque ela
+// vive dentro de um efeito React alimentado por SSE.
+//
+// Da, sim -- desde que se recorte apenas o BLOCO da decisao. Ele nao depende
+// do React: sao cinco nomes (`modoTvRef`, as duas listas e os dois sons).
+// Extraindo o texto REAL do arquivo e rodando com dubles, a pergunta deixa
+// de ser "a linha esta escrita assim?" e passa a ser "com a TV aberta e a
+// fila parada, o dono ouve?" -- que e a pergunta que o relato de 14/09 fez.
+{
+  const problemas = [];
+  // Acha o bloco pelo INICIO da condicao, e nao pela forma inteira: assim,
+  // se a forma aninhada voltar, este bloco a EXECUTA e diz qual caso ficou
+  // mudo -- em vez de reclamar que nao encontrou nada. Forma quem trava e a
+  // checagem de texto acima; aqui se mede comportamento.
+  const i = app.indexOf("if (modoTvRef.current");
+  if (i < 0) {
+    problemas.push("nao achei o bloco da decisao do som para executar");
+  } else {
+    const j = app.indexOf("\n", app.indexOf("tocarSomMensagem();", i));
+    const bloco = app.slice(i, app.indexOf("}", j) + 1);
+
+    //  nome                                          TV     fila minhas  esperado
+    const casos = [
+      ["TV aberta + mensagem na FILA",                true,  1,   0,      "monitoramento"],
+      ["TV aberta + mensagem na MINHA conversa",      true,  0,   1,      "blip"],
+      ["TV aberta + fila e minha conversa na rajada", true,  1,   1,      "monitoramento"],
+      ["TV aberta + conversa de OUTRO atendente",     true,  0,   0,      "silencio"],
+      ["Central + minha conversa",                    false, 0,   1,      "blip"],
+      ["Central + fila (a fila e do Modo TV)",        false, 1,   0,      "silencio"],
+    ];
+
+    for (const [nome, tv, nFila, nMinhas, esperado] of casos) {
+      let tocou = "silencio";
+      // eslint-disable-next-line no-new-func
+      const fn = new Function(
+        "modoTvRef", "paraATv", "paraMeuOuvido", "tocarSomMonitoramento", "tocarSomMensagem",
+        bloco
+      );
+      fn(
+        { current: tv },
+        new Array(nFila).fill({}),
+        new Array(nMinhas).fill({}),
+        () => { tocou = "monitoramento"; },
+        () => { tocou = "blip"; }
+      );
+      if (tocou !== esperado) problemas.push(nome + ": esperava " + esperado + ", veio " + tocou);
+    }
+  }
+  check("a decisao do som, EXECUTADA caso a caso", problemas);
 }
 
 console.log(

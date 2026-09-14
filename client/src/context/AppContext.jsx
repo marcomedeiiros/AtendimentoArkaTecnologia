@@ -714,8 +714,35 @@ export function AppProvider({ children }) {
         const paraATv = novas.filter((n) => n.pendente);
 
         // UM TOQUE POR RAJADA, não por mensagem (era assim antes e continua).
-        if (modoTvRef.current) {
-          if (paraATv.length > 0) tocarSomMonitoramento();
+        //
+        // ── A CONDIÇÃO É COMBINADA, E ISSO NÃO É COSMÉTICO (14/09/2026) ─────
+        //
+        // O RELATO: "no Modo TV não está saindo som de notificação, só faz
+        // barulho no pendente". Estava certo, e a causa era a forma ANINHADA
+        // que estava aqui:
+        //
+        //   if (modoTv) { if (paraATv.length > 0) monitoramento; }  // sem else
+        //   else if (paraMeuOuvido.length > 0) blip;
+        //
+        // Com o Modo TV aberto e a fila parada, o `else` não era alcançado --
+        // e quem estava atendendo NAQUELE navegador ficava sem o próprio blip.
+        // A TV tomava o áudio da aba inteira, inclusive das conversas do dono.
+        //
+        // O pedido são DUAS regras, e elas NÃO são excludentes:
+        //
+        //   som para o perfil que está atendendo  -> sempre, TV aberta ou não
+        //   som da fila ao entrar em Pendentes    -> só com o Modo TV aberto
+        //
+        // Combinando a condição num ramo só, o `else if` volta a existir para o
+        // dono. Nenhum caminho fica sem som por causa da tela que está aberta --
+        // e era a FORMA aninhada, não a regra, que produzia o caso mudo.
+        //
+        // A ORDEM É A PRIORIDADE, e é deliberada: numa rajada que traga as duas
+        // coisas, a FILA ganha. Cliente esperando sem ninguém é mais urgente que
+        // mais uma mensagem numa conversa que já tem dono -- e dois sons
+        // sobrepostos não informam mais do que um.
+        if (modoTvRef.current && paraATv.length > 0) {
+          tocarSomMonitoramento();
         } else if (paraMeuOuvido.length > 0) {
           tocarSomMensagem();
         }
