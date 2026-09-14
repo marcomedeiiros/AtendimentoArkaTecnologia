@@ -3,7 +3,7 @@ import {
   Users, ShieldCheck, Clock, TrendingUp,
   Download, ArrowRight, Activity, CheckCircle2, Inbox,
   BarChart3, FileText, Loader2, Star, MessageCircle, X, LifeBuoy, ClipboardList, UserCheck, Bot,
-  Trophy
+  Trophy, ChevronLeft, ChevronRight
 } from 'lucide-react';
 // So o Doughnut sobrou nesta tela: ele precisa de ArcElement. Escalas e
 // elementos de linha/barra ficaram registrados sem grafico que os usasse.
@@ -175,14 +175,16 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
   // '' = tanto faz | 'com' = so quem escreveu | 'sem' = so a nota seca.
   const [filtroComentario, setFiltroComentario] = useState('');
 
-  // A LISTA NASCE CURTA E CRESCE A PEDIDO.
+  // A LISTA E PAGINADA, NAO EMPILHADA.
   //
   // Mostrar tudo de uma vez transformava a tabela numa rolagem sem fim: a
   // pessoa perdia os graficos de vista e nao achava mais o rodape da pagina.
-  // A escada (10 -> 30 -> 50 -> +50) deixa o primeiro olhar curto e so cresce
-  // quando alguem pede -- que e quando o tamanho passa a ser util, nao estorvo.
-  const DEGRAUS_AVAL = [10, 30, 50];
-  const [limiteAval, setLimiteAval] = useState(DEGRAUS_AVAL[0]);
+  // Empilhar com "ver mais" so adiava o problema -- a lista continuava
+  // crescendo e nao havia como VOLTAR. Em paginas, a altura da tabela e
+  // sempre a mesma e o caminho e de mao dupla: Anterior e Próximo.
+  const TAMANHOS_PAGINA = [10, 30, 50, 100];
+  const [porPagina, setPorPagina] = useState(TAMANHOS_PAGINA[0]);
+  const [paginaAval, setPaginaAval] = useState(1);
 
   // ---------- Avaliações ----------
   //
@@ -327,14 +329,26 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
     return feedbacksBase;
   }, [feedbacksBase, filtroComentario]);
 
-  // Mudou o filtro, a lista volta ao primeiro degrau: continuar em 150 linhas
-  // depois de trocar de setor esconderia o fato de que o recorte mudou.
+  // Mudou o filtro ou o tamanho da pagina, volta-se para a primeira: ficar na
+  // pagina 7 de um recorte que agora tem 2 paginas daria uma tabela vazia sem
+  // explicacao -- pareceria "nenhum resultado" quando ha resultados de sobra.
   useEffect(() => {
-    setLimiteAval(DEGRAUS_AVAL[0]);
-  }, [filtroNota, filtroSetor, buscaAval, filtroComentario]);
+    setPaginaAval(1);
+  }, [filtroNota, filtroSetor, buscaAval, filtroComentario, porPagina]);
 
-  // Proximo degrau: 10 -> 30 -> 50 e, dali em diante, de 50 em 50.
-  const proximoLimite = DEGRAUS_AVAL.find(d => d > limiteAval) ?? limiteAval + 50;
+  // A PAGINA E DERIVADA, NAO GUARDADA.
+  //
+  // A lista chega por SSE e muda sozinha: uma avaliacao nova entrando podia
+  // deixar `paginaAval` apontando para depois do fim. Recalcular o total aqui
+  // e prender a pagina dentro dele faz a tabela nunca ficar em branco por
+  // causa de um indice velho, sem precisar de um efeito corrigindo estado.
+  const totalPaginas = Math.max(1, Math.ceil(feedbacksFiltrados.length / porPagina));
+  const paginaAtual = Math.min(paginaAval, totalPaginas);
+  const inicioPagina = (paginaAtual - 1) * porPagina;
+  const feedbacksPagina = useMemo(
+    () => feedbacksFiltrados.slice(inicioPagina, inicioPagina + porPagina),
+    [feedbacksFiltrados, inicioPagina, porPagina]
+  );
 
   const exportarPdf = useCallback(async () => {
     setGerandoPdf(true);
@@ -883,7 +897,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                     </tr>
                   </thead>
                   <tbody>
-                    {feedbacksFiltrados.slice(0, limiteAval).map(c => (
+                    {feedbacksPagina.map(c => (
                       <tr key={c.linhaId || c.id} className={`border-b border-linha/40 hover:bg-grafite-600/40 transition-colors ${
                         c.avaliacao <= 2 ? 'bg-falha/5' : ''
                       }`}>
@@ -951,33 +965,41 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                 </table>
                 </div>
 
-                {/* A escada. O rodape sempre diz onde a lista esta -- sem
-                    isso, "ver mais" some no fim e ninguem sabe se acabou. */}
-                <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
-                  <span className="text-[11px] text-slate-500">
-                    Mostrando {Math.min(limiteAval, feedbacksFiltrados.length)} de {feedbacksFiltrados.length}
-                  </span>
-                  {feedbacksFiltrados.length > limiteAval && (
+                {/* O rodape diz sempre ONDE a lista esta -- "31-60 de 214" e
+                    "Página 2 de 8". Sem isso, Anterior e Próximo viram dois
+                    botoes cegos: da para andar, mas nao para saber onde se
+                    esta nem quanto falta. */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-slate-500">
+                      {inicioPagina + 1}–{inicioPagina + feedbacksPagina.length} de {feedbacksFiltrados.length}
+                    </span>
+                    <select
+                      value={porPagina}
+                      onChange={e => setPorPagina(Number(e.target.value))}
+                      title="Quantas avaliações por página"
+                      className="bg-grafite-700 border border-linha rounded-xl px-2 py-1 text-[11px] text-slate-200 focus:outline-none focus:border-acao/50">
+                      {TAMANHOS_PAGINA.map(n => <option key={n} value={n}>{n} por página</option>)}
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-2">
                     <button
-                      onClick={() => setLimiteAval(proximoLimite)}
-                      className="px-3 py-1.5 rounded-xl text-[11px] font-semibold bg-grafite-700 border border-linha text-slate-200 hover:border-acao/50 hover:text-white transition-colors">
-                      Ver mais {Math.min(proximoLimite, feedbacksFiltrados.length) - limiteAval}
+                      onClick={() => setPaginaAval(p => Math.max(1, Math.min(p, totalPaginas) - 1))}
+                      disabled={paginaAtual <= 1}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-[11px] font-semibold bg-grafite-700 border border-linha text-slate-200 hover:border-acao/50 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-linha disabled:hover:text-slate-200">
+                      <ChevronLeft size={12} /> Anterior
                     </button>
-                  )}
-                  {feedbacksFiltrados.length > limiteAval && (
+                    <span className="text-[11px] text-slate-400 font-mono px-1">
+                      {paginaAtual} / {totalPaginas}
+                    </span>
                     <button
-                      onClick={() => setLimiteAval(feedbacksFiltrados.length)}
-                      className="text-[11px] text-slate-400 hover:text-white underline underline-offset-2">
-                      ver todas as {feedbacksFiltrados.length}
+                      onClick={() => setPaginaAval(p => Math.min(totalPaginas, Math.min(p, totalPaginas) + 1))}
+                      disabled={paginaAtual >= totalPaginas}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-[11px] font-semibold bg-grafite-700 border border-linha text-slate-200 hover:border-acao/50 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-linha disabled:hover:text-slate-200">
+                      Próximo <ChevronRight size={12} />
                     </button>
-                  )}
-                  {limiteAval > DEGRAUS_AVAL[0] && (
-                    <button
-                      onClick={() => setLimiteAval(DEGRAUS_AVAL[0])}
-                      className="text-[11px] text-slate-400 hover:text-white underline underline-offset-2">
-                      recolher
-                    </button>
-                  )}
+                  </div>
                 </div>
               </>
             )}
