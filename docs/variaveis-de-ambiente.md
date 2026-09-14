@@ -2,7 +2,7 @@
 
 **O que é isto:** o servidor lê **71** variáveis de ambiente. **32** estão no
 `.env.example` ou no `docker-compose.prod.yml`. As **39** desta página existem só
-dentro do código — quem opera o sistema não tem como descobrir que elas existem.
+dentro do código  quem opera o sistema não tem como descobrir que elas existem.
 
 **Nenhuma delas quebra nada se faltar:** todas caem num padrão (`|| "lax"`,
 `Number(...) || 8`). O problema é de **descoberta**, não de funcionamento. Duas
@@ -41,7 +41,7 @@ faz o cookie sobreviver à navegação normal e não viajar em requisição de o
 Os mínimos são forçados no código (`Math.max(2, ...)`): não dá para desligar a
 proteção baixando o número a zero.
 
-## WhatsApp — reconexão e cofre da sessão
+## WhatsApp  reconexão e cofre da sessão
 
 | Variável | Padrão | Onde |
 | --- | --- | --- |
@@ -56,7 +56,7 @@ Estas são da mesma família das duas que já estão no compose
 calibradas no incidente de 09/09. Ver
 [integracao-whatsapp-estabilidade.md](integracao-whatsapp-estabilidade.md).
 
-## Chatbot — limites do motor
+## Chatbot  limites do motor
 
 | Variável | Padrão | Onde |
 | --- | --- | --- |
@@ -92,7 +92,7 @@ passam a morar no banco. Mudar a variável **não** muda o que já foi salvo.
 | Variável | Padrão | Onde |
 | --- | --- | --- |
 | `N8N_URL` | `http://localhost:5678` | `configuracao.service.js:64` |
-| `N8N_API_KEY` | (vazio) — **segredo** | `configuracao.service.js:65` |
+| `N8N_API_KEY` | (vazio)  **segredo** | `configuracao.service.js:65` |
 | `N8N_WEBHOOK_FLUXO` | (vazio) | `configuracao.service.js:67` |
 | `TRANSCRICAO_URL` | Groq | `transcricao.client.js:13` |
 | `TRANSCRICAO_API_KEY` | usa `GROQ_API_KEY` antes | `configuracao.service.js:80` |

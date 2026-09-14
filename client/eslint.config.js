@@ -1,11 +1,11 @@
 /**
- * Linter do painel — deliberadamente pequeno.
+ * Linter do painel deliberadamente pequeno.
  *
  * ── POR QUE EXISTE ──────────────────────────────────────────────────────────
  *
  * A rede de verificação do projeto (`server/verificar-*.js`) é boa no que
  * cobre: regra de negócio medida contra o banco. Mas ela não enxerga uma classe
- * inteira de defeito do React — a **dependência esquecida** num `useEffect` /
+ * inteira de defeito do React a **dependência esquecida** num `useEffect` /
  * `useMemo` / `useCallback`. O sintoma não é um erro: é a tela usando um valor
  * velho e ninguém percebendo, porque nada estoura. É o tipo de defeito que só
  * aparece como "às vezes some" ou "só some depois que eu troco de aba".
@@ -14,7 +14,7 @@
  *
  * Um preset completo (`eslint:recommended` + react + import) acende centenas de
  * avisos de estilo num código de 64 mil linhas que já funciona. Isso não
- * conserta nada e treina todo mundo a ignorar a saída do linter — o mesmo mal
+ * conserta nada e treina todo mundo a ignorar a saída do linter o mesmo mal
  * que um teste cronicamente vermelho causa.
  *
  * Então aqui ficam ligadas as regras que apontam DEFEITO, não gosto:
