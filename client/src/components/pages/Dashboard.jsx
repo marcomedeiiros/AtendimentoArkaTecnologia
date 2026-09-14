@@ -12,6 +12,8 @@ import { Doughnut } from 'react-chartjs-2';
 import { EmojiIcon } from './EmojiIcon';
 import { exportarRelatorioPdf } from '../../utils/exportarPdf';
 import { hojeISO, dataISO, FUSO_BR } from '../../utils/data';
+import { limparDocumento, mascararDocumento } from '../../utils/documento';
+import { empresaDaConversa, cnpjDaConversa } from '../../utils/empresa';
 import HelpDeskPainel from './HelpDeskPainel';
 import RegistroConversas from './RegistroConversas';
 import RelatoriosClientes from './RelatoriosClientes';
@@ -243,10 +245,17 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
   // e esconderia todo o histórico de feedbacks. Cada OS traz também o SETOR em
   // que ela foi atendida -- que é o que classifica o feedback.
   const avaliacoesPorOS = useMemo(() => conversas.flatMap(c => {
+    // A EMPRESA E RESOLVIDA UMA VEZ POR CONVERSA, e nao por linha: ela e um
+    // dado do fio do cliente, igual para todas as OS dele, e resolve-la ali
+    // dentro varreria a lista de parceiros uma vez por atendimento.
+    const empresaNome = empresaDaConversa(c, parceiros);
+    const cnpjDigitos = cnpjDaConversa(c);
     const lista = c.atendimentos && c.atendimentos.length ? c.atendimentos : null;
-    if (!lista) return [c];
+    if (!lista) return [{ ...c, empresaNome, cnpjDigitos }];
     return lista.map(a => ({
       ...c,
+      empresaNome,
+      cnpjDigitos,
       linhaId: a.id,
       ticket: a.os,
       setor: a.setor || c.setor,
@@ -269,7 +278,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
       atendenteNome: a.atendenteNome || null,
       ultimoAtendenteNome: a.atendenteNome || null,
     }));
-  }), [conversas]);
+  }), [conversas, parceiros]);
 
   const avaliacoes = useMemo(() => {
     const avaliadas = avaliacoesPorOS
@@ -365,8 +374,20 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
       }
       if (termo) {
         // Inclui o atendente: permite filtrar as avaliacoes de uma pessoa.
-        const alvo = `${c.cliente || ''} ${c.telefone || ''} ${c.feedback || ''} ${c.atendenteNome || c.ultimoAtendenteNome || ''}`.toLowerCase();
-        if (!alvo.includes(termo)) return false;
+        // E a razao social: quem procura "Zunik" quer as notas da empresa,
+        // mesmo que nenhum contato se chame assim.
+        const alvo = `${c.cliente || ''} ${c.telefone || ''} ${c.feedback || ''} ${c.atendenteNome || c.ultimoAtendenteNome || ''} ${c.empresaNome || ''}`.toLowerCase();
+        if (alvo.includes(termo)) return true;
+
+        // CNPJ digitado como se le: "12.345" tem de achar 12345678000190. Por
+        // isso a comparacao e por DIGITOS, e nao pelo texto com pontuacao.
+        //
+        // O piso de 2 digitos nao e frescura: `limparDocumento('zunik')` e
+        // string vazia, e `'123'.includes('')` e sempre true -- sem o piso,
+        // toda busca por nome que nao casasse devolveria a lista inteira em
+        // vez de nada. Mesmo cuidado da busca de Clientes (CNPJ).
+        const digitos = limparDocumento(termo);
+        return digitos.length >= 2 && (c.cnpjDigitos || '').includes(digitos);
       }
       return true;
     });
@@ -437,10 +458,14 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
 
   const exportarAvaliacoesCsv = useCallback(() => {
     const linhas = [
-      ['Cliente', 'Telefone', 'Nota', 'Atendente', 'Setor', 'Finalizado em', 'Comentário'],
+      ['Cliente', 'Telefone', 'Empresa', 'CNPJ', 'Nota', 'Atendente', 'Setor', 'Finalizado em', 'Comentário'],
       ...feedbacksFiltrados.map(c => [
         c.cliente || '',
         c.telefone || '',
+        c.empresaNome || '',
+        // Sem mascara: em planilha, "12.345.678/0001-90" vira texto e um
+        // numero puro continua sendo comparavel com o resto do sistema.
+        c.cnpjDigitos || '',
         c.avaliacao,
         c.atendenteNome || c.ultimoAtendenteNome || '',
         c.setor || 'Geral',
@@ -971,6 +996,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                     <tr className="border-b border-linha text-slate-400">
                       <th className="text-left py-2.5 px-3 font-semibold">Cliente</th>
                       <th className="text-left py-2.5 px-3 font-semibold">Telefone</th>
+                      <th className="text-left py-2.5 px-3 font-semibold">Empresa</th>
                       <th className="text-center py-2.5 px-3 font-semibold">Nota</th>
                       <th className="text-left py-2.5 px-3 font-semibold">Atendente</th>
                       <th className="text-left py-2.5 px-3 font-semibold">Setor</th>
@@ -985,6 +1011,25 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                       }`}>
                         <td className="py-2.5 px-3 text-white font-semibold">{c.cliente}</td>
                         <td className="py-2.5 px-3 text-slate-400 font-mono">{c.telefone || '-'}</td>
+                        {/* DE QUE EMPRESA E ESTE CLIENTE.
+                            Razao social em cima e CNPJ embaixo: o nome e o
+                            que se procura, o numero e o que identifica. Fio
+                            sem CNPJ verificado nao inventa empresa -- escreve
+                            "sem CNPJ", que e a verdade, em vez de um traco
+                            mudo que tanto pode ser "nao tem" quanto "nao
+                            carregou". */}
+                        <td className="py-2.5 px-3 align-top max-w-[14rem]">
+                          {c.cnpjDigitos ? (
+                            <div className="leading-tight">
+                              <p className="text-slate-200 truncate" title={c.empresaNome || ''}>
+                                {c.empresaNome || 'Empresa não cadastrada'}
+                              </p>
+                              <p className="text-[10px] text-slate-500 font-mono">{mascararDocumento(c.cnpjDigitos)}</p>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-slate-600">sem CNPJ</span>
+                          )}
+                        </td>
                         <td className="py-2.5 px-3">
                           <div className="flex items-center justify-center gap-0.5">
                             {renderEstrelas(c.avaliacao)}

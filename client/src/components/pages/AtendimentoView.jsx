@@ -46,6 +46,7 @@ import { contatoDoVcard } from '../../utils/vcard';
 // duplicadas aqui e em ParceirosPage, com as mesmas regras copiadas, e a
 // mudanca para aceitar CPF teria de ser feita duas vezes.
 import { limparDocumento, mascararDocumento, documentoValido } from '../../utils/documento';
+import { empresaDaConversa } from '../../utils/empresa';
 import { FUSO_BR } from '../../utils/data';
 import { mesclarConversa, registrarApagada, desfazerApagada } from '../../utils/mesclarConversa';
 import { formatarComAssinatura, formatarLegendaComAssinatura, separarAssinatura, juntarAssinatura } from '../../utils/assinatura';
@@ -219,21 +220,9 @@ const SEM_SETOR = {
   classe: 'bg-slate-700/50 border-linha-forte text-slate-300',
 };
 
-/**
- * Nome da empresa do cliente, para exibição.
- *
- * O CNPJ continua no banco e continua sendo o que liga a conversa à empresa --
- * ele só não aparece mais na tela. A razão social vem de dois lugares, nesta
- * ordem: o cadastro vivo em Clientes (CNPJ), para uma edição de nome valer na
- * hora; e `conversa.empresa`, gravada quando o CNPJ foi identificado, que
- * sobrevive mesmo se o parceiro sair do cadastro depois.
- */
-function empresaDaConversa(c, parceiros = []) {
-  if (!c?.cnpjVerificado) return null;
-  const digitos = limparDocumento(c.cnpj);
-  const parceiro = digitos ? parceiros.find(p => limparDocumento(p.cnpj) === digitos) : null;
-  return parceiro?.razaoSocial || c.empresa || null;
-}
+// `empresaDaConversa` saiu daqui para `utils/empresa`: a Visão Geral passou a
+// fazer a mesma pergunta na coluna Empresa da tabela de feedbacks, e duas
+// cópias da regra envelheceriam separadas.
 
 // O CADASTRO da empresa desta conversa, quando ela e um parceiro conhecido.
 //
