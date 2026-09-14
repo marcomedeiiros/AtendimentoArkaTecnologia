@@ -121,9 +121,31 @@ console.log("\n=== 5. O SERVIDOR PRESERVA O vCARD ===\n");
   });
   check(!!(emArray && emArray.vcard), "contactsArrayMessage tambem preserva o vCard");
 
-  const mapper = fs.readFileSync(path.join(__dirname, "src/shared/helpers/mapper.helper.js"), "utf8");
-  check(/midia:\s*tipo !== "texto" \? \{ \.\.\.meta/.test(mapper),
-    "o mapper repassa o metadata inteiro (o vCard chega na tela)");
+  // ── MEDE O RESULTADO, E NAO O TEXTO DO ARQUIVO ────────────────────────────
+  //
+  // Aqui havia uma regex contra o codigo-fonte do mapper (`{ ...meta`). Ela
+  // reprovou uma mudanca CERTA: o espalhamento virou `semSegredo(meta)` para
+  // parar de mandar `segredo` -- a chave que decifra a edicao da mensagem --
+  // dentro do payload do SSE, visivel no console de qualquer navegador aberto
+  // na Central. O vCard continuava chegando na tela; so o teste discordava.
+  //
+  // Teste que olha para a forma da linha reprova refatoracao e aprova regressao
+  // que mantenha a linha parecida. Entao agora ele chama `mapMensagem` e olha o
+  // que sai -- que e o que a tela recebe. De quebra, cobre o vazamento: se o
+  // `segredo` voltar ao payload, esta assercao acende.
+  const { mapMensagem } = require("./src/shared/helpers/mapper.helper");
+  const naTela = mapMensagem({
+    id: "msg-teste",
+    origem: "cliente",
+    texto: "",
+    criadoEm: new Date(),
+    metadata: { tipo: "contato", vcard: midia.vcard, segredo: "NAO-PODE-SAIR-DAQUI" },
+  });
+  check(naTela.midia?.vcard === midia.vcard, "o mapper leva o vCard ate a tela");
+  check(
+    !Object.keys(naTela.midia || {}).includes("segredo"),
+    "e o segredo da edicao NAO vai junto no payload"
+  );
 }
 
 console.log("\n=== 6. A TELA ESTA LIGADA NO CAMINHO CERTO ===\n");
