@@ -145,6 +145,30 @@ services:
         condition: service_started
       evolution-db:
         condition: service_healthy
+    # ── SABER SE A API ESTA DE PE, e nao so se ela iniciou ──────────────────
+    #
+    # O `web` depende dela com `condition: service_started`, que se satisfaz no
+    # instante em que o processo nasce. Quando a API entra em crash-loop (foi o
+    # que aconteceu num deploy com mudanca de schema), o nginx sobe normalmente
+    # e devolve 502, enquanto `docker compose ps` mostra o `api` "Up" a cada
+    # reinicio -- sem nenhum sinal de que ele esta morrendo e voltando. O
+    # diagnostico dependia de alguem pensar em `docker logs`.
+    #
+    # `/health` e uma rota barata e sem autenticacao (app.js): responde JSON e
+    # nao toca no banco. A cada 30s sao 30 requisicoes por janela de 15 min,
+    # contra um teto de 2000 no limitador -- nao tira vaga de ninguem.
+    #
+    # E so SINALIZACAO, pela mesma escolha ja feita na Evolution logo abaixo:
+    # nada depende de `service_healthy` da api, entao um health vermelho
+    # aparece no `docker compose ps` sem derrubar o painel. Num painel de
+    # atendimento, uma tela que abre e mostra erro e melhor que uma tela que
+    # nao abre.
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   # ------------------------------------------------------------------------
   # Evolution API: ponte com o WhatsApp (le o QR e entrega as mensagens).
