@@ -22,7 +22,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 console.error(
   "Este script está obsoleto e desativado. Use: node publicar-fluxo-arka.js\n" +
-    "Motivo: apesar do nome "ver", ele faz update no bloco do menu."
+    "Motivo: apesar do nome 'ver', ele faz update no bloco do menu."
 );
 process.exit(1);
 

@@ -22,7 +22,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 console.error(
   "Este script está obsoleto e desativado. Use: node publicar-fluxo-arka.js\n" +
-    "Motivo: gravava esperaEscolha:true na opção curinga do bloco de Identificação -- era exatamente o botão "resposta livre" debaixo da pergunta."
+    "Motivo: gravava esperaEscolha:true na opção curinga do bloco de Identificação -- era exatamente o botão 'resposta livre' debaixo da pergunta."
 );
 process.exit(1);
 
