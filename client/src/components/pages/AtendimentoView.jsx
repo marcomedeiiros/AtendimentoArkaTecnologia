@@ -2852,7 +2852,20 @@ function PainelChat({
   }, [scrollRef]);
 
   // Ao trocar de conversa: vai direto pro fim (sem animacao).
-  useEffect(() => { irParaFim(false); /* eslint-disable-next-line */ }, [conversa.id]);
+  //
+  // A dependencia `irParaFim` fica de fora DE PROPOSITO: este efeito existe
+  // para reagir a troca de conversa, e so a ela. Incluir a funcao faria a tela
+  // saltar para o fim toda vez que ela fosse recriada, no meio da leitura de
+  // uma mensagem antiga.
+  //
+  // O `eslint-disable-next-line` estava DENTRO do corpo, na mesma linha do
+  // `irParaFim(false)` -- ou seja, silenciava a linha seguinte, que nao era a
+  // do aviso. Nao desligava nada, e o linter ainda o apontava como diretiva
+  // inutil. Aqui ele esta na linha certa: a anterior ao array de dependencias.
+  useEffect(() => {
+    irParaFim(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversa.id]);
 
   // Chegou mensagem nova: desce se o usuario estava lendo o fim; senao sinaliza.
   useEffect(() => {
