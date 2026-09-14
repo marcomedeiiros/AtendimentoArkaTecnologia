@@ -2402,16 +2402,10 @@ class ChatbotEngine {
         const os = sessao.contexto?.osAvaliada || null;
         const nota = this.interpretarNota(textoEntrada);
         if (nota != null && sessao.aguardando === AGUARDANDO.AVALIACAO_NOTA) {
-          await this.deps.conversaRepository.update(alvo, {
+          await this._gravarResultadoAvaliacao(alvo, os, {
             avaliacao: nota,
             avaliacaoStatus: "respondida",
           });
-          if (os) {
-            await this.deps.conversaRepository.atualizarAtendimento(os, {
-              avaliacao: nota,
-              avaliacaoStatus: "respondida",
-            });
-          }
         }
         await this.deps.sessaoRepository.update(sessao.id, {
           fluxoAtualId: null,
@@ -2490,19 +2484,13 @@ class ChatbotEngine {
         return { processado: true, conversaId: conversa.id, aguardando: AGUARDANDO.AVALIACAO_NOTA };
       }
 
-      await this.deps.conversaRepository.update(alvoId, {
-        avaliacao: nota,
-        avaliacaoStatus: "respondida",
-      });
       // A nota pertence ao CICLO (a OS) que foi avaliado -- `osAvaliada`, e nao
       // "a OS atual": o cliente pode ter aberto um chamado novo entre o
       // fechamento e a resposta da pesquisa.
-      if (osAvaliada) {
-        await this.deps.conversaRepository.atualizarAtendimento(osAvaliada, {
-          avaliacao: nota,
-          avaliacaoStatus: "respondida",
-        });
-      }
+      await this._gravarResultadoAvaliacao(alvoId, osAvaliada, {
+        avaliacao: nota,
+        avaliacaoStatus: "respondida",
+      });
       await this._emitirConversa(alvoId);
 
       // Pediu comentario? avanca; senao agradece e encerra.
@@ -2529,14 +2517,9 @@ class ChatbotEngine {
     const pular = ["pular", "nao", "nao quero", "-", "n"];
     const ehPular = !comentario || pular.includes(this.normalizarTexto(comentario));
     if (!ehPular) {
-      await this.deps.conversaRepository.update(alvoId, {
+      await this._gravarResultadoAvaliacao(alvoId, osAvaliada, {
         feedback: comentario.slice(0, 1000),
       });
-      if (osAvaliada) {
-        await this.deps.conversaRepository.atualizarAtendimento(osAvaliada, {
-          feedback: comentario.slice(0, 1000),
-        });
-      }
       await this._emitirConversa(alvoId);
     }
     await this.enviarBot(conversa.id, telefone, cfg.mensagemAgradecimento, instanceName);
@@ -2721,16 +2704,50 @@ class ChatbotEngine {
     return recusas.includes(t);
   }
 
+  /**
+   * Grava o resultado da pesquisa: SEMPRE na OS avaliada, e na conversa apenas
+   * enquanto ela ainda estiver naquele ciclo.
+   *
+   * A OS e a verdade -- e dela que saem a tela de Feedbacks e o ranking. Os
+   * campos da CONVERSA sao espelho do ciclo EM CURSO, e o cliente pode
+   * responder a pesquisa depois de um ciclo novo ter comecado (ele escreveu de
+   * novo, ou um atendente reabriu). Escrever o espelho nessa hora colava a nota
+   * do atendimento anterior num atendimento que mal comecou -- e, pior, fazia o
+   * proximo fechamento pular a pesquisa, porque ela desiste quando ve que a
+   * conversa "ja tem nota".
+   *
+   * O criterio e o mesmo que `finalizarPesquisa` ja usa para decidir se ainda
+   * pode fechar a conversa: comparar a OS atual com a que foi avaliada.
+   */
+  async _gravarResultadoAvaliacao(conversaId, atendimentoId, dados) {
+    if (atendimentoId) {
+      await this.deps.conversaRepository.atualizarAtendimento(atendimentoId, dados);
+    }
+
+    // Sem OS avaliada (sessao antiga) nao ha o que comparar: mantem o
+    // comportamento de sempre e escreve o espelho.
+    let mesmoCiclo = true;
+    if (atendimentoId) {
+      const atual = await this.deps.conversaRepository.findById(conversaId);
+      mesmoCiclo = !atual?.atendimentoAtualId || atual.atendimentoAtualId === atendimentoId;
+    }
+
+    if (mesmoCiclo) {
+      await this.deps.conversaRepository.update(conversaId, dados);
+    } else {
+      logger.info("Resultado da pesquisa gravado so na OS avaliada: ciclo novo em curso", {
+        conversaId,
+        atendimentoId,
+      });
+    }
+    return mesmoCiclo;
+  }
+
   // Grava COMO a avaliacao terminou, na conversa e na OS avaliada. Silencioso:
   // e registro, e nao pode derrubar o encerramento do atendimento.
   async registrarStatusAvaliacao(conversaId, atendimentoId, status) {
     try {
-      await this.deps.conversaRepository.update(conversaId, { avaliacaoStatus: status });
-      if (atendimentoId) {
-        await this.deps.conversaRepository.atualizarAtendimento(atendimentoId, {
-          avaliacaoStatus: status,
-        });
-      }
+      await this._gravarResultadoAvaliacao(conversaId, atendimentoId, { avaliacaoStatus: status });
       await this._emitirConversa(conversaId);
     } catch (e) {
       logger.warn("Nao foi possivel registrar o status da avaliacao", {

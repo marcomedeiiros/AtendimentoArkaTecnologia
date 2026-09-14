@@ -534,7 +534,7 @@ class ConversaRepository {
   // passar e a AUTORIA.
   //
   // Isto e a segunda barreira. A primeira e nao reabrir um ciclo avaliado (ver
-  // `reabrirEmCicloNovoSeAvaliado`): quando ela funciona, esta nem e alcancada.
+  // `reabrirEmCicloNovoSeJulgado`): quando ela funciona, esta nem e alcancada.
   async atualizarAtendimentoAtual(conversaId, data) {
     const conversa = await prisma.conversa.findUnique({
       where: { id: conversaId },
@@ -547,14 +547,37 @@ class ConversaRepository {
     if (mexeNaAutoria) {
       const atual = await prisma.atendimento.findUnique({
         where: { id: conversa.atendimentoAtualId },
-        select: { avaliacao: true, atendenteNome: true },
+        select: { avaliacao: true, atendenteNome: true, status: true },
       });
-      if (atual && atual.avaliacao != null) {
+
+      // ── E OS FECHADA TAMBEM NAO TROCA DE AUTOR ──────────────────────────
+      //
+      // A trava de cima cobre a OS que JA TEM nota. Falta a janela entre o
+      // fechamento e a resposta do cliente: ali a OS esta fechada e ainda sem
+      // nota, entao `avaliacao != null` nao segura nada. Quem mexesse na
+      // conversa nesse intervalo virava o autor do ciclo, e a nota que
+      // chegasse cinco minutos depois seria creditada a ele -- o defeito de
+      // 10/09 voltando por outra porta.
+      //
+      // O criterio e o estado, e nao um prazo: prazo e chute sobre quando o
+      // cliente responde, e volta a falhar no dia em que ele responde tarde.
+      // Trabalho de ciclo fechado e fato consumado, tenha nota ou nao.
+      //
+      // REABRIR PASSA: o mesmo update que traz a OS de volta para "aberta"
+      // carrega `status` e e a continuacao legitima daquele atendimento -- ali
+      // o autor novo e quem esta assumindo. So e recusado o que mexe na
+      // autoria de uma OS que estava fechada E continua fechada.
+      const continuaFechada =
+        atual?.status === "fechada" &&
+        (data.status === undefined || data.status === "fechada");
+
+      if (atual && (atual.avaliacao != null || continuaFechada)) {
         const { atendenteId, atendenteNome, ...resto } = data;
         campos = resto;
-        logger.warn("Autoria de OS avaliada preservada", {
+        logger.warn("Autoria de OS encerrada preservada", {
           conversaId,
           atendimentoId: conversa.atendimentoAtualId,
+          motivo: atual.avaliacao != null ? "ja_avaliada" : "ciclo_fechado",
           mantido: atual.atendenteNome,
           recusado: atendenteNome ?? null,
         });
@@ -569,7 +592,7 @@ class ConversaRepository {
   }
 
   /**
-   * REABRIR UM CICLO JA AVALIADO ABRE OS NOVA -- e nao continua a mesma.
+   * REABRIR UM CICLO JA JULGADO ABRE OS NOVA -- e nao continua a mesma.
    *
    * ── POR QUE A REGRA MUDOU ─────────────────────────────────────────────────
    *
@@ -583,15 +606,25 @@ class ConversaRepository {
    *
    * Era o defeito de 10/09/2026: a nota 5 dada ao Lucas virou ponto do Rangel.
    *
-   * O ciclo avaliado fica intacto, e a continuacao do atendimento vira uma OS
-   * propria -- exatamente o que ja acontece quando o CLIENTE volta a escrever
-   * num fio fechado (ver `garantirAtendimentoAberto`). Duas jornadas de
-   * atendimento dividindo uma linha so e o que produzia o crédito errado.
+   * ── E O CICLO ENTREGUE AO JULGAMENTO CONTA IGUAL ──────────────────────────
+   *
+   * A regra olhava so para "ja tem nota". Mas entre a pergunta ("de 1 a 5, que
+   * nota voce da?") e a resposta do cliente existe uma janela em que o ciclo
+   * esta encerrado, a pesquisa esta de pe e a nota ainda nao chegou. Reabrir
+   * ali continuava na mesma OS e trocava o autor -- e a nota que chegasse
+   * depois cairia na linha ja com o nome errado, pelo mesmo mecanismo do
+   * defeito acima.
+   *
+   * O ciclo que foi MANDADO para julgamento tambem ja acabou: o que vier
+   * depois e trabalho novo. Por isso `avaliacaoStatus === "aguardando"` entra
+   * no mesmo criterio. Quem prende a nota a linha certa e o `osAvaliada`
+   * guardado na sessao da pesquisa, que ja existe justamente para isso.
    *
    * Devolve a OS nova, ou `null` quando nao havia nada a preservar (ciclo sem
-   * nota, ou conversa sem OS) -- e ai reabrir continua na mesma, como antes.
+   * nota e sem pesquisa em curso, ou conversa sem OS) -- e ai reabrir continua
+   * na mesma, como antes.
    */
-  reabrirEmCicloNovoSeAvaliado(conversaId, { setor = null, atendenteId = null, atendenteNome = null } = {}) {
+  reabrirEmCicloNovoSeJulgado(conversaId, { setor = null, atendenteId = null, atendenteNome = null } = {}) {
     // Mesma fila por conversa do resto do arquivo: dois cliques simultaneos em
     // "Reabrir" nao podem abrir duas OS para o mesmo ciclo.
     return comLock(`conversa:${conversaId}`, async () => {
@@ -603,9 +636,10 @@ class ConversaRepository {
 
       const atual = await prisma.atendimento.findUnique({
         where: { id: conversa.atendimentoAtualId },
-        select: { avaliacao: true },
+        select: { avaliacao: true, avaliacaoStatus: true },
       });
-      if (!atual || atual.avaliacao == null) return null;
+      const julgado = !!atual && (atual.avaliacao != null || atual.avaliacaoStatus === "aguardando");
+      if (!julgado) return null;
 
       return this.abrirAtendimento(conversaId, {
         setor: setor || conversa.setor || null,

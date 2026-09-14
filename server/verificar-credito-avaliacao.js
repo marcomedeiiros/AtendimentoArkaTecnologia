@@ -222,6 +222,149 @@ async function main() {
     "e ciclo ainda nao avaliado continua aceitando troca de responsavel (transferencia)"
   );
 
+  titulo("5b. FECHAR DEVOLVE A CONVERSA -- SEM LEVAR A AUTORIA JUNTO");
+
+  // O RELATO: "quando o atendente reabre o chamado, ele pega a antiga pessoa
+  // que estava atendendo". A causa era o fechamento nao soltar o responsavel:
+  // a regra do reabrir ("quem reabre assume, se ninguem assumiu") nunca era
+  // verdadeira, porque sempre havia alguem -- o dono do ciclo anterior.
+  const fio = await prisma.conversa.create({
+    data: {
+      cliente: `${MARCA} cliente fecha`,
+      telefone: `5527${String(Date.now()).slice(-7)}22`,
+      setor: "Técnico",
+      statusAtendimento: "pendente",
+      instanciaId: instancia.id,
+    },
+  });
+  const osFio = await conversaRepository.abrirAtendimento(fio.id, { setor: "Técnico", status: "pendente" });
+  await conversaService.atender(fio.id, lucas.id);
+  await conversaService.atualizarStatus(fio.id, "fechada", null, autorDe(lucas), "Backup e restauração");
+
+  let fioDepois = await conversaRepository.findById(fio.id);
+  let osFioDepois = await prisma.atendimento.findUnique({ where: { id: osFio.id } });
+  check(fioDepois.atendenteId === null, "fechar solta o responsavel da conversa");
+  check(
+    fioDepois.ultimoAtendenteNome === lucas.nome,
+    `mas o historico fica (${fioDepois.ultimoAtendenteNome})`
+  );
+  check(
+    osFioDepois.atendenteNome === lucas.nome,
+    `e a OS continua sabendo quem fez o trabalho (${osFioDepois.atendenteNome})`
+  );
+
+  // E agora quem reabre assume de verdade.
+  await conversaService.atualizarStatus(fio.id, "aberta", null, autorDe(rangel));
+  fioDepois = await conversaRepository.findById(fio.id);
+  check(fioDepois.atendenteId === rangel.id, "e quem reabre passa a ser o responsavel");
+  osFioDepois = await prisma.atendimento.findUnique({ where: { id: osFio.id } });
+  check(
+    osFioDepois.atendenteNome === rangel.nome,
+    `ciclo sem nota e sem pesquisa continua na mesma OS, agora do Rangel (${osFioDepois.atendenteNome})`
+  );
+
+  titulo("5c. REABRIR COM A PESQUISA EM CURSO NAO ROUBA A NOTA QUE VEM DEPOIS");
+
+  // A JANELA QUE O RELATO PEDIU PARA CUIDAR: o bot ja perguntou "de 1 a 5, que
+  // nota voce da?" e o cliente ainda nao respondeu. O ciclo esta fechado e SEM
+  // nota, entao a trava de "OS ja avaliada" nao pega. Sem o conserto, reabrir
+  // aqui trocava o autor da OS e a nota que chegasse depois seria creditada a
+  // quem reabriu.
+  //
+  // O criterio e estado, e nao prazo: `avaliacaoStatus = "aguardando"` diz que
+  // a pesquisa esta de pe, independente de o cliente responder em 5 minutos ou
+  // no dia seguinte.
+  const fio2 = await prisma.conversa.create({
+    data: {
+      cliente: `${MARCA} cliente pesquisa`,
+      telefone: `5527${String(Date.now()).slice(-7)}33`,
+      setor: "Técnico",
+      statusAtendimento: "pendente",
+      instanciaId: instancia.id,
+    },
+  });
+  const osPesquisa = await conversaRepository.abrirAtendimento(fio2.id, { setor: "Técnico", status: "pendente" });
+  await conversaService.atender(fio2.id, lucas.id);
+  await conversaService.atualizarStatus(fio2.id, "fechada", null, autorDe(lucas), "Backup e restauração");
+  // O bot perguntou a nota: a OS entra em "aguardando" (ver iniciarPesquisaSatisfacao).
+  await conversaRepository.atualizarAtendimento(osPesquisa.id, { avaliacaoStatus: "aguardando" });
+  await conversaRepository.update(fio2.id, { avaliacaoStatus: "aguardando" });
+
+  // O Rangel reabre ANTES de o cliente responder.
+  await conversaService.atualizarStatus(fio2.id, "aberta", null, autorDe(rangel));
+
+  const osPesquisaDepois = await prisma.atendimento.findUnique({ where: { id: osPesquisa.id } });
+  check(
+    osPesquisaDepois.atendenteNome === lucas.nome,
+    `a OS que espera a nota continua com o Lucas (${osPesquisaDepois.atendenteNome})`
+  );
+  check(osPesquisaDepois.status === "fechada", "e continua fechada -- senao a nota nao pontuaria");
+
+  const osDoFio2 = await prisma.atendimento.findMany({ where: { conversaId: fio2.id }, orderBy: { abertoEm: "asc" } });
+  check(osDoFio2.length === 2, `a continuacao virou OS nova (${osDoFio2.length} OS)`);
+  const osContinuacao = osDoFio2.find((o) => o.id !== osPesquisa.id);
+  check(osContinuacao?.atendenteNome === rangel.nome, `e a OS nova e do Rangel (${osContinuacao?.atendenteNome})`);
+
+  // O ciclo novo nao pode nascer carregando a avaliacao do anterior: a pesquisa
+  // desiste quando ve que a conversa "ja tem nota", e o proximo fechamento
+  // terminaria sem perguntar nada ao cliente.
+  const fio2Depois = await conversaRepository.findById(fio2.id);
+  check(fio2Depois.avaliacao == null, "a conversa nao carrega a nota do ciclo anterior");
+  check(fio2Depois.avaliacaoStatus == null, "nem o status da pesquisa antiga");
+
+  // A NOTA CHEGA AGORA, atrasada -- e tem de cair na OS do Lucas.
+  await conversaRepository.atualizarAtendimento(osPesquisa.id, {
+    avaliacao: 5,
+    avaliacaoStatus: "respondida",
+  });
+  const osPesquisaFinal = await prisma.atendimento.findUnique({ where: { id: osPesquisa.id } });
+  const osContinuacaoFinal = await prisma.atendimento.findUnique({ where: { id: osContinuacao.id } });
+  check(osPesquisaFinal.avaliacao === 5, "a nota atrasada cai na OS que foi avaliada");
+  check(osPesquisaFinal.atendenteNome === lucas.nome, "e continua creditada ao Lucas");
+  check(osContinuacaoFinal.avaliacao == null, "e a OS nova, do Rangel, segue sem nota");
+
+  titulo("5d. A TRAVA DE TRAS TAMBEM VALE PARA OS FECHADA SEM NOTA");
+
+  // Terceira barreira. Mesmo que algum caminho tente escrever a autoria na OS
+  // da janela da pesquisa, ela recusa: ciclo fechado e trabalho encerrado,
+  // tenha nota ou nao. Reabrir continua passando, porque o mesmo update tira a
+  // OS de "fechada" -- e ai o autor novo e quem esta assumindo.
+  const fio3 = await prisma.conversa.create({
+    data: {
+      cliente: `${MARCA} cliente trava`,
+      telefone: `5527${String(Date.now()).slice(-7)}44`,
+      setor: "Técnico",
+      statusAtendimento: "fechada",
+      instanciaId: instancia.id,
+    },
+  });
+  const osTrava = await conversaRepository.abrirAtendimento(fio3.id, {
+    setor: "Técnico",
+    status: "fechada",
+    atendenteId: lucas.id,
+    atendenteNome: lucas.nome,
+  });
+  await conversaRepository.atualizarAtendimentoAtual(fio3.id, {
+    atendenteId: rangel.id,
+    atendenteNome: rangel.nome,
+  });
+  let osTravaDepois = await prisma.atendimento.findUnique({ where: { id: osTrava.id } });
+  check(
+    osTravaDepois.atendenteNome === lucas.nome,
+    `OS fechada recusa troca de autoria (${osTravaDepois.atendenteNome})`
+  );
+
+  await conversaRepository.atualizarAtendimentoAtual(fio3.id, {
+    status: "aberta",
+    atendenteId: rangel.id,
+    atendenteNome: rangel.nome,
+  });
+  osTravaDepois = await prisma.atendimento.findUnique({ where: { id: osTrava.id } });
+  check(
+    osTravaDepois.atendenteNome === rangel.nome,
+    `mas o mesmo update que reabre passa (${osTravaDepois.atendenteNome})`
+  );
+
   titulo("6. A TELA NAO INVENTA NOME");
 
   // A coluna "Atendente" das avaliacoes sai da OS, e de mais nenhum lugar. O

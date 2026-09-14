@@ -1298,13 +1298,38 @@ class ConversaService {
       data.lido = true;
       data.naoLidas = 0;
       dataOS.fechadoEm = data.fechadoEm;
+
+      // ── FECHAR DEVOLVE A CONVERSA: NINGUEM CONTINUA ATENDENDO O QUE ACABOU ──
+      //
+      // `atendenteId` e o responsavel ATUAL, e depois do fechamento nao ha
+      // atendimento em curso para ter responsavel. Ele sobrevivia ao
+      // fechamento, e o efeito aparecia no Reabrir: a regra logo abaixo diz
+      // "quem reabre assume, se ninguem assumiu" e nunca era verdadeira --
+      // o fio voltava para a mao de quem tinha atendido o ciclo ANTERIOR,
+      // sem essa pessoa ter feito nada.
+      //
+      // Isto NAO e novidade no sistema: e exatamente o que ja acontece quando
+      // o proprio CLIENTE volta a escrever num fio fechado (ver o engine, onde
+      // o ciclo novo nasce com `atendenteId: null` "para quem assumiu o
+      // anterior nao herdar este de graca"). O que havia era uma incoerencia
+      // entre os dois caminhos.
+      //
+      // ── E A AUTORIA DO TRABALHO NAO VAI JUNTO ─────────────────────────────
+      //
+      // So a CONVERSA perde o responsavel. `ultimoAtendenteNome` fica (e o
+      // historico) e, principalmente, `dataOS` NAO recebe `atendenteId: null`:
+      // quem fez aquele trabalho esta gravado na OS, e e de la que saem a
+      // coluna "Atendente" das avaliacoes e os pontos do ranking. Limpar a OS
+      // aqui apagaria o credito de todo mundo -- e a nota que chega depois do
+      // fechamento ficaria orfa, lida como atendimento do bot.
+      data.atendenteId = null;
     } else if (status === "aberta") {
       // Reabertura: limpa o fechamento e garante marca de atendimento. REABRIR
       // continua na MESMA OS (e a continuacao do atendimento) -- EXCETO quando
-      // aquele ciclo ja foi avaliado pelo cliente, e aí ele nao se mexe mais:
-      // ver `reabrirEmCicloNovoSeAvaliado` logo abaixo, e o defeito de 10/09
-      // que ela fecha. OS nova tambem quando o cliente inicia um ciclo novo
-      // depois do fechamento.
+      // aquele ciclo ja foi julgado pelo cliente (nota dada, ou pesquisa em
+      // curso), e aí ele nao se mexe mais: ver `reabrirEmCicloNovoSeJulgado`
+      // logo abaixo, e o defeito de 10/09 que ela fecha. OS nova tambem quando
+      // o cliente inicia um ciclo novo depois do fechamento.
       data.fechadoEm = null;
       dataOS.fechadoEm = null;
       // O MOTIVO SAI JUNTO COM O FECHAMENTO.
@@ -1347,11 +1372,48 @@ class ConversaService {
     // de proposito: e a OS nova que recebe o status, o responsavel e o
     // `atendidoEm` deste reabrir.
     if (status === "aberta") {
-      await conversaRepository.reabrirEmCicloNovoSeAvaliado(id, {
+      // O NOME TEM DE SER DA MESMA PESSOA QUE O ID.
+      //
+      // Antes o id e o nome vinham de expressoes independentes, e com o
+      // fechamento devolvendo a conversa (`atendenteId: null` acima) elas
+      // passariam a discordar: o id seria de quem reabriu e o nome cairia no
+      // `ultimoAtendenteNome`, que e de quem atendeu ANTES. Nome errado numa
+      // OS e pior que nome nenhum -- ninguem desconfia dele. Entao os dois
+      // saem do mesmo dono, e sem nome a OS fica sem nome.
+      const assumiuAgora = !!data.atendenteId;
+      const donoId = data.atendenteId || conversa.atendenteId || null;
+      const donoNome = assumiuAgora
+        ? data.ultimoAtendenteNome || null
+        : conversa.ultimoAtendenteNome || null;
+
+      const osNova = await conversaRepository.reabrirEmCicloNovoSeJulgado(id, {
         setor: conversa.setor,
-        atendenteId: data.atendenteId || conversa.atendenteId || null,
-        atendenteNome: data.ultimoAtendenteNome || conversa.ultimoAtendenteNome || null,
+        atendenteId: donoId,
+        atendenteNome: donoNome,
       });
+
+      if (osNova) {
+        // ── O CICLO NOVO NASCE SEM A NOTA DO ANTERIOR ───────────────────────
+        //
+        // `avaliacao`/`feedback`/`avaliacaoStatus` da CONVERSA sao espelho do
+        // ciclo em curso. Deixando o espelho do ciclo velho aqui, o proximo
+        // fechamento nao perguntaria nada ao cliente: a pesquisa desiste
+        // quando ve que a conversa "ja tem nota" (ver iniciarPesquisaSatisfacao
+        // no engine). O atendimento novo terminaria sem avaliacao nenhuma, sem
+        // ninguem entender por que.
+        //
+        // A nota antiga nao se perde: ela mora na OS antiga, que e de onde a
+        // tela de Feedbacks e o ranking leem. E o mesmo reset que o engine ja
+        // faz quando o proprio cliente abre um ciclo novo.
+        data.avaliacao = null;
+        data.feedback = null;
+        data.avaliacaoStatus = null;
+        // Ciclo novo comeca agora, e nao quando o anterior comecou: `atendidoEm`
+        // e o relogio do atendimento, e o de cima e o da OS que ja fechou.
+        const agora = new Date();
+        data.atendidoEm = agora;
+        dataOS.atendidoEm = agora;
+      }
     }
 
     // Linha antiga (de antes das OS) ainda nao tem atendimento nenhum: cria a
