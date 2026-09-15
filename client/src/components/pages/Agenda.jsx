@@ -386,8 +386,21 @@ function PainelCompromisso({ compromisso, pessoas, onSalvar, onRemover, onFechar
       <div onClick={() => !salvando && onFechar()}
         className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-40 lg:hidden" />
 
-      <aside className="fixed top-0 right-0 h-dvh w-full sm:w-[26rem] z-50 glass-panel border-l border-linha shadow-2xl flex flex-col">
-        <div className="p-4 bg-grafite-600 border-b border-linha flex items-center justify-between shrink-0">
+      {/* ── O PAINEL TEM A ALTURA DO QUE ELE CARREGA ──────────────────────────
+          Ele ocupava `h-dvh` fixo, e o corpo com `flex-1` esticava até o fim da
+          tela: num monitor alto, o formulário terminava na metade e sobrava um
+          vazio enorme entre a última pergunta e os botões -- que ficavam lá
+          embaixo, soltos, longe do que eles salvam.
+
+          Agora ele cresce com o conteúdo até o limite da janela, e aí sim o
+          corpo rola. Flutua encostado à direita, centrado na vertical, como um
+          cartão. No celular vira a gaveta de tela cheia de antes: ali não há
+          "ao lado", e margem só roubaria espaço de digitação. */}
+      <aside className="fixed z-50 glass-panel shadow-2xl flex flex-col
+                        inset-0 w-full h-dvh border-l border-linha
+                        sm:inset-y-0 sm:left-auto sm:right-4 sm:my-auto sm:h-fit sm:max-h-[calc(100dvh-2rem)]
+                        sm:w-[26rem] sm:rounded-2xl sm:border">
+        <div className="p-4 bg-grafite-600 border-b border-linha flex items-center justify-between shrink-0 sm:rounded-t-2xl">
           <div className="flex items-center gap-2 font-bold text-sm text-white min-w-0">
             <CalendarDays size={16} className="text-acao-200 shrink-0" />
             <span className="truncate">{novo ? 'Novo compromisso' : 'Compromisso'}</span>
@@ -456,7 +469,7 @@ function PainelCompromisso({ compromisso, pessoas, onSalvar, onRemover, onFechar
           )}
         </div>
 
-        <div className="p-4 bg-grafite-600 border-t border-linha flex items-center gap-2 shrink-0">
+        <div className="p-4 bg-grafite-600 border-t border-linha flex items-center gap-2 shrink-0 sm:rounded-b-2xl">
           {!novo && (
             <button onClick={() => onRemover(compromisso.id)}
               title="Remover compromisso"
