@@ -181,17 +181,37 @@ function PilulaCompromisso({ comp, cor, onAbrir, onArrastar, podeArrastar }) {
           mesma cor duas vezes. Aqui o círculo é um vazado escuro sobre a cor da
           pílula -- ele diz QUEM, e a pílula diz O QUÊ.
 
-          Sem responsável é estado legítimo (lembrete do time): círculo
-          tracejado, que diz "não tem dono", e não o avatar de alguém que não
-          existe. */}
+          ── E "SEM RESPONSÁVEL" NÃO VIRA UM PONTO MUDO ─────────────────────
+
+          Era um círculo tracejado com um "·". Tecnicamente correto (ninguém foi
+          atribuído), e inútil: quem acabou de criar o compromisso olha para o
+          próprio item e não se reconhece nele. Um compromisso SEMPRE tem alguém
+          por trás -- se não há responsável, há quem criou.
+
+          Então o círculo cai para as iniciais de quem criou, com o contorno
+          TRACEJADO mantido. É a diferença que importa: preenchido = alguém tem
+          de fazer; tracejado = ninguém assumiu, e estas são as iniciais de quem
+          marcou. O `title` diz a frase inteira, sem abreviação. */}
       <span
-        title={comp.responsavelNome || 'Sem responsável (do time)'}
-        className={`shrink-0 w-[18px] h-[18px] rounded-full grid place-items-center leading-none ${
+        title={
           comp.responsavelNome
-            ? 'bg-black/15 border border-black/10 text-[8.5px] font-bold'
-            : 'border border-dashed border-black/30 text-black/40 text-[10px]'
+            ? `Responsável: ${comp.responsavelNome}`
+            : comp.usuarioNome
+              ? `Sem responsável — criado por ${comp.usuarioNome}`
+              : 'Sem responsável (do time)'
+        }
+        className={`shrink-0 w-[18px] h-[18px] rounded-full grid place-items-center leading-none font-bold ${
+          comp.responsavelNome
+            ? 'bg-black/15 border border-black/10 text-[8.5px]'
+            : comp.usuarioNome
+              ? 'border border-dashed border-black/35 text-black/50 text-[8.5px]'
+              : 'border border-dashed border-black/30 text-black/40 text-[10px]'
         }`}>
-        {comp.responsavelNome ? iniciais(comp.responsavelNome) : '·'}
+        {comp.responsavelNome
+          ? iniciais(comp.responsavelNome)
+          : comp.usuarioNome
+            ? iniciais(comp.usuarioNome)
+            : '·'}
       </span>
       <span className="font-mono opacity-70 shrink-0">{comp.hora}</span>
       <span className={`truncate ${comp.concluido ? 'line-through' : ''}`}>{comp.titulo}</span>
@@ -411,7 +431,13 @@ function VisaoLista({ compromissos, onAbrir, onToggleConcluido }) {
                       uma pílula pintada, então a cor da pessoa é a única cor do
                       elemento -- e é a mesma que ela tem em toda a Central. */}
                   <span className="hidden lg:flex items-center gap-1.5 text-[10px] shrink-0 w-32 truncate"
-                    title={c.responsavelNome || 'Sem responsável (do time)'}>
+                    title={
+                      c.responsavelNome
+                        ? `Responsável: ${c.responsavelNome}`
+                        : c.usuarioNome
+                          ? `Sem responsável — criado por ${c.usuarioNome}`
+                          : 'Sem responsável (do time)'
+                    }>
                     {c.responsavelNome
                       ? <><Avatar nome={c.responsavelNome} size="xs" /> <span className="text-slate-300 truncate">{c.responsavelNome}</span></>
                       : <><Users size={10} className="text-slate-600 shrink-0" /> <span className="text-slate-600">do time</span></>}
