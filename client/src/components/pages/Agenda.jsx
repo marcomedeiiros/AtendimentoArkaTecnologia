@@ -232,6 +232,14 @@ function LegendaDaCor({ criterio }) {
  */
 function PilulaCompromisso({ comp, cor, onAbrir, onArrastar, podeArrastar }) {
   return (
+    // ── A ALCINHA VALE PARA QUALQUER COMPROMISSO, e não só para os longos ──
+    //
+    // Antes ela só existia na barra de vários dias. Para esticar um
+    // compromisso normal era preciso abrir o painel e preencher "Termina em"
+    // antes -- ou seja, para transformá-lo em barra era preciso que ele já
+    // fosse uma. Puxar a borda direita de qualquer item agora estende o fim,
+    // que é o gesto que a pessoa tenta primeiro.
+    <div className="relative">
     <button
       draggable={podeArrastar}
       onDragStart={(e) => {
@@ -296,6 +304,22 @@ function PilulaCompromisso({ comp, cor, onAbrir, onArrastar, podeArrastar }) {
       <span className="font-mono opacity-70 shrink-0">{comp.hora}</span>
       <span className={`truncate ${comp.concluido ? 'line-through' : ''}`}>{comp.titulo}</span>
     </button>
+
+    {podeArrastar && (
+      <span
+        draggable
+        onDragStart={(e) => {
+          e.stopPropagation();
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', comp.id);
+          onArrastar({ comp, modo: 'esticar' });
+        }}
+        onClick={() => onAbrir(comp)}
+        title="Puxe para o compromisso durar mais dias"
+        className="absolute right-0 top-0 h-full w-2.5 cursor-ew-resize rounded-r-md bg-black/0 hover:bg-black/25"
+      />
+    )}
+    </div>
   );
 }
 
@@ -363,8 +387,9 @@ function BarraCompromisso({ faixa, cor, podeArrastar, onAbrir, onArrastar }) {
               e.dataTransfer.setData('text/plain', comp.id);
               onArrastar({ comp, modo: 'esticar' });
             }}
+            onClick={() => onAbrir(comp)}
             title="Puxe para mudar o dia em que termina"
-            className="absolute right-0 top-0 h-full w-2 cursor-ew-resize rounded-r-md hover:bg-black/20"
+            className="absolute right-0 top-0 h-full w-2.5 cursor-ew-resize rounded-r-md bg-black/0 hover:bg-black/25"
           />
         )}
       </div>
