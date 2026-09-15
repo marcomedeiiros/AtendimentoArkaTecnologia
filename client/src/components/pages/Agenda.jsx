@@ -856,7 +856,7 @@ function PainelCompromisso({ compromisso, pessoas, onSalvar, onRemover, onFechar
               )}
             </div>
             <p className="text-[10px] text-slate-500 mt-1">
-              Atravessa dias no calendário e dá para puxar a borda da barra para mudar.
+              Atravessa dias no calendário e dá para puxar a borda da barra para mudar
             </p>
           </div>
 
@@ -866,7 +866,7 @@ function PainelCompromisso({ compromisso, pessoas, onSalvar, onRemover, onFechar
               <option value="">Sem responsável (do time)</option>
               {pessoas.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
             </select>
-            <p className="text-[10px] text-slate-500 mt-1">Quem tem de fazer diferente de quem criou.</p>
+            <p className="text-[10px] text-slate-500 mt-1">Quem tem de fazer diferente de quem criou</p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -923,7 +923,7 @@ function PainelCompromisso({ compromisso, pessoas, onSalvar, onRemover, onFechar
               ))}
             </div>
             <p className="text-[10px] text-slate-500 mt-1.5">
-              Vence o critério de cor do calendário. <strong className="font-semibold text-slate-400">Automática</strong> devolve a cor ao critério.
+              Vence o critério de cor do calendário <strong className="font-semibold text-slate-400">Automática</strong> devolve a cor ao critério
             </p>
           </div>
 
