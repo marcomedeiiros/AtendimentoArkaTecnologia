@@ -381,25 +381,24 @@ function PainelCompromisso({ compromisso, pessoas, onSalvar, onRemover, onFechar
 
   return (
     <>
-      {/* Véu só no celular: no desktop o painel divide a tela com a agenda, e
-          escurecer o resto anularia a razão de ele ser lateral. */}
+      {/* ── CENTRALIZADO, E NÃO ENCOSTADO NA DIREITA ─────────────────────────
+          Ele nasceu lateral para a agenda continuar visível ao lado enquanto se
+          lê um item. Na prática a preferência foi outra: pop-up no meio da
+          tela. Então o véu passa a valer em TODA largura -- um cartão flutuando
+          no centro sobre a agenda acesa não se destaca de nada, e o escurecido
+          é o que diz "resolva isto antes de voltar".
+
+          A altura continua sendo a do conteúdo (`h-fit` com teto), que foi o
+          conserto do vazio de ~350px entre a última pergunta e os botões. No
+          celular segue a gaveta de tela cheia: ali margem só roubaria espaço de
+          digitação. */}
       <div onClick={() => !salvando && onFechar()}
-        className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-40 lg:hidden" />
+        className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-40" />
 
-      {/* ── O PAINEL TEM A ALTURA DO QUE ELE CARREGA ──────────────────────────
-          Ele ocupava `h-dvh` fixo, e o corpo com `flex-1` esticava até o fim da
-          tela: num monitor alto, o formulário terminava na metade e sobrava um
-          vazio enorme entre a última pergunta e os botões -- que ficavam lá
-          embaixo, soltos, longe do que eles salvam.
-
-          Agora ele cresce com o conteúdo até o limite da janela, e aí sim o
-          corpo rola. Flutua encostado à direita, centrado na vertical, como um
-          cartão. No celular vira a gaveta de tela cheia de antes: ali não há
-          "ao lado", e margem só roubaria espaço de digitação. */}
       <aside className="fixed z-50 glass-panel shadow-2xl flex flex-col
                         inset-0 w-full h-dvh border-l border-linha
-                        sm:inset-y-0 sm:left-auto sm:right-4 sm:my-auto sm:h-fit sm:max-h-[calc(100dvh-2rem)]
-                        sm:w-[26rem] sm:rounded-2xl sm:border">
+                        sm:inset-0 sm:m-auto sm:h-fit sm:max-h-[calc(100dvh-2rem)]
+                        sm:w-[26rem] sm:rounded-2xl sm:border sm:border-linha">
         <div className="p-4 bg-grafite-600 border-b border-linha flex items-center justify-between shrink-0 sm:rounded-t-2xl">
           <div className="flex items-center gap-2 font-bold text-sm text-white min-w-0">
             <CalendarDays size={16} className="text-acao-200 shrink-0" />
