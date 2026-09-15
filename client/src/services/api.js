@@ -773,9 +773,19 @@ export const MensagensRapidasAPI = {
 // Tudo controlado pelo módulo "agenda" (o servidor barra quem não tem acesso).
 export const AgendaAPI = {
   listar: () => request('/agenda'),
+  // A quem dá para atribuir. NÃO é `EquipeAPI.listar`: aquela rota exige o
+  // módulo "equipe", que quem tem a Agenda quase nunca tem — o seletor de
+  // responsável viria vazio para a maior parte do time. Esta devolve só id e
+  // nome dos ativos, que é o necessário para escolher um nome numa lista.
+  pessoas: () => request('/agenda/pessoas'),
   criar: (dados) => request('/agenda', { method: 'POST', body: JSON.stringify(dados) }),
   atualizar: (id, dados) => request(`/agenda/${id}`, { method: 'PUT', body: JSON.stringify(dados) }),
   definirConcluido: (id, concluido) => request(`/agenda/${id}/concluido`, { method: 'PATCH', body: JSON.stringify({ concluido }) }),
+  // Remarcar manda SO a data (e a hora, se mudar). O arrastar do calendário usa
+  // esta rota em vez do PUT: o objeto que a tela tem em mãos durante o arraste é
+  // o da lista, que pode estar velho, e um PUT gravaria de volta um título ou
+  // uma descrição que outra pessoa acabou de mudar.
+  remarcar: (id, data, hora) => request(`/agenda/${id}/data`, { method: 'PATCH', body: JSON.stringify(hora ? { data, hora } : { data }) }),
   remover: (id) => request(`/agenda/${id}`, { method: 'DELETE' }),
   limparConcluidosAntigos: () => request('/agenda/concluidos-antigos', { method: 'DELETE' }),
 };
