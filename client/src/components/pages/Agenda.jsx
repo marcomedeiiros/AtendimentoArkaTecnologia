@@ -28,6 +28,7 @@ import {
   CalendarDays, Plus, Trash2, Save, X, Clock, List, LayoutGrid,
   CheckCircle2, Circle, ChevronLeft, ChevronRight, Search, Loader2, User, Users,
 } from 'lucide-react';
+import Portal from '../Portal';
 import { AgendaAPI } from '../../services/api';
 import { hojeISO, anoMesHoje, somarDias, FUSO_BR } from '../../utils/data';
 import { avisar, confirmar } from '../../utils/dialogo';
@@ -380,7 +381,30 @@ function PainelCompromisso({ compromisso, pessoas, onSalvar, onRemover, onFechar
   const rotulo = 'text-xs text-slate-400 font-medium block mb-1.5';
 
   return (
-    <>
+    // ── PORTAL: O `space-y-4` DA TELA ESTAVA EMPURRANDO O MODAL ──────────────
+    //
+    // A raiz da Agenda é `<div className="fade-in space-y-4">`, e `space-y-4` é
+    // a regra `.space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: 1rem }`.
+    // O modal, sendo filho dali, levava esse `margin-top: 16px` -- e a regra tem
+    // especificidade (0,3,0) contra (0,1,0) do `sm:m-auto`, então ela VENCE e a
+    // margem automática que centraliza na vertical é descartada.
+    //
+    // O resultado, medido: `margin-top: 16px` e `margin-bottom: 0`, com o cartão
+    // colado no topo e a sobra inteira embaixo. O véu pegava a mesma margem e
+    // começava 16px abaixo, deixando uma faixa da tela sem escurecer.
+    //
+    // Renderizar no `<body>` tira o modal de dentro do `space-y` e devolve a
+    // margem automática: medido depois, `margin-top: 324.5px` calculado sozinho,
+    // folga igual em cima e embaixo, e o véu cobrindo a janela inteira.
+    //
+    // (Não era o `transform` do `.fade-in` virando bloco de contenção, que é a
+    // suspeita óbvia: `getComputedStyle` devolve `transform: none` ali, e um
+    // `fixed` inserido em cada nível acima mediu a janela inteira -- só dentro
+    // do `space-y-4` é que a medida mudava.)
+    //
+    // O invólucro do Portal ainda carrega `data-portal-modal`, que os atalhos
+    // globais de teclado consultam para não agir por baixo de um modal aberto.
+    <Portal>
       {/* ── CENTRALIZADO, E NÃO ENCOSTADO NA DIREITA ─────────────────────────
           Ele nasceu lateral para a agenda continuar visível ao lado enquanto se
           lê um item. Na prática a preferência foi outra: pop-up no meio da
@@ -486,7 +510,7 @@ function PainelCompromisso({ compromisso, pessoas, onSalvar, onRemover, onFechar
           </button>
         </div>
       </aside>
-    </>
+    </Portal>
   );
 }
 
