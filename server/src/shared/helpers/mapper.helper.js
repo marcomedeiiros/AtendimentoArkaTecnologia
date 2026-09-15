@@ -374,6 +374,9 @@ function mapCompromisso(c) {
     // que ela mostra, e ele sobrevive a pessoa sair da equipe.
     responsavelId: c.responsavelId || null,
     responsavelNome: c.responsavelNome || null,
+    // Nome da cor ("azul"), nunca o hex -- quem traduz é a tela, que conhece o
+    // tema em uso. `null` = automática, derivada do critério do calendário.
+    cor: c.cor || null,
     criadoEm: c.criadoEm ? c.criadoEm.toISOString?.() || c.criadoEm : null,
   };
 }

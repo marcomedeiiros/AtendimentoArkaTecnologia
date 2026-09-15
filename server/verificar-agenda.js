@@ -27,7 +27,7 @@ const path = require("path");
 
 const prisma = require(path.join(__dirname, "src/infrastructure/database/prisma.client"));
 const service = require(path.join(__dirname, "src/modules/agenda/agenda.service"));
-const { criarCompromissoSchema, remarcarSchema } = require(path.join(__dirname, "src/modules/agenda/agenda.dto"));
+const { criarCompromissoSchema, remarcarSchema, CORES } = require(path.join(__dirname, "src/modules/agenda/agenda.dto"));
 
 const erros = [];
 function check(ok, nome) {
@@ -188,6 +188,51 @@ async function main() {
     campos.length === 2 && campos.includes("id") && campos.includes("nome"),
     `devolve so id e nome (veio: ${campos.join(", ")})`
   );
+
+  titulo("6b. A COR ESCOLHIDA A MAO E UM CONJUNTO FECHADO");
+
+  // Hex livre vindo do painel entregaria cor ilegivel (texto escuro sobre fundo
+  // escuro), cor que so funciona num dos dois temas, e texto livre num campo
+  // onde ninguem espera texto livre. A lista fechada e o que impede os tres.
+  const comCor = await service.criar({ ...base, cor: "roxo" }, { sub: ana.id, nome: ana.nome });
+  check(comCor.cor === "roxo", `a cor escolhida e gravada pelo NOME (${comCor.cor})`);
+
+  const semCor = await service.atualizar(comCor.id, { ...base, cor: null });
+  check(semCor.cor === null, "null volta para a cor automatica");
+
+  // O DTO barra na borda...
+  let barrouNaBorda = false;
+  try {
+    criarCompromissoSchema.parse({ ...base, cor: "#ff0000" });
+  } catch {
+    barrouNaBorda = true;
+  }
+  check(barrouNaBorda, "o DTO recusa hex cru (#ff0000)");
+
+  // ...e o servico reconfere, porque nem toda chamada vem por HTTP (script de
+  // manutencao, importacao, um caminho novo ligado direto no service).
+  const forcado = await service.atualizar(comCor.id, { ...base, cor: "#ff0000" });
+  check(forcado.cor === null, "e o service reconfere: cor fora da lista vira automatica");
+
+  const naoMexeu = await service.atualizar(comCor.id, { ...base });
+  check(naoMexeu.cor === null, "update sem o campo nao mexe na cor");
+
+  // Guardar o NOME, e nao o hex, e o que deixa a paleta ser retocada depois sem
+  // deixar cor velha presa no banco.
+  const fs2 = require("fs");
+  const tela2 = fs2.readFileSync(path.join(__dirname, "../client/src/components/pages/Agenda.jsx"), "utf8");
+  check(
+    /const PALETA = \{[\s\S]*?azul:\s*\{ hex:/.test(tela2),
+    "quem traduz nome em cor e a TELA (PALETA), que conhece o tema"
+  );
+  for (const nome of CORES) {
+    if (!new RegExp(`\\b${nome}:\\s*\\{ hex:`).test(tela2)) {
+      check(false, `a cor "${nome}" existe no servidor mas nao na paleta da tela`);
+    }
+  }
+  check(true, `as ${CORES.length} cores do servidor existem na paleta da tela`);
+
+  await service.remover(comCor.id);
 
   titulo("7. A TELA ESTA LIGADA NO CAMINHO CERTO");
 

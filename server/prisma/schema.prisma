@@ -342,6 +342,19 @@ model Compromisso {
   /// sem responsavel definido, que e um estado legitimo (lembrete do time).
   responsavelId   String? @map("responsavel_id")
   responsavelNome String? @map("responsavel_nome")
+  /// COR ESCOLHIDA A MAO, quando alguem nao quer a cor derivada do tipo ou da
+  /// prioridade.
+  ///
+  /// Guarda o NOME da cor ("azul", "ambar"), e nao o hex. O painel tem tema
+  /// claro e escuro e a paleta ja foi retocada uma vez; com o hex gravado, um
+  /// retoque deixaria no banco centenas de cores da paleta ANTIGA, que ninguem
+  /// saberia distinguir das novas. O nome sobrevive ao retoque -- quem traduz
+  /// nome em cor e a tela, que conhece o tema em uso.
+  ///
+  /// Nulo = cor automatica (a que o criterio do calendario mandar). E o padrao,
+  /// e e o que mantem a leitura do mes: cor escolhida item a item vira
+  /// decoracao, e decoracao nao responde "o que esta urgente aqui".
+  cor             String? @map("cor")
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 

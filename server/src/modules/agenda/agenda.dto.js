@@ -2,6 +2,20 @@ const { z } = require("zod");
 
 const TIPOS = ["reuniao", "ligacao", "tarefa", "followup", "lembrete"];
 const PRIORIDADES = ["alta", "media", "baixa"];
+
+/**
+ * AS CORES SAO UM CONJUNTO FECHADO, e nao um hex livre.
+ *
+ * Aceitar "#ff0000" do painel entregaria tres problemas de graca: cor ilegivel
+ * (texto escuro sobre fundo escuro), cor que so funciona num dos dois temas, e
+ * um campo de texto livre num lugar onde ninguem espera texto livre. Com a
+ * lista fechada, a tela escolhe entre cores que ja foram medidas contra os dois
+ * fundos -- e o servidor recusa qualquer outra.
+ *
+ * Guardar o NOME, e nao o hex, e o que deixa a paleta ser retocada depois sem
+ * deixar cores velhas presas no banco (ver o comentario no schema).
+ */
+const CORES = ["azul", "verde", "ambar", "roxo", "vermelho", "rosa", "ciano", "cinza"];
 const RE_DATA = /^\d{4}-\d{2}-\d{2}$/; // YYYY-MM-DD
 const RE_HORA = /^\d{2}:\d{2}$/; // HH:MM
 
@@ -21,6 +35,9 @@ const base = {
   //
   // `null` e valor legitimo: compromisso sem dono (lembrete do time inteiro).
   responsavelId: z.string().uuid("Responsavel invalido").nullable().optional(),
+  // `null` = cor automática (a que o critério do calendário mandar), que é o
+  // padrão. Ver CORES acima para por que a lista é fechada.
+  cor: z.enum(CORES).nullable().optional(),
 };
 
 const criarCompromissoSchema = z.object(base);
@@ -51,4 +68,5 @@ module.exports = {
   remarcarSchema,
   TIPOS,
   PRIORIDADES,
+  CORES,
 };

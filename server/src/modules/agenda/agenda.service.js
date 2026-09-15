@@ -3,6 +3,7 @@ const usuarioRepository = require("../../infrastructure/repositories/usuario.rep
 const { mapCompromisso } = require("../../shared/helpers/mapper.helper");
 const AppError = require("../../shared/errors/AppError");
 const { dataBrasilia } = require("../../shared/helpers/cnpj.helper");
+const { CORES } = require("./agenda.dto");
 
 // Fuso de Brasilia, nao UTC. Com `toISOString()`, das 21h em diante o "hoje"
 // virava AMANHA -- e a limpeza abaixo passava a considerar o proprio dia como
@@ -67,11 +68,26 @@ class AgendaService {
     return { responsavelId: usuario.id, responsavelNome: usuario.nome };
   }
 
+  /**
+   * A cor, reconferida aqui -- e nao so no DTO.
+   *
+   * Defesa em profundidade, como o resto do projeto: a borda valida com Zod e o
+   * servico confere de novo, porque nem toda chamada vem por HTTP (script de
+   * manutencao, importacao, um caminho novo que alguem ligue direto no
+   * service). Cor fora da lista vira `null` -- automatica --, que e o estado
+   * seguro: a tela ainda sabe pintar.
+   */
+  _corValida(cor) {
+    if (!cor) return null;
+    return CORES.includes(cor) ? cor : null;
+  }
+
   // O autor vem do token (nao do corpo), so para saber quem criou.
   async criar(dados, autor) {
     const { responsavelId, ...resto } = dados;
     const criado = await repo.create({
       ...resto,
+      cor: this._corValida(dados.cor),
       ...(await this._camposDoResponsavel(dados)),
       usuarioId: autor?.sub || null,
       usuarioNome: autor?.nome || null,
@@ -86,6 +102,9 @@ class AgendaService {
     const { responsavelId, ...resto } = dados;
     const atualizado = await repo.update(id, {
       ...resto,
+      // `"cor" in dados` separa "não mexa" de "volte para automática" (null),
+      // igual ao responsável logo abaixo.
+      ...("cor" in dados ? { cor: this._corValida(dados.cor) } : {}),
       ...(await this._camposDoResponsavel(dados)),
     });
     return mapCompromisso(atualizado);
