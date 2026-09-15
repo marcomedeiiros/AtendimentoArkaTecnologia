@@ -147,34 +147,37 @@ const PALETA = {
   cinza:    { hex: '#94A3B8', rotulo: 'Cinza' },
 };
 
-const CORES_POR_CRITERIO = {
+const POR_CRITERIO = {
   tipo: (c) => (TIPOS[c.tipo] || TIPOS.tarefa).hex,
   prioridade: (c) => (PRIORIDADES[c.prioridade] || PRIORIDADES.media).hex,
   responsavel: (c) => (c.responsavelNome ? hexDoNome(c.responsavelNome) : '#94A3B8'),
   fixa: () => '#00A884',
-  // Sem cor escolhida, cai no tipo -- e não num cinza de "vazio". O item sem
-  // cor à mão não é um item sem informação: ele só não teve a cor trocada.
-  escolhida: (c) => (c.cor && PALETA[c.cor] ? PALETA[c.cor].hex : (TIPOS[c.tipo] || TIPOS.tarefa).hex),
 };
 
 /**
- * ── POR QUE A COR ESCOLHIDA É UM CRITÉRIO, E NÃO UM "SEMPRE VENCE" ─────────
+ * ── A COR ESCOLHIDA À MÃO VENCE O CRITÉRIO ────────────────────────────────
  *
- * O caminho óbvio seria: tem cor à mão? usa. Não tem? usa o critério. Só que aí
- * o mês vira uma colcha -- metade dos itens dizendo "urgência" e a outra metade
- * dizendo "eu gostei de roxo" --, e nenhuma das duas leituras funciona. Bater o
- * olho e ver "este mês está cheio de vermelho" deixa de significar nada.
+ * Primeiro eu fiz dela um critério a mais: a cor só aparecia com o calendário
+ * em "cor escolhida à mão". O argumento era preservar a leitura do mês -- com
+ * metade dos itens dizendo "urgência" e a outra metade dizendo "gostei de
+ * roxo", nenhuma das duas leituras funciona.
  *
- * Aqui a escolha é do MÊS, como o menu "Color:" do Asana: ou o calendário
- * inteiro está pintado por prioridade, ou está pintado pelas cores escolhidas.
- * A cor à mão continua gravada o tempo todo; ela só aparece quando é ela que
- * está sendo perguntada.
+ * Só que na prática isso quebra a expectativa mais básica que existe: escolher
+ * uma cor e o bloco não mudar. Quem escolhe está dizendo "este aqui é
+ * diferente", e o sistema respondia "só se você mudar outra coisa antes".
+ *
+ * Então a regra é a simples: quem escolheu, mandou. O critério continua valendo
+ * para todo o resto -- que é a maioria, porque escolher cor é a exceção.
  */
+function corDoCompromisso(comp, criterio) {
+  if (comp.cor && PALETA[comp.cor]) return PALETA[comp.cor].hex;
+  return (POR_CRITERIO[criterio] || POR_CRITERIO.tipo)(comp);
+}
+
 const CRITERIOS_COR = [
   { id: 'tipo', rotulo: 'Cor por tipo' },
   { id: 'prioridade', rotulo: 'Cor por prioridade' },
   { id: 'responsavel', rotulo: 'Cor por responsável' },
-  { id: 'escolhida', rotulo: 'Cor escolhida à mão' },
   { id: 'fixa', rotulo: 'Uma cor só' },
 ];
 
@@ -192,9 +195,7 @@ function LegendaDaCor({ criterio }) {
       ? Object.values(TIPOS).map((t) => ({ hex: t.hex, rotulo: t.label }))
       : criterio === 'prioridade'
         ? Object.values(PRIORIDADES).map((p) => ({ hex: p.hex, rotulo: p.label }))
-        : criterio === 'escolhida'
-          ? Object.values(PALETA).map((p) => ({ hex: p.hex, rotulo: p.rotulo }))
-          : null;
+        : null;
 
   if (!itens) return null;
 
@@ -206,11 +207,10 @@ function LegendaDaCor({ criterio }) {
           {i.rotulo}
         </span>
       ))}
-      {criterio === 'escolhida' && (
-        <span className="text-[10px] text-slate-600">
-          · sem cor escolhida, vale a cor do tipo
-        </span>
-      )}
+      {/* Dito na própria legenda: sem isso, quem escolheu uma cor à mão olharia
+          a chave, não acharia o seu roxo ali, e concluiria que a legenda está
+          errada -- quando o que há é uma exceção legítima. */}
+      <span className="text-[10px] text-slate-600">· cor escolhida à mão vence este critério</span>
     </div>
   );
 }
@@ -294,6 +294,79 @@ function PilulaCompromisso({ comp, cor, onAbrir, onArrastar, podeArrastar }) {
   );
 }
 
+/**
+ * A barra do compromisso que atravessa dias.
+ *
+ * Diferente da pílula em duas coisas, e as duas de propósito:
+ *
+ *   sem hora     numa barra de quatro dias, "08:00" responde a pergunta errada
+ *                -- o que importa é o intervalo, e ele está no próprio desenho
+ *   com alcinha  a borda direita é uma área própria de arraste, que estica o
+ *                fim sem mover o início
+ *
+ * O corte da virada de semana não arredonda: a ponta cortada fica reta, e é
+ * isso que diz "continua na linha de baixo" em vez de "acabou aqui".
+ */
+function BarraCompromisso({ faixa, cor, podeArrastar, onAbrir, onArrastar }) {
+  const { comp, coluna, largura, comecaAqui, terminaAqui } = faixa;
+
+  return (
+    <div
+      className="pointer-events-auto mt-9 self-start px-0.5"
+      style={{ gridColumn: `${coluna + 1} / span ${largura}` }}
+    >
+      <div className="relative">
+        <button
+          draggable={podeArrastar}
+          onDragStart={(e) => {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', comp.id);
+            onArrastar({ comp, modo: 'mover' });
+          }}
+          onClick={() => onAbrir(comp)}
+          title={`${comp.titulo} · de ${comp.data} a ${comp.dataFim}`}
+          style={{ backgroundColor: cor }}
+          className={`w-full flex items-center gap-1.5 px-1.5 py-1 text-left text-[10px] font-semibold leading-tight text-grafite-900 transition-opacity ${
+            comp.concluido ? 'opacity-50' : 'hover:opacity-90'
+          } ${comecaAqui ? 'rounded-l-md' : ''} ${terminaAqui ? 'rounded-r-md' : ''} ${
+            podeArrastar ? 'cursor-grab active:cursor-grabbing' : ''
+          }`}
+        >
+          {comecaAqui && (
+            <span
+              title={comp.responsavelNome || (comp.usuarioNome ? `Sem responsável — criado por ${comp.usuarioNome}` : 'Sem responsável')}
+              className={`shrink-0 w-[18px] h-[18px] rounded-full grid place-items-center leading-none font-bold text-[8.5px] ${
+                comp.responsavelNome ? 'bg-black/15 border border-black/10' : 'border border-dashed border-black/35 text-black/50'
+              }`}>
+              {comp.responsavelNome
+                ? iniciais(comp.responsavelNome)
+                : comp.usuarioNome ? iniciais(comp.usuarioNome) : '·'}
+            </span>
+          )}
+          <span className={`truncate ${comp.concluido ? 'line-through' : ''}`}>{comp.titulo}</span>
+        </button>
+
+        {/* A alcinha só existe na ponta que é o FIM de verdade: numa barra
+            cortada pela virada da semana, puxar a borda do corte seria puxar um
+            fim que não está ali. */}
+        {terminaAqui && podeArrastar && (
+          <span
+            draggable
+            onDragStart={(e) => {
+              e.stopPropagation();
+              e.dataTransfer.effectAllowed = 'move';
+              e.dataTransfer.setData('text/plain', comp.id);
+              onArrastar({ comp, modo: 'esticar' });
+            }}
+            title="Puxe para mudar o dia em que termina"
+            className="absolute right-0 top-0 h-full w-2 cursor-ew-resize rounded-r-md hover:bg-black/20"
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ───────────────────────────────────────────────────────────────── calendário
 
 /** Semana ISO-8601 -- a que a operação chama de "semana 38". */
@@ -307,21 +380,32 @@ function numeroDaSemana(diaISO) {
 
 function VisaoCalendario({
   ano, mes, compromissos, corDaPilula, comFimDeSemana, comNumeroDaSemana,
-  onAbrir, onCriarEm, onRemarcar,
+  onAbrir, onCriarEm, onRemarcar, onEsticar,
 }) {
   const [arrastando, setArrastando] = useState(null);
   const [diaAlvo, setDiaAlvo] = useState(null);
   const hoje = hojeISO();
 
-  // Índice por dia: sem ele, cada uma das 42 células varreria a lista inteira.
-  const porDia = useMemo(() => {
+  // ── OS LONGOS SAEM DAS CÉLULAS E VIRAM BARRA ─────────────────────────────
+  //
+  // Um compromisso de 20 a 23 não é "um item no dia 20": ele ocupa quatro dias,
+  // e é isso que a tela tem de mostrar. Desenhá-lo dentro da célula do dia 20
+  // diria a coisa errada -- quem olhasse o dia 22 não veria nada acontecendo.
+  //
+  // Então a lista se divide em dois: os de um dia viram pílula dentro da
+  // célula, e os longos viram uma faixa por cima da semana, atravessando as
+  // colunas. Um compromisso que cruza a virada da semana aparece como duas
+  // faixas (uma em cada linha), que é como todo calendário resolve isso.
+  const { porDia, longos } = useMemo(() => {
     const mapa = new Map();
+    const barras = [];
     for (const c of compromissos) {
+      if (c.dataFim && c.dataFim > c.data) { barras.push(c); continue; }
       if (!mapa.has(c.data)) mapa.set(c.data, []);
       mapa.get(c.data).push(c);
     }
     for (const lista of mapa.values()) lista.sort((a, b) => a.hora.localeCompare(b.hora));
-    return mapa;
+    return { porDia: mapa, longos: barras };
   }, [compromissos]);
 
   const celulas = useMemo(() => gradeDoMes(ano, mes), [ano, mes]);
@@ -334,12 +418,57 @@ function VisaoCalendario({
   const colunas = comFimDeSemana ? 'grid-cols-7' : 'grid-cols-5';
   const semanas = [0, 1, 2, 3, 4, 5];
 
+  /**
+   * O drop faz uma de DUAS coisas, conforme o que começou a ser arrastado.
+   *
+   *   mover     a barra inteira anda, mantendo a duração (o servidor desloca o
+   *             fim junto -- ver `remarcar`)
+   *   esticar   o início fica e o fim vai para o dia solto
+   *
+   * `arrastando` guarda o modo junto com o item, e não só o item: sem isso, o
+   * drop não teria como saber se a pessoa pegou a barra ou a alcinha da borda.
+   */
   function soltar(diaISO) {
     setDiaAlvo(null);
-    const comp = arrastando;
+    const alvo = arrastando;
     setArrastando(null);
-    if (!comp || comp.data === diaISO) return;
-    onRemarcar(comp, diaISO);
+    if (!alvo) return;
+    if (alvo.modo === 'esticar') {
+      // Esticar para trás do início não existe: a alcinha é a do FIM.
+      if (diaISO < alvo.comp.data) return;
+      onEsticar(alvo.comp, diaISO);
+      return;
+    }
+    if (alvo.comp.data === diaISO) return;
+    onRemarcar(alvo.comp, diaISO);
+  }
+
+  /**
+   * Os pedaços de uma barra dentro de UMA semana.
+   *
+   * Um compromisso de quinta a terça cruza a virada da semana, e vira dois
+   * pedaços -- um em cada linha. `continua`/`continuaDepois` dizem qual das
+   * pontas é o corte, para arredondar só a borda que é fim de verdade: uma
+   * barra cortada com os dois cantos redondos pareceria dois compromissos.
+   */
+  function faixasDaSemana(semana) {
+    const diasDaLinha = diasVisiveis.map((dow) => celulas[semana * 7 + dow].iso);
+    const primeiro = diasDaLinha[0];
+    const ultimo = diasDaLinha[diasDaLinha.length - 1];
+
+    return longos
+      .filter((c) => c.data <= ultimo && c.dataFim >= primeiro)
+      .map((c) => {
+        const inicioCol = diasDaLinha.findIndex((d) => d >= c.data);
+        const fimCol = diasDaLinha.reduce((ultimoDentro, d, i) => (d <= c.dataFim ? i : ultimoDentro), 0);
+        return {
+          comp: c,
+          coluna: Math.max(0, inicioCol),
+          largura: Math.max(1, fimCol - Math.max(0, inicioCol) + 1),
+          comecaAqui: c.data >= primeiro,
+          terminaAqui: c.dataFim <= ultimo,
+        };
+      });
   }
 
   // ── AS COLUNAS NÃO QUEBRAM, MAS TAMBÉM NÃO ESPREMEM ─────────────────────
@@ -373,7 +502,27 @@ function VisaoCalendario({
                 {numeroDaSemana(celulas[semana * 7].iso)}
               </div>
             )}
-            <div className={`flex-1 grid ${colunas} auto-rows-fr`}>
+            <div className={`flex-1 grid ${colunas} auto-rows-fr relative`}>
+              {/* ── AS BARRAS, POR CIMA DAS CÉLULAS ─────────────────────────
+                  Uma grade sobreposta com as mesmas colunas: assim a faixa se
+                  alinha exatamente com os dias que ela cobre, sem depender de
+                  medir pixel. `pointer-events-none` na camada e `auto` na
+                  barra -- senão a camada inteira roubaria o clique e o drop das
+                  células que ela cobre. `mt-9` desce abaixo da linha do número
+                  do dia. */}
+              <div className={`absolute inset-0 grid ${colunas} pointer-events-none`}>
+                {faixasDaSemana(semana).map((f) => (
+                  <BarraCompromisso
+                    key={f.comp.id + '-' + semana}
+                    faixa={f}
+                    cor={corDaPilula(f.comp)}
+                    podeArrastar={podeArrastar}
+                    onAbrir={onAbrir}
+                    onArrastar={setArrastando}
+                  />
+                ))}
+              </div>
+
               {diasVisiveis.map((dow) => {
                 const cel = celulas[semana * 7 + dow];
                 const doDia = porDia.get(cel.iso) || [];
@@ -546,6 +695,7 @@ function PainelCompromisso({ compromisso, pessoas, onSalvar, onRemover, onFechar
   const [prioridade, setPrioridade] = useState(compromisso?.prioridade || 'media');
   const [responsavelId, setResponsavelId] = useState(compromisso?.responsavelId || '');
   const [cor, setCor] = useState(compromisso?.cor || '');
+  const [dataFim, setDataFim] = useState(compromisso?.dataFim || '');
   const [descricao, setDescricao] = useState(compromisso?.descricao || '');
   const [contato, setContato] = useState(compromisso?.contato || '');
 
@@ -571,6 +721,9 @@ function PainelCompromisso({ compromisso, pessoas, onSalvar, onRemover, onFechar
       // Vazio = automática. Vai como `null` explícito: string vazia não passa
       // na lista fechada do servidor.
       cor: cor || null,
+      // Vazio = de um dia só. Vai como `null`, e não string vazia: o servidor
+      // normaliza fim igual ao início para null pela mesma razão.
+      dataFim: dataFim || null,
       descricao: descricao.trim(),
       contato: contato.trim(),
       concluido: compromisso?.concluido || false,
@@ -651,6 +804,32 @@ function PainelCompromisso({ compromisso, pessoas, onSalvar, onRemover, onFechar
             </div>
           </div>
 
+          {/* ── QUANDO TERMINA ───────────────────────────────────────────────
+              Vazio = de um dia só, que é a esmagadora maioria -- por isso o
+              campo não vem preenchido com a data de início: preenchido, ele
+              diria que todo compromisso é longo.
+
+              `min` no próprio input impede escolher um fim antes do começo sem
+              precisar de mensagem de erro. O servidor recusa igual, porque a
+              tela não é a barreira. */}
+          <div>
+            <label className={rotulo}>Termina em <span className="text-slate-600 font-normal">· opcional</span></label>
+            <div className="flex items-center gap-2">
+              <input type="date" value={dataFim} min={data}
+                onChange={(e) => setDataFim(e.target.value)} className={campo} />
+              {dataFim && (
+                <button type="button" onClick={() => setDataFim('')}
+                  title="Voltar a ser de um dia só"
+                  className="shrink-0 px-2.5 py-2.5 rounded-xl bg-grafite-700 border border-linha text-slate-400 hover:text-white text-[11px] font-semibold transition-colors">
+                  Um dia
+                </button>
+              )}
+            </div>
+            <p className="text-[10px] text-slate-500 mt-1">
+              Atravessa dias no calendário — e dá para puxar a borda da barra para mudar.
+            </p>
+          </div>
+
           <div>
             <label className={rotulo}>Responsável</label>
             <select value={responsavelId} onChange={(e) => setResponsavelId(e.target.value)} className={campo}>
@@ -714,7 +893,7 @@ function PainelCompromisso({ compromisso, pessoas, onSalvar, onRemover, onFechar
               ))}
             </div>
             <p className="text-[10px] text-slate-500 mt-1.5">
-              Só aparece com o calendário em <strong className="font-semibold text-slate-400">Cor escolhida à mão</strong>.
+              Vence o critério de cor do calendário. <strong className="font-semibold text-slate-400">Automática</strong> devolve a cor ao critério.
             </p>
           </div>
 
@@ -869,6 +1048,25 @@ export default function Agenda() {
    * onde saiu e a pessoa fica sabendo, em vez de continuar vendo uma data que
    * não existe no banco.
    */
+  /**
+   * Esticar a barra puxando a alcinha da borda.
+   *
+   * Otimista como o remarcar, e com o mesmo desfazer. Soltar no próprio dia de
+   * início encurta para um dia só -- o servidor normaliza `dataFim === data`
+   * para `null`, e é por isso que a tela manda a data solta sem tratar o caso.
+   */
+  async function esticar(comp, novoFim) {
+    const anterior = comp.dataFim;
+    setCompromissos((prev) => prev.map((c) => (c.id === comp.id ? { ...c, dataFim: novoFim } : c)));
+    try {
+      const atualizado = await AgendaAPI.esticar(comp.id, novoFim);
+      setCompromissos((prev) => ordenar(prev.map((c) => (c.id === atualizado.id ? atualizado : c))));
+    } catch (e) {
+      setCompromissos((prev) => prev.map((c) => (c.id === comp.id ? { ...c, dataFim: anterior } : c)));
+      avisar('Não foi possível mudar o fim: ' + (e.message || 'erro desconhecido'));
+    }
+  }
+
   async function remarcar(comp, novaData) {
     const anterior = comp.data;
     setCompromissos((prev) => ordenar(prev.map((c) => (c.id === comp.id ? { ...c, data: novaData } : c))));
@@ -1035,12 +1233,13 @@ export default function Agenda() {
       ) : visao === 'calendario' ? (
         <VisaoCalendario
           ano={ano} mes={mes} compromissos={doMes}
-          corDaPilula={CORES_POR_CRITERIO[criterioCor] || CORES_POR_CRITERIO.tipo}
+          corDaPilula={(c) => corDoCompromisso(c, criterioCor)}
           comFimDeSemana={comFimDeSemana}
           comNumeroDaSemana={comNumeroDaSemana}
           onAbrir={setAberto}
           onCriarEm={(dia) => setAberto({ data: dia })}
           onRemarcar={remarcar}
+          onEsticar={esticar}
         />
       ) : daLista.length > 0 ? (
         <VisaoLista compromissos={daLista} onAbrir={setAberto} onToggleConcluido={toggleConcluido} />
