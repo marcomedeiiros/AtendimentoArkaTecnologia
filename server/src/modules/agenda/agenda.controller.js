@@ -6,6 +6,10 @@ class AgendaController {
     return service.listar().then((data) => success(res, data));
   }
 
+  pessoas(req, res) {
+    return service.pessoasAtribuiveis().then((data) => success(res, data));
+  }
+
   criar(req, res) {
     return service.criar(req.body, req.user).then((data) => success(res, data, 201));
   }
@@ -16,6 +20,10 @@ class AgendaController {
 
   definirConcluido(req, res) {
     return service.definirConcluido(req.params.id, req.body.concluido).then((data) => success(res, data));
+  }
+
+  remarcar(req, res) {
+    return service.remarcar(req.params.id, req.body).then((data) => success(res, data));
   }
 
   remover(req, res) {

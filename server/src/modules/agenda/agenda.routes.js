@@ -7,6 +7,7 @@ const {
   criarCompromissoSchema,
   atualizarCompromissoSchema,
   definirConcluidoSchema,
+  remarcarSchema,
 } = require("./agenda.dto");
 
 router.use(authMiddleware);
@@ -18,11 +19,19 @@ router.use(exigirModulo("agenda"));
 router.get("/", (req, res, next) => controller.listar(req, res).catch(next));
 router.post("/", validate(criarCompromissoSchema), (req, res, next) => controller.criar(req, res).catch(next));
 
+// A quem da para atribuir: so id e nome dos ativos. Fica sob o modulo
+// "agenda" (o router inteiro exige), e nao sob "equipe" -- ver o comentario
+// em `pessoasAtribuiveis`.
+router.get("/pessoas", (req, res, next) => controller.pessoas(req, res).catch(next));
+
 // Rota especifica ANTES de "/:id" para nao ser capturada como um id.
 router.delete("/concluidos-antigos", (req, res, next) => controller.limparConcluidosAntigos(req, res).catch(next));
 
 router.put("/:id", validate(atualizarCompromissoSchema), (req, res, next) => controller.atualizar(req, res).catch(next));
 router.patch("/:id/concluido", validate(definirConcluidoSchema), (req, res, next) => controller.definirConcluido(req, res).catch(next));
+// Remarcar: so a data/hora mudam. Ver `remarcarSchema` para o porque de nao
+// reaproveitar o PUT aqui.
+router.patch("/:id/data", validate(remarcarSchema), (req, res, next) => controller.remarcar(req, res).catch(next));
 router.delete("/:id", (req, res, next) => controller.remover(req, res).catch(next));
 
 module.exports = router;

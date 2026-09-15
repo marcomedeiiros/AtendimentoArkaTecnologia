@@ -326,8 +326,22 @@ model Compromisso {
   descricao    String   @default("")
   contato      String   @default("")
   concluido    Boolean  @default(false)
+  /// QUEM CRIOU -- e so isso. Nao confundir com quem tem de fazer.
   usuarioId    String?  @map("usuario_id")
   usuarioNome  String?  @map("usuario_nome")
+  /// QUEM TEM DE FAZER, que e outra pergunta.
+  ///
+  /// Sem este campo, "os meus compromissos" so podia significar "os que eu
+  /// criei" -- e quem marca a reuniao quase nunca e quem vai nela. Filtrar por
+  /// pessoa devolvia a lista errada sem avisar, porque as duas perguntas
+  /// respondiam com o mesmo dado.
+  ///
+  /// O NOME fica gravado junto com o id, e nao so o id: e o mesmo motivo do
+  /// `atendenteNome` da OS. O id sozinho vira "-" na tela quando a pessoa sai
+  /// da equipe, e o compromisso perde o historico de quem era. Nulo nos dois =
+  /// sem responsavel definido, que e um estado legitimo (lembrete do time).
+  responsavelId   String? @map("responsavel_id")
+  responsavelNome String? @map("responsavel_nome")
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 

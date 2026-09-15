@@ -369,6 +369,11 @@ function mapCompromisso(c) {
     contato: c.contato || "",
     concluido: !!c.concluido,
     usuarioNome: c.usuarioNome || null,
+    // QUEM TEM DE FAZER -- diferente de `usuarioNome`, que e quem criou. O id
+    // vai junto porque a tela filtra por ele ("so os meus"); o nome, porque e o
+    // que ela mostra, e ele sobrevive a pessoa sair da equipe.
+    responsavelId: c.responsavelId || null,
+    responsavelNome: c.responsavelNome || null,
     criadoEm: c.criadoEm ? c.criadoEm.toISOString?.() || c.criadoEm : null,
   };
 }
