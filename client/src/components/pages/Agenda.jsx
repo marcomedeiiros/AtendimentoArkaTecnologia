@@ -239,7 +239,12 @@ function PilulaCompromisso({ comp, cor, onAbrir, onArrastar, podeArrastar }) {
         // `setData` é o que faz o Firefox aceitar o arraste; o id real vai pelo
         // estado do pai, porque o dataTransfer só se lê no drop.
         e.dataTransfer.setData('text/plain', comp.id);
-        onArrastar(comp);
+        // SEMPRE `{ comp, modo }` -- nunca o compromisso cru. Quando as barras
+        // de vários dias entraram, o drop passou a precisar saber se a pessoa
+        // pegou o item ou a alcinha do fim, e esta chamada ficou para trás
+        // mandando só o `comp`: `alvo.comp` virava undefined e o drop estourava
+        // em silêncio. Arrastar parou de funcionar e nada apareceu na tela.
+        onArrastar({ comp, modo: 'mover' });
       }}
       onClick={() => onAbrir(comp)}
       title={`${comp.hora} · ${comp.titulo}${comp.responsavelNome ? ` · ${comp.responsavelNome}` : ' · sem responsável'}`}

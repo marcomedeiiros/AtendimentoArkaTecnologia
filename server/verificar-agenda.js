@@ -305,6 +305,27 @@ async function main() {
     /responsavelId:\s*responsavelId \|\| null/.test(tela),
     "o painel manda `null` (e nao string vazia) quando nao ha responsavel"
   );
+  // ── O CONTRATO DO ARRASTE, CONFERIDO ──────────────────────────────────────
+  //
+  // Isto existe por causa de um defeito real: quando as barras de varios dias
+  // entraram, o drop passou a esperar `{ comp, modo }` e a chamada da PILULA
+  // ficou para tras mandando so o `comp`. `alvo.comp` virava undefined, o drop
+  // estourava em silencio, e arrastar parou de funcionar sem nada aparecer na
+  // tela -- o tipo de quebra que so o uso descobre.
+  //
+  // Todo `onArrastar(` tem de mandar o objeto com `comp` e `modo`. Se alguem
+  // acrescentar um terceiro lugar que arrasta e esquecer, o teste diz.
+  const chamadas = tela.match(/onArrastar\(([^)]*)\)/g) || [];
+  const forasDoContrato = chamadas.filter((c) => !/\{\s*comp\s*,\s*modo:/.test(c));
+  check(
+    chamadas.length >= 3 && forasDoContrato.length === 0,
+    `todo arraste manda { comp, modo } (${chamadas.length} chamadas${forasDoContrato.length ? ", fora: " + forasDoContrato.join(" ") : ""})`
+  );
+  check(
+    /if \(alvo\.modo === ['"]esticar['"]\)/.test(tela),
+    "e o drop decide pelo `modo` -- mover ou esticar"
+  );
+
   check(/AgendaAPI\.esticar\(/.test(tela), "a alcinha da barra chama `esticar`");
   check(
     /esticar:\s*\(id, dataFim\)[^\n]*\/agenda\/\$\{id\}\/fim/.test(api),
