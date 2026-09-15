@@ -1,18 +1,18 @@
 /**
- * Agenda — o calendário é a tela, e não um seletor de dia.
+ * Agenda o calendário é a tela, e não um seletor de dia.
  *
  * ── O QUE MUDOU, E POR QUÊ ──────────────────────────────────────────────────
  *
  * A versão anterior tinha um mini-calendário de bolinhas que servia só para
  * escolher uma data, e a lista mostrava UM dia por vez. Para responder "como
- * está a semana?" era preciso clicar dia a dia e guardar de cabeça — o
+ * está a semana?" era preciso clicar dia a dia e guardar de cabeça o
  * calendário sabia que havia algo naquele dia, mas não dizia o quê.
  *
  * Agora a grade do mês mostra os compromissos dentro dos dias, e o mês inteiro
  * se lê de uma vez. As duas visões respondem perguntas diferentes:
  *
- *   Calendário  "como está o mês?"   — distribuição, buracos, dias cheios
- *   Lista       "o que vem agora?"   — ordem, agrupada por dia, com o de hoje no topo
+ *   Calendário  "como está o mês?" distribuição, buracos, dias cheios
+ *   Lista       "o que vem agora?" ordem, agrupada por dia, com o de hoje no topo
  *
  * O detalhe abre num painel lateral e não num modal que cobre tudo: quem está
  * conferindo uma agenda precisa continuar vendo a agenda enquanto lê um item.
@@ -74,7 +74,7 @@ const iso = (ano, mes, dia) =>
   `${ano}-${String(mes + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
 
 /**
- * As 6 semanas da grade — incluindo as sobras do mês vizinho.
+ * As 6 semanas da grade incluindo as sobras do mês vizinho.
  *
  * O calendário antigo deixava as sobras em branco, e a primeira semana ficava
  * com buracos à esquerda. Mostrar os dias vizinhos apagados dá a continuidade
@@ -101,7 +101,7 @@ function gradeDoMes(ano, mes) {
   return celulas;
 }
 
-/** "Hoje", "Amanhã", "Ontem" ou "sex, 19 de set" — o rótulo do grupo na Lista. */
+/** "Hoje", "Amanhã", "Ontem" ou "sex, 19 de set" o rótulo do grupo na Lista. */
 function rotuloDoDia(diaISO) {
   const hoje = hojeISO();
   if (diaISO === hoje) return 'Hoje';
@@ -285,7 +285,7 @@ function PilulaCompromisso({ comp, cor, onAbrir, onArrastar, podeArrastar }) {
           comp.responsavelNome
             ? `Responsável: ${comp.responsavelNome}`
             : comp.usuarioNome
-              ? `Sem responsável — criado por ${comp.usuarioNome}`
+              ? `Sem responsável criado por ${comp.usuarioNome}`
               : 'Sem responsável (do time)'
         }
         className={`shrink-0 w-[18px] h-[18px] rounded-full grid place-items-center leading-none font-bold ${
@@ -363,7 +363,7 @@ function BarraCompromisso({ faixa, cor, podeArrastar, onAbrir, onArrastar }) {
         >
           {comecaAqui && (
             <span
-              title={comp.responsavelNome || (comp.usuarioNome ? `Sem responsável — criado por ${comp.usuarioNome}` : 'Sem responsável')}
+              title={comp.responsavelNome || (comp.usuarioNome ? `Sem responsável criado por ${comp.usuarioNome}` : 'Sem responsável')}
               className={`shrink-0 w-[18px] h-[18px] rounded-full grid place-items-center leading-none font-bold text-[8.5px] ${
                 comp.responsavelNome ? 'bg-black/15 border border-black/10' : 'border border-dashed border-black/35 text-black/50'
               }`}>
@@ -689,7 +689,7 @@ function VisaoLista({ compromissos, onAbrir, onToggleConcluido }) {
                       c.responsavelNome
                         ? `Responsável: ${c.responsavelNome}`
                         : c.usuarioNome
-                          ? `Sem responsável — criado por ${c.usuarioNome}`
+                          ? `Sem responsável criado por ${c.usuarioNome}`
                           : 'Sem responsável (do time)'
                     }>
                     {c.responsavelNome
@@ -856,7 +856,7 @@ function PainelCompromisso({ compromisso, pessoas, onSalvar, onRemover, onFechar
               )}
             </div>
             <p className="text-[10px] text-slate-500 mt-1">
-              Atravessa dias no calendário — e dá para puxar a borda da barra para mudar.
+              Atravessa dias no calendário e dá para puxar a borda da barra para mudar.
             </p>
           </div>
 
@@ -866,7 +866,7 @@ function PainelCompromisso({ compromisso, pessoas, onSalvar, onRemover, onFechar
               <option value="">Sem responsável (do time)</option>
               {pessoas.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
             </select>
-            <p className="text-[10px] text-slate-500 mt-1">Quem tem de fazer — diferente de quem criou.</p>
+            <p className="text-[10px] text-slate-500 mt-1">Quem tem de fazer diferente de quem criou.</p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

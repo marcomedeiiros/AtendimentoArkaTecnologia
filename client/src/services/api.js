@@ -774,7 +774,7 @@ export const MensagensRapidasAPI = {
 export const AgendaAPI = {
   listar: () => request('/agenda'),
   // A quem dá para atribuir. NÃO é `EquipeAPI.listar`: aquela rota exige o
-  // módulo "equipe", que quem tem a Agenda quase nunca tem — o seletor de
+  // módulo "equipe", que quem tem a Agenda quase nunca tem o seletor de
   // responsável viria vazio para a maior parte do time. Esta devolve só id e
   // nome dos ativos, que é o necessário para escolher um nome numa lista.
   pessoas: () => request('/agenda/pessoas'),
