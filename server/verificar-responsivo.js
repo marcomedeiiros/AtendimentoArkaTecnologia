@@ -185,8 +185,14 @@ titulo("4. Grade: colunas que sabem virar uma só");
 // casar -- que é o comportamento desejado: grade alterada volta para revisão.
 const GRADES_LIBERADAS = [
   // Calendário: as 7 colunas SÃO os sete dias da semana; com menos, vira outra coisa.
-  { arquivo: "components/pages/Agenda.jsx", marca: "grid grid-cols-7 gap-0.5 mb-1", motivo: "cabeçalho dom..sáb" },
-  { arquivo: "components/pages/Agenda.jsx", marca: "grid grid-cols-7 gap-0.5", motivo: "dias do mês" },
+  //
+  // A grade deixou de ser o mini-calendário de bolinhas e passou a mostrar os
+  // compromissos DENTRO dos dias -- e aí sete colunas em 320px (45px cada) não
+  // caberiam um chip legível. A liberação continua valendo porque a grade tem
+  // largura mínima (`min-w-[38rem]`) dentro de um `overflow-x-auto`: no celular
+  // ela rola de lado em vez de espremer, e nenhuma célula fica abaixo de ~87px.
+  { arquivo: "components/pages/Agenda.jsx", marca: "grid grid-cols-7 border-b border-linha", motivo: "cabeçalho dom..sáb, em grade de largura mínima com rolagem" },
+  { arquivo: "components/pages/Agenda.jsx", marca: "grid grid-cols-7 auto-rows-fr", motivo: "dias do mês, em grade de largura mínima com rolagem" },
   // MEDIDO, não presumido: reproduzido com o CSS compilado numa tela de 320px, a
   // linha precisa de 286px e tem 286px -- inclusive com os números de uma
   // operação grande (12.847 avaliações, 87,4%). Não transborda e não corta.

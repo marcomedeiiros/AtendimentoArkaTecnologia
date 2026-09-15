@@ -252,6 +252,22 @@ for (const f of arquivos.filter((a) => a.endsWith(".jsx"))) {
   for (const m of s.matchAll(/(?:const|let|var|\()\s*\{([^}]*)\}\s*(?:=|\))/g)) {
     for (const n of m[1].split(",")) definidos.add(n.trim().split(":").pop().trim().split("=")[0].trim());
   }
+  // ── DESESTRUTURACAO DE ARRAY TAMBEM DEFINE ───────────────────────────────
+  //
+  // A linha acima cobre `{ Icone }`, mas nao `[id, Icone, texto]` -- e um
+  // componente vindo de tupla e comum em `.map()` sobre uma lista de pares.
+  // Acusar isso e o falso positivo que o cabecalho desta secao promete evitar:
+  // a pessoa perde a tarde procurando um import que nunca faltou.
+  //
+  // So em posicao de DESESTRUTURACAO (`const [...] =` e `([...]) =>`), e nao em
+  // qualquer colchete: `const lista = [Foo, Bar]` e literal de array, e dar
+  // `Foo` como definido ali esconderia um import que falta de verdade.
+  for (const m of s.matchAll(/(?:const|let|var)\s*\[([^\]]*)\]\s*=/g)) {
+    for (const n of m[1].split(",")) definidos.add(n.trim().split("=")[0].trim().replace(/^\.\.\./, ""));
+  }
+  for (const m of s.matchAll(/\(\s*\[([^\]]*)\]\s*\)\s*=>/g)) {
+    for (const n of m[1].split(",")) definidos.add(n.trim().split("=")[0].trim().replace(/^\.\.\./, ""));
+  }
 
   for (const m of s.matchAll(/<([A-Z][A-Za-z0-9_$]*)[\s/>]/g)) {
     // `<Foo.Bar>` e um namespace; basta `Foo` estar definido.
