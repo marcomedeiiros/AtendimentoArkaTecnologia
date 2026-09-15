@@ -3,13 +3,14 @@ import {
   Users, ShieldCheck, Clock, TrendingUp,
   Download, ArrowRight, Activity, CheckCircle2, Inbox,
   BarChart3, FileText, Loader2, Star, MessageCircle, X, LifeBuoy, ClipboardList, UserCheck, Bot,
-  Trophy, ChevronLeft, ChevronRight
+  Trophy
 } from 'lucide-react';
 // So o Doughnut sobrou nesta tela: ele precisa de ArcElement. Escalas e
 // elementos de linha/barra ficaram registrados sem grafico que os usasse.
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
 import { EmojiIcon } from './EmojiIcon';
+import Paginacao, { usePaginacao } from '../Paginacao';
 import { exportarRelatorioPdf } from '../../utils/exportarPdf';
 import { hojeISO, dataISO, FUSO_BR } from '../../utils/data';
 import { limparDocumento, mascararDocumento } from '../../utils/documento';
@@ -232,9 +233,11 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
   // Empilhar com "ver mais" so adiava o problema -- a lista continuava
   // crescendo e nao havia como VOLTAR. Em paginas, a altura da tabela e
   // sempre a mesma e o caminho e de mao dupla: Anterior e Próximo.
-  const TAMANHOS_PAGINA = [10, 30, 50, 100];
-  const [porPagina, setPorPagina] = useState(TAMANHOS_PAGINA[0]);
-  const [paginaAval, setPaginaAval] = useState(1);
+  //
+  // O estado e o rodape moram em `components/Paginacao`, que o Registro de
+  // Conversas tambem usa: as bordas desta conta (pagina alem do fim, filtro que
+  // muda o total) sao as mesmas nas duas telas, e corrigi-las em duas copias
+  // significa corrigir numa e esquecer na outra.
 
   // ---------- Avaliações ----------
   //
@@ -407,26 +410,11 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
     return feedbacksBase;
   }, [feedbacksBase, filtroComentario]);
 
-  // Mudou o filtro ou o tamanho da pagina, volta-se para a primeira: ficar na
-  // pagina 7 de um recorte que agora tem 2 paginas daria uma tabela vazia sem
-  // explicacao -- pareceria "nenhum resultado" quando ha resultados de sobra.
-  useEffect(() => {
-    setPaginaAval(1);
-  }, [filtroNota, filtroSetor, buscaAval, filtroComentario, filtroPeriodo, porPagina]);
-
-  // A PAGINA E DERIVADA, NAO GUARDADA.
-  //
-  // A lista chega por SSE e muda sozinha: uma avaliacao nova entrando podia
-  // deixar `paginaAval` apontando para depois do fim. Recalcular o total aqui
-  // e prender a pagina dentro dele faz a tabela nunca ficar em branco por
-  // causa de um indice velho, sem precisar de um efeito corrigindo estado.
-  const totalPaginas = Math.max(1, Math.ceil(feedbacksFiltrados.length / porPagina));
-  const paginaAtual = Math.min(paginaAval, totalPaginas);
-  const inicioPagina = (paginaAtual - 1) * porPagina;
-  const feedbacksPagina = useMemo(
-    () => feedbacksFiltrados.slice(inicioPagina, inicioPagina + porPagina),
-    [feedbacksFiltrados, inicioPagina, porPagina]
-  );
+  // A chave junta os filtros: quando ela muda, a paginacao volta para a
+  // primeira pagina (ver `usePaginacao`).
+  const paginacaoAval = usePaginacao(feedbacksFiltrados, {
+    chaveDosFiltros: `${filtroNota}|${filtroSetor}|${buscaAval}|${filtroComentario}|${filtroPeriodo}`,
+  });
 
   const exportarPdf = useCallback(async () => {
     setGerandoPdf(true);
@@ -1005,7 +993,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                     </tr>
                   </thead>
                   <tbody>
-                    {feedbacksPagina.map(c => (
+                    {paginacaoAval.visiveis.map(c => (
                       <tr key={c.linhaId || c.id} className={`border-b border-linha/40 hover:bg-grafite-600/40 transition-colors ${
                         c.avaliacao <= 2 ? 'bg-falha/5' : ''
                       }`}>
@@ -1092,42 +1080,7 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
                 </table>
                 </div>
 
-                {/* O rodape diz sempre ONDE a lista esta -- "31-60 de 214" e
-                    "Página 2 de 8". Sem isso, Anterior e Próximo viram dois
-                    botoes cegos: da para andar, mas nao para saber onde se
-                    esta nem quanto falta. */}
-                <div className="flex flex-wrap items-center justify-center sm:justify-between gap-3 pt-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-slate-500">
-                      {inicioPagina + 1}–{inicioPagina + feedbacksPagina.length} de {feedbacksFiltrados.length}
-                    </span>
-                    <select
-                      value={porPagina}
-                      onChange={e => setPorPagina(Number(e.target.value))}
-                      title="Quantas avaliações por página"
-                      className="bg-grafite-700 border border-linha rounded-xl px-2 py-1 text-[11px] text-slate-200 focus:outline-none focus:border-acao/50">
-                      {TAMANHOS_PAGINA.map(n => <option key={n} value={n}>{n} por página</option>)}
-                    </select>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setPaginaAval(p => Math.max(1, Math.min(p, totalPaginas) - 1))}
-                      disabled={paginaAtual <= 1}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-[11px] font-semibold bg-grafite-700 border border-linha text-slate-200 hover:border-acao/50 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-linha disabled:hover:text-slate-200">
-                      <ChevronLeft size={12} /> Anterior
-                    </button>
-                    <span className="text-[11px] text-slate-400 font-mono px-1">
-                      {paginaAtual} / {totalPaginas}
-                    </span>
-                    <button
-                      onClick={() => setPaginaAval(p => Math.min(totalPaginas, Math.min(p, totalPaginas) + 1))}
-                      disabled={paginaAtual >= totalPaginas}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-[11px] font-semibold bg-grafite-700 border border-linha text-slate-200 hover:border-acao/50 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-linha disabled:hover:text-slate-200">
-                      Próximo <ChevronRight size={12} />
-                    </button>
-                  </div>
-                </div>
+                <Paginacao estado={paginacaoAval} rotulo="avaliações" />
               </>
             )}
           </div>

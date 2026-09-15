@@ -9,6 +9,7 @@ import { useState, useMemo } from 'react';
 import { Search, Download, FileText } from 'lucide-react';
 import { exportarTranscricaoPdf } from '../../utils/exportarPdf';
 import { FUSO_BR } from '../../utils/data';
+import Paginacao, { usePaginacao } from '../Paginacao';
 
 function fmtData(iso) {
   if (!iso) return '-';
@@ -168,6 +169,18 @@ export default function RegistroConversas({ conversas: fios = [], equipe = [] })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversas, busca, status, setor, atendente, periodo]);
 
+  // ── A LISTA VIRA PÁGINAS ───────────────────────────────────────────────────
+  //
+  // Antes ela cortava nas 200 mais recentes e avisava em letra miúda que o
+  // resto só saía no CSV: a conversa de três meses atrás simplesmente não
+  // existia na tela. Agora dá para chegar nela andando, e o teto some.
+  //
+  // A chave junta os filtros para a paginação voltar à primeira página quando o
+  // recorte muda -- ver o comentário em `usePaginacao`.
+  const paginacao = usePaginacao(filtradas, {
+    chaveDosFiltros: `${busca}|${status}|${setor}|${atendente}|${periodo}`,
+  });
+
   function exportarCsv() {
     const linhas = [
       ['OS', 'ID', 'Cliente', 'Telefone', 'Setor', 'Status', 'Início', 'Fim', 'Mensagens', 'Avaliação', 'Atendente'],
@@ -253,7 +266,8 @@ export default function RegistroConversas({ conversas: fios = [], equipe = [] })
             Nenhuma conversa para os filtros selecionados.
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+            <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-linha text-slate-400 bg-grafite-700/40">
@@ -271,7 +285,7 @@ export default function RegistroConversas({ conversas: fios = [], equipe = [] })
                 </tr>
               </thead>
               <tbody>
-                {filtradas.slice(0, 200).map((c) => {
+                {paginacao.visiveis.map((c) => {
                   const st = STATUS[c.statusAtendimento] || { label: c.statusAtendimento, cls: 'bg-slate-500/15 text-slate-300 border-slate-500/30' };
                   return (
                     <tr key={c.linhaId || c.id} className="border-b border-linha/40 hover:bg-grafite-600/40 transition-colors">
@@ -307,14 +321,13 @@ export default function RegistroConversas({ conversas: fios = [], equipe = [] })
                 })}
               </tbody>
             </table>
-          </div>
+            </div>
+            <div className="px-3 pb-3">
+              <Paginacao estado={paginacao} rotulo="conversas" />
+            </div>
+          </>
         )}
       </div>
-      {filtradas.length > 200 && (
-        <p className="text-[10px] text-slate-500 text-center">
-          Mostrando as 200 conversas mais recentes. Refine os filtros ou use o CSV para o log completo.
-        </p>
-      )}
     </div>
   );
 }
