@@ -82,12 +82,36 @@ class AgendaService {
     return CORES.includes(cor) ? cor : null;
   }
 
+  /**
+   * O fim do compromisso longo, normalizado.
+   *
+   * Duas coisas acontecem aqui, e as duas existem para manter UM invariante:
+   * "nulo = de um dia so".
+   *
+   *   fim igual ao inicio    vira null. Sao a mesma coisa, e guardar as duas
+   *                          formas obrigaria toda leitura a comparar os dois
+   *                          campos antes de saber se o compromisso e longo.
+   *   fim antes do inicio    e recusado. O DTO ja barra na borda; aqui e a
+   *                          segunda barreira, para o caminho que nao vem por
+   *                          HTTP (script, importacao). Sem ela, o item nao
+   *                          desenharia barra nenhuma e sumiria da tela sem
+   *                          dizer por que.
+   */
+  _fimValido(data, dataFim) {
+    if (!dataFim || dataFim === data) return null;
+    if (dataFim < data) {
+      throw new AppError("A data final nao pode ser antes da inicial", 400, "DATA_FIM_INVALIDA");
+    }
+    return dataFim;
+  }
+
   // O autor vem do token (nao do corpo), so para saber quem criou.
   async criar(dados, autor) {
     const { responsavelId, ...resto } = dados;
     const criado = await repo.create({
       ...resto,
       cor: this._corValida(dados.cor),
+      dataFim: this._fimValido(dados.data, dados.dataFim),
       ...(await this._camposDoResponsavel(dados)),
       usuarioId: autor?.sub || null,
       usuarioNome: autor?.nome || null,
@@ -105,6 +129,7 @@ class AgendaService {
       // `"cor" in dados` separa "não mexa" de "volte para automática" (null),
       // igual ao responsável logo abaixo.
       ...("cor" in dados ? { cor: this._corValida(dados.cor) } : {}),
+      ...("dataFim" in dados ? { dataFim: this._fimValido(dados.data, dados.dataFim) } : {}),
       ...(await this._camposDoResponsavel(dados)),
     });
     return mapCompromisso(atualizado);
@@ -123,11 +148,54 @@ class AgendaService {
    * O arrastar do calendario cai aqui. Nao aceita nenhum outro campo -- ver
    * `remarcarSchema`. `hora` so entra quando informada, para arrastar entre
    * dias nao apagar o horario que ja estava marcado.
+   *
+   * ── ARRASTAR UM COMPROMISSO LONGO MOVE A BARRA INTEIRA ──────────────────
+   *
+   * Uma migracao de 20 a 23 arrastada para o dia 25 vira 25 a 28, e nao "25 a
+   * 23" (impossivel) nem "25 a 25" (a duracao apagada em silencio). Quem
+   * arrasta esta dizendo "isto acontece mais tarde", nao "isto agora dura menos
+   * um dia" -- e a duracao e o dado que ninguem espera perder num gesto de
+   * mover. O deslocamento e calculado em dias inteiros sobre o calendario de
+   * Brasilia, pelo mesmo motivo que `somarDias` existe no painel.
    */
   async remarcar(id, { data, hora }) {
     const existente = await repo.findById(id);
     if (!existente) throw new AppError("Compromisso nao encontrado", 404, "NOT_FOUND");
-    const atualizado = await repo.update(id, { data, ...(hora ? { hora } : {}) });
+
+    let dataFim;
+    if (existente.dataFim) {
+      const dias = (a, b) =>
+        Math.round((new Date(`${b}T12:00:00Z`) - new Date(`${a}T12:00:00Z`)) / 86400000);
+      const duracao = dias(existente.data, existente.dataFim);
+      const fim = new Date(`${data}T12:00:00Z`);
+      fim.setUTCDate(fim.getUTCDate() + duracao);
+      dataFim = fim.toISOString().slice(0, 10);
+    }
+
+    const atualizado = await repo.update(id, {
+      data,
+      ...(hora ? { hora } : {}),
+      ...(dataFim ? { dataFim } : {}),
+    });
+    return mapCompromisso(atualizado);
+  }
+
+  /**
+   * Esticar: muda so o FIM.
+   *
+   * E o outro gesto do calendario -- puxar a borda direita da barra. Separado
+   * de `remarcar` porque a pergunta e outra: ali a data inteira anda, aqui o
+   * inicio fica onde esta e a barra cresce ou encolhe.
+   *
+   * Fim igual ao inicio vira `null` (de volta a um dia so), pela mesma regra de
+   * `_fimValido`: um invariante so para "isto e longo?".
+   */
+  async esticar(id, { dataFim }) {
+    const existente = await repo.findById(id);
+    if (!existente) throw new AppError("Compromisso nao encontrado", 404, "NOT_FOUND");
+    const atualizado = await repo.update(id, {
+      dataFim: this._fimValido(existente.data, dataFim),
+    });
     return mapCompromisso(atualizado);
   }
 

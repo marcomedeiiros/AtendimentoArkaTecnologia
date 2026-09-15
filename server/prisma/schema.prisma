@@ -319,7 +319,18 @@ model Parceiro {
 model Compromisso {
   id           String   @id @default(uuid())
   titulo       String
-  data         String // YYYY-MM-DD
+  data         String // YYYY-MM-DD -- o dia em que COMEÇA
+  /// O dia em que TERMINA, para o compromisso que atravessa dias (uma migração,
+  /// um treinamento de três dias, uma viagem).
+  ///
+  /// Nulo = de um dia só, que é a esmagadora maioria. Guardar `dataFim = data`
+  /// para todo mundo faria cada leitura ter de comparar os dois campos para
+  /// saber se o compromisso é longo -- com nulo, a pergunta é direta.
+  ///
+  /// O fim é INCLUSIVO: um compromisso de 20 a 22 ocupa os três dias. É como se
+  /// fala ("de segunda a quarta"), e trocar isso por exclusivo criaria uma
+  /// tradução silenciosa entre o que a tela mostra e o que o banco guarda.
+  dataFim      String?  @map("data_fim")
   hora         String   @default("09:00")
   tipo         String   @default("reuniao") // reuniao|ligacao|tarefa|followup|lembrete
   prioridade   String   @default("media") // alta|media|baixa

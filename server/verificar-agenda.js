@@ -234,6 +234,57 @@ async function main() {
 
   await service.remover(comCor.id);
 
+  titulo("6c. O COMPROMISSO QUE ATRAVESSA DIAS");
+
+  const longo = await service.criar(
+    { ...base, data: "2026-11-10", dataFim: "2026-11-13" },
+    { sub: ana.id, nome: ana.nome }
+  );
+  check(longo.dataFim === "2026-11-13", `o fim e gravado (${longo.dataFim})`);
+
+  // "Nulo = de um dia so" e o invariante. Guardar fim IGUAL ao inicio criaria
+  // duas formas de dizer a mesma coisa, e toda leitura teria de comparar os
+  // dois campos antes de saber se o compromisso e longo.
+  const umDia = await service.atualizar(longo.id, { ...base, data: "2026-11-10", dataFim: "2026-11-10" });
+  check(umDia.dataFim === null, "fim igual ao inicio vira null (de um dia so)");
+
+  // ARRASTAR UM LONGO MOVE A BARRA INTEIRA.
+  //
+  // Uma migracao de 10 a 13 arrastada para o dia 20 vira 20 a 23. Quem arrasta
+  // esta dizendo "isto acontece mais tarde", nao "isto agora dura menos" -- e a
+  // duracao e o dado que ninguem espera perder num gesto de mover.
+  await service.atualizar(longo.id, { ...base, data: "2026-11-10", dataFim: "2026-11-13" });
+  const movido = await service.remarcar(longo.id, { data: "2026-11-20" });
+  check(movido.data === "2026-11-20", `arrastado para 20 (${movido.data})`);
+  check(movido.dataFim === "2026-11-23", `e o fim andou junto, preservando 4 dias (${movido.dataFim})`);
+
+  // ESTICAR muda SO o fim: o inicio fica onde esta.
+  const esticado = await service.esticar(longo.id, { dataFim: "2026-11-27" });
+  check(esticado.data === "2026-11-20", `esticar nao mexe no inicio (${esticado.data})`);
+  check(esticado.dataFim === "2026-11-27", `e leva o fim para onde soltou (${esticado.dataFim})`);
+
+  const encurtado = await service.esticar(longo.id, { dataFim: "2026-11-20" });
+  check(encurtado.dataFim === null, "esticar de volta ao dia de inicio devolve um compromisso de um dia");
+
+  // Fim antes do inicio: barrado na borda E no service.
+  let bordaBarrou = false;
+  try {
+    criarCompromissoSchema.parse({ ...base, data: "2026-11-10", dataFim: "2026-11-01" });
+  } catch {
+    bordaBarrou = true;
+  }
+  check(bordaBarrou, "o DTO recusa fim antes do inicio");
+
+  let serviceBarrou = false;
+  try {
+    await service.criar({ ...base, data: "2026-11-10", dataFim: "2026-11-01" }, { sub: ana.id, nome: ana.nome });
+  } catch (e) {
+    serviceBarrou = (e.codigo || e.code) === "DATA_FIM_INVALIDA";
+  }
+  check(serviceBarrou, "e o service reconfere -- senao o item nao desenharia barra e sumiria da tela");
+
+  await service.remover(longo.id);
+
   titulo("7. A TELA ESTA LIGADA NO CAMINHO CERTO");
 
   const fs = require("fs");
@@ -253,6 +304,17 @@ async function main() {
   check(
     /responsavelId:\s*responsavelId \|\| null/.test(tela),
     "o painel manda `null` (e nao string vazia) quando nao ha responsavel"
+  );
+  check(/AgendaAPI\.esticar\(/.test(tela), "a alcinha da barra chama `esticar`");
+  check(
+    /esticar:\s*\(id, dataFim\)[^\n]*\/agenda\/\$\{id\}\/fim/.test(api),
+    "e `esticar` aponta para PATCH /agenda/:id/fim"
+  );
+  // A cor escolhida a mao vence o criterio -- foi o pedido depois de a primeira
+  // versao fazer dela um criterio a mais, e o bloco nao mudar ao escolher cor.
+  check(
+    /function corDoCompromisso[\s\S]{0,220}if \(comp\.cor && PALETA\[comp\.cor\]\) return/.test(tela),
+    "a cor escolhida a mao vence o criterio do calendario"
   );
 
   titulo("limpeza");

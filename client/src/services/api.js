@@ -786,6 +786,9 @@ export const AgendaAPI = {
   // o da lista, que pode estar velho, e um PUT gravaria de volta um título ou
   // uma descrição que outra pessoa acabou de mudar.
   remarcar: (id, data, hora) => request(`/agenda/${id}/data`, { method: 'PATCH', body: JSON.stringify(hora ? { data, hora } : { data }) }),
+  // Esticar: só o FIM muda. Separado de `remarcar` porque o gesto é outro --
+  // ali a barra inteira anda, aqui o início fica e ela cresce ou encolhe.
+  esticar: (id, dataFim) => request(`/agenda/${id}/fim`, { method: 'PATCH', body: JSON.stringify({ dataFim }) }),
   remover: (id) => request(`/agenda/${id}`, { method: 'DELETE' }),
   limparConcluidosAntigos: () => request('/agenda/concluidos-antigos', { method: 'DELETE' }),
 };

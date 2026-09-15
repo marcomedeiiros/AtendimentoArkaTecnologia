@@ -26,6 +26,10 @@ class AgendaController {
     return service.remarcar(req.params.id, req.body).then((data) => success(res, data));
   }
 
+  esticar(req, res) {
+    return service.esticar(req.params.id, req.body).then((data) => success(res, data));
+  }
+
   remover(req, res) {
     return service.remover(req.params.id).then((data) => success(res, data));
   }

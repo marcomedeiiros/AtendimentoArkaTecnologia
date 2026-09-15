@@ -8,6 +8,7 @@ const {
   atualizarCompromissoSchema,
   definirConcluidoSchema,
   remarcarSchema,
+  esticarSchema,
 } = require("./agenda.dto");
 
 router.use(authMiddleware);
@@ -32,6 +33,8 @@ router.patch("/:id/concluido", validate(definirConcluidoSchema), (req, res, next
 // Remarcar: so a data/hora mudam. Ver `remarcarSchema` para o porque de nao
 // reaproveitar o PUT aqui.
 router.patch("/:id/data", validate(remarcarSchema), (req, res, next) => controller.remarcar(req, res).catch(next));
+// Esticar: so o fim muda (puxar a borda da barra no calendario).
+router.patch("/:id/fim", validate(esticarSchema), (req, res, next) => controller.esticar(req, res).catch(next));
 router.delete("/:id", (req, res, next) => controller.remover(req, res).catch(next));
 
 module.exports = router;

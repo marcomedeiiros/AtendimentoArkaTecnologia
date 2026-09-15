@@ -377,6 +377,8 @@ function mapCompromisso(c) {
     // Nome da cor ("azul"), nunca o hex -- quem traduz é a tela, que conhece o
     // tema em uso. `null` = automática, derivada do critério do calendário.
     cor: c.cor || null,
+    // Fim INCLUSIVO do compromisso que atravessa dias; `null` = de um dia só.
+    dataFim: c.dataFim || null,
     criadoEm: c.criadoEm ? c.criadoEm.toISOString?.() || c.criadoEm : null,
   };
 }
