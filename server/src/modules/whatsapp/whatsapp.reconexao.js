@@ -747,8 +747,79 @@ function estado() {
   };
 }
 
+// ── O ENVIO COMO SENSOR: SOCKET ZUMBI ───────────────────────────────────────
+//
+// Todo este modulo pergunta a UMA fonte se a sessao esta de pe:
+// `/instance/connectionState`. Em 15/09/2026 essa fonte MENTIU por doze
+// minutos. Ela respondia `open` -- e respondia de boa-fe, porque a instancia
+// estava mesmo registrada como aberta -- enquanto o websocket do Baileys ja
+// tinha morrido por keep-alive. Quem sabia a verdade era o envio: todo
+// `sendText` voltava 500 "Connection Closed". O vigia, olhando so o rotulo, nao
+// tinha o que classificar: para ele estava tudo certo, e ele chegou a logar
+// "[WhatsApp] Online" no meio do apagao.
+//
+// A licao nao e trocar a fonte -- e ADMITIR UMA SEGUNDA. Uma requisicao que
+// morreu no fio e evidencia melhor que um campo de banco, porque ela TENTOU.
+// Entao o client da Evolution grita (ver observarSocketMorto la) e aqui a gente
+// escuta e entra no mesmo caminho de sempre: `reconectarAgora`, que escolhe
+// connect ou restart conforme o estado, restaura do cofre se preciso, e NUNCA
+// apaga credencial nem pede QR.
+//
+// DUAS TRAVAS, porque o grito e barato e a reconexao nao e:
+//
+//  1. DEBOUNCE. Um apagao de socket derruba TODAS as mensagens em voo de uma
+//     vez -- em 15/09 foram 12 falhas em 8 minutos, e num horario cheio seriam
+//     dezenas em segundos. Sem freio, cada uma abriria a sua reconexao e nos
+//     estariamos fazendo exatamente o que o resto deste arquivo existe para
+//     evitar: jogar sockets em cima de um handshake.
+//
+//  2. NADA DURANTE PAREAMENTO PERDIDO. Com `precisaParear`, religar nao e so
+//     inutil: e o caminho pelo qual um erro de envio viraria pedido de QR.
+const DEBOUNCE_SOCKET_MORTO_MS =
+  Number(process.env.WHATSAPP_DEBOUNCE_SOCKET_MORTO_MS) || 30 * 1000;
+
+let ultimoSocketMortoEm = 0;
+
+async function notificarSocketMorto(diagnostico = {}) {
+  if (precisaParear) return { agiu: false, motivo: "pareamento_perdido" };
+
+  const agora = Date.now();
+  if (agora - ultimoSocketMortoEm < DEBOUNCE_SOCKET_MORTO_MS) {
+    return { agiu: false, motivo: "debounce" };
+  }
+  ultimoSocketMortoEm = agora;
+
+  // `warn` e nao `error`: isto nao e uma falha nova, e a MESMA falha que o
+  // chamador ja registrou -- o que esta linha acrescenta e que alguem reagiu.
+  logger.warn("[WhatsApp] Socket zumbi detectado pelo envio -- religando", {
+    instance: instanciaVigiada,
+    endpoint: diagnostico.endpoint || null,
+    detalhe: diagnostico.detalhe || null,
+    // O estado que a Evolution AFIRMA ter, para o log guardar a discordancia
+    // que motivou tudo isto.
+    situacaoDoVigia: situacao,
+  });
+
+  try {
+    const r = await reconectarAgora();
+    return { agiu: true, resultado: r };
+  } catch (e) {
+    logger.warn("[WhatsApp] Religar apos socket zumbi falhou -- o ciclo normal segue tentando", {
+      instance: instanciaVigiada,
+      message: e.message,
+    });
+    return { agiu: true, erro: e.message };
+  }
+}
+
 function iniciar() {
   if (timer) return timer;
+
+  // O ENVIO VIRA SENSOR AQUI. Enquanto ninguem escutava, o grito do client
+  // caia no vazio e o socket zumbi so acabava quando um humano mexia no
+  // painel -- e o que ele mexeu, em 15/09, foi o botao que destruiu o
+  // pareamento. Ver notificarSocketMorto.
+  evolutionApi.observarSocketMorto((d) => notificarSocketMorto(d));
   // Folga no boot para a Evolution e o Baileys terminarem de subir -- sem ela a
   // primeira verificacao pegaria um `connecting` legitimo do arranque.
   setTimeout(() => {
@@ -806,4 +877,5 @@ module.exports = {
   marcarPrecisaParear,
   registrarPedidoDeQr,
   avaliarQrRecebido,
+  notificarSocketMorto,
 };

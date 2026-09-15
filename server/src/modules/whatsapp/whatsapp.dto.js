@@ -13,7 +13,13 @@ const corpo = (shape, refine) => {
 const nomeInstancia = z.string().min(1).max(120).optional();
 
 // Rotas que so precisam saber a instancia (conectar/desconectar/reiniciar/excluir).
-const instanceOnlySchema = corpo({ instance: nomeInstancia });
+// `forcar` so tem sentido em `desconectar`, e viaja aqui em vez de num esquema
+// proprio porque um campo opcional a mais nas outras rotas nao muda nada -- ja
+// um esquema quase identico ao lado convida a divergirem com o tempo.
+const instanceOnlySchema = corpo({
+  instance: nomeInstancia,
+  forcar: z.union([z.boolean(), z.literal("1"), z.literal("true")]).optional(),
+});
 
 // Envio avulso/em massa: telefone e texto obrigatorios.
 const enviarSchema = corpo({
