@@ -1,5 +1,5 @@
 /**
- * Paginação de tabela — o estado e o rodapé, numa casa só.
+ * Paginação de tabela o estado e o rodapé, numa casa só.
  *
  * Nasceu na tabela de Feedbacks (Visão Geral) e o Registro de Conversas pediu a
  * mesma coisa. Copiar as ~50 linhas para lá criaria duas paginações que
@@ -23,7 +23,7 @@ export const TAMANHOS_PAGINA = [10, 30, 50, 100];
  *
  * A página é DERIVADA, e não guardada: o total é recalculado a cada render e a
  * página fica presa dentro dele. As listas aqui chegam por SSE e mudam sozinhas
- * — sem isso, uma linha nova entrando deixaria o índice apontando para depois do
+ * sem isso, uma linha nova entrando deixaria o índice apontando para depois do
  * fim, e a tabela ficaria em branco por causa de um número velho.
  */
 export function usePaginacao(itens, { chaveDosFiltros = '', tamanhoInicial = TAMANHOS_PAGINA[0] } = {}) {
@@ -62,7 +62,7 @@ export function usePaginacao(itens, { chaveDosFiltros = '', tamanhoInicial = TAM
 /**
  * O rodapé: onde a lista está, à esquerda; por onde andar, à direita.
  *
- * Sem os números, Anterior e Próximo viram dois botões cegos — dá para andar,
+ * Sem os números, Anterior e Próximo viram dois botões cegos dá para andar,
  * mas não para saber onde se está nem quanto falta. Nas pontas eles desabilitam
  * em vez de aceitar o clique e não fazer nada.
  */
