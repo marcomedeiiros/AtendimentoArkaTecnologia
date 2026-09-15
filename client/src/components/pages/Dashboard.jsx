@@ -12,7 +12,7 @@ import { Doughnut } from 'react-chartjs-2';
 import { EmojiIcon } from './EmojiIcon';
 import Paginacao, { usePaginacao } from '../Paginacao';
 import { exportarRelatorioPdf } from '../../utils/exportarPdf';
-import { hojeISO, dataISO, FUSO_BR } from '../../utils/data';
+import { hojeISO, dataISO, somarDias, FUSO_BR } from '../../utils/data';
 import { limparDocumento, mascararDocumento } from '../../utils/documento';
 import { empresaDaConversa, cnpjDaConversa } from '../../utils/empresa';
 import HelpDeskPainel from './HelpDeskPainel';
@@ -120,17 +120,10 @@ const PERIODOS_AVAL = [
   { id: 'mesPassado', rotulo: 'Mês passado',        descricao: 'do mês passado' },
 ];
 
-/** Recua dias de uma data YYYY-MM-DD sem sair do calendário de Brasília.
- *
- * Ancorar ao MEIO-DIA em UTC é o truque: o dia vira um ponto longe das duas
- * bordas, então somar ou subtrair 24h nunca cai no dia vizinho por causa de
- * fuso ou de horário de verão. É a mesma razão pela qual `dataISO` existe --
- * contas de data feitas no fuso do navegador erram de noite. */
-function recuarDias(diaISO, dias) {
-  const d = new Date(`${diaISO}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() - dias);
-  return d.toISOString().slice(0, 10);
-}
+// `recuarDias` virou `somarDias` em utils/data: a Agenda passou a precisar da
+// mesma conta (a grade do mês e o "amanhã" da lista), e o cuidado com fuso que
+// ela carrega é exatamente o tipo de coisa que não pode existir em duas cópias.
+const recuarDias = (diaISO, dias) => somarDias(diaISO, -dias);
 
 /** A janela de um período, como duas datas YYYY-MM-DD (inclusivas).
  *

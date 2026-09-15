@@ -41,3 +41,20 @@ export function anoMesHoje() {
   const [ano, mes] = hojeISO().split('-');
   return { ano: Number(ano), mes: Number(mes) - 1 };
 }
+
+/**
+ * Soma (ou subtrai, com `dias` negativo) dias de uma data YYYY-MM-DD.
+ *
+ * Ancorar ao MEIO-DIA em UTC é o truque: o dia vira um ponto longe das duas
+ * bordas, então somar ou subtrair 24h nunca cai no dia vizinho por causa de
+ * fuso ou de horário de verão. É a mesma razão pela qual `dataISO` existe --
+ * conta de data feita com o relógio do navegador erra de noite.
+ *
+ * Mora aqui porque três telas fazem isto: os períodos da tabela de feedbacks,
+ * a grade do mês da Agenda e o "amanhã" da lista.
+ */
+export function somarDias(diaISO, dias) {
+  const d = new Date(`${diaISO}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + dias);
+  return d.toISOString().slice(0, 10);
+}
