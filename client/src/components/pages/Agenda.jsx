@@ -126,19 +126,94 @@ function rotuloDoDia(diaISO) {
  *   responsavel  de quem é, com a MESMA cor que o avatar da pessoa usa
  *   fixa         sem código de cor; só a agenda, sem semáforo
  */
+/**
+ * A PALETA DA COR ESCOLHIDA À MÃO.
+ *
+ * O banco guarda o NOME ("azul"), e é aqui que ele vira cor. Foi essa separação
+ * que permitiu retocar a paleta sem deixar hex velho preso no banco.
+ *
+ * São tons claros de propósito: a pílula é preenchida e o texto dela é escuro
+ * (`text-grafite-900`), então a cor precisa ser o fundo claro do par. Um tom
+ * escuro aqui devolveria texto escuro sobre fundo escuro.
+ */
+const PALETA = {
+  azul:     { hex: '#93C5FD', rotulo: 'Azul' },
+  verde:    { hex: '#4FE0BC', rotulo: 'Verde' },
+  ambar:    { hex: '#FFC24D', rotulo: 'Âmbar' },
+  roxo:     { hex: '#D8B4FE', rotulo: 'Roxo' },
+  vermelho: { hex: '#F58A96', rotulo: 'Vermelho' },
+  rosa:     { hex: '#F9A8D4', rotulo: 'Rosa' },
+  ciano:    { hex: '#67E8F9', rotulo: 'Ciano' },
+  cinza:    { hex: '#94A3B8', rotulo: 'Cinza' },
+};
+
 const CORES_POR_CRITERIO = {
   tipo: (c) => (TIPOS[c.tipo] || TIPOS.tarefa).hex,
   prioridade: (c) => (PRIORIDADES[c.prioridade] || PRIORIDADES.media).hex,
   responsavel: (c) => (c.responsavelNome ? hexDoNome(c.responsavelNome) : '#94A3B8'),
   fixa: () => '#00A884',
+  // Sem cor escolhida, cai no tipo -- e não num cinza de "vazio". O item sem
+  // cor à mão não é um item sem informação: ele só não teve a cor trocada.
+  escolhida: (c) => (c.cor && PALETA[c.cor] ? PALETA[c.cor].hex : (TIPOS[c.tipo] || TIPOS.tarefa).hex),
 };
 
+/**
+ * ── POR QUE A COR ESCOLHIDA É UM CRITÉRIO, E NÃO UM "SEMPRE VENCE" ─────────
+ *
+ * O caminho óbvio seria: tem cor à mão? usa. Não tem? usa o critério. Só que aí
+ * o mês vira uma colcha -- metade dos itens dizendo "urgência" e a outra metade
+ * dizendo "eu gostei de roxo" --, e nenhuma das duas leituras funciona. Bater o
+ * olho e ver "este mês está cheio de vermelho" deixa de significar nada.
+ *
+ * Aqui a escolha é do MÊS, como o menu "Color:" do Asana: ou o calendário
+ * inteiro está pintado por prioridade, ou está pintado pelas cores escolhidas.
+ * A cor à mão continua gravada o tempo todo; ela só aparece quando é ela que
+ * está sendo perguntada.
+ */
 const CRITERIOS_COR = [
   { id: 'tipo', rotulo: 'Cor por tipo' },
   { id: 'prioridade', rotulo: 'Cor por prioridade' },
   { id: 'responsavel', rotulo: 'Cor por responsável' },
+  { id: 'escolhida', rotulo: 'Cor escolhida à mão' },
   { id: 'fixa', rotulo: 'Uma cor só' },
 ];
+
+/**
+ * A legenda do critério ativo.
+ *
+ * Existe porque a pergunta "como eu mudo a cor?" foi feita -- e uma tela que
+ * pinta as coisas sem dizer o que a cor significa obriga a perguntar. Some no
+ * "uma cor só" (não há código a explicar) e no "por responsável" (a legenda
+ * seria a lista da equipe inteira, que é longa e já está no próprio avatar).
+ */
+function LegendaDaCor({ criterio }) {
+  const itens =
+    criterio === 'tipo'
+      ? Object.values(TIPOS).map((t) => ({ hex: t.hex, rotulo: t.label }))
+      : criterio === 'prioridade'
+        ? Object.values(PRIORIDADES).map((p) => ({ hex: p.hex, rotulo: p.label }))
+        : criterio === 'escolhida'
+          ? Object.values(PALETA).map((p) => ({ hex: p.hex, rotulo: p.rotulo }))
+          : null;
+
+  if (!itens) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-1">
+      {itens.map((i) => (
+        <span key={i.rotulo} className="flex items-center gap-1.5 text-[10px] text-slate-400">
+          <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: i.hex }} />
+          {i.rotulo}
+        </span>
+      ))}
+      {criterio === 'escolhida' && (
+        <span className="text-[10px] text-slate-600">
+          · sem cor escolhida, vale a cor do tipo
+        </span>
+      )}
+    </div>
+  );
+}
 
 /**
  * O compromisso dentro da célula do dia.
@@ -470,6 +545,7 @@ function PainelCompromisso({ compromisso, pessoas, onSalvar, onRemover, onFechar
   const [tipo, setTipo] = useState(compromisso?.tipo || 'reuniao');
   const [prioridade, setPrioridade] = useState(compromisso?.prioridade || 'media');
   const [responsavelId, setResponsavelId] = useState(compromisso?.responsavelId || '');
+  const [cor, setCor] = useState(compromisso?.cor || '');
   const [descricao, setDescricao] = useState(compromisso?.descricao || '');
   const [contato, setContato] = useState(compromisso?.contato || '');
 
@@ -492,6 +568,9 @@ function PainelCompromisso({ compromisso, pessoas, onSalvar, onRemover, onFechar
       // Vazio no seletor = sem responsável, e isso vai como `null` explícito:
       // string vazia não passaria na validação de uuid do servidor.
       responsavelId: responsavelId || null,
+      // Vazio = automática. Vai como `null` explícito: string vazia não passa
+      // na lista fechada do servidor.
+      cor: cor || null,
       descricao: descricao.trim(),
       contato: contato.trim(),
       concluido: compromisso?.concluido || false,
@@ -594,6 +673,49 @@ function PainelCompromisso({ compromisso, pessoas, onSalvar, onRemover, onFechar
                 {Object.entries(PRIORIDADES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
               </select>
             </div>
+          </div>
+
+          {/* ── COR À MÃO ────────────────────────────────────────────────────
+              Amostras, e não um seletor de cor livre: são as oito cores que já
+              foram medidas contra o texto escuro da pílula e contra os dois
+              temas. O servidor recusa qualquer outra, então um campo livre aqui
+              só criaria a chance de escolher algo que seria rejeitado.
+
+              "Automática" é o padrão, e não uma opção escondida no fim: a cor
+              derivada do tipo ou da prioridade é o que faz o mês ser legível de
+              longe, e escolher à mão é a exceção. */}
+          <div>
+            <label className={rotulo}>Cor</label>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setCor('')}
+                title="Usar a cor que o calendário definir (tipo, prioridade ou responsável)"
+                className={`h-7 px-2.5 rounded-lg text-[10px] font-semibold border transition-colors ${
+                  cor === ''
+                    ? 'bg-acao/15 border-acao/40 text-acao-200'
+                    : 'bg-grafite-700 border-linha text-slate-400 hover:text-slate-200'
+                }`}>
+                Automática
+              </button>
+              {Object.entries(PALETA).map(([id, p]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setCor(id)}
+                  title={p.rotulo}
+                  aria-label={p.rotulo}
+                  aria-pressed={cor === id}
+                  style={{ backgroundColor: p.hex }}
+                  className={`w-7 h-7 rounded-lg border-2 transition-transform ${
+                    cor === id ? 'border-white scale-105' : 'border-transparent hover:scale-105'
+                  }`}
+                />
+              ))}
+            </div>
+            <p className="text-[10px] text-slate-500 mt-1.5">
+              Só aparece com o calendário em <strong className="font-semibold text-slate-400">Cor escolhida à mão</strong>.
+            </p>
           </div>
 
           <div>
@@ -897,6 +1019,8 @@ export default function Agenda() {
           </>
         )}
       </div>
+
+      {visao === 'calendario' && <LegendaDaCor criterio={criterioCor} />}
 
       {erro && (
         <div className="rounded-xl border border-falha/30 bg-falha/15 p-3 text-xs font-semibold text-falha-400">
