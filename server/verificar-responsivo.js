@@ -191,8 +191,16 @@ const GRADES_LIBERADAS = [
   // caberiam um chip legível. A liberação continua valendo porque a grade tem
   // largura mínima (`min-w-[38rem]`) dentro de um `overflow-x-auto`: no celular
   // ela rola de lado em vez de espremer, e nenhuma célula fica abaixo de ~87px.
-  { arquivo: "components/pages/Agenda.jsx", marca: "grid grid-cols-7 border-b border-linha", motivo: "cabeçalho dom..sáb, em grade de largura mínima com rolagem" },
-  { arquivo: "components/pages/Agenda.jsx", marca: "grid grid-cols-7 auto-rows-fr", motivo: "dias do mês, em grade de largura mínima com rolagem" },
+  // As duas classes passaram a sair da MESMA linha, porque o calendário ganhou
+  // o botão "só dias úteis": 7 colunas com o fim de semana, 5 sem ele. O
+  // cabeçalho e as semanas usam a variável, então não há mais `grid-cols-N`
+  // escrito em outro lugar do arquivo.
+  //
+  // Continua liberado pelo mesmo motivo de antes, e a conta refeita: a grade
+  // tem `min-w-[38rem]` (608px) dentro de um `overflow-x-auto`, menos 36px da
+  // coluna de número da semana -- 81px por célula com 7 colunas, 114px com 5.
+  // Nenhuma espremida abaixo do que um chip precisa; no celular rola de lado.
+  { arquivo: "components/pages/Agenda.jsx", marca: "comFimDeSemana ? 'grid-cols-7' : 'grid-cols-5'", motivo: "os sete dias da semana (ou os cinco úteis), em grade de largura mínima com rolagem" },
   // MEDIDO, não presumido: reproduzido com o CSS compilado numa tela de 320px, a
   // linha precisa de 286px e tem 286px -- inclusive com os números de uma
   // operação grande (12.847 avaliações, 87,4%). Não transborda e não corta.

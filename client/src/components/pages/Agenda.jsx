@@ -26,9 +26,13 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   CalendarDays, Plus, Trash2, Save, X, Clock, List, LayoutGrid,
-  CheckCircle2, Circle, ChevronLeft, ChevronRight, Search, Loader2, User, Users,
+  CheckCircle2, Circle, ChevronLeft, ChevronRight, Search, Loader2, Users,
 } from 'lucide-react';
 import Portal from '../Portal';
+// O avatar da equipe, com as regras que o painel inteiro já usa: iniciais do
+// primeiro e do último nome, e cor escolhida por hash -- a mesma pessoa tem a
+// mesma cor em toda a Central, e é isso que deixa reconhecê-la de relance.
+import Avatar, { hexDoNome, iniciais } from '../Avatar';
 import { AgendaAPI } from '../../services/api';
 import { hojeISO, anoMesHoje, somarDias, FUSO_BR } from '../../utils/data';
 import { avisar, confirmar } from '../../utils/dialogo';
@@ -38,18 +42,22 @@ const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
                'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const DIAS_SEMANA = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 
+// `chip` é a classe do selo na Lista; `hex` é a cor sólida da pílula do
+// calendário. O hex existe separado porque a pílula pinta com `style`: classe
+// montada em tempo de execução não sobrevive à varredura do Tailwind, que só vê
+// o que está escrito literalmente no arquivo.
 const TIPOS = {
-  reuniao:  { label: 'Reunião',   chip: 'bg-blue-500/20 text-blue-300 border-blue-500/30',       barra: 'bg-blue-400' },
-  ligacao:  { label: 'Ligação',   chip: 'bg-ativo/20 text-ativo-400 border-ativo/30',            barra: 'bg-ativo-400' },
-  tarefa:   { label: 'Tarefa',    chip: 'bg-espera/20 text-espera-400 border-espera/30',         barra: 'bg-espera-400' },
-  followup: { label: 'Follow-up', chip: 'bg-purple-500/20 text-purple-300 border-purple-500/30', barra: 'bg-purple-400' },
-  lembrete: { label: 'Lembrete',  chip: 'bg-falha/20 text-falha-400 border-falha/30',            barra: 'bg-falha-400' },
+  reuniao:  { label: 'Reunião',   chip: 'bg-blue-500/20 text-blue-300 border-blue-500/30',       hex: '#93C5FD' },
+  ligacao:  { label: 'Ligação',   chip: 'bg-ativo/20 text-ativo-400 border-ativo/30',            hex: '#4FE0BC' },
+  tarefa:   { label: 'Tarefa',    chip: 'bg-espera/20 text-espera-400 border-espera/30',         hex: '#FFC24D' },
+  followup: { label: 'Follow-up', chip: 'bg-purple-500/20 text-purple-300 border-purple-500/30', hex: '#D8B4FE' },
+  lembrete: { label: 'Lembrete',  chip: 'bg-falha/20 text-falha-400 border-falha/30',            hex: '#F58A96' },
 };
 
 const PRIORIDADES = {
-  alta:  { label: 'Alta',  dot: 'bg-falha-400' },
-  media: { label: 'Média', dot: 'bg-espera-400' },
-  baixa: { label: 'Baixa', dot: 'bg-slate-400' },
+  alta:  { label: 'Alta',  dot: 'bg-falha-400',  hex: '#F58A96' },
+  media: { label: 'Média', dot: 'bg-espera-400', hex: '#FFC24D' },
+  baixa: { label: 'Baixa', dot: 'bg-slate-400',  hex: '#94A3B8' },
 };
 
 // As duas visões. Campos com nome, e não uma tupla posicional: `[id, Icone,
@@ -104,17 +112,50 @@ function rotuloDoDia(diaISO) {
   });
 }
 
-// ─────────────────────────────────────────────────────────── chip do calendário
+// ───────────────────────────────────────────────────────── pílula do calendário
+
+/**
+ * DE ONDE VEM A COR DA PÍLULA.
+ *
+ * O calendário inteiro é recolorido por um critério escolhido na barra, como o
+ * menu "Color:" do Asana. Nenhum destes exige coluna nova: os três campos já
+ * existem no compromisso.
+ *
+ *   tipo         o que é (reunião, ligação, tarefa...)
+ *   prioridade   o que é urgente -- o mês inteiro fica legível de longe
+ *   responsavel  de quem é, com a MESMA cor que o avatar da pessoa usa
+ *   fixa         sem código de cor; só a agenda, sem semáforo
+ */
+const CORES_POR_CRITERIO = {
+  tipo: (c) => (TIPOS[c.tipo] || TIPOS.tarefa).hex,
+  prioridade: (c) => (PRIORIDADES[c.prioridade] || PRIORIDADES.media).hex,
+  responsavel: (c) => (c.responsavelNome ? hexDoNome(c.responsavelNome) : '#94A3B8'),
+  fixa: () => '#00A884',
+};
+
+const CRITERIOS_COR = [
+  { id: 'tipo', rotulo: 'Cor por tipo' },
+  { id: 'prioridade', rotulo: 'Cor por prioridade' },
+  { id: 'responsavel', rotulo: 'Cor por responsável' },
+  { id: 'fixa', rotulo: 'Uma cor só' },
+];
 
 /**
  * O compromisso dentro da célula do dia.
  *
- * Arrastável: soltar em outro dia remarca. `draggable` só no desktop — no
- * toque, o gesto de arrastar compete com a rolagem da página, e um arraste
- * acidental remarcaria o compromisso de alguém sem querer.
+ * ── A ORDEM DOS TRÊS PEDAÇOS NÃO É ESTÉTICA ───────────────────────────────
+ *
+ * Avatar, hora, título: as duas colunas de largura FIXA primeiro e o texto
+ * variável por último. Assim as iniciais e o horário ficam alinhados de uma
+ * linha para a outra, e dá para varrer a coluna do dia de cima a baixo
+ * procurando "o que é meu" sem ler nada. Com o avatar à direita ele mudava de
+ * posição conforme o tamanho do título, e a varredura se perdia.
+ *
+ * Arrastável: soltar em outro dia remarca. `draggable` só no ponteiro fino --
+ * no toque o gesto compete com a rolagem, e um arraste acidental remarcaria o
+ * compromisso de alguém sem querer.
  */
-function ChipCompromisso({ comp, onAbrir, onArrastar, podeArrastar }) {
-  const t = tipoDe(comp);
+function PilulaCompromisso({ comp, cor, onAbrir, onArrastar, podeArrastar }) {
   return (
     <button
       draggable={podeArrastar}
@@ -126,23 +167,53 @@ function ChipCompromisso({ comp, onAbrir, onArrastar, podeArrastar }) {
         onArrastar(comp);
       }}
       onClick={() => onAbrir(comp)}
-      title={`${comp.hora} · ${comp.titulo}${comp.responsavelNome ? ` · ${comp.responsavelNome}` : ''}`}
-      className={`group w-full flex items-center gap-1 px-1.5 py-1 rounded-md text-left text-[10px] leading-tight transition-colors ${
-        comp.concluido ? 'opacity-50' : ''
-      } hover:bg-grafite-600/80 ${podeArrastar ? 'cursor-grab active:cursor-grabbing' : ''}`}
+      title={`${comp.hora} · ${comp.titulo}${comp.responsavelNome ? ` · ${comp.responsavelNome}` : ' · sem responsável'}`}
+      style={{ backgroundColor: cor }}
+      className={`w-full flex items-center gap-1.5 px-1.5 py-1 rounded-md text-left text-[10px] font-semibold leading-tight text-grafite-900 transition-opacity ${
+        comp.concluido ? 'opacity-50' : 'hover:opacity-90'
+      } ${podeArrastar ? 'cursor-grab active:cursor-grabbing' : ''}`}
     >
-      <span className={`w-1 h-3 rounded-full shrink-0 ${t.barra}`} />
-      <span className="text-slate-500 font-mono shrink-0">{comp.hora}</span>
-      <span className={`truncate text-slate-200 ${comp.concluido ? 'line-through' : ''}`}>
-        {comp.titulo}
+      {/* ── O CÍRCULO AQUI É NEUTRO, e não o `<Avatar>` colorido ──────────────
+          As iniciais são as mesmas (`iniciais` vem do próprio Avatar, para a
+          regra de qual letra aparece ter uma casa só). O que muda é a cor: numa
+          pílula já preenchida, o avatar com a cor da PESSOA coloca dois códigos
+          de cor no mesmo objeto de 18px, e quem colore por responsável veria a
+          mesma cor duas vezes. Aqui o círculo é um vazado escuro sobre a cor da
+          pílula -- ele diz QUEM, e a pílula diz O QUÊ.
+
+          Sem responsável é estado legítimo (lembrete do time): círculo
+          tracejado, que diz "não tem dono", e não o avatar de alguém que não
+          existe. */}
+      <span
+        title={comp.responsavelNome || 'Sem responsável (do time)'}
+        className={`shrink-0 w-[18px] h-[18px] rounded-full grid place-items-center leading-none ${
+          comp.responsavelNome
+            ? 'bg-black/15 border border-black/10 text-[8.5px] font-bold'
+            : 'border border-dashed border-black/30 text-black/40 text-[10px]'
+        }`}>
+        {comp.responsavelNome ? iniciais(comp.responsavelNome) : '·'}
       </span>
+      <span className="font-mono opacity-70 shrink-0">{comp.hora}</span>
+      <span className={`truncate ${comp.concluido ? 'line-through' : ''}`}>{comp.titulo}</span>
     </button>
   );
 }
 
 // ───────────────────────────────────────────────────────────────── calendário
 
-function VisaoCalendario({ ano, mes, compromissos, onAbrir, onCriarEm, onRemarcar }) {
+/** Semana ISO-8601 -- a que a operação chama de "semana 38". */
+function numeroDaSemana(diaISO) {
+  const d = new Date(`${diaISO}T12:00:00Z`);
+  const alvo = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  alvo.setUTCDate(alvo.getUTCDate() + 4 - (alvo.getUTCDay() || 7));
+  const inicioAno = new Date(Date.UTC(alvo.getUTCFullYear(), 0, 1));
+  return Math.ceil(((alvo - inicioAno) / 86400000 + 1) / 7);
+}
+
+function VisaoCalendario({
+  ano, mes, compromissos, corDaPilula, comFimDeSemana, comNumeroDaSemana,
+  onAbrir, onCriarEm, onRemarcar,
+}) {
   const [arrastando, setArrastando] = useState(null);
   const [diaAlvo, setDiaAlvo] = useState(null);
   const hoje = hojeISO();
@@ -161,6 +232,13 @@ function VisaoCalendario({ ano, mes, compromissos, onAbrir, onCriarEm, onRemarca
   const celulas = useMemo(() => gradeDoMes(ano, mes), [ano, mes]);
   const podeArrastar = typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches;
 
+  // Sábado e domingo fora: as 5 colunas restantes ganham ~40% de largura cada.
+  // É o ajuste que mais melhora a leitura de quem não marca nada no fim de
+  // semana -- e o mês continua inteiro, só sem as duas colunas vazias.
+  const diasVisiveis = comFimDeSemana ? [0, 1, 2, 3, 4, 5, 6] : [1, 2, 3, 4, 5];
+  const colunas = comFimDeSemana ? 'grid-cols-7' : 'grid-cols-5';
+  const semanas = [0, 1, 2, 3, 4, 5];
+
   function soltar(diaISO) {
     setDiaAlvo(null);
     const comp = arrastando;
@@ -169,88 +247,102 @@ function VisaoCalendario({ ano, mes, compromissos, onAbrir, onCriarEm, onRemarca
     onRemarcar(comp, diaISO);
   }
 
+  // ── AS COLUNAS NÃO QUEBRAM, MAS TAMBÉM NÃO ESPREMEM ─────────────────────
+  //
+  // Uma semana tem sete dias: virar duas colunas no celular não seria um
+  // calendário, seria outra coisa. Mas sete colunas num telefone de 320px dão
+  // 45px cada, e num chip de 45px não cabe "14:00 Reunião". Então a grade tem
+  // largura mínima e o container rola de lado -- medido: 87px por célula, e a
+  // página em si não rola na horizontal.
+  //
+  // A coluna do número da semana fica FORA da grade, numa faixa própria, para o
+  // `grid-cols-7` continuar existindo como classe: é por ela que a verificação
+  // de responsividade reconhece (e libera, com motivo escrito) esta grade.
   return (
-    // ── AS 7 COLUNAS NÃO QUEBRAM, MAS TAMBÉM NÃO ESPREMEM ───────────────────
-    //
-    // Uma semana tem sete dias: virar duas colunas no celular não seria um
-    // calendário, seria outra coisa. Mas sete colunas num telefone de 320px dão
-    // 45px cada, e num chip de 45px não cabe "14:00 Reunião" -- a grade ficaria
-    // bonita e ilegível.
-    //
-    // Então a grade tem largura MÍNIMA e o container rola de lado. Ninguém
-    // perde informação: desliza-se a semana como se desliza uma tabela larga,
-    // que é o gesto que o resto do painel já usa. A partir de `sm` a largura da
-    // tela já passa do mínimo e não há rolagem nenhuma.
     <div className="glass-panel rounded-2xl border border-linha overflow-hidden">
       <div className="overflow-x-auto">
       <div className="min-w-[38rem]">
-      <div className="grid grid-cols-7 border-b border-linha bg-grafite-700/40">
-        {DIAS_SEMANA.map((d) => (
-          <div key={d} className="text-center text-[10px] font-bold text-slate-500 py-2">{d}</div>
-        ))}
-      </div>
+        <div className="flex border-b border-linha bg-grafite-700/40">
+          {comNumeroDaSemana && <div className="w-9 shrink-0 border-r border-linha/60" />}
+          <div className={`flex-1 grid ${colunas}`}>
+            {diasVisiveis.map((i) => (
+              <div key={i} className="text-center text-[10px] font-bold text-slate-500 py-2">{DIAS_SEMANA[i]}</div>
+            ))}
+          </div>
+        </div>
 
-      <div className="grid grid-cols-7 auto-rows-fr">
-        {celulas.map((cel) => {
-          const doDia = porDia.get(cel.iso) || [];
-          const ehHoje = cel.iso === hoje;
-          const alvo = diaAlvo === cel.iso;
-          // Três cabem sem a célula crescer; o resto vira "+N", que leva para a
-          // Lista daquele dia em vez de espremer mais texto ilegível.
-          const visiveis = doDia.slice(0, 3);
-          const sobra = doDia.length - visiveis.length;
-
-          return (
-            <div
-              key={cel.iso}
-              onDragOver={(e) => { if (arrastando) { e.preventDefault(); setDiaAlvo(cel.iso); } }}
-              onDragLeave={() => setDiaAlvo((d) => (d === cel.iso ? null : d))}
-              onDrop={(e) => { e.preventDefault(); soltar(cel.iso); }}
-              className={`min-h-[104px] border-b border-r border-linha/60 p-1.5 flex flex-col gap-1 transition-colors ${
-                cel.doMes ? '' : 'bg-grafite-800/40'
-              } ${alvo ? 'bg-acao/15 ring-1 ring-inset ring-acao/50' : ''}`}
-            >
-              <div className="flex items-center justify-between">
-                <button
-                  onClick={() => onCriarEm(cel.iso)}
-                  title="Novo compromisso neste dia"
-                  className={`w-6 h-6 rounded-lg text-[11px] font-bold flex items-center justify-center transition-colors ${
-                    ehHoje
-                      ? 'bg-acao text-slate-950'
-                      : cel.doMes
-                        ? 'text-slate-300 hover:bg-grafite-600'
-                        : 'text-slate-600 hover:bg-grafite-600'
-                  }`}
-                >
-                  {cel.numero}
-                </button>
-                {doDia.length > 0 && (
-                  <span className="text-[9px] text-slate-600 font-mono pr-0.5">{doDia.length}</span>
-                )}
+        {semanas.map((semana) => (
+          <div key={semana} className="flex">
+            {comNumeroDaSemana && (
+              <div className="w-9 shrink-0 border-r border-b border-linha/60 pt-2 text-center text-[10px] font-mono text-slate-600">
+                {numeroDaSemana(celulas[semana * 7].iso)}
               </div>
+            )}
+            <div className={`flex-1 grid ${colunas} auto-rows-fr`}>
+              {diasVisiveis.map((dow) => {
+                const cel = celulas[semana * 7 + dow];
+                const doDia = porDia.get(cel.iso) || [];
+                const ehHoje = cel.iso === hoje;
+                const alvo = diaAlvo === cel.iso;
+                // Três cabem sem a célula crescer; o resto vira "+N", que abre o
+                // primeiro escondido em vez de espremer mais texto ilegível.
+                const visiveis = doDia.slice(0, 3);
+                const sobra = doDia.length - visiveis.length;
 
-              <div className="flex flex-col gap-0.5 min-h-0">
-                {visiveis.map((c) => (
-                  <ChipCompromisso
-                    key={c.id}
-                    comp={c}
-                    onAbrir={onAbrir}
-                    onArrastar={setArrastando}
-                    podeArrastar={podeArrastar}
-                  />
-                ))}
-                {sobra > 0 && (
-                  <button
-                    onClick={() => onAbrir(doDia[visiveis.length])}
-                    className="text-[10px] text-slate-500 hover:text-acao-200 text-left px-1.5 font-semibold">
-                    +{sobra} {sobra > 1 ? 'outros' : 'outro'}
-                  </button>
-                )}
-              </div>
+                return (
+                  <div
+                    key={cel.iso}
+                    onDragOver={(e) => { if (arrastando) { e.preventDefault(); setDiaAlvo(cel.iso); } }}
+                    onDragLeave={() => setDiaAlvo((d) => (d === cel.iso ? null : d))}
+                    onDrop={(e) => { e.preventDefault(); soltar(cel.iso); }}
+                    className={`min-h-[104px] border-b border-r border-linha/60 p-1.5 flex flex-col gap-1 transition-colors ${
+                      cel.doMes ? '' : 'bg-grafite-800/40'
+                    } ${alvo ? 'bg-acao/15 ring-1 ring-inset ring-acao/50' : ''}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <button
+                        onClick={() => onCriarEm(cel.iso)}
+                        title="Novo compromisso neste dia"
+                        className={`w-6 h-6 rounded-lg text-[11px] font-bold flex items-center justify-center transition-colors ${
+                          ehHoje
+                            ? 'bg-acao text-slate-950'
+                            : cel.doMes
+                              ? 'text-slate-300 hover:bg-grafite-600'
+                              : 'text-slate-600 hover:bg-grafite-600'
+                        }`}
+                      >
+                        {cel.numero}
+                      </button>
+                      {doDia.length > 0 && (
+                        <span className="text-[9px] text-slate-600 font-mono pr-0.5">{doDia.length}</span>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col gap-0.5 min-h-0">
+                      {visiveis.map((c) => (
+                        <PilulaCompromisso
+                          key={c.id}
+                          comp={c}
+                          cor={corDaPilula(c)}
+                          onAbrir={onAbrir}
+                          onArrastar={setArrastando}
+                          podeArrastar={podeArrastar}
+                        />
+                      ))}
+                      {sobra > 0 && (
+                        <button
+                          onClick={() => onAbrir(doDia[visiveis.length])}
+                          className="text-[10px] text-slate-500 hover:text-acao-200 text-left px-1.5 font-semibold">
+                          +{sobra} {sobra > 1 ? 'outros' : 'outro'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
-      </div>
+          </div>
+        ))}
       </div>
       </div>
     </div>
@@ -315,10 +407,13 @@ function VisaoLista({ compromissos, onAbrir, onToggleConcluido }) {
                   </span>
                   {/* Sem responsável definido é um estado legítimo (lembrete do
                       time), e a tela diz isso em vez de um traço mudo. */}
-                  <span className="hidden lg:flex items-center gap-1 text-[10px] shrink-0 w-28 truncate"
-                    title={c.responsavelNome || 'Sem responsável'}>
+                  {/* Aqui o avatar COLORIDO faz sentido: a linha da Lista não é
+                      uma pílula pintada, então a cor da pessoa é a única cor do
+                      elemento -- e é a mesma que ela tem em toda a Central. */}
+                  <span className="hidden lg:flex items-center gap-1.5 text-[10px] shrink-0 w-32 truncate"
+                    title={c.responsavelNome || 'Sem responsável (do time)'}>
                     {c.responsavelNome
-                      ? <><User size={10} className="text-purple-300 shrink-0" /> <span className="text-slate-300 truncate">{c.responsavelNome}</span></>
+                      ? <><Avatar nome={c.responsavelNome} size="xs" /> <span className="text-slate-300 truncate">{c.responsavelNome}</span></>
                       : <><Users size={10} className="text-slate-600 shrink-0" /> <span className="text-slate-600">do time</span></>}
                   </span>
                 </div>
@@ -530,6 +625,11 @@ export default function Agenda() {
   const [filtroResponsavel, setFiltroResponsavel] = useState(''); // '' | 'meus' | 'sem' | id
   const [filtroTipo, setFiltroTipo] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('pendentes'); // '' | 'pendentes' | 'concluidos'
+  // Como o mês é PINTADO e o que ele mostra. Não são filtros -- não escondem
+  // nada; mudam a leitura do mesmo conjunto.
+  const [criterioCor, setCriterioCor] = useState('tipo');
+  const [comFimDeSemana, setComFimDeSemana] = useState(true);
+  const [comNumeroDaSemana, setComNumeroDaSemana] = useState(false);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
@@ -734,6 +834,42 @@ export default function Agenda() {
           <option value="concluidos">Concluídos</option>
           <option value="">Todos</option>
         </select>
+
+        {/* Só no calendário: a Lista não é pintada por critério nem tem colunas
+            de dia da semana, então estes três controles não teriam o que fazer
+            lá -- e um controle que não faz nada é pior que um controle a menos. */}
+        {visao === 'calendario' && (
+          <>
+            <select value={criterioCor} onChange={(e) => setCriterioCor(e.target.value)}
+              title="Por qual campo o mês é colorido" className={selecao}>
+              {CRITERIOS_COR.map((c) => <option key={c.id} value={c.id}>{c.rotulo}</option>)}
+            </select>
+
+            <button
+              onClick={() => setComFimDeSemana((v) => !v)}
+              aria-pressed={comFimDeSemana}
+              title="Mostrar ou esconder sábado e domingo"
+              className={`px-2.5 py-1.5 rounded-xl border text-[11px] font-semibold transition-colors ${
+                comFimDeSemana
+                  ? 'bg-grafite-700 border-linha text-slate-300 hover:text-white'
+                  : 'bg-acao/15 border-acao/30 text-acao-200'
+              }`}>
+              {comFimDeSemana ? 'Fim de semana' : 'Só dias úteis'}
+            </button>
+
+            <button
+              onClick={() => setComNumeroDaSemana((v) => !v)}
+              aria-pressed={comNumeroDaSemana}
+              title="Coluna com o número da semana do ano"
+              className={`px-2.5 py-1.5 rounded-xl border text-[11px] font-semibold transition-colors ${
+                comNumeroDaSemana
+                  ? 'bg-acao/15 border-acao/30 text-acao-200'
+                  : 'bg-grafite-700 border-linha text-slate-300 hover:text-white'
+              }`}>
+              Nº da semana
+            </button>
+          </>
+        )}
       </div>
 
       {erro && (
@@ -749,6 +885,9 @@ export default function Agenda() {
       ) : visao === 'calendario' ? (
         <VisaoCalendario
           ano={ano} mes={mes} compromissos={doMes}
+          corDaPilula={CORES_POR_CRITERIO[criterioCor] || CORES_POR_CRITERIO.tipo}
+          comFimDeSemana={comFimDeSemana}
+          comNumeroDaSemana={comNumeroDaSemana}
           onAbrir={setAberto}
           onCriarEm={(dia) => setAberto({ data: dia })}
           onRemarcar={remarcar}

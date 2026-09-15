@@ -26,7 +26,7 @@ const CORES = [
  * viram inicial de ninguem. Sobrando nada aproveitavel, devolve `null` -- e
  * quem chama decide o que desenhar no lugar.
  */
-function iniciais(nome = '') {
+export function iniciais(nome = '') {
   const letras = (s) => Array.from(String(s)).filter((c) => /[\p{L}\p{N}]/u.test(c));
   const partes = String(nome).trim().split(/\s+/).map(letras).filter((a) => a.length > 0);
   if (partes.length === 0) return null;
@@ -48,7 +48,43 @@ function corDoNome(nome = '') {
   return CORES[Math.abs(hash) % CORES.length];
 }
 
+/**
+ * A MESMA cor da pessoa, em hex -- para quem precisa pintar algo que não é um
+ * avatar com a identidade dela.
+ *
+ * Existe por causa do calendário da Agenda: colorindo as pílulas por
+ * responsável, a pílula do Marco e o avatar do Marco têm de ser a MESMA cor,
+ * senão a tela usa dois códigos de cor para a mesma pessoa e nenhum dos dois se
+ * aprende. Reimplementar o hash lá seria garantir que um dia eles divergem.
+ *
+ * Hex, e não a classe do Tailwind, porque a pílula pinta com `style` -- classe
+ * montada em tempo de execução não sobrevive à varredura do Tailwind.
+ */
+// Os MESMOS tons do `text-*` de cada entrada de CORES, na mesma ordem -- e não
+// uma paleta parecida. Mudar CORES sem mexer aqui faz as duas divergirem, então
+// os dois arrays andam juntos.
+const HEX_POR_INDICE = [
+  '#06CF9C', // acao-200
+  '#93C5FD', // blue-300
+  '#4FE0BC', // ativo-400
+  '#D8B4FE', // purple-300
+  '#F9A8D4', // pink-300
+  '#FFC24D', // espera-400
+  '#67E8F9', // cyan-300
+];
+
+export function hexDoNome(nome = '') {
+  let hash = 0;
+  for (let i = 0; i < nome.length; i++) hash = nome.charCodeAt(i) + ((hash << 5) - hash);
+  return HEX_POR_INDICE[Math.abs(hash) % HEX_POR_INDICE.length];
+}
+
 const TAMANHOS = {
+  // Dentro de uma linha de texto -- a pílula do calendário da Agenda. Aqui o
+  // avatar não é um retrato: é a COLUNA que o olho percorre para achar "o que é
+  // meu" varrendo o mês. Duas letras em 18px ainda se leem; foto, não, e por
+  // isso este tamanho quase sempre cai nas iniciais, que é o que se quer.
+  xs: 'w-[18px] h-[18px] text-[8.5px]',
   sm: 'w-8 h-8 text-[11px]',
   md: 'w-10 h-10 text-xs',
   lg: 'w-12 h-12 text-sm',
