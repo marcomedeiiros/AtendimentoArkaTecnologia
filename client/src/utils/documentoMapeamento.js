@@ -33,6 +33,27 @@ function dataBR(iso) {
     : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: FUSO_BR });
 }
 
+/**
+ * O ENDERECO DA LOGO DA EMPRESA -- a mesma cadastrada em Clientes (CNPJ).
+ *
+ * Sai do CNPJ digitado, e nao de um campo guardado no relatorio: trocar a
+ * empresa troca a logo, e apagar o CNPJ tira a logo junto. Assim ela nunca
+ * fica falando de um cliente que nao e mais o do relatorio.
+ *
+ * Quem nao tem logo responde 404, e quem desenha decide o que por no lugar --
+ * na tela, o mesmo predinho da tela de Clientes; no PDF, nada (um retangulo
+ * vazio num documento parece defeito, nao parece "sem logo").
+ *
+ * A rota e a da tela de Relatorios, e nao a de /parceiros: quem faz visita em
+ * geral nao tem o modulo `parceiros`, e a de la responderia 403 justamente
+ * para quem esta escrevendo o relatorio.
+ */
+export function urlLogoDaEmpresa(cnpj) {
+  const so = String(cnpj || '').replace(/D/g, '');
+  if (so.length !== 14 && so.length !== 11) return null;
+  return `/api/rankings/mapeamentos/empresas/${so}/logo`;
+}
+
 function documento(cnpj) {
   const s = String(cnpj || '').replace(/\D/g, '');
   if (s.length === 14) return s.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
@@ -121,6 +142,8 @@ export function montarDocumentoMapeamento(dados = {}, itensRegra = []) {
       .filter(Boolean)
       .join(' · '),
     identificacao,
+    // A logo da empresa visitada (ou null). Ver `urlLogoDaEmpresa`.
+    logoEmpresa: urlLogoDaEmpresa(cnpj),
     secoes,
     // O rodapé do PDF e a legenda da folha na tela -- o mesmo texto nos dois.
     // "Uso interno" no rodapé porque é o que este documento é: ele vai para o

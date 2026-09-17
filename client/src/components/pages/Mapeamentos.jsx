@@ -293,6 +293,38 @@ const TINTA_SUAVE_FOLHA = '#54666e';
 const MARCA_FOLHA = '#017561';
 const LINHA_FOLHA = '#d1d7db';
 
+/**
+ * A LOGO DA EMPRESA VISITADA, na folha.
+ *
+ * Ela sai do CNPJ digitado: mudou o CNPJ, muda a logo; apagou, some. Nunca
+ * fica falando de um cliente que não é mais o do relatório.
+ *
+ * Sem CNPJ não desenha nada -- reservar um quadrado vazio no alto da folha
+ * para um campo opcional é ruído. Com CNPJ e sem logo cadastrada (404), vem o
+ * MESMO prédio da tela de Clientes: ali ele quer dizer "empresa sem logo", e
+ * aqui quer dizer a mesma coisa.
+ */
+function LogoDaEmpresa({ url }) {
+  const [falhou, setFalhou] = useState(false);
+  // A URL muda quando o CNPJ muda; sem este reset, um 404 de um CNPJ
+  // ficaria valendo para o próximo, que talvez tenha logo.
+  useEffect(() => { setFalhou(false); }, [url]);
+  if (!url) return null;
+  if (falhou) {
+    return (
+      <span className="w-16 h-16 shrink-0 grid place-items-center rounded-xl"
+        style={{ border: `1px solid ${LINHA_FOLHA}`, color: '#9aa6ad' }}
+        title="Este cliente não tem logo cadastrada">
+        <Building2 size={26} />
+      </span>
+    );
+  }
+  return (
+    <img src={url} alt="" onError={() => setFalhou(true)}
+      className="w-24 max-h-16 shrink-0 object-contain" />
+  );
+}
+
 function FolhaRelatorio({ documento }) {
   return (
     <div
@@ -324,14 +356,19 @@ function FolhaRelatorio({ documento }) {
         <div className="mt-3" style={{ borderTop: `2px solid ${MARCA_FOLHA}` }} />
         <div className="mt-[2px]" style={{ borderTop: `1px solid ${LINHA_FOLHA}` }} />
 
-        {/* Identificação */}
-        <div className="mt-5 space-y-1">
-          {documento.identificacao.map(({ rotulo, valor, vazia }) => (
-            <p key={rotulo} className="text-[12px] flex gap-2">
-              <span className="font-bold shrink-0 w-36" style={{ color: TINTA_FOLHA }}>{rotulo}:</span>
-              <span className="min-w-0" style={{ color: vazia ? '#9aa6ad' : TINTA_SUAVE_FOLHA }}>{valor}</span>
-            </p>
-          ))}
+        {/* IDENTIFICAÇÃO, e à direita a logo de QUEM o documento fala.
+            Em cima, à esquerda, fica a marca da Arka -- o remetente. As duas no
+            mesmo cabeçalho disputariam o mesmo papel. */}
+        <div className="mt-5 flex items-start gap-4">
+          <div className="min-w-0 flex-1 space-y-1">
+            {documento.identificacao.map(({ rotulo, valor, vazia }) => (
+              <p key={rotulo} className="text-[12px] flex gap-2">
+                <span className="font-bold shrink-0 w-36" style={{ color: TINTA_FOLHA }}>{rotulo}:</span>
+                <span className="min-w-0" style={{ color: vazia ? '#9aa6ad' : TINTA_SUAVE_FOLHA }}>{valor}</span>
+              </p>
+            ))}
+          </div>
+          <LogoDaEmpresa url={documento.logoEmpresa} />
         </div>
 
         {/* As seções, na mesma ordem do PDF */}

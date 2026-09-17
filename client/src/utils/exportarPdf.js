@@ -248,6 +248,29 @@ function prepararImagemDoPdf(img) {
  * O cookie de sessão vai sozinho (same-origin), do mesmo jeito que na `<img>`
  * da lista de clientes.
  */
+/**
+ * Uma imagem SERVIDA PELA API, pronta para o `addImage`.
+ *
+ * Mesma ideia do `carregarLogoCliente` logo abaixo, com a rota vindo de fora:
+ * o relatorio de visita busca a logo pela porta da tela de Relatorios, e o de
+ * CNPJ pela de /parceiros. 404 (empresa sem logo) e resposta esperada, e nao
+ * erro -- o documento sai sem ela.
+ */
+async function carregarImagemDaApi(url) {
+  if (!url) return null;
+  let objectUrl = null;
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+    objectUrl = URL.createObjectURL(await resp.blob());
+    return prepararImagemDoPdf(await abrirImagem(objectUrl));
+  } catch {
+    return null;
+  } finally {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  }
+}
+
 async function carregarLogoCliente(cnpj) {
   const doc = String(cnpj || '').replace(/\D/g, '');
   if (!doc) return null;
@@ -858,6 +881,27 @@ export async function gerarMapeamentoPdf(documento, { nome = 'relatorio.pdf' } =
     subtitulo: documento.subtitulo,
     margem,
   });
+
+  /**
+   * A LOGO DA EMPRESA VISITADA, a direita da identificacao.
+   *
+   * Em cima, a esquerda, fica a marca da ARKA -- o remetente do documento.
+   * Aqui fica de QUEM ele fala. As duas no mesmo cabecalho disputariam o mesmo
+   * papel; e a mesma divisao do relatorio por CNPJ.
+   *
+   * Sem logo cadastrada, nada e desenhado: um retangulo vazio no canto de um
+   * documento parece defeito, e nao "esta empresa nao tem logo".
+   */
+  const logoEmpresa = await carregarImagemDaApi(documento.logoEmpresa);
+  if (logoEmpresa) {
+    const CX_L = 30;
+    const CX_A = 18;
+    const esc = Math.min(CX_L / logoEmpresa.largura, CX_A / logoEmpresa.altura);
+    const l = logoEmpresa.largura * esc;
+    const a = logoEmpresa.altura * esc;
+    try { pdf.addImage(logoEmpresa.dataUrl, 'PNG', larguraPg - margem - l, y - 1, l, a); }
+    catch { /* formato invalido: o relatorio sai sem ela */ }
+  }
 
   // Pagina nova ja nasce com a marca d'agua: e o unico jeito de ela ficar
   // ATRAS do texto sem redesenhar a folha inteira no fim.

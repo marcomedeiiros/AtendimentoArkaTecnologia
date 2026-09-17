@@ -5,6 +5,8 @@ const { adminMiddleware } = require("../../shared/middlewares/admin.middleware")
 const { exigirModulo } = require("../permissoes/modulo.middleware");
 const { podeVerRelatoriosDeVisita } = require("../../shared/helpers/equipeRanking.helper");
 const validate = require("../../shared/middlewares/validate.middleware");
+// So para servir a logo da empresa na tela de Relatorios (ver a rota abaixo).
+const parceiroController = require("../parceiros/parceiro.controller");
 const {
   criarMapeamentoSchema,
   atualizarMapeamentoSchema,
@@ -78,6 +80,18 @@ router.get("/mapeamentos", exigirRelatorioDeVisita, (req, res, next) => controll
 // ANTES de "/mapeamentos/:id": senao "empresas" seria lido como um id.
 router.get("/mapeamentos/empresas", exigirRelatorioDeVisita, (req, res, next) =>
   controller.buscarEmpresas(req, res).catch(next)
+);
+// A LOGO DA EMPRESA, a mesma cadastrada em Clientes (CNPJ).
+//
+// O handler e o DE LA, reaproveitado: sao os mesmos bytes, o mesmo 404 para
+// quem nao tem logo e o mesmo cabecalho de midia. Copiar quinze linhas aqui
+// criaria um segundo lugar para a regra de servir logo envelhecer.
+//
+// O que muda e so a PORTA: /parceiros exige o modulo `parceiros`, que quem faz
+// visita nao tem. A logo entra no relatorio dele, entao ele precisa ler -- e
+// so isso: uma imagem do cadastro, sem o resto da ficha.
+router.get("/mapeamentos/empresas/:cnpj/logo", exigirRelatorioDeVisita, (req, res, next) =>
+  parceiroController.logo(req, res).catch(next)
 );
 // O PDF. Antes de "/mapeamentos/:id" nao precisa (o caminho e mais longo), mas
 // fica junto para quem le a lista ver que o arquivo tem endereco proprio -- e
