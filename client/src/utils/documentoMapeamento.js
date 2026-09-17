@@ -64,7 +64,7 @@ export function montarDocumentoMapeamento(dados = {}, itensRegra = []) {
     ['Data da visita', dataVisita ? dataBR(dataVisita) : null],
     ['Prazo de entrega', prazoEm ? dataBR(prazoEm) : null],
     ['Técnico responsável', tecnicoNome || null],
-  ].map(([rotulo, valor]) => ({ rotulo, valor: valor || '—', vazia: !valor }));
+  ].map(([rotulo, valor]) => ({ rotulo, valor: valor || '-', vazia: !valor }));
 
   const doChecklist = (itensRegra || []).map((i) => ({
     chave: i.chave,
