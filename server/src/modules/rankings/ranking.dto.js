@@ -59,10 +59,27 @@ const evidenciaSchema = z.union([
  *
  * Aqui so se confere formato. Que os bytes sejam mesmo um PDF e conferido no
  * service, depois de gravar -- nome de arquivo nao e prova de nada.
+ *
+ * ── `gerado` ──────────────────────────────────────────────────────────────
+ *
+ * Diz que o PDF foi MONTADO pela tela a partir deste mesmo formulario, e nao
+ * anexado pronto. Com ele, o servidor nao tenta LER o arquivo para preencher o
+ * checklist: seria ler de volta o que o proprio checklist acabou de escrever --
+ * o texto do tecnico voltaria trocado por "No relatorio: ..." e as fotos
+ * contariam duas vezes (na lista de evidencias e dentro do PDF).
+ *
+ * Nao e uma brecha de confianca nova: sem PDF, `itens` sempre veio do cliente e
+ * o servidor sempre saneou pela allowlist do checklist em vigor. O que a
+ * leitura protegia era o PDF DE FORA, que ninguem controlava -- e esse caminho
+ * deixou de existir na tela.
  */
 const arquivoSchema = z
   .union([
-    z.object({ conteudo: z.string().min(16), nome: z.string().max(180).optional() }),
+    z.object({
+      conteudo: z.string().min(16),
+      nome: z.string().max(180).optional(),
+      gerado: z.boolean().optional(),
+    }),
     z.object({ arquivo: z.string().min(1), nome: z.string().max(180).optional().nullable() }),
   ])
   .nullable();
@@ -112,7 +129,6 @@ const regrasRelatorioSchema = z.object({
   // De 1 a 31: o dia que nao existe no mes cai no ultimo dia dele (a aparagem e
   // em `relatorio.regras`, com o helper de calendario). Aqui so a faixa.
   vencimentoDiaDoMes: z.number().int().min(1).max(31).nullable().optional(),
-  exigirPdf: z.boolean().optional(),
   minimoRelatorios: z.number().int().min(1).max(20).optional(),
   custoPorDevolucao: z.number().int().min(0).max(25).optional(),
   pesos: z.record(z.string(), z.number().int().min(0).max(100)).optional(),

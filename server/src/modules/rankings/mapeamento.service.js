@@ -347,7 +347,7 @@ class MapeamentoService {
       return {
         ...analise,
         prazoSugerido: analise.dataVisita ? regrasRelatorio.paraISO(regrasRelatorio.prazoDe(analise.dataVisita, regras)) : null,
-        regras: { prazoDias: regras.prazoDias, vencimentoDiaDoMes: regras.vencimentoDiaDoMes, exigirPdf: regras.exigirPdf },
+        regras: { prazoDias: regras.prazoDias, vencimentoDiaDoMes: regras.vencimentoDiaDoMes },
       };
     } finally {
       await midiaStorage.remover(salvo.arquivoPath).catch(() => {});
@@ -442,18 +442,14 @@ class MapeamentoService {
     const evidencias = await this._guardarEvidencias(dados.evidencias);
     const arquivo = (await this._guardarArquivo(dados.arquivo)) || {};
     const regras = await regrasRelatorio.obter();
-    // "Exigir PDF" so vale na ENTREGA, nunca no rascunho: a pessoa precisa poder
-    // abrir o registro e voltar depois com o arquivo. Barrar o rascunho tambem
-    // transformaria a regra num impedimento de comecar.
-    if (dados.entregar && regras.exigirPdf && !arquivo.arquivoPath) {
-      throw new AppError(
-        "A empresa exige o relatório em PDF anexado para entregar. Anexe o arquivo ou salve como rascunho.",
-        400,
-        "PDF_OBRIGATORIO"
-      );
-    }
-    // Havendo PDF, e ele quem preenche o que pontua (ver `_lerDoRelatorio`).
-    const lido = arquivo.arquivoPath
+    // O PDF MONTADO NA PLATAFORMA NAO E RELIDO.
+    //
+    // Ler de volta um arquivo que o proprio formulario acabou de gerar
+    // devolveria o checklist do tecnico trocado por "No relatorio: <palavra>"
+    // e contaria cada foto duas vezes -- uma na lista de evidencias, outra
+    // dentro do PDF. A leitura existia para o arquivo feito FORA daqui, e esse
+    // caminho saiu da tela (ver ranking.dto, `gerado`).
+    const lido = arquivo.arquivoPath && !dados.arquivo?.gerado
       ? await this._lerDoRelatorio(arquivo.arquivoPath, {
           resumoAtual: dados.resumo,
           itensAtuais: dados.itens,
@@ -503,10 +499,17 @@ class MapeamentoService {
 
     const evidencias = await this._guardarEvidencias(dados.evidencias, atual.evidencias || []);
     const arquivo = await this._guardarArquivo(dados.arquivo, atual);
-    // So rele quando o PDF MUDOU: reler a cada salvamento gastaria CPU para
-    // chegar ao mesmo resultado, e sobrescreveria o resumo que a pessoa pode
-    // ter corrigido a mao depois.
-    const lido = arquivo?.arquivoPath
+    // Um PDF VINDO DE FORA (relatorio antigo, reenviado) continua sendo lido,
+    // e so quando ele MUDOU: reler a cada salvamento gastaria CPU para chegar
+    // ao mesmo resultado, e sobrescreveria o resumo corrigido a mao.
+    // O PDF MONTADO NA PLATAFORMA NAO E RELIDO.
+    //
+    // Ler de volta um arquivo que o proprio formulario acabou de gerar
+    // devolveria o checklist do tecnico trocado por "No relatorio: <palavra>"
+    // e contaria cada foto duas vezes -- uma na lista de evidencias, outra
+    // dentro do PDF. A leitura existia para o arquivo feito FORA daqui, e esse
+    // caminho saiu da tela (ver ranking.dto, `gerado`).
+    const lido = arquivo?.arquivoPath && !dados.arquivo?.gerado
       ? await this._lerDoRelatorio(arquivo.arquivoPath, {
           resumoAtual: dados.resumo ?? atual.resumo,
           // Na edicao vale o que veio no corpo; sem ele, o que ja estava

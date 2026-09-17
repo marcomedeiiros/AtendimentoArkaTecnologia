@@ -21,8 +21,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   ClipboardList, Plus, Loader2, AlertCircle, Camera, CheckCircle2, RotateCcw,
-  Clock, Building2, X, Save, Send, Trash2, ShieldCheck, FileText,
-  ChevronDown, ChevronRight, SlidersHorizontal, Trophy,
+  Clock, Building2, X, Save, Send, Trash2, FileText,
+  ArrowLeft, SlidersHorizontal, Trophy,
 } from 'lucide-react';
 import { RankingsAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -30,6 +30,15 @@ import { avisar, confirmar, pedirTexto } from '../../utils/dialogo';
 import Portal from '../Portal';
 import { FUSO_BR } from '../../utils/data';
 import { ehDaEquipeExterna } from '../../utils/equipeRanking';
+import { montarDocumentoMapeamento, nomeArquivoMapeamento } from '../../utils/documentoMapeamento';
+// O `jspdf` continua chegando so no primeiro PDF: quem importa a biblioteca e o
+// proprio `exportarPdf`, por dentro (ver `libs()`).
+import { gerarMapeamentoPdf } from '../../utils/exportarPdf';
+
+// A MARCA, no mesmo arquivo que o login e o Modo TV usam. Ela aparece duas
+// vezes na folha: pequena no cabeçalho (o remetente do documento) e grande,
+// quase transparente, atrás do texto.
+const LOGO_ARKA = '/arka_tecnologia_logo-removebg-preview.png';
 
 const STATUS_META = {
   rascunho:    { rotulo: 'Rascunho',    classe: 'bg-quieto/20 text-quieto-400 border-quieto/30' },
@@ -168,7 +177,7 @@ function ModalDetalhe({ id, itensRegra, onFechar, onEditar, podeEditar }) {
                       <span className="text-[11px] font-bold text-acao-200 shrink-0">Abrir</span>
                     </a>
                   ) : (
-                    <p className="text-[11px] text-texto-fraco">Nenhum PDF anexado.</p>
+                    <p className="text-[11px] text-texto-fraco">Ainda sem PDF: ele é gerado ao salvar o relatório.</p>
                   )}
                 </div>
 
@@ -254,8 +263,145 @@ function ModalDetalhe({ id, itensRegra, onFechar, onEditar, podeEditar }) {
   );
 }
 
-/** Formulário do mapeamento. Mostra o efeito de cada campo na pontuação. */
-function ModalMapeamento({ itensRegra, minimoResumo, inicial, onFechar, onSalvo }) {
+/**
+ * A FOLHA -- o relatório como o cliente vai receber, ao vivo.
+ *
+ * ── POR QUE ELA É BRANCA NA MARRA ──────────────────────────────────────────
+ *
+ * `bg-white` aqui NÃO daria branco: neste projeto `--c-white` vale 17 27 33 no
+ * tema claro (index.css), então a classe entrega quase-preto. E mesmo que
+ * desse, o papel não acompanha o tema de quem digita -- o PDF é o mesmo
+ * documento para quem está no escuro e para quem está no claro. Por isso as
+ * cores desta folha são hexadecimais literais, e são as mesmas da paleta do
+ * PDF (exportarPdf.js).
+ *
+ * ── E POR QUE ELA MOSTRA O QUE AINDA ESTÁ VAZIO ────────────────────────────
+ *
+ * Seção sem conteúdo aparece como espaço reservado, em cinza claro: é isso que
+ * diz à pessoa o que falta escrever ANTES de entregar. No PDF ela não entra --
+ * ninguém manda ao cliente um título com nada embaixo.
+ */
+const TINTA_FOLHA = '#111b21';
+const TINTA_SUAVE_FOLHA = '#54666e';
+const MARCA_FOLHA = '#017561';
+const LINHA_FOLHA = '#d1d7db';
+
+function FolhaRelatorio({ documento }) {
+  return (
+    <div
+      className="relative mx-auto w-full max-w-[52rem] rounded-xl shadow-2xl overflow-hidden"
+      style={{ backgroundColor: '#ffffff', color: TINTA_FOLHA, aspectRatio: 'auto' }}
+    >
+      {/* A MARCA D'ÁGUA, grande e atrás de tudo. `pointer-events-none` porque
+          ela é papel, não conteúdo: não pode roubar o clique de nada. */}
+      <img
+        src={LOGO_ARKA}
+        alt=""
+        aria-hidden="true"
+        className="pointer-events-none select-none absolute left-1/2 top-1/2 w-[55%] -translate-x-1/2 -translate-y-1/2 opacity-[0.07]"
+      />
+
+      <div className="relative p-6 sm:p-9">
+        {/* Cabeçalho: a marca, o título e a régua dupla -- o mesmo topo do PDF. */}
+        <div className="flex items-start gap-4">
+          <img src={LOGO_ARKA} alt="Arka Tecnologia" className="w-16 shrink-0 object-contain" />
+          <div className="min-w-0">
+            <p className="text-[15px] font-bold leading-tight" style={{ color: TINTA_FOLHA }}>
+              {documento.titulo}
+            </p>
+            <p className="text-[11px] mt-0.5" style={{ color: TINTA_SUAVE_FOLHA }}>
+              {documento.subtitulo}
+            </p>
+          </div>
+        </div>
+        <div className="mt-3" style={{ borderTop: `2px solid ${MARCA_FOLHA}` }} />
+        <div className="mt-[2px]" style={{ borderTop: `1px solid ${LINHA_FOLHA}` }} />
+
+        {/* Identificação */}
+        <div className="mt-5 space-y-1">
+          {documento.identificacao.map(({ rotulo, valor, vazia }) => (
+            <p key={rotulo} className="text-[12px] flex gap-2">
+              <span className="font-bold shrink-0 w-36" style={{ color: TINTA_FOLHA }}>{rotulo}:</span>
+              <span className="min-w-0" style={{ color: vazia ? '#9aa6ad' : TINTA_SUAVE_FOLHA }}>{valor}</span>
+            </p>
+          ))}
+        </div>
+
+        {/* As seções, na mesma ordem do PDF */}
+        <div className="mt-6 space-y-5">
+          {documento.secoes.map((secao) => (
+            <div key={secao.id}>
+              <p className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: MARCA_FOLHA }}>
+                {secao.titulo}
+              </p>
+
+              {secao.vazia ? (
+                <p className="mt-1.5 text-[12px] italic" style={{ color: '#9aa6ad' }}>
+                  {secao.espera} <span className="not-italic">(não entra no PDF enquanto estiver vazio)</span>
+                </p>
+              ) : secao.tipo === 'texto' ? (
+                <p className="mt-1.5 text-[12.5px] leading-relaxed whitespace-pre-wrap" style={{ color: TINTA_FOLHA }}>
+                  {secao.texto}
+                </p>
+              ) : secao.tipo === 'itens' ? (
+                <div className="mt-1.5">
+                  {secao.itens.map((item) => (
+                    <div key={item.chave} className="py-2" style={{ borderBottom: `1px solid ${LINHA_FOLHA}` }}>
+                      <p className="text-[9.5px] font-bold uppercase tracking-[0.1em]" style={{ color: MARCA_FOLHA }}>
+                        {item.rotulo}
+                      </p>
+                      <p className="mt-0.5 text-[12.5px] leading-relaxed whitespace-pre-wrap pl-1.5" style={{ color: TINTA_FOLHA }}>
+                        {item.texto}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {secao.fotos.map((src, i) => (
+                    <img key={i} src={src} alt={`Evidência ${i + 1}`}
+                      className="w-full max-h-40 object-cover rounded"
+                      style={{ border: `1px solid ${LINHA_FOLHA}` }} />
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <p className="mt-8 pt-2 text-[9.5px]" style={{ borderTop: `1px solid ${LINHA_FOLHA}`, color: TINTA_SUAVE_FOLHA }}>
+          {documento.legenda}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * O EDITOR DO MAPEAMENTO -- formulário de um lado, o PDF do outro.
+ *
+ * ── O QUE MUDOU, E POR QUÊ ─────────────────────────────────────────────────
+ *
+ * Isto era um pop-up com um campo de anexar PDF no topo. O relatório era feito
+ * FORA da plataforma, subia como arquivo, e o servidor tentava LER o arquivo
+ * para descobrir o que havia dentro. Duas consequências: cada técnico entregava
+ * um documento com uma cara, e a nota media o quanto o extrator entendeu do
+ * layout de cada um -- um PDF ilegível derrubava a completude de quem tinha
+ * feito a visita inteira.
+ *
+ * Agora o relatório é MONTADO aqui. O que se digita à esquerda aparece na folha
+ * à direita, e é essa folha que vira o PDF ao salvar. Não há mais upload, não
+ * há mais leitura para dar errado, e o cliente recebe sempre o mesmo documento.
+ *
+ * ── POR QUE TELA CHEIA, E NÃO O POP-UP DE ANTES ────────────────────────────
+ *
+ * Preview e formulário lado a lado precisam de largura. Num modal centralizado
+ * sobraria meia tela para cada, e a folha -- que tem proporção de papel --
+ * ficaria pequena demais para se ler o que está sendo escrito. O pop-up também
+ * obrigava a fechar tudo para consultar a lista, e escrever relatório é tarefa
+ * longa: agora é uma tela, com volta explícita.
+ */
+function EditorMapeamento({ itensRegra, minimoResumo, inicial, tecnicoNome, onFechar, onSalvo }) {
   const edicao = !!inicial?.id;
   const [empresa, setEmpresa] = useState(inicial?.empresa || '');
   const [cnpj, setCnpj] = useState(inicial?.cnpj || '');
@@ -269,67 +415,53 @@ function ModalMapeamento({ itensRegra, minimoResumo, inicial, onFechar, onSalvo 
   const [itens, setItens] = useState(() => ({ ...(inicial?.itens || {}) }));
   const [pendencias, setPendencias] = useState(inicial?.pendencias || '');
   const [evidencias, setEvidencias] = useState(() => inicial?.arquivos || []);
-  // O PDF do relatório. `pdf` é o arquivo novo escolhido agora; `pdfSalvo` é o
-  // que já estava no servidor. Os dois separados porque "não mexi no PDF" e
-  // "quero remover o PDF" precisam ser distinguíveis na hora de salvar.
-  const [pdf, setPdf] = useState(null);
-  const [pdfSalvo, setPdfSalvo] = useState(() => inicial?.arquivo || null);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
-  // O que foi lido do PDF. `null` = ainda não leu nada.
-  const [analise, setAnalise] = useState(null);
-  const [lendo, setLendo] = useState(false);
-  // Os campos que o PDF preenche sozinho ficam escondidos até alguém pedir.
-  // Eles continuam existindo para o caso de um PDF que a leitura não entendeu.
-  const [manual, setManual] = useState(false);
-  // As regras da empresa que a TELA precisa saber (prazo em dias, e se o PDF é
-  // obrigatório para entregar). Vêm junto com a leitura do PDF: o técnico não
-  // tem acesso à tela de Configuração, mas precisa saber o que ela decidiu
-  // para ele -- descobrir a regra pelo erro ao clicar em Entregar é o pior
-  // jeito possível.
-  const [regras, setRegras] = useState(null);
 
-  // A MESMA conta do servidor: itens preenchidos + resumo com pelo menos 20
+  /**
+   * COMO VER UMA EVIDÊNCIA QUE JÁ ESTÁ NO SERVIDOR.
+   *
+   * A foto recém-anexada é uma data URL, e se desenha sozinha. A que já estava
+   * gravada é só uma referência (`{ arquivo: "..." }`) -- o caminho em disco
+   * nunca chega ao navegador. Ela abre pela rota por ÍNDICE, e o índice é o da
+   * ordem em que o servidor guardou.
+   *
+   * Por isso o mapa é montado UMA VEZ, na abertura: remover uma foto reordena a
+   * lista da tela, e recalcular o índice depois disso mostraria a foto errada.
+   */
+  const [urlSalva] = useState(() => {
+    const mapa = new Map();
+    (inicial?.arquivos || []).forEach((ev, i) => {
+      if (ev && typeof ev === 'object') mapa.set(ev, RankingsAPI.urlEvidenciaMapeamento(inicial.id, i));
+    });
+    return mapa;
+  });
+  const fotos = useMemo(
+    () => evidencias.map((ev) => (typeof ev === 'string' ? ev : urlSalva.get(ev))).filter(Boolean),
+    [evidencias, urlSalva]
+  );
+
+  // A MESMA conta do servidor: itens preenchidos + resumo com o mínimo de
   // caracteres, sobre o total. Espelhada aqui para o número aparecer enquanto
   // se digita -- se as duas divergirem, a do servidor é a que vale.
-  /**
-   * A COMPLETUDE SOMA AS DUAS FONTES: o que o PDF cobre e o que foi digitado.
-   *
-   * ── O DEFEITO QUE ISTO CORRIGE ─────────────────────────────────────────────
-   *
-   * Com PDF lido, este número usava SÓ a leitura. Quem anexava o relatório e
-   * depois completava os itens à mão via o número travado -- digitava, e
-   * continuava 67%. Não era só o mostrador: o servidor também sobrescrevia o
-   * checklist, então o trabalho sumia de verdade.
-   *
-   * Agora conta o item que o PDF cobriu OU que a pessoa escreveu -- a mesma
-   * soma que o servidor grava, para os dois números nunca discordarem.
-   */
+  //
+  // Sem PDF lido, ela voltou a ser o que sempre foi: o que a pessoa escreveu.
   const completude = useMemo(() => {
-    const cobertos = itensRegra.filter(
-      (i) => analise?.cobertura?.[i.chave]?.coberto || String(itens[i.chave] || '').trim()
-    ).length;
-    // Com PDF lido o resumo é escrito pelo servidor quando a pessoa não escreve
-    // um -- então ele conta de qualquer jeito.
-    // O LIMIAR VEM DO SERVIDOR (`minimoResumo`), e nao cravado aqui.
-    //
-    // Era um 20 escrito nesta linha, e o mesmo 20 vivia em
-    // `pontuacao.externa.completudeDe`. Duas copias da mesma regra: mudar a do
-    // servidor deixava esta previa explicando uma conta que nao roda mais -- e
-    // e por ela que a pessoa decide se o relatorio esta pronto para entregar.
-    // (auditoria-regra-no-front-end-10-09.md, F3)
+    const cobertos = itensRegra.filter((i) => String(itens[i.chave] || '').trim()).length;
     const minimo = minimoResumo ?? 20;
-    const comResumo = analise?.lido || resumo.trim().length >= minimo ? 1 : 0;
-    return Math.round(((cobertos + comResumo) / (itensRegra.length + 1)) * 100);
-  }, [itens, resumo, itensRegra, analise]);
-
-  // As fotos DE DENTRO do PDF somam com as evidências anexadas (ver
-  // pontuacao.externa.quantidadeEvidencias). Era o MAIOR das duas, e com um PDF
-  // de 2 fotos anexar 1 ou 2 não mexia em nada -- a pessoa mandava a foto e o
-  // número não subia.
-  const evidenciasContadas = evidencias.length + (analise?.fotos || 0);
+    return Math.round(((cobertos + (resumo.trim().length >= minimo ? 1 : 0)) / (itensRegra.length + 1)) * 100);
+  }, [itens, resumo, itensRegra, minimoResumo]);
 
   const dentroDoPrazo = useMemo(() => hojeISO() <= prazoEm, [prazoEm]);
+
+  // A DESCRIÇÃO DO DOCUMENTO, que a folha desenha e o PDF desenha.
+  const documento = useMemo(
+    () => montarDocumentoMapeamento(
+      { empresa, cnpj, dataVisita, prazoEm, resumo, itens, pendencias, tecnicoNome, evidencias: fotos },
+      itensRegra
+    ),
+    [empresa, cnpj, dataVisita, prazoEm, resumo, itens, pendencias, tecnicoNome, fotos, itensRegra]
+  );
 
   const anexar = (e) => {
     const arquivos = [...(e.target.files || [])];
@@ -343,95 +475,18 @@ function ModalMapeamento({ itensRegra, minimoResumo, inicial, onFechar, onSalvo 
   };
 
   /**
-   * O PDF do relatório -- barrado aqui por tamanho e extensão.
+   * SALVAR -- e, junto, gerar o PDF.
    *
-   * O servidor confere os BYTES (nome de arquivo não prova nada), mas a
-   * checagem daqui existe para a pessoa saber na hora, e não depois de esperar
-   * 15 MB subirem só para receber um erro.
+   * O arquivo é montado A CADA salvamento, da mesma descrição que está na tela:
+   * o PDF guardado nunca fica descrevendo uma versão anterior do relatório, que
+   * é o que aconteceria se ele só fosse gerado na entrega.
+   *
+   * Se a geração falhar (a biblioteca não baixou, por exemplo), o salvamento
+   * segue SEM o arquivo em vez de perder o que foi digitado -- os campos são o
+   * registro; o PDF é a apresentação deles.
    */
-  const anexarPdf = (e) => {
-    const f = (e.target.files || [])[0];
-    e.target.value = '';
-    if (!f) return;
-    if (f.type !== 'application/pdf' && !f.name.toLowerCase().endsWith('.pdf')) {
-      setErro('O relatório precisa ser um arquivo PDF.');
-      return;
-    }
-    if (f.size > 15 * 1024 * 1024) { setErro(`"${f.name}" passa de 15 MB.`); return; }
-    setErro('');
-    const r = new FileReader();
-    r.onload = () => {
-      const escolhido = { conteudo: r.result, nome: f.name, bytes: f.size };
-      setPdf(escolhido);
-      lerPdf(escolhido);
-    };
-    r.readAsDataURL(f);
-  };
-
-  /**
-   * LÊ O PDF e preenche o formulário com o que ele já diz.
-   *
-   * ── POR QUE ISTO EXISTE ────────────────────────────────────────────────────
-   *
-   * Empresa, data, o que foi vistoriado e as fotos já estão dentro do relatório
-   * que a pessoa acabou de montar. Digitar de novo é transcrever o próprio
-   * trabalho -- e o efeito prático era campo em branco, que derrubava a
-   * completude e fazia a nota medir preenchimento de formulário.
-   *
-   * ── E POR QUE O RESULTADO É SÓ SUGESTÃO ────────────────────────────────────
-   *
-   * A leitura depende do layout do documento, que é feito fora deste sistema.
-   * Então nada aqui sobrescreve o que a pessoa já digitou, e tudo continua
-   * editável: um campo preenchido errado em silêncio é pior que um vazio.
-   *
-   * Falhar aqui não impede nada -- o formulário continua funcionando à mão.
-   */
-  const lerPdf = async (escolhido) => {
-    setLendo(true);
-    setAnalise(null);
-    try {
-      const r = await RankingsAPI.analisarMapeamento({ conteudo: escolhido.conteudo, nome: escolhido.nome });
-      setAnalise(r);
-      if (!r?.lido) return;
-      // `||` e não sobrescrita: o que a pessoa escreveu vale mais que o que eu li.
-      if (r.empresa && !empresa.trim()) setEmpresa(r.empresa);
-      if (r.dataVisita) {
-        setDataVisita(r.dataVisita);
-        // O PRAZO SAI DA REGRA DA EMPRESA, calculada pelo servidor -- ele
-        // combina o prazo por relatório com o vencimento mensal, quando existe.
-        // Repetir essa conta aqui criaria uma segunda regra para manter em dia.
-        //
-        // E ELE NÃO PODE NASCER VENCIDO: quando o relatório traz só mês e ano, a
-        // visita cai no dia 1º, e "1º + N dias" já passou faz tempo para quem
-        // lança no fim do mês. O quadro abria escrito "vencido" antes de a
-        // pessoa digitar qualquer coisa, acusando um atraso que ninguém sabe se
-        // houve. Com dia presumido, a sugestão sai de HOJE.
-        if (!edicao) {
-          const dias = r.regras?.prazoDias ?? 3;
-          setPrazoEm(
-            r.dataDiaPresumido || !r.prazoSugerido
-              ? prazoSugerido(hojeISO(), dias)
-              : r.prazoSugerido
-          );
-        }
-        if (r.regras) setRegras(r.regras);
-      }
-    } catch (e2) {
-      setAnalise({ lido: false, motivo: e2?.message || 'Não foi possível ler o PDF.' });
-    } finally {
-      setLendo(false);
-    }
-  };
-
   const salvar = async (entregar) => {
     if (!empresa.trim()) { setErro('Informe a empresa visitada.'); return; }
-    // A regra é do servidor, que recusa de qualquer jeito. Isto aqui existe
-    // para a pessoa não montar o registro inteiro e só descobrir a exigência no
-    // clique final -- e ainda oferece o caminho que funciona (rascunho).
-    if (entregar && regras?.exigirPdf && !pdf && !pdfSalvo) {
-      setErro('A empresa exige o relatório em PDF para entregar. Anexe o arquivo ou salve como rascunho.');
-      return;
-    }
     if (entregar) {
       const ok = await confirmar(
         `O relatório entra na contagem de ${data(dataVisita)} e passa para a validação do supervisor ` +
@@ -443,12 +498,40 @@ function ModalMapeamento({ itensRegra, minimoResumo, inicial, onFechar, onSalvo 
     }
     setSalvando(true);
     setErro('');
-    const corpo = { empresa: empresa.trim(), cnpj: cnpj.replace(/\D/g, '') || null, dataVisita, prazoEm, resumo, itens, pendencias, evidencias, entregar };
-    // `arquivo` só entra no corpo quando houve mudança. Campo AUSENTE quer
-    // dizer "não mexi nisso" -- é o que impede um salvamento comum de apagar o
-    // relatório que já tinha sido enviado.
-    if (pdf) corpo.arquivo = { conteudo: pdf.conteudo, nome: pdf.nome };
-    else if (!pdfSalvo && inicial?.arquivo) corpo.arquivo = null;
+    const corpo = {
+      empresa: empresa.trim(),
+      cnpj: cnpj.replace(/\D/g, '') || null,
+      dataVisita, prazoEm, resumo, itens, pendencias, evidencias, entregar,
+    };
+    try {
+      const pdf = await gerarMapeamentoPdf(documento, {
+        nome: nomeArquivoMapeamento({ empresa, dataVisita }),
+      });
+      // `gerado: true` diz ao servidor que este PDF saiu daqui -- ele não tenta
+      // LER o arquivo para preencher o checklist, porque o checklist é
+      // justamente o que o gerou. Sem isso, o texto digitado voltaria do banco
+      // trocado por "No relatório: ..." e as fotos contariam duas vezes.
+      corpo.arquivo = { conteudo: pdf.conteudo, nome: pdf.nome, gerado: true };
+    } catch {
+      /**
+       * FALHOU A GERAÇÃO -- e o que acontece depende do que se pediu.
+       *
+       * ENTREGAR para sem entregar nada: entrega é o documento indo para o
+       * cliente, e um relatório entregue sem relatório dentro é pior que um
+       * botão que não funcionou. Era isto que a opção "exigir PDF" tentava
+       * garantir lá na Configuração -- com o arquivo montado aqui, a garantia
+       * fica no único lugar que sabe se ele existe.
+       *
+       * RASCUNHO segue em frente: os campos são o registro, o PDF é a
+       * apresentação deles, e perder o que foi digitado por causa de uma
+       * biblioteca que não baixou seria o pior desfecho possível.
+       */
+      if (entregar) {
+        setErro('Não consegui montar o PDF do relatório agora. Salve como rascunho e tente entregar de novo.');
+        setSalvando(false);
+        return;
+      }
+    }
     try {
       if (edicao) await RankingsAPI.atualizarMapeamento(inicial.id, corpo);
       else await RankingsAPI.criarMapeamento(corpo);
@@ -461,240 +544,141 @@ function ModalMapeamento({ itensRegra, minimoResumo, inicial, onFechar, onSalvo 
   };
 
   return (
-    <Portal>
-      <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center z-50 p-3 overflow-y-auto">
-        <div className="glass-panel border border-linha rounded-2xl w-full max-w-2xl shadow-2xl fade-in my-auto flex flex-col max-h-[calc(100dvh-1.5rem)]">
-          <div className="p-4 bg-grafite-600 border-b border-linha flex items-center justify-between shrink-0 rounded-t-2xl">
-            <span className="flex items-center gap-2 font-bold text-sm text-white">
-              <ClipboardList size={16} className="text-acao-200" />
-              {edicao ? 'Editar mapeamento' : 'Novo mapeamento técnico'}
-            </span>
-            <button onClick={onFechar} className="text-slate-400 hover:text-white"><X size={16} /></button>
+    /* `h-full`: a area de conteudo do AppLayout ja tem altura definida e rolagem
+       propria -- e dela que os dois paineis herdam o teto. Uma altura em `dvh`
+       aqui ignoraria o cabecalho do painel e deixaria a barra de botoes fora da
+       tela em notebook. */
+    <div className="fade-in flex flex-col h-full min-h-[34rem]">
+      {/* A BARRA: quem sai, e quem salva. Fica fora dos dois painéis porque vale
+          para os dois -- e porque o botão de entregar não pode ficar no fim de
+          um formulário que rola. */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-5 py-2.5 border-b border-linha shrink-0">
+        <span className="flex items-center gap-2 font-bold text-sm text-texto min-w-0">
+          <button onClick={onFechar} disabled={salvando}
+            className="p-1.5 rounded-lg text-texto-fraco hover:text-texto hover:bg-grafite-700 disabled:opacity-50"
+            title="Voltar para a lista">
+            <ArrowLeft size={16} />
+          </button>
+          <ClipboardList size={16} className="text-acao-200 shrink-0" />
+          <span className="truncate">{edicao ? 'Editar relatório' : 'Novo relatório de visita'}</span>
+        </span>
+        <div className="flex items-center gap-2">
+          <button onClick={() => salvar(false)} disabled={salvando}
+            className="px-3 py-2 rounded-lg bg-grafite-700 border border-linha text-texto text-xs font-semibold hover:border-linha-forte disabled:opacity-50 flex items-center gap-1.5">
+            {salvando ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Salvar
+          </button>
+          <button onClick={() => salvar(true)} disabled={salvando}
+            className="px-4 py-2 rounded-lg bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold disabled:opacity-50 flex items-center gap-1.5">
+            <Send size={13} /> Entregar
+          </button>
+        </div>
+      </div>
+
+      {/* A TELA DIVIDIDA. A linha do meio é a borda do painel direito.
+          Em tela estreita não há divisão possível: o formulário vem primeiro e
+          a folha fica embaixo, que é a ordem em que se usa. */}
+      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 overflow-y-auto lg:overflow-hidden">
+        {/* ── ESQUERDA: o que a pessoa preenche ── */}
+        <div className="p-3 sm:p-5 space-y-3 lg:overflow-y-auto">
+          {/* O PLACAR AO VIVO -- o que a tela sabe sobre a pontuação antes de
+              entregar, e não depois do fechamento do mês. */}
+          <div className="flex flex-wrap gap-2 [&>*]:flex-1 [&>*]:min-w-[7rem]">
+            <div className="rounded-xl border border-linha bg-grafite-700 p-2.5 text-center">
+              <p className="text-[10px] uppercase tracking-wider text-texto-fraco font-bold">Completo</p>
+              <p className={`font-display font-extrabold text-lg ${completude >= 80 ? 'text-ativo-400' : completude >= 50 ? 'text-espera-400' : 'text-falha-400'}`}>
+                {completude}%
+              </p>
+            </div>
+            <div className="rounded-xl border border-linha bg-grafite-700 p-2.5 text-center">
+              <p className="text-[10px] uppercase tracking-wider text-texto-fraco font-bold">Evidências</p>
+              <p className={`font-display font-extrabold text-lg ${evidencias.length >= 3 ? 'text-ativo-400' : 'text-espera-400'}`}>
+                {evidencias.length}
+              </p>
+            </div>
+            <div className="rounded-xl border border-linha bg-grafite-700 p-2.5 text-center">
+              <p className="text-[10px] uppercase tracking-wider text-texto-fraco font-bold">Prazo</p>
+              <p className={`font-display font-extrabold text-sm mt-1 ${dentroDoPrazo ? 'text-ativo-400' : 'text-falha-400'}`}>
+                {dentroDoPrazo ? 'dentro' : 'vencido'}
+              </p>
+            </div>
           </div>
 
-          <div className="p-4 space-y-3 flex-1 overflow-y-auto min-h-0">
-            {/* O PLACAR AO VIVO. É o que transforma o formulário em algo que a
-                pessoa entende antes de entregar, e não depois do fechamento. */}
-            {/* `flex flex-wrap` e não grade de 3: numa tela estreita os três
-                mostradores ficam com ~100px cada e o rótulo quebra no meio.
-                Assim eles ficam lado a lado quando há espaço e passam para a
-                linha de baixo quando não há -- sem precisar escolher um ponto
-                de quebra fixo. */}
-            <div className="flex flex-wrap gap-2 [&>*]:flex-1 [&>*]:min-w-[7rem]">
-              <div className="rounded-xl border border-linha bg-grafite-700 p-2.5 text-center">
-                <p className="text-[10px] uppercase tracking-wider text-texto-fraco font-bold">Completo</p>
-                <p className={`font-display font-extrabold text-lg ${completude >= 80 ? 'text-ativo-400' : completude >= 50 ? 'text-espera-400' : 'text-falha-400'}`}>
-                  {completude}%
-                </p>
-              </div>
-              <div className="rounded-xl border border-linha bg-grafite-700 p-2.5 text-center">
-                <p className="text-[10px] uppercase tracking-wider text-texto-fraco font-bold">Evidências</p>
-                <p className={`font-display font-extrabold text-lg ${evidenciasContadas >= 3 ? 'text-ativo-400' : 'text-espera-400'}`}>
-                  {evidenciasContadas}
-                </p>
-              </div>
-              <div className="rounded-xl border border-linha bg-grafite-700 p-2.5 text-center">
-                <p className="text-[10px] uppercase tracking-wider text-texto-fraco font-bold">Prazo</p>
-                <p className={`font-display font-extrabold text-sm mt-1 ${dentroDoPrazo ? 'text-ativo-400' : 'text-falha-400'}`}>
-                  {dentroDoPrazo ? 'dentro' : 'vencido'}
-                </p>
-              </div>
+          {erro && (
+            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-falha/10 border border-falha/30 text-falha-400 text-[11px]">
+              <AlertCircle size={13} className="shrink-0" /> {erro}
             </div>
+          )}
 
-            {erro && (
-              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-falha/10 border border-falha/30 text-falha-400 text-[11px]">
-                <AlertCircle size={13} className="shrink-0" /> {erro}
-              </div>
-            )}
-
-            {/* O PDF VEM PRIMEIRO -- é ele que preenche o resto.
-                Antes ele ficava no fim, depois de doze campos que a pessoa
-                digitava com o relatório aberto do lado. Invertido, o formulário
-                começa pelo trabalho que já está pronto. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <p className="text-[11px] font-semibold text-texto-suave mb-1.5">
-                Relatório em PDF <span className="text-texto-fraco font-normal">(o arquivo que vai para o cliente · até 15 MB)</span>
-              </p>
-              {pdf || pdfSalvo ? (
-                <div className="flex items-center gap-2 p-2.5 rounded-xl border border-acao/30 bg-acao/10">
-                  <FileText size={16} className="text-acao-200 shrink-0" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-xs font-semibold text-texto truncate">
-                      {pdf?.nome || pdfSalvo?.nome}
-                    </span>
-                    <span className="block text-[10px] text-texto-fraco">
-                      {tamanho(pdf?.bytes ?? pdfSalvo?.bytes)}{pdf ? ' · será enviado ao salvar' : ' · já enviado'}
-                    </span>
-                  </span>
-                  {/* Sem PDF novo escolhido, remover significa apagar o que está
-                      no servidor -- e isso só acontece ao salvar. */}
-                  <button
-                    onClick={() => { if (pdf) { setPdf(null); setAnalise(null); } else setPdfSalvo(null); }}
-                    className="shrink-0 p-1.5 rounded-lg text-falha-400 hover:bg-falha/15"
-                    title={pdf ? 'Descartar o arquivo escolhido' : 'Remover o relatório ao salvar'}
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              ) : (
-                <label className="flex items-center gap-2 p-3 rounded-xl border border-dashed border-linha-forte cursor-pointer text-texto-fraco hover:text-acao-200 hover:border-acao/50 transition-colors">
-                  <FileText size={16} className="shrink-0" />
-                  <span className="min-w-0">
-                    <span className="block text-xs font-semibold">Anexar o relatório em PDF</span>
-                    <span className="block text-[10px]">A empresa, a data e o que foi vistoriado são lidos daqui.</span>
-                  </span>
-                  <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={anexarPdf} />
-                </label>
-              )}
+              <label className="text-[11px] font-semibold text-texto-suave block mb-1">Empresa visitada *</label>
+              <input value={empresa} onChange={(e) => setEmpresa(e.target.value)} className={ENTRADA} />
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold text-texto-suave block mb-1">CNPJ (opcional)</label>
+              <input value={cnpj} onChange={(e) => setCnpj(e.target.value)} inputMode="numeric"
+                className={`${ENTRADA} font-mono`} />
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold text-texto-suave block mb-1">Data da visita</label>
+              <input type="date" value={dataVisita}
+                onChange={(e) => { setDataVisita(e.target.value); if (!edicao) setPrazoEm(prazoSugerido(e.target.value)); }}
+                className={ENTRADA} />
+              <p className="text-[10px] text-texto-fraco mt-1">É ela que define em qual mês o trabalho conta.</p>
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold text-texto-suave block mb-1">Prazo de entrega</label>
+              <input type="date" value={prazoEm} onChange={(e) => setPrazoEm(e.target.value)} className={ENTRADA} />
+            </div>
+          </div>
 
-              {lendo && (
-                <p className="mt-2 text-[11px] text-texto-fraco flex items-center gap-1.5">
-                  <Loader2 size={12} className="animate-spin" /> Lendo o relatório
-                </p>
-              )}
+          <div>
+            <label className="text-[11px] font-semibold text-texto-suave block mb-1">
+              Resumo da visita <span className="text-texto-fraco font-normal">(conta na completude a partir de {minimoResumo ?? 20} caracteres)</span>
+            </label>
+            <textarea value={resumo} onChange={(e) => setResumo(e.target.value)} rows={4}
+              className={`${ENTRADA} resize-none`} />
+          </div>
 
-              {/* O QUE FOI LIDO, à vista.
-                  Mostrar de onde saiu cada achado é o que torna a leitura
-                  automática confiável: quando ela errar, dá para ver o que ela
-                  leu -- em vez de a pessoa descobrir pelo campo errado. */}
-              {!lendo && analise && (
-                analise.lido ? (
-                  <div className="mt-2 p-2.5 rounded-xl border border-ativo/30 bg-ativo/10 space-y-1.5">
-                    <p className="text-[11px] font-bold text-ativo-400 flex items-center gap-1.5">
-                      <CheckCircle2 size={12} /> Li o relatório {analise.paginas} página{analise.paginas === 1 ? '' : 's'}
-                    </p>
-                    <p className="text-[10px] text-texto-suave leading-relaxed">
-                      {analise.empresa && <>Empresa <strong className="text-texto">{analise.empresa}</strong>. </>}
-                      {analise.dataVisita && (
-                        <>
-                          Visita em <strong className="text-texto">{data(analise.dataVisita)}</strong>
-                          {analise.dataDiaPresumido && ' (o relatório traz só mês e ano confira o dia)'}. {' '}
-                        </>
-                      )}
-                      {analise.fotos > 0 && <>{analise.fotos} foto{analise.fotos === 1 ? '' : 's'} de campo. </>}
-                      Cobre <strong className="text-texto">{analise.itensCobertos} de {analise.totalItens}</strong> itens do checklist.
-                    </p>
-                    <div className="flex flex-wrap gap-1">
-                      {itensRegra.map((i) => {
-                        const c = analise.cobertura?.[i.chave];
-                        return (
-                          <span key={i.chave}
-                            className={`text-[9px] px-1.5 py-0.5 rounded-full border ${c?.coberto ? 'border-ativo/40 bg-ativo/10 text-ativo-400' : 'border-linha text-texto-fraco'}`}
-                            title={c?.coberto ? `Encontrado: ${c.palavras.join(', ')}` : 'Não encontrado no relatório'}>
-                            {i.rotulo}
-                          </span>
-                        );
-                      })}
-                    </div>
+          <div>
+            <p className="text-[11px] font-semibold text-texto-suave mb-1.5">Checklist técnico</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {itensRegra.map((i) => {
+                const preenchido = String(itens[i.chave] || '').trim().length > 0;
+                return (
+                  <div key={i.chave}>
+                    <label className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 mb-1 ${preenchido ? 'text-ativo-400' : 'text-texto-fraco'}`}>
+                      {preenchido && <CheckCircle2 size={10} />} {i.rotulo}
+                    </label>
+                    <textarea
+                      value={itens[i.chave] || ''}
+                      onChange={(e) => setItens((s) => ({ ...s, [i.chave]: e.target.value }))}
+                      rows={2}
+                      className="w-full bg-grafite-700 border border-linha rounded-lg px-2.5 py-1.5 text-[11px] text-texto resize-none focus:outline-none focus:border-acao/50"
+                    />
                   </div>
-                ) : (
-                  <p className="mt-2 p-2.5 rounded-xl border border-espera/30 bg-espera/10 text-[10px] text-espera-400 leading-relaxed">
-                    {analise.motivo || 'Não consegui ler este PDF.'}
-                    {' '}O arquivo será enviado do mesmo jeito preencha os campos abaixo à mão.
-                  </p>
-                )
-              )}
+                );
+              })}
             </div>
+          </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-[11px] font-semibold text-texto-suave block mb-1">Empresa visitada *</label>
-                <input value={empresa} onChange={(e) => setEmpresa(e.target.value)}
-                  className="w-full bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto focus:outline-none focus:border-acao/50" />
-              </div>
-              <div>
-                <label className="text-[11px] font-semibold text-texto-suave block mb-1">CNPJ (opcional)</label>
-                <input value={cnpj} onChange={(e) => setCnpj(e.target.value)} inputMode="numeric"
-                  className="w-full bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto font-mono focus:outline-none focus:border-acao/50" />
-              </div>
-              <div>
-                <label className="text-[11px] font-semibold text-texto-suave block mb-1">Data da visita</label>
-                <input type="date" value={dataVisita}
-                  onChange={(e) => { setDataVisita(e.target.value); if (!edicao) setPrazoEm(prazoSugerido(e.target.value)); }}
-                  className="w-full bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto focus:outline-none focus:border-acao/50" />
-                <p className="text-[10px] text-texto-fraco mt-1">É ela que define em qual mês o trabalho conta.</p>
-              </div>
-              <div>
-                <label className="text-[11px] font-semibold text-texto-suave block mb-1">Prazo de entrega</label>
-                <input type="date" value={prazoEm} onChange={(e) => setPrazoEm(e.target.value)}
-                  className="w-full bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto focus:outline-none focus:border-acao/50" />
-              </div>
-            </div>
+          <div>
+            <label className="text-[11px] font-semibold text-texto-suave block mb-1">Pendências e recomendações</label>
+            <textarea value={pendencias} onChange={(e) => setPendencias(e.target.value)} rows={3}
+              className={`${ENTRADA} resize-none`} />
+          </div>
 
-            {/* O RESUMO E O CHECKLIST SAEM DO PDF -- e por isso não aparecem.
-                São eles que formam a completude, e o servidor os preenche lendo
-                o arquivo. Deixá-los à mostra pediria de novo o que a pessoa
-                acabou de escrever no relatório, que era exatamente o problema.
-                Ficam disponíveis para o caso do PDF que a leitura não entendeu
-                (e para os relatórios antigos, em edição). */}
-            <button
-              onClick={() => setManual((v) => !v)}
-              className="text-[11px] font-semibold text-texto-fraco hover:text-acao-200 flex items-center gap-1.5 self-start"
-            >
-              {manual ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-              Preencher resumo e checklist à mão
-              {analise?.lido && <span className="font-normal">(soma ao que o PDF já cobriu)</span>}
-            </button>
-
-            <div hidden={!manual} className="space-y-3">
-            <div>
-              <label className="text-[11px] font-semibold text-texto-suave block mb-1">
-                Resumo da visita <span className="text-texto-fraco font-normal">(conta na completude a partir de 20 caracteres)</span>
-              </label>
-              <textarea value={resumo} onChange={(e) => setResumo(e.target.value)} rows={3}
-                className="w-full bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto resize-none focus:outline-none focus:border-acao/50" />
-            </div>
-
-            <div>
-              <p className="text-[11px] font-semibold text-texto-suave mb-1.5">Checklist técnico</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {itensRegra.map((i) => {
-                  const preenchido = String(itens[i.chave] || '').trim().length > 0;
-                  // O QUE O PDF JÁ COBRIU fica dito no próprio item. Sem isso a
-                  // pessoa não tem como saber onde digitar ACRESCENTA e onde só
-                  // repete o que o relatório já diz -- e a completude parece
-                  // teimar num número sem explicação.
-                  const noPdf = !!analise?.cobertura?.[i.chave]?.coberto;
-                  const conta = preenchido || noPdf;
-                  return (
-                    <div key={i.chave}>
-                      <label className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 mb-1 ${conta ? 'text-ativo-400' : 'text-texto-fraco'}`}>
-                        {conta && <CheckCircle2 size={10} />} {i.rotulo}
-                        {noPdf && !preenchido && <span className="font-normal normal-case tracking-normal">no PDF</span>}
-                      </label>
-                      <textarea
-                        value={itens[i.chave] || ''}
-                        onChange={(e) => setItens((s) => ({ ...s, [i.chave]: e.target.value }))}
-                        rows={2}
-                        className="w-full bg-grafite-700 border border-linha rounded-lg px-2.5 py-1.5 text-[11px] text-texto resize-none focus:outline-none focus:border-acao/50"
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div>
-              <label className="text-[11px] font-semibold text-texto-suave block mb-1">Pendências e recomendações</label>
-              <textarea value={pendencias} onChange={(e) => setPendencias(e.target.value)} rows={2}
-                className="w-full bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto resize-none focus:outline-none focus:border-acao/50" />
-            </div>
-
-            <div>
-              <p className="text-[11px] font-semibold text-texto-suave mb-1.5">
-                {/* As fotos DE DENTRO do PDF já contam nesta parcela (o servidor
-                    conta ao ler o arquivo), então anexar aqui virou opcional --
-                    serve para o que não entrou no relatório. */}
-                Evidências avulsas <span className="text-texto-fraco font-normal">({evidencias.length}/12 · 3 já valem a faixa cheia{analise?.fotos ? ` · o PDF já traz ${analise.fotos}` : ''})</span>
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {evidencias.map((ev, i) => (
+          <div>
+            <p className="text-[11px] font-semibold text-texto-suave mb-1.5">
+              Evidências <span className="text-texto-fraco font-normal">({evidencias.length}/12 · 3 já valem a faixa cheia · entram no fim do PDF)</span>
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {evidencias.map((ev, i) => {
+                const src = typeof ev === 'string' ? ev : urlSalva.get(ev);
+                return (
                   <span key={i} className="relative w-16 h-16 rounded-lg border border-linha bg-grafite-700 grid place-items-center overflow-hidden">
-                    {typeof ev === 'string' && ev.startsWith('data:image') ? (
-                      <img src={ev} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <FileText size={18} className="text-texto-fraco" />
-                    )}
+                    {src ? <img src={src} alt="" className="w-full h-full object-cover" />
+                         : <FileText size={18} className="text-texto-fraco" />}
                     <button
                       onClick={() => setEvidencias((l) => l.filter((_, j) => j !== i))}
                       className="absolute top-0.5 right-0.5 bg-slate-950/80 rounded-full p-0.5 text-falha-400"
@@ -703,35 +687,28 @@ function ModalMapeamento({ itensRegra, minimoResumo, inicial, onFechar, onSalvo 
                       <X size={10} />
                     </button>
                   </span>
-                ))}
-                {evidencias.length < 12 && (
-                  <label className="w-16 h-16 rounded-lg border border-dashed border-linha-forte grid place-items-center cursor-pointer text-texto-fraco hover:text-acao-200 hover:border-acao/50 transition-colors">
-                    <Camera size={18} />
-                    <input type="file" accept="image/*" multiple className="hidden" onChange={anexar} />
-                  </label>
-                )}
-              </div>
+                );
+              })}
+              {evidencias.length < 12 && (
+                <label className="w-16 h-16 rounded-lg border border-dashed border-linha-forte grid place-items-center cursor-pointer text-texto-fraco hover:text-acao-200 hover:border-acao/50 transition-colors">
+                  <Camera size={18} />
+                  <input type="file" accept="image/*" multiple className="hidden" onChange={anexar} />
+                </label>
+              )}
             </div>
-            </div>
-          </div>
-
-          <div className="p-4 bg-grafite-600 border-t border-linha flex flex-col-reverse sm:flex-row sm:justify-end gap-2 shrink-0 rounded-b-2xl">
-            <button onClick={onFechar} disabled={salvando}
-              className="px-3 py-2 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 disabled:opacity-50">
-              Cancelar
-            </button>
-            <button onClick={() => salvar(false)} disabled={salvando}
-              className="px-3 py-2 rounded-lg bg-grafite-700 border border-linha text-texto text-xs font-semibold hover:border-linha-forte disabled:opacity-50 flex items-center justify-center gap-1.5">
-              {salvando ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Salvar rascunho
-            </button>
-            <button onClick={() => salvar(true)} disabled={salvando}
-              className="px-4 py-2 rounded-lg bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold disabled:opacity-50 flex items-center justify-center gap-1.5">
-              <Send size={13} /> Entregar
-            </button>
           </div>
         </div>
+
+        {/* ── DIREITA: a folha que vira o PDF ── */}
+        <div className="border-t lg:border-t-0 lg:border-l border-linha-forte bg-grafite-800/40 p-3 sm:p-5 lg:overflow-y-auto">
+          <p className="text-[10px] uppercase tracking-wider text-texto-fraco font-bold mb-2.5 flex items-center gap-1.5">
+            <FileText size={12} /> Prévia do PDF
+            <span className="font-normal normal-case tracking-normal">é este arquivo que o cliente recebe</span>
+          </p>
+          <FolhaRelatorio documento={documento} />
+        </div>
       </div>
-    </Portal>
+    </div>
   );
 }
 
@@ -993,17 +970,6 @@ function Configuracao() {
               onChange={(e) => mexer('vencimentoDiaDoMes', e.target.value === '' ? null : Number(e.target.value))} />
           </Campo>
         </div>
-        <label className="flex items-start gap-2 cursor-pointer">
-          <input type="checkbox" className="mt-0.5 accent-acao"
-            checked={!!rascunho.exigirPdf}
-            onChange={(e) => mexer('exigirPdf', e.target.checked)} />
-          <span>
-            <span className="text-[11px] font-semibold text-texto-suave block">Exigir o PDF anexado para entregar</span>
-            <span className="text-[10px] text-texto-fraco">
-              Vale só na entrega o rascunho continua podendo ser salvo sem arquivo, para a pessoa começar o registro e voltar depois.
-            </span>
-          </span>
-        </label>
       </div>
 
       <div className="glass-panel border border-linha rounded-2xl p-4 sm:p-5 space-y-4">
@@ -1239,6 +1205,27 @@ export default function Mapeamentos() {
     );
   }
 
+  /**
+   * O EDITOR TOMA A TELA -- ele não é mais um pop-up por cima da lista.
+   *
+   * Escrever relatório com a folha do lado precisa da largura inteira, e a
+   * lista atrás de um formulário desse tamanho não servia para nada: quem está
+   * escrevendo não consulta a lista, e quem consulta a lista não está
+   * escrevendo. A volta é explícita, pelo botão da barra.
+   */
+  if (editando && regras) {
+    return (
+      <EditorMapeamento
+        itensRegra={regras.itens}
+        minimoResumo={regras.minimoResumo}
+        inicial={editando.novo ? null : editando}
+        tecnicoNome={editando.novo ? usuario?.nome : editando.tecnicoNome || usuario?.nome}
+        onFechar={() => setEditando(null)}
+        onSalvo={() => { setEditando(null); carregar(); }}
+      />
+    );
+  }
+
   return (
     <div className="p-4 sm:p-6 space-y-4 fade-in">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -1405,15 +1392,6 @@ export default function Mapeamentos() {
         />
       )}
 
-      {editando && regras && (
-        <ModalMapeamento
-          itensRegra={regras.itens}
-          minimoResumo={regras.minimoResumo}
-          inicial={editando.novo ? null : editando}
-          onFechar={() => setEditando(null)}
-          onSalvo={() => { setEditando(null); carregar(); }}
-        />
-      )}
     </div>
   );
 }

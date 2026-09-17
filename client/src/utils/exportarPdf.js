@@ -782,3 +782,238 @@ export async function exportarRelatorioEmpresaPdf(relatorio) {
     .replace(/[^\w]+/g, '-').toLowerCase().slice(0, 40);
   pdf.save(`relatorio-${slug}-${periodo.inicioIso || ''}.pdf`);
 }
+
+// ── O RELATORIO DE VISITA TECNICA (MAPEAMENTO) ─────────────────────────────
+//
+// POR QUE ELE E GERADO AQUI, e nao mais anexado pelo tecnico.
+//
+// Ate agora o PDF vinha de fora: cada um montava o dele num editor qualquer e
+// subia o arquivo. O sistema entao LIA esse PDF para tentar descobrir o que
+// havia dentro -- leitura que depende do layout do documento, feito por fora, e
+// que errava calada. Dois relatorios da mesma empresa saiam com cara diferente,
+// e a completude media o quanto o extrator entendeu do arquivo de cada um.
+//
+// Montando o documento aqui, o que a pessoa digita E o relatorio: nao ha
+// transcricao, nao ha leitura para dar errado, e todo cliente recebe a mesma
+// folha. O preview da tela desenha ESTA MESMA descricao (montarDocumentoMapeamento).
+//
+// Ele DEVOLVE o arquivo em data URL em vez de baixar: quem chama e o formulario,
+// que manda o PDF junto do salvamento. Baixar e outro gesto, e quem quiser o
+// arquivo tem o link do historico.
+
+/**
+ * A MARCA D'AGUA -- a logo grande, clara, atras do texto.
+ *
+ * Desenhada no momento em que a pagina nasce, e nao no fim: em cima do texto,
+ * mesmo clara, ela suja a leitura de quem imprime. Embaixo, ela e o papel.
+ *
+ * Opacidade pelo GState, com rede: `GState` existe no jsPDF 4, mas se um dia
+ * sumir, o relatorio sai sem marca d'agua em vez de nao sair.
+ */
+function marcaDaguaPdf(pdf, logo) {
+  if (!logo?.dataUrl) return;
+  const largura = pdf.internal.pageSize.getWidth();
+  const altura = pdf.internal.pageSize.getHeight();
+  // Ocupa a metade da largura da folha, centralizada -- grande o bastante para
+  // ler como marca do documento, e nao como selo esquecido num canto.
+  const l = largura * 0.52;
+  const a = (logo.altura / logo.largura) * l;
+  try {
+    pdf.saveGraphicsState();
+    pdf.setGState(new pdf.GState({ opacity: 0.06 }));
+    pdf.addImage(logo.dataUrl, 'PNG', (largura - l) / 2, (altura - a) / 2, l, a);
+    pdf.restoreGraphicsState();
+  } catch {
+    /* sem transparencia disponivel: melhor folha limpa que logo solida por cima */
+  }
+}
+
+/**
+ * Gera o PDF do mapeamento a partir da descricao do documento.
+ *
+ * `documento` vem de `montarDocumentoMapeamento` -- o mesmo objeto que o
+ * preview da tela desenha. Devolve `{ conteudo, nome, bytes }` pronto para
+ * subir junto do formulario.
+ */
+export async function gerarMapeamentoPdf(documento, { nome = 'relatorio.pdf' } = {}) {
+  const { jsPDF } = await libs();
+  // `compress` ligado so aqui: este PDF e o unico que leva foto, e e o unico
+  // que SOBE para o servidor (teto de 15 MB) em vez de so ser baixado.
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+  const larguraPg = pdf.internal.pageSize.getWidth();
+  const alturaPg = pdf.internal.pageSize.getHeight();
+  const margem = 14;
+  const util = larguraPg - margem * 2;
+  const logo = await carregarLogo();
+
+  marcaDaguaPdf(pdf, logo);
+  let y = cabecalhoPdf(pdf, {
+    logo,
+    titulo: documento.titulo,
+    subtitulo: documento.subtitulo,
+    margem,
+  });
+
+  // Pagina nova ja nasce com a marca d'agua: e o unico jeito de ela ficar
+  // ATRAS do texto sem redesenhar a folha inteira no fim.
+  const quebra = (precisa = 6) => {
+    if (y + precisa > alturaPg - margem - 8) {
+      pdf.addPage();
+      marcaDaguaPdf(pdf, logo);
+      y = margem;
+    }
+  };
+
+  // ---------- Identificacao ----------
+  pdf.setFontSize(9);
+  documento.identificacao.forEach(({ rotulo, valor }) => {
+    const linhas = pdf.splitTextToSize(String(valor), util - 42);
+    quebra(linhas.length * 5.5);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(...TINTA);
+    pdf.text(`${rotulo}:`, margem, y);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(...TINTA_SUAVE);
+    linhas.forEach((linha, i) => pdf.text(linha, margem + 42, y + i * 5));
+    y += Math.max(1, linhas.length) * 5 + 0.5;
+  });
+  y += 4;
+
+  // ---------- As secoes, na ordem da descricao ----------
+  //
+  // Secao vazia NAO entra: na tela ela aparece como espaco reservado, para a
+  // pessoa ver o que falta, mas o cliente nao recebe titulo com nada embaixo.
+  for (const secao of documento.secoes) {
+    if (secao.vazia) continue;
+
+    if (secao.tipo === 'fotos') {
+      // As fotos comecam em pagina propria: espremidas no que sobrou da folha
+      // anterior elas saem do tamanho de selo, e evidencia que nao da para ver
+      // nao e evidencia.
+      pdf.addPage();
+      marcaDaguaPdf(pdf, logo);
+      y = margem;
+      y = tituloSecao(pdf, secao.titulo, margem, y);
+      const COL = 2;
+      const VAO = 6;
+      const larg = (util - VAO * (COL - 1)) / COL;
+      let col = 0;
+      let alturaLinha = 0;
+      for (const foto of secao.fotos) {
+        const img = await carregarFoto(foto);
+        if (!img) continue;
+        // A foto entra INTEIRA na caixa da coluna (larg x 70mm), encostando no
+        // lado que apertar primeiro: uma foto em pe nao pode empurrar a linha
+        // seguinte para fora da folha, e nenhuma delas sai esticada.
+        const esc = Math.min(larg / img.largura, 70 / img.altura);
+        const l = img.largura * esc;
+        const alt = img.altura * esc;
+        // Reserva a ALTURA CHEIA da linha, e nao a desta foto: a vizinha da
+        // direita pode ser mais alta, e quem decide a quebra e a mais alta das
+        // duas -- senao uma foto em pe passa da margem de baixo.
+        if (col === 0) quebra(76);
+        try { pdf.addImage(img.dataUrl, 'JPEG', margem + col * (larg + VAO), y, l, alt); }
+        catch { continue; }
+        alturaLinha = Math.max(alturaLinha, alt);
+        col += 1;
+        if (col === COL) { y += alturaLinha + VAO; col = 0; alturaLinha = 0; }
+      }
+      if (col > 0) y += alturaLinha + VAO;
+      continue;
+    }
+
+    quebra(14);
+    y = tituloSecao(pdf, secao.titulo, margem, y);
+
+    if (secao.tipo === 'texto') {
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(9.5);
+      pdf.setTextColor(...TINTA);
+      const linhas = pdf.splitTextToSize(secao.texto, util);
+      linhas.forEach((linha) => { quebra(5.5); pdf.text(linha, margem, y); y += 5; });
+      y += 4;
+      continue;
+    }
+
+    // Checklist: rotulo em cima, o que foi encontrado embaixo, com um fio
+    // claro separando um item do outro -- a mesma leitura do preview.
+    secao.itens.forEach((item) => {
+      const linhas = pdf.splitTextToSize(item.texto, util - 3);
+      quebra(linhas.length * 5 + 8);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(8);
+      pdf.setTextColor(...MARCA);
+      pdf.text(String(item.rotulo).toUpperCase(), margem, y, { charSpace: 0.3 });
+      y += 4.5;
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(9.5);
+      pdf.setTextColor(...TINTA);
+      linhas.forEach((linha) => { quebra(5.5); pdf.text(linha, margem + 3, y); y += 5; });
+      y += 1.5;
+      pdf.setDrawColor(...LINHA);
+      pdf.setLineWidth(0.2);
+      pdf.line(margem, y, larguraPg - margem, y);
+      y += 4;
+    });
+    y += 2;
+  }
+
+  rodapePdf(pdf, { legenda: documento.legenda, margem });
+
+  const conteudo = pdf.output('datauristring');
+  // O tamanho em bytes sai do proprio base64 -- a tela mostra "1,2 MB" antes de
+  // subir, e o teto do servidor e em bytes.
+  const base64 = conteudo.slice(conteudo.indexOf(',') + 1);
+  const bytes = Math.round((base64.length * 3) / 4);
+  return { conteudo, nome, bytes };
+}
+
+// Lado maior da evidencia dentro do PDF. A foto ocupa no maximo meia folha
+// (~90mm): a 1200px isso ja passa de 300 dpi, e tudo acima disso e peso puro.
+const LADO_MAIOR_EVIDENCIA = 1200;
+
+/**
+ * Uma evidencia pronta para o `addImage` -- REDUZIDA e em JPEG.
+ *
+ * Aceita tanto a data URL da foto recem-anexada quanto a URL do servidor de uma
+ * evidencia ja gravada (o cookie de sessao vai sozinho, same-origin). Falhou,
+ * devolve `null` e a foto e pulada: uma imagem quebrada nao pode impedir o
+ * relatorio de sair.
+ *
+ * ── POR QUE NAO ENTRA A FOTO ORIGINAL ──────────────────────────────────────
+ *
+ * Camera de celular entrega 4000x3000, e o PNG guarda isso sem perda: cinco
+ * fotos assim fizeram um PDF de 7 MB num teste -- com doze, o arquivo estoura o
+ * teto de 15 MB do servidor e o relatorio inteiro deixa de salvar por causa das
+ * evidencias. Reduzida ao que cabe no papel e em JPEG, a mesma foto pesa uma
+ * fracao disso e sai identica impressa.
+ *
+ * O ORIGINAL NAO SE PERDE: a evidencia continua sendo guardada inteira, e a
+ * tela de detalhe abre a foto em tamanho cheio. O que encolhe e a copia que vai
+ * dentro do documento.
+ */
+async function carregarFoto(src) {
+  try {
+    const img = await abrirImagem(src);
+    const l = img.naturalWidth;
+    const a = img.naturalHeight;
+    if (!l || !a) return null;
+    const esc = Math.min(1, LADO_MAIOR_EVIDENCIA / Math.max(l, a));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(l * esc));
+    canvas.height = Math.max(1, Math.round(a * esc));
+    const ctx = canvas.getContext('2d');
+    // Fundo branco antes de desenhar: PNG com transparencia vira preto no JPEG,
+    // que nao tem canal alfa.
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return {
+      dataUrl: canvas.toDataURL('image/jpeg', 0.72),
+      largura: canvas.width,
+      altura: canvas.height,
+    };
+  } catch {
+    return null;
+  }
+}

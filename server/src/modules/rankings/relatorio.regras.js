@@ -51,9 +51,6 @@ function padrao() {
     // daquele mes precisam estar entregues. `null` = a empresa nao usa essa
     // regra e vale so o prazo por relatorio.
     vencimentoDiaDoMes: null,
-    // Nao deixa ENTREGAR sem o PDF anexado. Desligado por padrao: ligar isso
-    // numa operacao que ainda nao manda PDF trancaria a entrega de todo mundo.
-    exigirPdf: false,
     minimoRelatorios: MINIMO_MAPEAMENTOS,
     pesos: { ...PESOS },
     custoPorDevolucao: CUSTO_POR_DEVOLUCAO,
@@ -155,7 +152,6 @@ function validar(entrada, base = padrao()) {
     out.vencimentoDiaDoMes = v === null || v === "" ? null : inteiro(v, 1, 31, base.vencimentoDiaDoMes ?? 5);
   }
 
-  if (entrada.exigirPdf !== undefined) out.exigirPdf = !!entrada.exigirPdf;
   if (entrada.minimoRelatorios !== undefined) {
     out.minimoRelatorios = inteiro(entrada.minimoRelatorios, 1, 20, base.minimoRelatorios);
   }
