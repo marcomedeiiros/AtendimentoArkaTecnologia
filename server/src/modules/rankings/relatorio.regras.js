@@ -63,6 +63,9 @@ function padrao() {
     // daquele mes. Depois, o mes esta fechado e a nota nao se mexe mais.
     // 31 quer dizer "o ultimo dia do mes", como no vencimento mensal.
     diaFechamento: 30,
+    // A HORA em que ele fecha, no dia acima. "23:59" e o fim do dia: quem
+    // fecha as 18h muda isto e a entrega para as 18h, e nao a meia-noite.
+    horaFechamento: "23:59",
     minimoRelatorios: MINIMO_MAPEAMENTOS,
     pesos: { ...PESOS },
     custoPorDevolucao: CUSTO_POR_DEVOLUCAO,
@@ -171,6 +174,13 @@ function validar(entrada, base = padrao()) {
     // Mesma regra do vencimento mensal: 31 significa o ultimo dia, seja ele
     // qual for -- a competencia nao pode SUMIR num mes de 30 dias.
     out.diaFechamento = inteiro(entrada.diaFechamento, 1, 31, base.diaFechamento);
+  }
+  if (entrada.horaFechamento !== undefined) {
+    // HH:MM, e o que nao for isso mantem o que ja estava -- um horario
+    // invalido nao pode virar "fecha em NaN" e travar a entrega de todo
+    // mundo. Recusar seria pior: `validar` roda tambem na LEITURA.
+    const bruto = String(entrada.horaFechamento || "").trim();
+    out.horaFechamento = /^([01]\d|2[0-3]):[0-5]\d$/.test(bruto) ? bruto : base.horaFechamento;
   }
   if (entrada.minimoRelatorios !== undefined) {
     out.minimoRelatorios = inteiro(entrada.minimoRelatorios, 1, 20, base.minimoRelatorios);
@@ -367,7 +377,10 @@ function fechamentoDaCompetencia(competencia, regras) {
   if (!ano || !mes) return null;
   const ultimo = new Date(ano, mes, 0).getDate();
   const dia = Math.min(regras?.diaFechamento ?? 30, ultimo);
-  return new Date(ano, mes - 1, dia, 23, 59, 59, 999);
+  // A HORA vem da configuracao. O padrao "23:59" e o fim do dia, que era o
+  // comportamento de antes -- quem nao mexer no campo nao sente diferenca.
+  const [h, min] = String(regras?.horaFechamento || "23:59").split(":").map(Number);
+  return new Date(ano, mes - 1, dia, Number.isFinite(h) ? h : 23, Number.isFinite(min) ? min : 59, 59, 999);
 }
 
 /** A competencia ja fechou? */

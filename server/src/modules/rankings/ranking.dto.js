@@ -137,6 +137,9 @@ const regrasRelatorioSchema = z.object({
   pontosPorRelatorio: z.number().int().min(1).max(100).optional(),
   // O dia em que a competencia do mes fecha. 31 = o ultimo dia, seja qual for.
   diaFechamento: z.number().int().min(1).max(31).optional(),
+  // A hora do fechamento, em HH:MM. So a FORMA aqui; a regra (e o que fazer
+  // com um horario invalido) fica em relatorio.regras.validar.
+  horaFechamento: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM").optional(),
   minimoRelatorios: z.number().int().min(1).max(20).optional(),
   custoPorDevolucao: z.number().int().min(0).max(25).optional(),
   /**

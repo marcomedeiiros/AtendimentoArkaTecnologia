@@ -1181,14 +1181,25 @@ function Configuracao() {
           </Campo>
           <Campo rotulo="Fecha o mês no dia"
             dica="Até esse dia a pontuação do mês ainda muda depois dele o mês está fechado, a nota não se mexe mais e o relatório daquele mês não pode mais ser entregue">
-            <input type="number" min={1} max={31} className={ENTRADA}
-              value={rascunho.diaFechamento ?? 30}
-              onChange={(e) => mexer('diaFechamento', Number(e.target.value))} />
+            {/* DIA + HORA, e não um calendário: isto é uma regra que se
+                repete todo mês. Uma data escolhida no calendário valeria
+                para setembro e não diria nada sobre outubro -- e alguém
+                teria de voltar aqui todo dia 1º. O dia do mês vale para
+                sempre; a hora é o que faltava para o administrador mandar
+                no horário. */}
+            <div className="flex gap-2">
+              <input type="number" min={1} max={31} className={ENTRADA}
+                value={rascunho.diaFechamento ?? 30}
+                onChange={(e) => mexer('diaFechamento', Number(e.target.value))} />
+              <input type="time" className={ENTRADA}
+                value={rascunho.horaFechamento ?? '23:59'}
+                onChange={(e) => mexer('horaFechamento', e.target.value)} />
+            </div>
             {/* A DATA DE VERDADE, para este mês e para um mês curto: “31” não
                 existe em fevereiro, e o número sozinho não conta essa parte.
                 Mostrar as duas evita o ajuste que só se descobre em fevereiro. */}
             <p className="text-[10px] text-texto-fraco mt-1">
-              Este mês fecha em <strong className="text-texto-suave">{dataDeFechamento(rascunho.diaFechamento)}</strong>
+              Este mês fecha em <strong className="text-texto-suave">{dataDeFechamento(rascunho.diaFechamento)} às {rascunho.horaFechamento ?? '23:59'}</strong>
               {' '}em fevereiro seria <strong className="text-texto-suave">{dataDeFechamento(rascunho.diaFechamento, 1)}</strong>
               {' '}um dia que não existe no mês cai no último dele.
             </p>
