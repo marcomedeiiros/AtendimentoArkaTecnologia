@@ -55,6 +55,21 @@ const primeiroDiaDoMes = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
 };
+/**
+ * A DATA em que a competência fecha, para a Configuração mostrar.
+ *
+ * Mesma conta do servidor (relatorio.regras.fechamentoDaCompetencia): o dia
+ * que não existe naquele mês cai no último dele.
+ */
+function dataDeFechamento(dia, mesRelativo = null) {
+  const hoje = new Date();
+  const mes = mesRelativo === null ? hoje.getMonth() : mesRelativo;
+  const ano = mesRelativo === null ? hoje.getFullYear() : hoje.getFullYear() + (mesRelativo < hoje.getMonth() ? 1 : 0);
+  const ultimo = new Date(ano, mes + 1, 0).getDate();
+  const d = Math.min(Number(dia) || 30, ultimo);
+  return `${String(d).padStart(2, '0')}/${String(mes + 1).padStart(2, '0')}`;
+}
+
 const ultimoDiaDoMes = () => {
   const d = new Date();
   const ultimo = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
@@ -1165,10 +1180,18 @@ function Configuracao() {
               onChange={(e) => mexer('prazoDias', Number(e.target.value))} />
           </Campo>
           <Campo rotulo="Fecha o mês no dia"
-            dica="Até esse dia a pontuação do mês ainda muda depois dele o mês está fechado, a nota não se mexe mais e o relatório daquele mês não pode mais ser entregue 31 = sempre o último dia do mês">
+            dica="Até esse dia a pontuação do mês ainda muda depois dele o mês está fechado, a nota não se mexe mais e o relatório daquele mês não pode mais ser entregue">
             <input type="number" min={1} max={31} className={ENTRADA}
               value={rascunho.diaFechamento ?? 30}
               onChange={(e) => mexer('diaFechamento', Number(e.target.value))} />
+            {/* A DATA DE VERDADE, para este mês e para um mês curto: “31” não
+                existe em fevereiro, e o número sozinho não conta essa parte.
+                Mostrar as duas evita o ajuste que só se descobre em fevereiro. */}
+            <p className="text-[10px] text-texto-fraco mt-1">
+              Este mês fecha em <strong className="text-texto-suave">{dataDeFechamento(rascunho.diaFechamento)}</strong>
+              {' '}em fevereiro seria <strong className="text-texto-suave">{dataDeFechamento(rascunho.diaFechamento, 1)}</strong>
+              {' '}um dia que não existe no mês cai no último dele.
+            </p>
           </Campo>
           <Campo rotulo="Vencimento mensal (dia do mês seguinte)"
             dica="Todos os relatórios de um mês precisam estar entregues até esse dia do mês seguinte No mês que não tiver esse dia, vence no último dia dele (31 = sempre no último dia) Vazio = a empresa não usa essa regra valendo as duas, vale a mais apertada">
@@ -1309,8 +1332,12 @@ function Configuracao() {
           className="px-3 py-2 rounded-xl bg-grafite-700 border border-linha text-texto-suave text-[11px] font-bold hover:border-linha-forte disabled:opacity-50 flex items-center gap-1.5">
           <RotateCcw size={12} /> Restaurar o padrão
         </button>
-        <button onClick={salvar} disabled={salvando || somaPesos !== 100}
-          title={somaPesos !== 100 ? 'Os pesos precisam somar 100' : undefined}
+        {/* O TRAVAMENTO ACOMPANHA A SOMA, e não um 100 escrito aqui: quando o
+            volume saiu dos pesos (virou ponto por relatório), a soma passou a
+            ser 75 -- e um 100 cravado deixava o botão desabilitado para
+            sempre, com a tela inteira parecendo que não salva. */}
+        <button onClick={salvar} disabled={salvando || somaPesos !== TETO_QUALIDADE}
+          title={somaPesos !== TETO_QUALIDADE ? `Os pesos de qualidade precisam somar ${TETO_QUALIDADE}` : undefined}
           className="px-4 py-2 rounded-xl bg-acao hover:bg-acao-200 text-slate-950 text-xs font-bold disabled:opacity-50 flex items-center gap-1.5">
           {salvando ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Salvar regras
         </button>

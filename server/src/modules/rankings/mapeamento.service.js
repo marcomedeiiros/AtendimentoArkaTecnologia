@@ -517,7 +517,10 @@ class MapeamentoService {
       orderBy: [{ dataVisita: "desc" }, { criadoEm: "desc" }],
       take: 300,
     });
-    return linhas.map((m) => this._mapear(m));
+    // O checklist EM VIGOR, lido UMA vez para a lista inteira: e ele que
+    // dimensiona a completude de cada linha.
+    const regrasAtuais = await regrasRelatorio.obter();
+    return linhas.map((m) => this._mapear(m, { itensRegra: regrasAtuais.itens }));
   }
 
   async obter(id, usuario) {
@@ -526,7 +529,8 @@ class MapeamentoService {
     if (m.tecnicoId !== usuario?.sub && !(await ehSupervisor(usuario?.sub))) {
       throw new AppError("Sem acesso a este mapeamento", 403, "SEM_PERMISSAO");
     }
-    return this._mapear(m, { completo: true });
+    const regrasAtuais = await regrasRelatorio.obter();
+    return this._mapear(m, { completo: true, itensRegra: regrasAtuais.itens });
   }
 
   async criar(dados, usuario) {
@@ -576,7 +580,7 @@ class MapeamentoService {
       },
     });
     bus.emitRecurso("mapeamentos");
-    return this._mapear(criado, { completo: true });
+    return this._mapear(criado, { completo: true, itensRegra: regras.itens });
   }
 
   async atualizar(id, dados, usuario) {
@@ -649,7 +653,7 @@ class MapeamentoService {
       },
     });
     bus.emitRecurso("mapeamentos");
-    return this._mapear(salvo, { completo: true });
+    return this._mapear(salvo, { completo: true, itensRegra: regrasAtuais.itens });
   }
 
   /**
@@ -705,7 +709,8 @@ class MapeamentoService {
     });
     logger.info("Relatorio devolvido para correcao", { id, por: nome });
     bus.emitRecurso("mapeamentos");
-    return this._mapear(salvo, { completo: true });
+    const regrasAtuais = await regrasRelatorio.obter();
+    return this._mapear(salvo, { completo: true, itensRegra: regrasAtuais.itens });
   }
 
   async remover(id, usuario) {
@@ -739,7 +744,22 @@ class MapeamentoService {
    * da pontuacao -- a tela mostra exatamente o numero que virou ponto, e nao uma
    * segunda leitura do mesmo relatorio.
    */
-  _mapear(m, { completo = false } = {}) {
+  /**
+   * @param {Array} itensRegra o checklist EM VIGOR
+   *
+   * ── POR QUE O CHECKLIST TEM DE CHEGAR AQUI ────────────────────────────
+   *
+   * `completudeDe` sem o segundo argumento usa a lista DE FABRICA (8 itens).
+   * Numa empresa que configurou um checklist de 2, um relatorio com os 2
+   * itens e a descricao preenchidos aparecia como 22% na lista (2 de 8+1) --
+   * enquanto o formulario, que usa a lista configurada, mostrava 100%.
+   *
+   * Duas contas para o mesmo numero: a tela dizia que estava completo e a
+   * lista dizia que nao, e a leitura possivel era "o sistema nao salvou o que
+   * eu preenchi". O ranking sempre usou a lista em vigor; era esta linha que
+   * estava fora.
+   */
+  _mapear(m, { completo = false, itensRegra = null } = {}) {
     const base = {
       id: m.id,
       tecnicoId: m.tecnicoId,
@@ -751,7 +771,7 @@ class MapeamentoService {
       entregueEm: m.entregueEm,
       status: m.status,
       devolucoes: m.devolucoes,
-      completude: Math.round(completudeDe(m) * 100),
+      completude: Math.round(completudeDe(m, itensRegra || ITENS_MAPEAMENTO) * 100),
       noPrazo: noPrazo(m),
       evidencias: Array.isArray(m.evidencias) ? m.evidencias.length : 0,
       // O PDF: nome, tamanho e quando foi enviado. O CAMINHO em disco nunca sai
