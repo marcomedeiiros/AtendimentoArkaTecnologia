@@ -4,11 +4,11 @@
  * ── POR QUE ISTO EXISTE ────────────────────────────────────────────────────
  *
  * O relatório agora é MONTADO na plataforma: o técnico digita à esquerda e vê
- * a folha à direita, e é essa folha que vira o PDF entregue ao cliente. São
+ * a folha à direita, e é essa folha que vira o PDF entregue ao supervisor. São
  * dois renderizadores diferentes -- HTML na tela, jsPDF no arquivo -- e nada
  * garante que dois códigos que desenham "a mesma coisa" continuem desenhando a
  * mesma coisa depois do terceiro ajuste. O preview que mente é pior que não ter
- * preview: a pessoa confere na tela e o cliente recebe outro documento.
+ * preview: a pessoa confere na tela e quem valida recebe outro documento.
  *
  * Então o CONTEÚDO nasce aqui, uma vez: que seções existem, em que ordem, o que
  * entra em cada uma e o que está vazio. Os dois desenhistas recebem a mesma
@@ -49,8 +49,8 @@ function documento(cnpj) {
  *
  * Seção sem conteúdo não some: ela volta marcada `vazia`. Na tela isso vira um
  * espaço reservado -- que é o que mostra à pessoa o que ainda falta escrever --
- * e no PDF ela é descartada, porque ninguém manda ao cliente um título com
- * nada embaixo.
+ * e no PDF ela é descartada, porque um título com nada embaixo não diz nada a
+ * quem vai validar a visita.
  */
 export function montarDocumentoMapeamento(dados = {}, itensRegra = []) {
   const {
@@ -115,11 +115,13 @@ export function montarDocumentoMapeamento(dados = {}, itensRegra = []) {
     identificacao,
     secoes,
     // O rodapé do PDF e a legenda da folha na tela -- o mesmo texto nos dois.
-    legenda: `Arka Tecnologia · Relatório de visita técnica${empresa ? ` · ${String(empresa).trim()}` : ''}`,
+    // "Uso interno" no rodapé porque é o que este documento é: ele vai para o
+    // supervisor, e não para o cliente visitado.
+    legenda: `Arka Tecnologia · Relatório de visita técnica · uso interno${empresa ? ` · ${String(empresa).trim()}` : ''}`,
   };
 }
 
-/** Nome do arquivo que o cliente recebe: empresa e data, sem acento nem espaço. */
+/** Nome do arquivo entregue: empresa e data, sem acento nem espaço. */
 export function nomeArquivoMapeamento({ empresa, dataVisita } = {}) {
   const slug = String(empresa || 'visita')
     .normalize('NFD')

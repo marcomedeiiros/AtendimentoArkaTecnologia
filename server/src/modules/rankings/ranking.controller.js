@@ -120,6 +120,10 @@ class RankingController {
     return success(res, await mapeamentoService.listar(req.query, req.user));
   }
 
+  async buscarEmpresas(req, res) {
+    return success(res, await mapeamentoService.empresasParaBusca(req.query.q));
+  }
+
   async obterMapeamento(req, res) {
     return success(res, await mapeamentoService.obter(req.params.id, req.user));
   }

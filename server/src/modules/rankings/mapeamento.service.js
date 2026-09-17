@@ -403,6 +403,45 @@ class MapeamentoService {
     return { ...aberto, mimetype: meta?.mimetype || "application/octet-stream", nome: meta?.nome || `evidencia-${i + 1}` };
   }
 
+  /**
+   * AS EMPRESAS DO CADASTRO, para o campo de empresa visitada se completar.
+   *
+   * ── POR QUE ELA VIVE AQUI, E NAO EM /parceiros ────────────────────────────
+   *
+   * A tela Clientes (CNPJ) esta atras do modulo "parceiros", e quem faz visita
+   * tecnica em geral nao tem esse modulo: usar a rota de la obrigaria a abrir o
+   * cadastro inteiro (contrato, telefones, contatos, status) para quem so
+   * precisa acertar o nome e o CNPJ do relatorio.
+   *
+   * Entao esta rota devolve DUAS COLUNAS e mais nada: razao social e CNPJ. E o
+   * bastante para preencher o formulario, e nao carrega nada que a pessoa nao
+   * precisava ver.
+   *
+   * So ATIVOS: sugerir um cliente que a empresa nao atende mais e convidar o
+   * erro que o autocompletar deveria evitar.
+   */
+  async empresasParaBusca(busca) {
+    const q = String(busca || "").trim();
+    // Menos de duas letras nao e busca: a cada tecla viria a lista inteira de
+    // clientes, que e exatamente o que o `q` existe para evitar.
+    if (q.length < 2) return [];
+    const so = q.replace(/\D/g, "");
+    const linhas = await prisma.parceiro.findMany({
+      where: {
+        status: "ativo",
+        // Digitou numero? Procura por CNPJ tambem -- quem tem o documento na
+        // mao nao deveria ter de descobrir a grafia da razao social.
+        OR: so.length >= 3
+          ? [{ razaoSocial: { contains: q } }, { cnpj: { contains: so } }]
+          : [{ razaoSocial: { contains: q } }],
+      },
+      select: { razaoSocial: true, cnpj: true },
+      orderBy: { razaoSocial: "asc" },
+      take: 8,
+    });
+    return linhas.map((p) => ({ razaoSocial: p.razaoSocial, cnpj: p.cnpj }));
+  }
+
   async listar(filtros, usuario) {
     const supervisor = await ehSupervisor(usuario?.sub);
     const where = {};

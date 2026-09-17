@@ -74,6 +74,11 @@ router.get("/regras", exigirRelatorioDeVisita, (req, res, next) => controller.re
 // ── MAPEAMENTOS -- antes de /:equipe, senao "mapeamentos" cairia na rota do
 // ranking e viraria um "ranking chamado mapeamentos" com erro 400.
 router.get("/mapeamentos", exigirRelatorioDeVisita, (req, res, next) => controller.listarMapeamentos(req, res).catch(next));
+// As empresas do cadastro, para o campo "empresa visitada" se completar.
+// ANTES de "/mapeamentos/:id": senao "empresas" seria lido como um id.
+router.get("/mapeamentos/empresas", exigirRelatorioDeVisita, (req, res, next) =>
+  controller.buscarEmpresas(req, res).catch(next)
+);
 // O PDF. Antes de "/mapeamentos/:id" nao precisa (o caminho e mais longo), mas
 // fica junto para quem le a lista ver que o arquivo tem endereco proprio -- e
 // que por isso o service reconfere a permissao em vez de confiar na listagem.

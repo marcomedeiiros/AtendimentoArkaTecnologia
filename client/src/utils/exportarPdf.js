@@ -794,8 +794,13 @@ export async function exportarRelatorioEmpresaPdf(relatorio) {
 // e a completude media o quanto o extrator entendeu do arquivo de cada um.
 //
 // Montando o documento aqui, o que a pessoa digita E o relatorio: nao ha
-// transcricao, nao ha leitura para dar errado, e todo cliente recebe a mesma
-// folha. O preview da tela desenha ESTA MESMA descricao (montarDocumentoMapeamento).
+// transcricao, nao ha leitura para dar errado, e o supervisor recebe sempre a
+// mesma folha. O preview da tela desenha ESTA MESMA descricao
+// (montarDocumentoMapeamento).
+//
+// ESTE DOCUMENTO E INTERNO: ele e a entrega da visita para a validacao do
+// supervisor, e nao o relatorio que vai ao cliente (esse e o de CNPJ, mais
+// abaixo neste arquivo). O rodape diz isso, para nao virar anexo de e-mail.
 //
 // Ele DEVOLVE o arquivo em data URL em vez de baixar: quem chama e o formulario,
 // que manda o PDF junto do salvamento. Baixar e outro gesto, e quem quiser o

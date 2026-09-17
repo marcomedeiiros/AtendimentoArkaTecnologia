@@ -279,7 +279,7 @@ function ModalDetalhe({ id, itensRegra, onFechar, onEditar, podeEditar }) {
  *
  * Seção sem conteúdo aparece como espaço reservado, em cinza claro: é isso que
  * diz à pessoa o que falta escrever ANTES de entregar. No PDF ela não entra --
- * ninguém manda ao cliente um título com nada embaixo.
+ * ninguém manda para a validação um título com nada embaixo.
  */
 const TINTA_FOLHA = '#111b21';
 const TINTA_SUAVE_FOLHA = '#54666e';
@@ -391,7 +391,9 @@ function FolhaRelatorio({ documento }) {
  *
  * Agora o relatório é MONTADO aqui. O que se digita à esquerda aparece na folha
  * à direita, e é essa folha que vira o PDF ao salvar. Não há mais upload, não
- * há mais leitura para dar errado, e o cliente recebe sempre o mesmo documento.
+ * há mais leitura para dar errado, e o supervisor recebe sempre o mesmo
+ * documento -- este relatório é a entrega INTERNA da visita, e é por ele que a
+ * validação acontece.
  *
  * ── POR QUE TELA CHEIA, E NÃO O POP-UP DE ANTES ────────────────────────────
  *
@@ -417,6 +419,33 @@ function EditorMapeamento({ itensRegra, minimoResumo, inicial, tecnicoNome, onFe
   const [evidencias, setEvidencias] = useState(() => inicial?.arquivos || []);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
+  // As empresas sugeridas para o campo de cima, e se a lista esta aberta.
+  const [sugestoes, setSugestoes] = useState([]);
+  const [buscando, setBuscando] = useState(false);
+
+  /**
+   * BUSCA A EMPRESA NO CADASTRO enquanto se digita -- com freio.
+   *
+   * O atraso de 250ms nao e enfeite: sem ele, "Costa Camargo" dispara treze
+   * consultas, doze delas jogadas fora, e a lista pisca a cada tecla. O
+   * `cancelado` descarta a resposta que chega depois de a busca ter mudado --
+   * senao a resposta lenta de "cos" sobrescreveria a de "costa camargo".
+   *
+   * Falha e silenciosa de proposito: sem cadastro, sem rede ou sem permissao,
+   * o campo continua sendo um campo de texto comum. Autocompletar e atalho, e
+   * atalho que quebra nao pode impedir de lancar o relatorio.
+   */
+  useEffect(() => {
+    const q = empresa.trim();
+    if (!buscando || q.length < 2) { setSugestoes([]); return; }
+    let cancelado = false;
+    const t = setTimeout(() => {
+      RankingsAPI.buscarEmpresasMapeamento(q)
+        .then((r) => { if (!cancelado) setSugestoes(Array.isArray(r) ? r : []); })
+        .catch(() => { if (!cancelado) setSugestoes([]); });
+    }, 250);
+    return () => { cancelado = true; clearTimeout(t); };
+  }, [empresa, buscando]);
 
   /**
    * COMO VER UMA EVIDÊNCIA QUE JÁ ESTÁ NO SERVIDOR.
@@ -610,9 +639,49 @@ function EditorMapeamento({ itensRegra, minimoResumo, inicial, tecnicoNome, onFe
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
+            {/* A EMPRESA SAI DO CADASTRO, e traz o CNPJ com ela. Digitar o nome
+                à mão em cada visita era reescrever o que já está em Clientes --
+                e cada grafia diferente ("Costa Camargo", "COSTA CAMARGO LTDA")
+                virava uma empresa diferente no relatório, com o CNPJ em branco
+                ou digitado errado. */}
+            <div className="relative">
               <label className="text-[11px] font-semibold text-texto-suave block mb-1">Empresa visitada *</label>
-              <input value={empresa} onChange={(e) => setEmpresa(e.target.value)} className={ENTRADA} />
+              <input
+                value={empresa}
+                onChange={(e) => { setEmpresa(e.target.value); setBuscando(true); }}
+                onFocus={() => setBuscando(true)}
+                /* O clique na sugestão precisa acontecer ANTES de a lista
+                   fechar. Por isso o fechamento espera um instante -- sem isso
+                   o `blur` do campo apagava o item debaixo do dedo. */
+                onBlur={() => setTimeout(() => setBuscando(false), 150)}
+                autoComplete="off"
+                className={ENTRADA}
+              />
+              {buscando && sugestoes.length > 0 && (
+                <ul className="absolute z-20 left-0 right-0 mt-1 glass-panel border border-linha rounded-xl shadow-2xl overflow-hidden max-h-56 overflow-y-auto">
+                  {sugestoes.map((s) => (
+                    <li key={s.cnpj}>
+                      <button
+                        type="button"
+                        /* `onMouseDown`, e nao `onClick`: o clique dispara
+                           depois do `blur`, e aí a lista já não existe. */
+                        onMouseDown={() => {
+                          setEmpresa(s.razaoSocial);
+                          setCnpj(s.cnpj || '');
+                          setBuscando(false);
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-acao/15 transition-colors"
+                      >
+                        <span className="block text-[11px] font-semibold text-texto truncate">{s.razaoSocial}</span>
+                        <span className="block text-[10px] text-texto-fraco font-mono">{s.cnpj}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="text-[10px] text-texto-fraco mt-1">
+                Comece a digitar: o cliente cadastrado aparece abaixo e preenche o CNPJ.
+              </p>
             </div>
             <div>
               <label className="text-[11px] font-semibold text-texto-suave block mb-1">CNPJ (opcional)</label>
@@ -703,7 +772,7 @@ function EditorMapeamento({ itensRegra, minimoResumo, inicial, tecnicoNome, onFe
         <div className="border-t lg:border-t-0 lg:border-l border-linha-forte bg-grafite-800/40 p-3 sm:p-5 lg:overflow-y-auto">
           <p className="text-[10px] uppercase tracking-wider text-texto-fraco font-bold mb-2.5 flex items-center gap-1.5">
             <FileText size={12} /> Prévia do PDF
-            <span className="font-normal normal-case tracking-normal">é este arquivo que o cliente recebe</span>
+            <span className="font-normal normal-case tracking-normal">é este arquivo que vai para o supervisor</span>
           </p>
           <FolhaRelatorio documento={documento} />
         </div>
@@ -1018,13 +1087,13 @@ function Configuracao() {
 
       <div className="glass-panel border border-linha rounded-2xl p-4 sm:p-5 space-y-3">
         <p className="text-[11px] font-bold text-acao-200 flex items-center gap-1.5">
-          <FileText size={13} /> Leitura do PDF
+          <FileText size={13} /> Checklist da visita
         </p>
         <p className="text-[10px] text-texto-fraco leading-relaxed">
-          Cada linha é um item do checklist da visita ele é dado como coberto quando o relatório
-          traz alguma das palavras ao lado cada empresa escreve com o vocabulário dela, e um item
-          que nunca casa vira completude perdida sem ninguém entender por quê separe as palavras
-          por vírgula
+          Cada linha é um campo do formulário e uma seção do PDF a ordem daqui é a ordem da folha
+          as palavras ao lado valem só para os relatórios antigos, que eram lidos de um PDF
+          anexado hoje o documento é montado na plataforma, e o que conta é o que o técnico
+          escreve em cada item
         </p>
 
         {/* MEXER NO CHECKLIST MUDA O PASSADO, e isso precisa estar escrito.

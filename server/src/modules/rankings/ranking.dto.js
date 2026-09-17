@@ -131,6 +131,38 @@ const regrasRelatorioSchema = z.object({
   vencimentoDiaDoMes: z.number().int().min(1).max(31).nullable().optional(),
   minimoRelatorios: z.number().int().min(1).max(20).optional(),
   custoPorDevolucao: z.number().int().min(0).max(25).optional(),
+  /**
+   * O CHECKLIST -- e o campo que FALTAVA aqui.
+   *
+   * ── O DEFEITO QUE ISTO CORRIGE ──────────────────────────────────────────
+   *
+   * O checklist virou configuravel, mas a lista nunca entrou neste schema. O
+   * `validate` grava `req.body = result.data`, e o Zod DESCARTA a chave que o
+   * schema nao conhece: `itens` era removido na borda, chegava `undefined` no
+   * service, e `validarItens(undefined, base)` devolvia a lista de antes.
+   *
+   * O efeito na tela era o pior possivel: remover um item avisava
+   * "Configuracao salva" -- porque o resto realmente salvou -- e a lista
+   * voltava inteira, como se a gravacao tivesse sido desfeita sozinha.
+   * Renomear e acrescentar item nao funcionavam pelo mesmo motivo.
+   *
+   * A REGRA continua no service (`relatorio.regras.validarItens`): chave
+   * derivada do rotulo, duplicada descartada, teto de 20 e checklist vazio
+   * recusado. Aqui e so a forma -- a mesma divisao do `itensSchema` acima.
+   *
+   * `chave` e opcional porque item NOVO nao tem uma: ela nasce do rotulo, no
+   * servidor. Quando vem, ela vence -- e o que faz um item sobreviver a ser
+   * renomeado sem perder o texto ja escrito nos relatorios.
+   */
+  itens: z
+    .array(
+      z.object({
+        chave: z.string().max(40).optional().nullable(),
+        rotulo: z.string().max(60),
+      })
+    )
+    .max(40)
+    .optional(),
   pesos: z.record(z.string(), z.number().int().min(0).max(100)).optional(),
   // Lista ou texto separado por virgula -- a tela usa um campo de texto por
   // item, e obrigar o front a partir a string so moveria a mesma regra de lugar.

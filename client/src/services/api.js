@@ -600,6 +600,12 @@ export const RankingsAPI = {
     return request(`/rankings/mapeamentos${q.toString() ? `?${q}` : ''}`);
   },
   obterMapeamento: (id) => request(`/rankings/mapeamentos/${id}`),
+  // AS EMPRESAS DO CADASTRO, para o campo "empresa visitada" se completar.
+  // Devolve no maximo 8 pares { razaoSocial, cnpj } -- e nao o cadastro
+  // inteiro: a tela Clientes (CNPJ) esta atras do modulo `parceiros`, que quem
+  // faz visita em geral nao tem, e o formulario so precisa do nome e do numero.
+  buscarEmpresasMapeamento: (q) =>
+    request(`/rankings/mapeamentos/empresas?q=${encodeURIComponent(q || '')}`),
   // LE o PDF e devolve o que ele diz (empresa, data, fotos, itens cobertos).
   // Nao cria nada: a resposta e SUGESTAO para o formulario, e quem confirma e
   // a pessoa. O arquivo sobe de novo no salvar -- aqui nada fica guardado.
