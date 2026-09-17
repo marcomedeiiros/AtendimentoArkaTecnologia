@@ -902,23 +902,70 @@ export async function gerarMapeamentoPdf(documento, { nome = 'relatorio.pdf' } =
        * folha para ver a foto do que acabou de ler.
        *
        * Agora elas entram onde estao, e so pulam quando NAO CABE nem uma linha
-       * delas. Em tres colunas de ate 52mm, cinco ou seis fotos ainda cabem
-       * abaixo do texto de um relatorio tipico -- e continuam grandes o
-       * bastante para se ver o rack, que era o motivo da pagina propria.
+       * delas.
+       *
+       * ── E SAEM DO MAIOR TAMANHO QUE A FOLHA PERMITIR ──────────────────────
+       *
+       * Nem o numero de colunas nem a altura sao fixos. As combinacoes abaixo
+       * estao da MAIOR para a menor, e vale a primeira em que todas as fotos
+       * cabem no que sobrou da pagina: com duas ou tres fotos elas saem em duas
+       * colunas, largas; com seis, em tres; e num relatorio que ja encheu a
+       * folha, encolhem em vez de virar papel a mais.
+       *
+       * Numeros fixos teriam de ser os do PIOR caso -- e era isso que deixava a
+       * foto pequena mesmo quando havia meia folha livre embaixo dela.
        */
-      const COL = 3;
-      const VAO = 5;
-      const ALT_MAX = 52;
-      // Cabe o titulo e uma linha inteira de fotos? Senao, vira a pagina agora
-      // -- um titulo sozinho no pe da folha e pior que a quebra.
-      quebra(ALT_MAX + 14);
-      y = tituloSecao(pdf, secao.titulo, margem, y);
+      const VAO = 4;
+
+      // As fotos vem TODAS antes de desenhar: sem as medidas de cada uma nao da
+      // para saber a altura da grade -- e e ela que decide o tamanho.
+      const imgs = (await Promise.all(secao.fotos.map(carregarFoto))).filter(Boolean);
+      if (!imgs.length) continue;
+
+      // Altura da grade num arranjo: a soma das linhas, cada uma valendo o
+      // tamanho da foto mais alta dela.
+      const alturaDaGrade = (col, teto) => {
+        const larg = (util - VAO * (col - 1)) / col;
+        let total = 0;
+        for (let i = 0; i < imgs.length; i += col) {
+          const linha = imgs.slice(i, i + col);
+          total += Math.max(...linha.map((im) => Math.min(larg / im.largura, teto / im.altura) * im.altura)) + VAO;
+        }
+        return total;
+      };
+
+      // Quanto de papel cada foto ganha num arranjo -- a media da area
+      // desenhada. E por ela que os arranjos sao ordenados, e nao pelo teto:
+      // duas colunas com teto baixo podem dar uma foto MAIOR que tres colunas
+      // com teto alto, porque numa foto deitada quem manda e a largura. Comparar
+      // tetos escolheria o arranjo errado justamente na foto mais comum -- a do
+      // rack, tirada deitada.
+      const areaPorFoto = (col, teto) => {
+        const larg = (util - VAO * (col - 1)) / col;
+        const soma = imgs.reduce((acc, im) => {
+          const esc = Math.min(larg / im.largura, teto / im.altura);
+          return acc + im.largura * esc * im.altura * esc;
+        }, 0);
+        return soma / imgs.length;
+      };
+
+      const ARRANJOS = [2, 3]
+        .flatMap((col) => [96, 86, 78, 70, 62, 56, 50, 44].map((teto) => [col, teto]))
+        .sort((a, b) => areaPorFoto(...b) - areaPorFoto(...a));
+      // A QUEBRA VEM ANTES DA ESCOLHA DO ARRANJO, e nao depois: nao cabendo nem
+      // a menor fileira, a folha vira agora -- e o arranjo e entao escolhido
+      // para a pagina nova, onde ha espaco para as fotos sairem grandes. Na
+      // ordem inversa, o espaco medido seria o do fim da folha anterior e as
+      // fotos sairiam pequenas numa pagina quase vazia.
+      quebra(44 + 14);
+      // O espaco que sobra na folha depois do titulo desta secao.
+      const sobra = alturaPg - margem - 8 - (y + 5);
+      const [COL, ALT_MAX] = ARRANJOS.find(([c, t]) => alturaDaGrade(c, t) <= sobra) || ARRANJOS[ARRANJOS.length - 1];
       const larg = (util - VAO * (COL - 1)) / COL;
+      y = tituloSecao(pdf, secao.titulo, margem, y);
       let col = 0;
       let alturaLinha = 0;
-      for (const foto of secao.fotos) {
-        const img = await carregarFoto(foto);
-        if (!img) continue;
+      for (const img of imgs) {
         // A foto entra INTEIRA na caixa da coluna, encostando no lado que
         // apertar primeiro: uma foto em pe nao pode empurrar a linha seguinte
         // para fora da folha, e nenhuma delas sai esticada.
@@ -926,8 +973,8 @@ export async function gerarMapeamentoPdf(documento, { nome = 'relatorio.pdf' } =
         const l = img.largura * esc;
         const alt = img.altura * esc;
         // Reserva a ALTURA CHEIA da linha, e nao a desta foto: a vizinha da
-        // direita pode ser mais alta, e quem decide a quebra e a mais alta das
-        // tres -- senao uma foto em pe passa da margem de baixo.
+        // direita pode ser mais alta, e quem decide a quebra e a mais alta da
+        // fileira -- senao uma foto em pe passa da margem de baixo.
         if (col === 0) quebra(ALT_MAX + VAO);
         // Centralizada na coluna: em pe ela ocupa metade da largura, e alinhada
         // a esquerda a fileira fica com buracos em lugares diferentes.

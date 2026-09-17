@@ -357,9 +357,13 @@ function FolhaRelatorio({ documento }) {
                   ))}
                 </div>
               ) : (
-                // Três colunas, como no PDF: a folha da tela tem de mostrar a
-                // mesma fileira que o arquivo vai desenhar.
-                <div className="mt-2 grid grid-cols-3 gap-1.5">
+                // A MESMA FILEIRA DO PDF, aproximada: lá o número de colunas
+                // sai do espaço que sobrou na folha (poucas fotos ficam em duas
+                // colunas, grandes; muitas, em três). Aqui não há folha para
+                // medir, então vale a regra simples -- até quatro fotos, duas
+                // colunas. O que a prévia promete é o CONTEÚDO; a fileira pode
+                // sair de outro tamanho quando a página estiver apertada.
+                <div className={`mt-2 grid gap-1.5 ${secao.fotos.length <= 4 ? 'grid-cols-2' : 'grid-cols-3'}`}>
                   {secao.fotos.map((src, i) => (
                     <img key={i} src={src} alt={`Evidência ${i + 1}`}
                       className="w-full max-h-28 object-contain rounded"
