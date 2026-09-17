@@ -1833,8 +1833,72 @@ class WhatsAppService {
     };
   }
 
-  async desconectar(instanceName) {
+  /**
+   * ENCERRAR A SESSAO -- e por que esta rota agora pode dizer NAO.
+   *
+   * `logout` chama DELETE /instance/logout na Evolution, que APAGA a credencial
+   * do pareamento no banco dela. Nao e "desligar": e desfazer o pareamento. O
+   * unico caminho de volta e alguem com o celular na mao escaneando o QR.
+   *
+   * ── O DIA EM QUE ISSO CUSTOU O PAREAMENTO (15/09/2026) ────────────────────
+   *
+   * O socket do Baileys morreu as 13:21 e o envio comecou a falhar com
+   * "Connection Closed". A sessao estava PERFEITA no banco -- era so religar, e
+   * o cofre existe exatamente para atravessar isso. Mas a tela dizia
+   * "Conectado" (a Evolution ainda reportava `open`, ver socket zumbi em
+   * whatsapp.reconexao) e o operador fez a coisa mais natural do mundo diante
+   * de algo travado: desligar e ligar de novo.
+   *
+   *   13:34:06  POST /api/whatsapp/desconectar
+   *   13:34:06  Evolution: logoutInstance ... proceeding with credential cleanup
+   *   13:34:11  [WhatsApp] LOGOUT REAL DETECTADO
+   *   13:34:11  Sessao invalidada -- e preciso reescanear o QR no painel
+   *
+   * Uma queda de doze minutos, da qual o servidor se recuperaria sozinho, virou
+   * um repareamento por QR. E o operador nao fez nada de errado: ele apertou um
+   * botao que o sistema oferecia, sem que nada dissesse que aquele botao era o
+   * unico irreversivel da tela.
+   *
+   * ── A REGRA, IGUAL A DO QR ────────────────────────────────────────────────
+   *
+   * `obterQrcode` ja trabalhava assim, e o comentario dele diz a frase que
+   * faltava aqui: "e o servidor que decide se pode, nao a tela". Emitir QR com
+   * sessao viva podia destruir o pareamento, entao a rota recusa. Deslogar com
+   * sessao viva DESTROI o pareamento, sempre -- e a rota nao recusava nada.
+   *
+   * Agora recusa. Com a sessao valida (conectada, ou caida mas com o vigia
+   * religando), `desconectar` devolve 409 e aponta o botao certo: Reconectar.
+   * `forcar` continua existindo para quem realmente quer parear outro numero --
+   * e ai e uma decisao, nao um reflexo.
+   */
+  async desconectar(instanceName, { forcar = false } = {}) {
     const nome = instanceName || env.evolutionApi.instance;
+    const status = await this.obterStatus(nome);
+
+    // `podeMostrarQr` e o mesmo veredito que autoriza o QR: pareamento ja
+    // perdido, instalacao que nunca pareou, ou instancia inexistente. Nesses
+    // casos nao ha pareamento vivo para destruir -- deslogar e inofensivo, e as
+    // vezes e o passo que leva a instancia para `close` e destrava o QR.
+    if (!status.podeMostrarQr && !forcar) {
+      throw new AppError(
+        "A sessao do WhatsApp continua valida. Encerrar agora desfaz o pareamento e " +
+          "alguem precisara escanear o QR de novo -- se a conexao esta travada, use Reconectar.",
+        409,
+        "LOGOUT_DESNECESSARIO",
+        { situacao: status.situacao, state: status.state, conectado: status.conectado }
+      );
+    }
+
+    if (forcar && !status.podeMostrarQr) {
+      // Fica no log porque e destrutivo e deliberado: quando alguem perguntar
+      // "quem derrubou o pareamento?", a resposta tem de estar escrita.
+      logger.warn("[WhatsApp] LOGOUT FORCADO pelo operador com a sessao aparentemente valida", {
+        instance: nome,
+        situacao: status.situacao,
+        state: status.state,
+      });
+    }
+
     await evolutionApi.logout(nome);
 
     const instancia = await instanciaRepository.findByNome(nome);

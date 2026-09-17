@@ -290,9 +290,18 @@ export default function WhatsAppPage() {
     setOcupado(true); setAviso('');
     try {
       if (conectado) {
-        await WhatsAppAPI.desconectar(instancia);
-        setWhatsAppConectado(false);
-        setQrcode(null);
+        // ESTE BOTAO NAO DESLOGA MAIS EM SILENCIO. Ele chamava `desconectar`
+        // direto, sem pergunta nenhuma -- e `desconectar` APAGA a credencial do
+        // pareamento. Em 15/09/2026 foi por aqui que doze minutos de socket
+        // travado viraram um repareamento por QR: a tela dizia 'Conectado', o
+        // envio estava falhando, e desligar-e-ligar era a reacao obvia.
+        //
+        // O aviso ja existia -- estava em `encerrarSessao`, o botao secundario
+        // que so aparecia DESCONECTADO. Ou seja: a tela avisava justamente quando
+        // nao havia o que perder, e calava quando havia. Agora os dois caminhos
+        // passam pela mesma confirmacao.
+        await encerrarSessao();
+        return;
       } else if (podeMostrarQr) {
         await gerarQr();
       } else {
@@ -358,10 +367,13 @@ export default function WhatsAppPage() {
           'que é o único em que a Evolution emite QR Code e código de pareamento novos.\n\n' +
           'O pareamento atual já está perdido, então não há nada a perder aqui. ' +
           'A instância, o webhook e o token continuam como estão.'
-        : 'ATENÇÃO: o servidor considera a sessão VÁLIDA e está reconectando sozinho.\n\n' +
-          'Encerrar a sessão é o logout do WhatsApp: o pareamento é desfeito e ' +
+        : 'ATENÇÃO: o servidor considera a sessão VÁLIDA' +
+          (conectado ? ' e a instância está CONECTADA agora.' : ' e está reconectando sozinho.') +
+          '\n\nEncerrar a sessão é o logout do WhatsApp: o pareamento é desfeito e ' +
           'alguém precisará escanear o QR Code (ou digitar o código) de novo.\n\n' +
-          'Se você só quer destravar a conexão, cancele e use "Reconectar".',
+          'Se as mensagens não estão saindo mas a tela diz "Conectado", NÃO é isto que ' +
+          'resolve: quase sempre é o socket travado, e o caminho é "Reconectar". ' +
+          'Encerrar só faz sentido se você pretende parear o número de novo.',
       {
         titulo: 'Encerrar a sessão do WhatsApp?',
         rotuloConfirmar: 'Encerrar sessão',
@@ -372,7 +384,10 @@ export default function WhatsAppPage() {
 
     setOcupado(true); setAviso('');
     try {
-      await WhatsAppAPI.desconectar(instancia);
+      // `true` = `forcar`. O servidor recusa deslogar sessão viva sem isso (409
+      // LOGOUT_DESNECESSARIO); a bandeira é o que distingue este clique
+      // confirmado de uma chamada acidental. Ver whatsapp.service.desconectar.
+      await WhatsAppAPI.desconectar(instancia, true);
       setWhatsAppConectado(false);
       setQrcode(null);
       setPairingCode(null);

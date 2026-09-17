@@ -121,6 +121,63 @@ const EVENTOS_PADRAO = [
   "CONNECTION_UPDATE",
 ];
 
+/**
+ * SOCKET ZUMBI -- A EVOLUTION DIZ `open` E O SOCKET ESTA MORTO.
+ *
+ * Em 15/09/2026 o atendimento ficou 12 minutos sem conseguir enviar. O vigia
+ * nao viu problema nenhum: `/instance/connectionState` respondia `open` o tempo
+ * todo e ele tinha acabado de anotar "[WhatsApp] Online". Quem sabia a verdade
+ * era o ENVIO:
+ *
+ *   POST /message/sendText/... -> 500 {"message":"Connection Closed"}
+ *
+ * Por baixo, o Baileys ja tinha perdido o websocket ("error in sending keep
+ * alive", codigo 1006), mas a instancia continuava registrada como aberta.
+ * `connectionState` le o ROTULO; `sendText` le o FIO. Quando os dois discordam,
+ * quem mandou o pacote e que tem razao.
+ *
+ * Dai esta funcao: reconhecer, na RESPOSTA DE ERRO, a assinatura de "a
+ * requisicao chegou na Evolution e morreu no caminho do WhatsApp". Nao e erro
+ * de validacao (400) nem instancia inexistente (404) -- e 500 com uma destas
+ * frases do Baileys. Nenhuma delas significa pareamento perdido: significam
+ * socket a religar, que e trabalho do vigia.
+ */
+const FRASES_DE_SOCKET_MORTO = [
+  "connection closed",
+  "connection terminated",
+  "connection lost",
+  "timed out",
+  "socket closed",
+];
+
+function ehSocketMorto(httpStatus, detalhe) {
+  if (httpStatus !== 500) return false;
+  const texto = String(detalhe || "").toLowerCase();
+  return FRASES_DE_SOCKET_MORTO.some((frase) => texto.includes(frase));
+}
+
+// ── QUEM ESCUTA O SOCKET ZUMBI ──────────────────────────────────────────────
+//
+// O client e infraestrutura burra: ele NAO pode importar o vigia (que ja importa
+// o client -- seria ciclo) nem decidir reconexao sozinho. Entao ele so GRITA, e
+// quem sabe o que fazer se inscreve no boot. Ver whatsapp.reconexao.iniciar().
+let ouvinteSocketMorto = null;
+
+function observarSocketMorto(cb) {
+  ouvinteSocketMorto = typeof cb === "function" ? cb : null;
+}
+
+function avisarSocketMorto(diagnostico) {
+  if (!ouvinteSocketMorto) return;
+  try {
+    // Fire-and-forget DE PROPOSITO: quem chamou `sendText` esta no caminho de
+    // uma mensagem do atendente e nao pode ficar esperando uma reconexao.
+    Promise.resolve(ouvinteSocketMorto(diagnostico)).catch(() => {});
+  } catch {
+    /* um ouvinte quebrado nunca pode derrubar o envio */
+  }
+}
+
 class EvolutionApiClient {
   constructor() {
     // Valores do .env sao apenas o fallback: a config efetiva vem do banco
@@ -198,6 +255,14 @@ class EvolutionApiClient {
           corpo: data ?? corpoNaoJson,
         });
         const detalhe = mensagemDaEvolution(data) || textoDeErro(corpoNaoJson);
+
+        // SOCKET ZUMBI: a Evolution respondeu, mas quem morreu foi o fio ate o
+        // WhatsApp. O vigia precisa saber AGORA -- ele so olha
+        // `/connectionState`, que neste caso mente `open`. Ver ehSocketMorto.
+        if (ehSocketMorto(response.status, detalhe)) {
+          diagnostico.socketMorto = true;
+          avisarSocketMorto({ ...diagnostico, detalhe, instancia: cfg.instance });
+        }
 
         // INSTANCIA QUE NAO EXISTE E UM CASO A PARTE, e nao "falha de
         // comunicacao". Sem distingui-lo, o painel recebia 502 com texto
@@ -764,3 +829,8 @@ module.exports = new EvolutionApiClient();
 // deveria estar la -- ver whatsapp.conferirWebhook. Sem isto, "conferido" era so
 // "respondeu": o boot imprimia os eventos e nao sabia dizer se faltava algum.
 module.exports.EVENTOS_PADRAO = EVENTOS_PADRAO;
+// O GRITO DO SOCKET ZUMBI, para quem sabe religar. Exposto no modulo (e nao
+// na instancia) porque e um canal do processo, nao estado de uma conexao.
+module.exports.observarSocketMorto = observarSocketMorto;
+module.exports.__ehSocketMorto = ehSocketMorto; // usado pelos testes
+

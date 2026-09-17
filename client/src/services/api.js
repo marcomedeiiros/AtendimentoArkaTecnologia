@@ -660,7 +660,11 @@ export const WhatsAppAPI = {
     return request(`/whatsapp/qrcode${q ? `?${q}` : ''}`);
   },
   conectar: (instance) => request('/whatsapp/conectar', { method: 'POST', body: JSON.stringify({ instance }) }),
-  desconectar: (instance) => request('/whatsapp/desconectar', { method: 'POST', body: JSON.stringify({ instance }) }),
+  // `forcar` e obrigatorio para deslogar com a sessao ainda valida: sem ele o
+  // servidor devolve 409 LOGOUT_DESNECESSARIO. Deslogar APAGA a credencial do
+  // pareamento -- e o unico botao irreversivel desta tela.
+  desconectar: (instance, forcar = false) =>
+    request('/whatsapp/desconectar', { method: 'POST', body: JSON.stringify({ instance, forcar }) }),
   reiniciar: (instance) => request('/whatsapp/reiniciar', { method: 'POST', body: JSON.stringify({ instance }) }),
   excluir: (instance) => request('/whatsapp/instancia', { method: 'DELETE', body: JSON.stringify({ instance }) }),
   // O PAR DO `excluir`. Faltava, e a falta custou 4h30 de atendimento parado em

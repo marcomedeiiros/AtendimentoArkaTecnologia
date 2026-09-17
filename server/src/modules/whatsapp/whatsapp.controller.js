@@ -25,9 +25,17 @@ class WhatsAppController {
       .then((data) => success(res, data));
   }
 
+  // `forcar` aqui carrega o mesmo peso que em `qrcode`, e por um motivo mais
+  // grave: deslogar APAGA a credencial do pareamento. Sem a bandeira, o
+  // servico recusa enquanto a sessao for recuperavel -- ver desconectar().
   desconectar(req, res) {
+    const forcar =
+      req.body?.forcar === true ||
+      req.body?.forcar === "1" ||
+      req.query.forcar === "1" ||
+      req.query.forcar === "true";
     return whatsappService
-      .desconectar(req.body?.instance || req.query.instance)
+      .desconectar(req.body?.instance || req.query.instance, { forcar })
       .then((data) => success(res, data));
   }
 
