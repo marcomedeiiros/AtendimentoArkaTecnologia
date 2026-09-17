@@ -892,32 +892,47 @@ export async function gerarMapeamentoPdf(documento, { nome = 'relatorio.pdf' } =
     if (secao.vazia) continue;
 
     if (secao.tipo === 'fotos') {
-      // As fotos comecam em pagina propria: espremidas no que sobrou da folha
-      // anterior elas saem do tamanho de selo, e evidencia que nao da para ver
-      // nao e evidencia.
-      pdf.addPage();
-      marcaDaguaPdf(pdf, logo);
-      y = margem;
+      /**
+       * AS FOTOS CONTINUAM NA FOLHA, e nao comecam uma nova.
+       *
+       * Elas abriam pagina propria sempre. Num relatorio comum -- resumo de
+       * duas linhas, tres itens de checklist e as pendencias -- sobrava mais de
+       * meia folha em branco e as evidencias iam para a pagina 2 sozinhas: dois
+       * papeis para um relatorio que cabe em um, e quem valida tendo de virar a
+       * folha para ver a foto do que acabou de ler.
+       *
+       * Agora elas entram onde estao, e so pulam quando NAO CABE nem uma linha
+       * delas. Em tres colunas de ate 52mm, cinco ou seis fotos ainda cabem
+       * abaixo do texto de um relatorio tipico -- e continuam grandes o
+       * bastante para se ver o rack, que era o motivo da pagina propria.
+       */
+      const COL = 3;
+      const VAO = 5;
+      const ALT_MAX = 52;
+      // Cabe o titulo e uma linha inteira de fotos? Senao, vira a pagina agora
+      // -- um titulo sozinho no pe da folha e pior que a quebra.
+      quebra(ALT_MAX + 14);
       y = tituloSecao(pdf, secao.titulo, margem, y);
-      const COL = 2;
-      const VAO = 6;
       const larg = (util - VAO * (COL - 1)) / COL;
       let col = 0;
       let alturaLinha = 0;
       for (const foto of secao.fotos) {
         const img = await carregarFoto(foto);
         if (!img) continue;
-        // A foto entra INTEIRA na caixa da coluna (larg x 70mm), encostando no
-        // lado que apertar primeiro: uma foto em pe nao pode empurrar a linha
-        // seguinte para fora da folha, e nenhuma delas sai esticada.
-        const esc = Math.min(larg / img.largura, 70 / img.altura);
+        // A foto entra INTEIRA na caixa da coluna, encostando no lado que
+        // apertar primeiro: uma foto em pe nao pode empurrar a linha seguinte
+        // para fora da folha, e nenhuma delas sai esticada.
+        const esc = Math.min(larg / img.largura, ALT_MAX / img.altura);
         const l = img.largura * esc;
         const alt = img.altura * esc;
         // Reserva a ALTURA CHEIA da linha, e nao a desta foto: a vizinha da
         // direita pode ser mais alta, e quem decide a quebra e a mais alta das
-        // duas -- senao uma foto em pe passa da margem de baixo.
-        if (col === 0) quebra(76);
-        try { pdf.addImage(img.dataUrl, 'JPEG', margem + col * (larg + VAO), y, l, alt); }
+        // tres -- senao uma foto em pe passa da margem de baixo.
+        if (col === 0) quebra(ALT_MAX + VAO);
+        // Centralizada na coluna: em pe ela ocupa metade da largura, e alinhada
+        // a esquerda a fileira fica com buracos em lugares diferentes.
+        const x = margem + col * (larg + VAO) + (larg - l) / 2;
+        try { pdf.addImage(img.dataUrl, 'JPEG', x, y, l, alt); }
         catch { continue; }
         alturaLinha = Math.max(alturaLinha, alt);
         col += 1;

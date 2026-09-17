@@ -357,10 +357,12 @@ function FolhaRelatorio({ documento }) {
                   ))}
                 </div>
               ) : (
-                <div className="mt-2 grid grid-cols-2 gap-2">
+                // Três colunas, como no PDF: a folha da tela tem de mostrar a
+                // mesma fileira que o arquivo vai desenhar.
+                <div className="mt-2 grid grid-cols-3 gap-1.5">
                   {secao.fotos.map((src, i) => (
                     <img key={i} src={src} alt={`Evidência ${i + 1}`}
-                      className="w-full max-h-40 object-cover rounded"
+                      className="w-full max-h-28 object-contain rounded"
                       style={{ border: `1px solid ${LINHA_FOLHA}` }} />
                   ))}
                 </div>
