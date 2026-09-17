@@ -1239,9 +1239,10 @@ export default function Rankings() {
                       antiga mandava o técnico esperar um aval que ninguém dá.
                       (A verificação procura a palavra antiga neste arquivo --
                       então ela não pode ser citada nem em comentário.) */}
-                  <strong className="text-texto-suave">
-                    Pontuação de 0 a {dados?.pesos?.teto ?? 100}
-                  </strong>: {reguaExterna(dados?.pesos?.parcelas) || 'as cinco parcelas do relatório'}
+                  <strong className="text-texto-suave">Sem teto</strong> cada relatório entregue soma
+                  {' '}{dados?.pesos?.pontosPorRelatorio ?? 25} pontos
+                  {' '}e a qualidade vale até {dados?.pesos?.tetoQualidade ?? 75}:
+                  {' '}{reguaExterna(dados?.pesos?.parcelas) || 'as quatro parcelas do relatório'}
                   {dados?.pesos?.custoPorDevolucao
                     ? ` cada retorno para correção desconta ${dados.pesos.custoPorDevolucao}`
                     : ''}

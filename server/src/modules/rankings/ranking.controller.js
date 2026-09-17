@@ -5,7 +5,7 @@ const regrasRelatorio = require("./relatorio.regras");
 const {
   ITENS_MAPEAMENTO,
   PESOS,
-  FAIXAS_VOLUME,
+  PONTOS_POR_RELATORIO,
   FAIXAS_EVIDENCIAS,
   CUSTO_POR_DEVOLUCAO,
   MINIMO_MAPEAMENTOS,
@@ -65,7 +65,8 @@ class RankingController {
         // anunciar os numeros que estao valendo agora.
         padrao: {
           pesos: PESOS,
-          faixasVolume: FAIXAS_VOLUME,
+          // Nao ha mais faixa de volume: cada relatorio entregue soma o mesmo.
+          pontosPorRelatorio: PONTOS_POR_RELATORIO,
           faixasEvidencias: FAIXAS_EVIDENCIAS,
           custoPorDevolucao: CUSTO_POR_DEVOLUCAO,
           minimoMapeamentos: MINIMO_MAPEAMENTOS,

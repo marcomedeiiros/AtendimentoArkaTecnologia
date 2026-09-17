@@ -66,17 +66,37 @@ const MINIMO_MAPEAMENTOS = 3;
  */
 const MINIMO_RESUMO = 20;
 
-const PESOS = { volume: 25, completude: 25, prazo: 20, evidencias: 15, retrabalho: 15 };
+/**
+ * AS PARCELAS DE QUALIDADE, e o teto delas.
+ *
+ * `volume` saiu daqui: ele deixou de ser uma fatia de 100 e virou PONTO POR
+ * RELATORIO, sem teto (ver `PONTOS_POR_RELATORIO`). O que sobrou sao as quatro
+ * parcelas que medem a QUALIDADE do que foi entregue, e elas somam 75.
+ */
+const PESOS = { completude: 25, prazo: 20, evidencias: 15, retrabalho: 15 };
+const TETO_QUALIDADE = 75;
 
-// Faixas de volume: relatorios ENTREGUES no mes -> pontos. Lidas de cima para
-// baixo. Contavam aprovados; a aprovacao saiu (ver o bloco em pontuarExterno).
-const FAIXAS_VOLUME = [
-  { aPartirDe: 8, pontos: 25 },
-  { aPartirDe: 6, pontos: 20 },
-  { aPartirDe: 4, pontos: 15 },
-  { aPartirDe: 2, pontos: 8 },
-  { aPartirDe: 1, pontos: 3 },
-];
+/**
+ * QUANTO VALE CADA RELATORIO ENTREGUE -- e a parcela que nao tem teto.
+ *
+ * ── POR QUE A FAIXA SAIU ──────────────────────────────────────────────────
+ *
+ * O volume era uma FAIXA (1 relatorio 3 pontos, 8 ou mais 25) e o total da
+ * formula fechava em 100 por construcao. Quem entregava 8 empatava com quem
+ * entregava 20: o mes acabava no teto, e o trabalho depois dele nao aparecia
+ * em lugar nenhum -- o oposto do que um ranking mensal deveria fazer.
+ *
+ * Agora cada relatorio entregue soma, e soma sempre. A pontuacao cresce ate o
+ * mes fechar, e o proximo relatorio sempre vale alguma coisa. E a mesma
+ * escolha que o ranking da SEDE ja tinha feito (ver painel.service): la cada
+ * atendimento avaliado soma, sem teto.
+ *
+ * A QUALIDADE CONTINUA EM FAIXA, de proposito: completude, prazo e evidencias
+ * medem COMO o trabalho foi feito, e "como" nao acumula -- 20 relatorios pela
+ * metade nao valem mais que 10 impecaveis nessas parcelas.
+ */
+const PONTOS_POR_RELATORIO = 25;
+
 
 // Faixas de evidencia: MEDIA de anexos por mapeamento -> pontos. Tres fotos ja
 // contam a historia de uma visita; a quarta nao informa mais nada a quem le.
@@ -206,10 +226,17 @@ function noPrazo(m) {
  * 100" da sede virou mentira quando o teto de la caiu.
  */
 function reguaEmVigor(regras = null) {
-  const parcelas = { ...PESOS, ...(regras?.pesos || {}) };
+  // So as parcelas de QUALIDADE: `volume` nao e mais peso, e sim ponto por
+  // relatorio -- um `volume` que tenha sobrado de uma configuracao antiga e
+  // ignorado aqui para nao aparecer na tela como se ainda fosse fatia.
+  const { volume: _volumeAntigo, ...guardados } = regras?.pesos || {};
+  const parcelas = { ...PESOS, ...guardados };
   return {
     parcelas,
-    teto: Object.values(parcelas).reduce((soma, v) => soma + (Number(v) || 0), 0),
+    // Quanto vale cada relatorio entregue. A tela explica a conta com ele.
+    pontosPorRelatorio: regras?.pontosPorRelatorio ?? PONTOS_POR_RELATORIO,
+    // O TETO DA QUALIDADE, e nao o da pontuacao: o total nao tem teto.
+    tetoQualidade: Object.values(parcelas).reduce((soma, v) => soma + (Number(v) || 0), 0),
     // Quantos relatorios entregues ja permitem julgar as parcelas de qualidade.
     minimo: regras?.minimoRelatorios ?? MINIMO_MAPEAMENTOS,
     // O limiar do resumo vai junto porque a TELA precisa dele para a previa de
@@ -245,7 +272,7 @@ function reguaEmVigor(regras = null) {
 function pontuarExterno(lista, regras = null) {
   // A MESMA regua que a tela recebe -- ver `reguaEmVigor`. Duas leituras da
   // configuracao seriam duas reguas: a que pontua e a que a tela explica.
-  const { parcelas: pesos, minimo, custoPorDevolucao: custoDevolucao } = reguaEmVigor(regras);
+  const { parcelas: pesos, minimo, custoPorDevolucao: custoDevolucao, pontosPorRelatorio } = reguaEmVigor(regras);
   // O checklist em vigor. Sem configuração, a lista de fábrica.
   const itensEmVigor = Array.isArray(regras?.itens) && regras.itens.length ? regras.itens : ITENS_MAPEAMENTO;
   // So o que ja saiu da mao do tecnico entra na conta: rascunho e trabalho em
@@ -259,10 +286,9 @@ function pontuarExterno(lista, regras = null) {
   /**
    * AS FAIXAS ESCALAM COM O PESO.
    *
-   * FAIXAS_VOLUME e FAIXAS_EVIDENCIAS foram escritas para os tetos padrao (25 e
-   * 15). Se o administrador der 40 a volume e a faixa continuasse cravada em 25,
-   * mexer no peso nao mudaria quase nada e a tela passaria a mentir sobre a
-   * propria regra -- "volume vale 40" com o maximo real em 25.
+   * FAIXAS_EVIDENCIAS foi escrita para o teto padrao (15). Se o administrador
+   * der 30 a evidencias e a faixa continuasse cravada em 15, mexer no peso nao
+   * mudaria quase nada e a tela passaria a mentir sobre a propria regra.
    *
    * Reescalar mantem a FORMA da faixa (os degraus, e onde eles ficam) e muda so
    * o quanto ela vale no total, que e exatamente o que o peso significa.
@@ -282,7 +308,8 @@ function pontuarExterno(lista, regras = null) {
    * dizer: "quantas visitas viraram relatorio neste mes". A qualidade continua
    * cobrada nas outras quatro parcelas, e a devolucao desconta em retrabalho.
    */
-  const ptsVolume = escalar(faixa(FAIXAS_VOLUME, entregues.length), PESOS.volume, pesos.volume);
+  // CADA RELATORIO SOMA, e nao ha teto: ver `PONTOS_POR_RELATORIO`.
+  const ptsVolume = entregues.length * pontosPorRelatorio;
 
   // ── A SETA IMPORTA, E A FALTA DELA DERRUBAVA A PAGINA ───────────────────
   //
@@ -363,7 +390,8 @@ module.exports = {
   MINIMO_MAPEAMENTOS,
   MINIMO_RESUMO,
   PESOS,
-  FAIXAS_VOLUME,
+  TETO_QUALIDADE,
+  PONTOS_POR_RELATORIO,
   FAIXAS_EVIDENCIAS,
   CUSTO_POR_DEVOLUCAO,
 };

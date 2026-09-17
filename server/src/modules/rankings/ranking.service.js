@@ -352,8 +352,13 @@ class RankingService {
       pesos: {
         parcelas: regua.parcelas,
         custoPorDevolucao: regua.custoPorDevolucao,
-        teto: regua.teto,
-        semTeto: false,
+        // SEM TETO, como a sede: cada relatorio entregue soma
+        // `pontosPorRelatorio`, e a pontuacao cresce enquanto o mes estiver
+        // aberto. O que ainda tem teto e a QUALIDADE (as quatro parcelas), e a
+        // tela explica as duas coisas com estes dois numeros.
+        pontosPorRelatorio: regua.pontosPorRelatorio,
+        tetoQualidade: regua.tetoQualidade,
+        semTeto: true,
       },
       minimoAmostra: regua.minimo,
       classificacao: classificar(pessoas, (p) => p.registros),

@@ -132,6 +132,11 @@ const regrasRelatorioSchema = z.object({
   // De 1 a 31: o dia que nao existe no mes cai no ultimo dia dele (a aparagem e
   // em `relatorio.regras`, com o helper de calendario). Aqui so a faixa.
   vencimentoDiaDoMes: z.number().int().min(1).max(31).nullable().optional(),
+  // Quanto vale cada relatorio entregue -- a parcela de volume deixou de ter
+  // teto (ver pontuacao.externa.PONTOS_POR_RELATORIO).
+  pontosPorRelatorio: z.number().int().min(1).max(100).optional(),
+  // O dia em que a competencia do mes fecha. 31 = o ultimo dia, seja qual for.
+  diaFechamento: z.number().int().min(1).max(31).optional(),
   minimoRelatorios: z.number().int().min(1).max(20).optional(),
   custoPorDevolucao: z.number().int().min(0).max(25).optional(),
   /**

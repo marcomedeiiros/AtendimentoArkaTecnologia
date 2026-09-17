@@ -579,18 +579,23 @@ async function main() {
   const rLucas = externo.classificacao.find((p) => p.nome === lucas.nome);
 
   check(rJoao.posicao === 1, `Joao em 1o (${rJoao.pontos} pts) e Lucas em ${rLucas.posicao}o (${rLucas.pontos} pts)`);
-  check(rJoao.pontos <= 100 && rLucas.pontos <= 100, "nenhum passa de 100 -- o teto da formula e real");
-  // 90, e nao 100: quatro visitas impecaveis levam a faixa de volume de 15 (de
-  // 25), e os 25 restantes exigem OITO relatorios ENTREGUES no mes (contava
-  // aprovados ate a aprovacao sair). Escrevi 100 aqui na
-  // primeira versao e o teste reprovou -- a expectativa e que estava errada, nao
-  // a formula. Fica registrado porque e a calibragem mais discutivel dela: os
-  // 100 pontos sao um mes cheio, nao um mes bom.
-  check(rJoao.pontos === 90, `4 visitas impecaveis dao 90 -- os 100 exigem 8 entregues (deu ${rJoao.pontos})`);
+  // NAO HA MAIS TETO. A faixa de volume saiu: cada relatorio entregue soma
+  // `pontosPorRelatorio` (25 por padrao), e a qualidade vale ate 75. Quatro
+  // visitas impecaveis dao 4x25 + 75 = 175, e a quinta ainda soma -- que e o
+  // ponto da mudanca: antes o mes acabava no 100 e o trabalho seguinte nao
+  // aparecia em lugar nenhum.
+  check(rJoao.pontos === 175, `4 visitas impecaveis dao 175 = 4x25 + 75 de qualidade (deu ${rJoao.pontos})`);
+  const maisUma = pontuarExterno([
+    ...Array.from({ length: 5 }, () => ({
+      status: "entregue", descricao: "x".repeat(50), itens: itensCheios,
+      evidencias: [1, 2, 3], devolucoes: 0, prazoEm: noMes(8), entregueEm: noMes(6),
+    })),
+  ]);
+  check(maisUma.pontos > rJoao.pontos, `o quinto relatorio ainda soma (${maisUma.pontos} > ${rJoao.pontos})`);
   const cJoao = Object.fromEntries(rJoao.criterios.map((c) => [c.chave, c.pontos]));
   check(cJoao.completude === 25 && cJoao.prazo === 20 && cJoao.evidencias === 15 && cJoao.retrabalho === 15,
     "com as quatro parcelas de qualidade cheias");
-  check(cJoao.volume === 15, `e a de volume na faixa de 4 a 5 visitas (${cJoao.volume} de 25)`);
+  check(cJoao.volume === 100, `e a de volume soma 25 por relatorio entregue (${cJoao.volume} em 4 visitas)`);
   const cLucas = Object.fromEntries(rLucas.criterios.map((c) => [c.chave, c.pontos]));
   check(cLucas.retrabalho === 5, `2 devolucoes custam 10 dos 15 de retrabalho (sobrou ${cLucas.retrabalho})`);
   check(cLucas.prazo < 20, `um atraso em tres derruba a parcela de prazo (${cLucas.prazo} de 20)`);
@@ -605,7 +610,11 @@ async function main() {
   check(umSo.completude.conta === false, "com 1 relatorio a completude nao conta");
   check(umSo.completude.pontos === 0 && umSo.prazo.pontos === 0 && umSo.evidencias.pontos === 0,
     "as tres parcelas de qualidade ficam em 0 ate a amostra minima");
-  check(umSo.pontos < 30, `e o total fica baixo (${umSo.pontos}), em vez de liderar`);
+  // 40: o relatorio em si soma 25 e o retrabalho da os 15 dele (essa parcela
+  // nao espera amostra -- quem nao foi devolvido nao foi devolvido). O que
+  // fica zerado e o que uma visita so nao autoriza a concluir: completude,
+  // prazo e evidencias. Longe das 175 de um mes de quatro visitas.
+  check(umSo.pontos === 40, `e o total fica baixo (${umSo.pontos}), em vez de liderar`);
   check(umSo.completude.amostra === 1, "mas a tela recebe a amostra, para dizer '1 de 3' e nao '0,0'");
   // E RECEBE O MINIMO JUNTO. Sem este campo a tela usava um 3 cravado, e com o
   // minimo configurado em 5 escrevia "4 de 3" -- que se le como "bati o minimo
@@ -631,16 +640,21 @@ async function main() {
   // configuracao nao mudava o texto, e ele passava a explicar outra conta.
   const reguaPadrao = reguaEmVigor();
   check(
-    reguaPadrao.teto === 100,
-    `o teto e a SOMA das parcelas, e nao 100 escrito a mao (${reguaPadrao.teto})`
+    reguaPadrao.tetoQualidade === 75,
+    `o teto da QUALIDADE e a soma das quatro parcelas (${reguaPadrao.tetoQualidade})`
+  );
+  check(
+    reguaPadrao.pontosPorRelatorio === 25,
+    `e a regua diz quanto vale cada relatorio entregue (${reguaPadrao.pontosPorRelatorio})`
   );
   const reguaCfg = reguaEmVigor({
-    pesos: { volume: 30, completude: 20, prazo: 20, evidencias: 15, retrabalho: 15 },
+    pesos: { completude: 20, prazo: 20, evidencias: 20, retrabalho: 15 },
+    pontosPorRelatorio: 30,
     minimoRelatorios: 5,
     custoPorDevolucao: 8,
   });
   check(
-    reguaCfg.parcelas.volume === 30 && reguaCfg.minimo === 5 && reguaCfg.custoPorDevolucao === 8,
+    reguaCfg.pontosPorRelatorio === 30 && reguaCfg.minimo === 5 && reguaCfg.custoPorDevolucao === 8,
     "a regua em vigor e a configurada, e nao a de fabrica"
   );
   // E ela e a MESMA que pontua: duas leituras da configuracao seriam duas
@@ -678,8 +692,12 @@ async function main() {
     "a sede declara que nao tem teto"
   );
   check(
-    externo.pesos?.semTeto === false && externo.pesos?.teto === 100,
-    `e o externo declara o teto dele (${externo.pesos?.teto})`
+    externo.pesos?.semTeto === true && externo.pesos?.pontosPorRelatorio > 0,
+    `o externo tambem nao tem teto, e declara quanto vale cada relatorio (${externo.pesos?.pontosPorRelatorio})`
+  );
+  check(
+    externo.pesos?.tetoQualidade === 75,
+    `e declara o teto da parte que TEM teto, a qualidade (${externo.pesos?.tetoQualidade})`
   );
   check(
     typeof sede.minimoAmostra === "number" && typeof externo.minimoAmostra === "number",
@@ -756,6 +774,97 @@ async function main() {
   const doSupervisor = await mapeamentoService.listar({}, { sub: davi.id });
   check(doSupervisor.length > soDoJoao.length, `supervisor ve os de todo mundo (${doSupervisor.length})`);
 
+  /**
+   * 8a-bis. O MES EM DISPUTA -- a visita de outro mes nao entra.
+   *
+   * A data da visita decide em qual mes o relatorio pontua. Solta, ela deixava
+   * lancar hoje uma visita datada do mes passado -- e mexer num ranking que a
+   * equipe ja viu fechado. O campo de data da tela limita, mas limite de tela
+   * nao protege nada: a regra e conferida no servico, e e aqui que isso se
+   * prova.
+   *
+   * O RASCUNHO do mes corrente continua livre depois do fechamento: quem
+   * visitou no ultimo dia precisa poder registrar o que fez. O que fecha e a
+   * ENTREGA, que e o que vira ponto.
+   */
+  {
+    titulo("8a-bis. SO O MES EM DISPUTA");
+    const regras = require("./src/modules/rankings/relatorio.regras");
+
+    const mesPassado = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 15, 10, 0, 0);
+    let recusouPassado = null;
+    try {
+      await mapeamentoService.criar(
+        {
+          empresa: `${MARCA} Empresa Mes Passado`, dataVisita: mesPassado.toISOString(),
+          descricao: "x".repeat(60), itens: {}, evidencias: [],
+        },
+        { sub: joao.id, nome: joao.nome }
+      );
+    } catch (e) {
+      recusouPassado = e.code;
+    }
+    check(recusouPassado === "FORA_DA_COMPETENCIA", `visita do mes passado e recusada (${recusouPassado})`);
+
+    const mesQueVem = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 5, 10, 0, 0);
+    let recusouFuturo = null;
+    try {
+      await mapeamentoService.criar(
+        {
+          empresa: `${MARCA} Empresa Mes Que Vem`, dataVisita: mesQueVem.toISOString(),
+          descricao: "x".repeat(60), itens: {}, evidencias: [],
+        },
+        { sub: joao.id, nome: joao.nome }
+      );
+    } catch (e) {
+      recusouFuturo = e.code;
+    }
+    check(recusouFuturo === "FORA_DA_COMPETENCIA", `e a datada no mes que vem tambem (${recusouFuturo})`);
+
+    // O FECHAMENTO: com o dia 1 configurado, o mes corrente ja fechou -- entregar
+    // e recusado, e salvar rascunho continua passando.
+    const antesCfg = await prisma.configuracao.findUnique({ where: { chave: regras.CHAVE } });
+    try {
+      await regras.salvar({ diaFechamento: 1 });
+      let recusouEntrega = null;
+      try {
+        await mapeamentoService.criar(
+          {
+            empresa: `${MARCA} Empresa Fechada`, dataVisita: noMes(hoje.getDate()).toISOString(),
+            descricao: "x".repeat(60), itens: {}, evidencias: [], entregar: true,
+          },
+          { sub: joao.id, nome: joao.nome }
+        );
+      } catch (e) {
+        recusouEntrega = e.code;
+      }
+      // No dia 1o do mes o fechamento ainda nao passou -- e o unico dia em que
+      // esta checagem nao se aplica, e dizer isso e melhor que fingir que sim.
+      const jaPassouOFechamento = hoje.getDate() > 1;
+      check(
+        jaPassouOFechamento ? recusouEntrega === "COMPETENCIA_FECHADA" : recusouEntrega === null,
+        jaPassouOFechamento
+          ? `depois do fechamento, entregar e recusado (${recusouEntrega})`
+          : "hoje e dia 1o: o fechamento no dia 1 ainda nao passou, nada a recusar"
+      );
+
+      const rascunho = await mapeamentoService.criar(
+        {
+          empresa: `${MARCA} Empresa Rascunho`, dataVisita: noMes(hoje.getDate()).toISOString(),
+          descricao: "x".repeat(60), itens: {}, evidencias: [],
+        },
+        { sub: joao.id, nome: joao.nome }
+      );
+      check(rascunho.status === "rascunho", "mas o rascunho continua podendo ser salvo");
+    } finally {
+      // A configuracao da empresa volta como estava -- verificar nao muda regra.
+      if (antesCfg) {
+        await prisma.configuracao.update({ where: { chave: regras.CHAVE }, data: { valor: antesCfg.valor } });
+      } else {
+        await prisma.configuracao.deleteMany({ where: { chave: regras.CHAVE } });
+      }
+    }
+  }
   /**
    * 8b. O PDF DO RELATORIO -- e o buraco que ele poderia abrir.
    *
@@ -1059,8 +1168,12 @@ async function main() {
     try {
       const padrao = regras.padrao();
       check(
-        Object.values(padrao.pesos).reduce((a, b) => a + b, 0) === 100,
-        "o padrao sai das constantes e soma 100"
+        Object.values(padrao.pesos).reduce((a, b) => a + b, 0) === 75,
+        "o padrao sai das constantes e as parcelas de qualidade somam 75"
+      );
+      check(
+        padrao.pontosPorRelatorio > 0 && padrao.diaFechamento >= 1 && padrao.diaFechamento <= 31,
+        `e traz o ponto por relatorio e o dia de fechamento (${padrao.pontosPorRelatorio} pts, fecha dia ${padrao.diaFechamento})`
       );
 
       // PESOS INVALIDOS SAO RECUSADOS, e nao aparados em silencio: aparar daria
@@ -1068,9 +1181,11 @@ async function main() {
       // pela pontuacao do mes.
       let recusouPesos = false;
       try {
-        await regras.salvar({ pesos: { volume: 50, completude: 25, prazo: 20, evidencias: 15, retrabalho: 15 } });
+        // Sem `volume` no meio: com ele, a configuracao e lida como a ANTIGA e
+        // reescalada em vez de recusada (ver relatorio.regras.validar).
+        await regras.salvar({ pesos: { completude: 50, prazo: 20, evidencias: 15, retrabalho: 15 } });
       } catch (e) {
-        recusouPesos = e.code === "PESOS_NAO_SOMAM_100";
+        recusouPesos = e.code === "PESOS_NAO_SOMAM_TETO";
       }
       check(recusouPesos, "pesos que nao somam 100 sao recusados (400)");
 
@@ -1118,10 +1233,14 @@ async function main() {
       };
       const lista = [m, m, m, m];
       const comPadrao = pontuar(lista);
-      const comVolume = pontuar(lista, { ...padrao, pesos: { volume: 40, completude: 20, prazo: 15, evidencias: 15, retrabalho: 10 } });
+      const comVolume = pontuar(lista, {
+        ...padrao,
+        pontosPorRelatorio: 40,
+        pesos: { completude: 20, prazo: 20, evidencias: 25, retrabalho: 10 },
+      });
       check(
         comVolume.volume.pontos > comPadrao.volume.pontos,
-        `peso maior em volume da mais ponto de volume (${comPadrao.volume.pontos} -> ${comVolume.volume.pontos})`
+        `mais ponto por relatorio da mais ponto de volume (${comPadrao.volume.pontos} -> ${comVolume.volume.pontos})`
       );
       check(
         comVolume.retrabalho.pontos < comPadrao.retrabalho.pontos,

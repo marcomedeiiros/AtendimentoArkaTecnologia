@@ -134,6 +134,55 @@ function saneiaItens(itens, configurados = ITENS_MAPEAMENTO, anteriores = null) 
   return Object.keys(out).length ? out : null;
 }
 
+/**
+ * A VISITA TEM DE SER DO MES QUE ESTA EM DISPUTA.
+ *
+ * ── POR QUE ISTO E UMA REGRA, E NAO SO UM LIMITE NO CAMPO DE DATA ────────
+ *
+ * A data da visita decide em QUAL MES o relatorio pontua. Com ela livre, dava
+ * para lancar em outubro uma visita datada de setembro e mexer num mes que a
+ * equipe ja considerava encerrado -- ou datar no futuro e reservar ponto para
+ * um mes que nem comecou. Nos dois casos o ranking muda depois de as pessoas
+ * terem visto o resultado.
+ *
+ * Entao: so o mes corrente, e so enquanto ele nao fechou (o dia de fechamento
+ * sai da Configuracao). O RASCUNHO continua livre para ser salvo -- quem
+ * visitou no ultimo dia precisa poder registrar o que fez; o que a regra
+ * barra e a ENTREGA, que e o que vira ponto.
+ */
+function mesDaVisita(dataVisita) {
+  const d = dataDoDia(dataVisita);
+  if (!d || Number.isNaN(d.getTime())) return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function mesCorrente(agora = new Date()) {
+  return `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function conferirCompetencia(dataVisita, regras, { entregando }) {
+  const mes = mesDaVisita(dataVisita);
+  if (!mes) return;
+  const atual = mesCorrente();
+  if (mes !== atual) {
+    throw new AppError(
+      "A data da visita precisa ser deste mês -- é ele que está em disputa no ranking.",
+      400,
+      "FORA_DA_COMPETENCIA"
+    );
+  }
+  // Depois do fechamento o mes nao recebe mais entrega: a nota daquele mes
+  // esta dada. O rascunho continua podendo ser salvo.
+  if (entregando && regrasRelatorio.competenciaFechada(mes, regras)) {
+    const fim = regrasRelatorio.fechamentoDaCompetencia(mes, regras);
+    throw new AppError(
+      `A competência deste mês fechou em ${fim.toLocaleDateString("pt-BR")}. Salve como rascunho.`,
+      400,
+      "COMPETENCIA_FECHADA"
+    );
+  }
+}
+
 class MapeamentoService {
   /**
    * Guarda as fotos em DISCO e devolve so os caminhos.
@@ -498,6 +547,7 @@ class MapeamentoService {
           itensAtuais: dados.itens,
         })
       : { campos: {} };
+    conferirCompetencia(dados.dataVisita, regras, { entregando: !!dados.entregar });
     const criado = await prisma.mapeamentoTecnico.create({
       data: {
         // O TECNICO E SEMPRE QUEM ESTA LOGADO. Aceitar do corpo deixaria
@@ -566,6 +616,9 @@ class MapeamentoService {
     // O checklist EM VIGOR, para a allowlist dos campos. Lido aqui, uma vez.
     const regrasAtuais = await regrasRelatorio.obter();
 
+    // A data que vale e a nova, quando ela veio; senao, a que ja esta gravada
+    // -- entregar um rascunho antigo tambem passa pela regra do mes.
+    conferirCompetencia(dados.dataVisita ?? atual.dataVisita, regrasAtuais, { entregando });
     const salvo = await prisma.mapeamentoTecnico.update({
       where: { id },
       data: {

@@ -48,6 +48,18 @@ const STATUS_META = {
 };
 
 const hojeISO = () => new Date().toISOString().slice(0, 10);
+// Os limites do mês corrente, para o campo de data. Montados componente a
+// componente (e não por ISO) pelo mesmo motivo do `data()` mais abaixo: no
+// fuso de Brasília o dia 1º vira o último dia do mês anterior.
+const primeiroDiaDoMes = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+};
+const ultimoDiaDoMes = () => {
+  const d = new Date();
+  const ultimo = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(ultimo).padStart(2, '0')}`;
+};
 // Prazo sugerido: N dias após a visita. O N vem da CONFIGURAÇÃO (o servidor
 // manda junto com a leitura do PDF); o 3 aqui é só o valor de partida para o
 // formulário aberto antes de qualquer leitura.
@@ -785,10 +797,17 @@ function EditorMapeamento({ itensRegra, minimoResumo, inicial, tecnicoNome, onFe
             </div>
             <div>
               <label className="text-[11px] font-semibold text-texto-suave block mb-1">Data da visita</label>
-              <input type="date" value={dataVisita}
+              {/* PRESA AO MÊS CORRENTE, e o servidor recusa o resto.
+
+                  É a data que decide em qual mês o relatório pontua: solta,
+                  daria para lançar hoje uma visita datada do mês passado e
+                  mexer num ranking que a equipe já viu fechado. O `min`/`max`
+                  aqui é conveniência -- a regra de verdade está no serviço,
+                  porque o calendário do navegador não protege nada. */}
+              <input type="date" value={dataVisita} min={primeiroDiaDoMes()} max={ultimoDiaDoMes()}
                 onChange={(e) => { setDataVisita(e.target.value); if (!edicao) setPrazoEm(prazoSugerido(e.target.value)); }}
                 className={ENTRADA} />
-              <p className="text-[10px] text-texto-fraco mt-1">É ela que define em qual mês o trabalho conta.</p>
+              <p className="text-[10px] text-texto-fraco mt-1">Só deste mês: é ele que está em disputa no ranking.</p>
             </div>
             <div>
               <label className="text-[11px] font-semibold text-texto-suave block mb-1">Prazo de entrega</label>
@@ -1063,6 +1082,10 @@ function Campo({ rotulo, dica, children }) {
   );
 }
 
+// O teto das PARCELAS DE QUALIDADE (o mesmo de pontuacao.externa). O volume
+// saiu da soma: virou ponto por relatório, e a pontuação não tem mais teto.
+const TETO_QUALIDADE = 75;
+
 const ENTRADA = 'w-full bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto focus:outline-none focus:border-acao/50';
 
 function Configuracao() {
@@ -1141,6 +1164,12 @@ function Configuracao() {
               value={rascunho.prazoDias}
               onChange={(e) => mexer('prazoDias', Number(e.target.value))} />
           </Campo>
+          <Campo rotulo="Fecha o mês no dia"
+            dica="Até esse dia a pontuação do mês ainda muda depois dele o mês está fechado, a nota não se mexe mais e o relatório daquele mês não pode mais ser entregue 31 = sempre o último dia do mês">
+            <input type="number" min={1} max={31} className={ENTRADA}
+              value={rascunho.diaFechamento ?? 30}
+              onChange={(e) => mexer('diaFechamento', Number(e.target.value))} />
+          </Campo>
           <Campo rotulo="Vencimento mensal (dia do mês seguinte)"
             dica="Todos os relatórios de um mês precisam estar entregues até esse dia do mês seguinte No mês que não tiver esse dia, vence no último dia dele (31 = sempre no último dia) Vazio = a empresa não usa essa regra valendo as duas, vale a mais apertada">
             <input type="number" min={1} max={31} placeholder="não usar" className={ENTRADA}
@@ -1161,6 +1190,16 @@ function Configuracao() {
           O ranking é recalculado a cada consulta, então mudar os pesos muda também os
           <strong> meses já passados</strong> premiações já registradas continuam como estão
         </p>
+        {/* A PARCELA SEM TETO fica separada das outras de propósito: ela não
+            divide os 75 com ninguém, e enfileirá-la junto faria parecer que
+            entra na mesma soma. */}
+        <Campo rotulo="Pontos por relatório entregue"
+          dica="Cada relatório entregue soma isto, sem teto a pontuação cresce o mês inteiro, e o próximo relatório sempre vale">
+          <input type="number" min={1} max={100} className={ENTRADA}
+            value={rascunho.pontosPorRelatorio ?? 25}
+            onChange={(e) => mexer('pontosPorRelatorio', Number(e.target.value))} />
+        </Campo>
+
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {Object.entries(rascunho.pesos).map(([chave, valor]) => (
             <Campo key={chave} rotulo={{
@@ -1171,10 +1210,13 @@ function Configuracao() {
                 value={valor} onChange={(e) => mexerPeso(chave, e.target.value)} />
             </Campo>
           ))}
-          <div className={`rounded-xl border p-2.5 text-center self-end ${somaPesos === 100 ? 'border-ativo/40 bg-ativo/10' : 'border-falha/40 bg-falha/10'}`}>
+          {/* 75, e não 100: o volume saiu desta soma quando virou ponto por
+              relatório. As quatro que sobraram medem a QUALIDADE, e é entre
+              elas que o administrador divide. */}
+          <div className={`rounded-xl border p-2.5 text-center self-end ${somaPesos === TETO_QUALIDADE ? 'border-ativo/40 bg-ativo/10' : 'border-falha/40 bg-falha/10'}`}>
             <p className="text-[10px] uppercase tracking-wider text-texto-fraco font-bold">Soma</p>
-            <p className={`font-display font-extrabold text-lg ${somaPesos === 100 ? 'text-ativo-400' : 'text-falha-400'}`}>
-              {somaPesos}
+            <p className={`font-display font-extrabold text-lg ${somaPesos === TETO_QUALIDADE ? 'text-ativo-400' : 'text-falha-400'}`}>
+              {somaPesos}<span className="text-xs font-bold text-texto-fraco">/{TETO_QUALIDADE}</span>
             </p>
           </div>
         </div>

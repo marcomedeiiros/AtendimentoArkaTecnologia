@@ -33,7 +33,10 @@ const AppError = require("../../shared/errors/AppError");
 const logger = require("../../config/logger");
 // A MESMA aparagem que o ciclo do ranking usa -- ver o helper.
 const { diaQueExiste } = require("../../shared/helpers/calendario.helper");
-const { ITENS_MAPEAMENTO, PESOS, MINIMO_MAPEAMENTOS, CUSTO_POR_DEVOLUCAO } = require("./pontuacao.externa");
+const {
+  ITENS_MAPEAMENTO, PESOS, TETO_QUALIDADE, PONTOS_POR_RELATORIO,
+  MINIMO_MAPEAMENTOS, CUSTO_POR_DEVOLUCAO,
+} = require("./pontuacao.externa");
 const { PALAVRAS_PADRAO } = require("./analise.relatorio");
 
 const CHAVE = "relatorios.regras";
@@ -51,6 +54,15 @@ function padrao() {
     // daquele mes precisam estar entregues. `null` = a empresa nao usa essa
     // regra e vale so o prazo por relatorio.
     vencimentoDiaDoMes: null,
+    // Quanto vale cada relatorio entregue. Substituiu a faixa de volume: a
+    // pontuacao cresce o mes inteiro, sem teto (ver pontuacao.externa).
+    pontosPorRelatorio: PONTOS_POR_RELATORIO,
+    // O DIA EM QUE A COMPETENCIA FECHA.
+    //
+    // Ate ele, o mes esta em disputa: da para lancar e entregar visita
+    // daquele mes. Depois, o mes esta fechado e a nota nao se mexe mais.
+    // 31 quer dizer "o ultimo dia do mes", como no vencimento mensal.
+    diaFechamento: 30,
     minimoRelatorios: MINIMO_MAPEAMENTOS,
     pesos: { ...PESOS },
     custoPorDevolucao: CUSTO_POR_DEVOLUCAO,
@@ -152,6 +164,14 @@ function validar(entrada, base = padrao()) {
     out.vencimentoDiaDoMes = v === null || v === "" ? null : inteiro(v, 1, 31, base.vencimentoDiaDoMes ?? 5);
   }
 
+  if (entrada.pontosPorRelatorio !== undefined) {
+    out.pontosPorRelatorio = inteiro(entrada.pontosPorRelatorio, 1, 100, base.pontosPorRelatorio);
+  }
+  if (entrada.diaFechamento !== undefined) {
+    // Mesma regra do vencimento mensal: 31 significa o ultimo dia, seja ele
+    // qual for -- a competencia nao pode SUMIR num mes de 30 dias.
+    out.diaFechamento = inteiro(entrada.diaFechamento, 1, 31, base.diaFechamento);
+  }
   if (entrada.minimoRelatorios !== undefined) {
     out.minimoRelatorios = inteiro(entrada.minimoRelatorios, 1, 20, base.minimoRelatorios);
   }
@@ -165,17 +185,44 @@ function validar(entrada, base = padrao()) {
   out.itens = validarItens(entrada.itens, base.itens);
 
   if (entrada.pesos && typeof entrada.pesos === "object") {
+    /**
+     * A CONFIGURACAO GRAVADA ANTES DISTO TEM `volume` NOS PESOS.
+     *
+     * `volume` deixou de ser fatia de 100 e virou ponto por relatorio. Uma
+     * configuracao antiga chega aqui com cinco chaves somando 100, e recusa-la
+     * deixaria a tela de Configuracao sem abrir -- `validar` roda tambem na
+     * LEITURA. Entao o valor antigo de `volume` vira o ponto por relatorio
+     * (quando ninguem mandou um) e as quatro parcelas de qualidade sao
+     * reescaladas para somar o teto, mantendo a proporcao escolhida.
+     */
+    const antigo = entrada.pesos.volume;
+    if (antigo !== undefined && entrada.pontosPorRelatorio === undefined) {
+      out.pontosPorRelatorio = inteiro(antigo, 1, 100, base.pontosPorRelatorio);
+    }
     const pesos = {};
     for (const chave of Object.keys(base.pesos)) {
       pesos[chave] = inteiro(entrada.pesos[chave], 0, 100, base.pesos[chave]);
     }
     const soma = Object.values(pesos).reduce((a, b) => a + b, 0);
-    if (soma !== 100) {
-      throw new AppError(
-        `Os pesos precisam somar 100. Somaram ${soma}.`,
-        400,
-        "PESOS_NAO_SOMAM_100"
-      );
+    if (soma !== TETO_QUALIDADE) {
+      // Vindo de uma configuracao antiga (com `volume` junto), reescala em vez
+      // de recusar: o administrador nao digitou isto agora, e travar a leitura
+      // seria quebrar a tela por causa de um formato velho.
+      if (antigo !== undefined && soma > 0) {
+        for (const chave of Object.keys(pesos)) {
+          pesos[chave] = Math.round((pesos[chave] / soma) * TETO_QUALIDADE);
+        }
+        // A divisao pode sobrar ou faltar 1 ponto; o resto cai na completude,
+        // que e a maior parcela -- e a que menos sente um ponto.
+        const ajuste = TETO_QUALIDADE - Object.values(pesos).reduce((a, b) => a + b, 0);
+        pesos.completude += ajuste;
+      } else {
+        throw new AppError(
+          `Os pesos de qualidade precisam somar ${TETO_QUALIDADE}. Somaram ${soma}.`,
+          400,
+          "PESOS_NAO_SOMAM_TETO"
+        );
+      }
     }
     out.pesos = pesos;
   }
@@ -306,4 +353,30 @@ function prazoDe(dataVisitaISO, regras) {
 const paraISO = (d) =>
   d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : null;
 
-module.exports = { obter, salvar, padrao, validar, prazoDe, paraISO, CHAVE };
+/**
+ * QUANDO A COMPETENCIA DAQUELE MES FECHA.
+ *
+ * Devolve o ultimo instante do dia de fechamento. Um dia que nao existe
+ * naquele mes cai no ULTIMO dele -- a competencia nao pode sumir num mes
+ * curto, que e o mesmo cuidado do vencimento mensal.
+ *
+ * @param {string} competencia "AAAA-MM"
+ */
+function fechamentoDaCompetencia(competencia, regras) {
+  const [ano, mes] = String(competencia || "").split("-").map(Number);
+  if (!ano || !mes) return null;
+  const ultimo = new Date(ano, mes, 0).getDate();
+  const dia = Math.min(regras?.diaFechamento ?? 30, ultimo);
+  return new Date(ano, mes - 1, dia, 23, 59, 59, 999);
+}
+
+/** A competencia ja fechou? */
+function competenciaFechada(competencia, regras, agora = new Date()) {
+  const fim = fechamentoDaCompetencia(competencia, regras);
+  return !!fim && agora > fim;
+}
+
+module.exports = {
+  obter, salvar, padrao, validar, prazoDe, paraISO, CHAVE,
+  fechamentoDaCompetencia, competenciaFechada,
+};
