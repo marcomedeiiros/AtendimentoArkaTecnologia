@@ -358,17 +358,23 @@ function FolhaRelatorio({ documento }) {
                 </div>
               ) : (
                 // A MESMA FILEIRA DO PDF, aproximada: lá o número de colunas
-                // sai do espaço que sobrou na folha (poucas fotos ficam em duas
-                // colunas, grandes; muitas, em três). Aqui não há folha para
-                // medir, então vale a regra simples -- até quatro fotos, duas
-                // colunas. O que a prévia promete é o CONTEÚDO; a fileira pode
-                // sair de outro tamanho quando a página estiver apertada.
-                <div className={`mt-2 grid gap-1.5 ${secao.fotos.length <= 4 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                // sai do espaço da folha onde elas vão parar. Aqui não há folha
+                // para medir, então vale a regra simples -- até oito fotos,
+                // duas colunas. O que a prévia promete é o CONTEÚDO; a fileira
+                // pode sair de outro tamanho quando a página estiver apertada.
+                <div>
+                  {secao.fotos.length >= 4 && (
+                    <p className="mt-1 text-[10.5px] italic" style={{ color: TINTA_SUAVE_FOLHA }}>
+                      No PDF elas ganham uma página só para elas, maiores.
+                    </p>
+                  )}
+                  <div className={`mt-2 grid gap-1.5 ${secao.fotos.length <= 8 ? 'grid-cols-2' : 'grid-cols-3'}`}>
                   {secao.fotos.map((src, i) => (
                     <img key={i} src={src} alt={`Evidência ${i + 1}`}
-                      className="w-full max-h-28 object-contain rounded"
+                      className="w-full max-h-36 object-contain rounded"
                       style={{ border: `1px solid ${LINHA_FOLHA}` }} />
                   ))}
+                  </div>
                 </div>
               )}
             </div>

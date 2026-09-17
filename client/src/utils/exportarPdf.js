@@ -893,29 +893,34 @@ export async function gerarMapeamentoPdf(documento, { nome = 'relatorio.pdf' } =
 
     if (secao.tipo === 'fotos') {
       /**
-       * AS FOTOS CONTINUAM NA FOLHA, e nao comecam uma nova.
+       * ONDE AS EVIDENCIAS ENTRAM -- e por que a conta depende de QUANTAS sao.
        *
-       * Elas abriam pagina propria sempre. Num relatorio comum -- resumo de
-       * duas linhas, tres itens de checklist e as pendencias -- sobrava mais de
-       * meia folha em branco e as evidencias iam para a pagina 2 sozinhas: dois
-       * papeis para um relatorio que cabe em um, e quem valida tendo de virar a
-       * folha para ver a foto do que acabou de ler.
+       * ── ATE TRES, NA MESMA FOLHA ──────────────────────────────────────────
        *
-       * Agora elas entram onde estao, e so pulam quando NAO CABE nem uma linha
-       * delas.
+       * Elas cabem embaixo do texto, e mandar tres fotos para uma pagina so
+       * gastaria um papel para deixar meia folha em branco -- com quem valida
+       * tendo de virar a pagina para ver a foto do que acabou de ler.
        *
-       * ── E SAEM DO MAIOR TAMANHO QUE A FOLHA PERMITIR ──────────────────────
+       * ── DE QUATRO EM DIANTE, PAGINA PROPRIA ───────────────────────────────
        *
-       * Nem o numero de colunas nem a altura sao fixos. As combinacoes abaixo
-       * estao da MAIOR para a menor, e vale a primeira em que todas as fotos
-       * cabem no que sobrou da pagina: com duas ou tres fotos elas saem em duas
-       * colunas, largas; com seis, em tres; e num relatorio que ja encheu a
-       * folha, encolhem em vez de virar papel a mais.
+       * Quatro ou mais espremidas no resto da folha so cabem em tres colunas, e
+       * numa foto deitada -- que e como a foto de rack e tirada -- quem manda e
+       * a largura: tres colunas param em 58mm, e o supervisor nao enxerga cabo
+       * nenhum nesse tamanho. Numa folha so para elas sao duas colunas de 87mm,
+       * metade maior. O papel a mais e o preco de a evidencia servir para
+       * alguma coisa.
        *
-       * Numeros fixos teriam de ser os do PIOR caso -- e era isso que deixava a
-       * foto pequena mesmo quando havia meia folha livre embaixo dela.
+       * ── E O TAMANHO SAI DO ESPACO, NOS DOIS CASOS ─────────────────────────
+       *
+       * Nem colunas nem altura sao fixas: os arranjos possiveis sao ordenados
+       * pela AREA que cada foto ganha, e vale o primeiro que cabe no espaco
+       * disponivel. Numeros fixos teriam de ser os do PIOR caso -- e era isso
+       * que deixava a foto pequena mesmo com meia folha livre embaixo dela.
        */
       const VAO = 4;
+      // A partir daqui a secao vale uma folha inteira. Abaixo disso, ela segue
+      // onde o texto parou.
+      const SO_PARA_ELAS = 4;
 
       // As fotos vem TODAS antes de desenhar: sem as medidas de cada uma nao da
       // para saber a altura da grade -- e e ela que decide o tamanho.
@@ -952,12 +957,18 @@ export async function gerarMapeamentoPdf(documento, { nome = 'relatorio.pdf' } =
       const ARRANJOS = [2, 3]
         .flatMap((col) => [96, 86, 78, 70, 62, 56, 50, 44].map((teto) => [col, teto]))
         .sort((a, b) => areaPorFoto(...b) - areaPorFoto(...a));
-      // A QUEBRA VEM ANTES DA ESCOLHA DO ARRANJO, e nao depois: nao cabendo nem
-      // a menor fileira, a folha vira agora -- e o arranjo e entao escolhido
-      // para a pagina nova, onde ha espaco para as fotos sairem grandes. Na
-      // ordem inversa, o espaco medido seria o do fim da folha anterior e as
-      // fotos sairiam pequenas numa pagina quase vazia.
-      quebra(44 + 14);
+      // A FOLHA VIRA ANTES DE ESCOLHER O ARRANJO, e nao depois: e o espaco da
+      // pagina onde elas VAO ficar que decide o tamanho. Na ordem inversa, o
+      // medido seria o fim da folha anterior, e as fotos sairiam pequenas numa
+      // pagina quase vazia.
+      if (imgs.length >= SO_PARA_ELAS) {
+        pdf.addPage();
+        marcaDaguaPdf(pdf, logo);
+        y = margem;
+      } else {
+        // Poucas fotos: seguem aqui, e so pulam se nem a menor fileira couber.
+        quebra(44 + 14);
+      }
       // O espaco que sobra na folha depois do titulo desta secao.
       const sobra = alturaPg - margem - 8 - (y + 5);
       const [COL, ALT_MAX] = ARRANJOS.find(([c, t]) => alturaDaGrade(c, t) <= sobra) || ARRANJOS[ARRANJOS.length - 1];
