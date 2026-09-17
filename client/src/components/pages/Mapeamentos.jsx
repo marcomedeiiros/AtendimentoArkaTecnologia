@@ -719,8 +719,33 @@ function EditorMapeamento({ itensRegra, minimoResumo, inicial, tecnicoNome, onFe
                    o `blur` do campo apagava o item debaixo do dedo. */
                 onBlur={() => setTimeout(() => setBuscando(false), 150)}
                 autoComplete="off"
-                className={ENTRADA}
+                className={`${ENTRADA} pr-9`}
               />
+              {/* TROCAR DE EMPRESA É LIMPAR AS TRÊS COISAS DE UMA VEZ.
+
+                  O nome, o CNPJ e a logo vêm do mesmo cliente, e apagar só o
+                  nome deixaria o CNPJ (e a logo) do anterior no relatório -- um
+                  documento com o nome de uma empresa e o documento de outra.
+                  Por isso o X zera os três, e não o campo em que ele está.
+
+                  `onMouseDown` pelo mesmo motivo da lista de sugestões: o
+                  clique só chegaria depois do `blur` do campo. */}
+              {(empresa || cnpj) && (
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setEmpresa('');
+                    setCnpj('');
+                    setSugestoes([]);
+                    setBuscando(false);
+                  }}
+                  title="Limpar a empresa (tira o nome, o CNPJ e a logo)"
+                  className="absolute right-2 top-[1.65rem] p-1 rounded-md text-texto-fraco hover:text-falha-400 hover:bg-falha/10"
+                >
+                  <X size={13} />
+                </button>
+              )}
               {buscando && sugestoes.length > 0 && (
                 <ul className="absolute z-20 left-0 right-0 mt-1 glass-panel border border-linha rounded-xl shadow-2xl overflow-hidden max-h-56 overflow-y-auto">
                   {sugestoes.map((s) => (
