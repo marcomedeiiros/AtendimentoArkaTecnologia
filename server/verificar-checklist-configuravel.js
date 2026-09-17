@@ -95,7 +95,9 @@ const base = regras.validar({}, undefined);
 
 // ── A conta ──────────────────────────────────────────────────────────────────
 {
-  const mapa = { itens: { backup: "feito", seguranca: "ok" }, resumo: "x".repeat(30) };
+  // `descricao` e nao `resumo`: quem conta nesta parcela e o relato da visita
+  // (o resumo virou a linha de assunto). Ver pontuacao.externa.completudeDe.
+  const mapa = { itens: { backup: "feito", seguranca: "ok" }, descricao: "x".repeat(30) };
   const doisItens = [{ chave: "backup", rotulo: "B" }, { chave: "seguranca", rotulo: "S" }];
   const tresItens = [...doisItens, { chave: "cameras", rotulo: "C" }];
 
@@ -103,7 +105,7 @@ const base = regras.validar({}, undefined);
   const c3 = completudeDe(mapa, tresItens);
 
   check("a completude usa o checklist em vigor", [
-    // 2 preenchidos + resumo, sobre 2 itens + 1 = 100%.
+    // 2 preenchidos + a descricao, sobre 2 itens + 1 = 100%.
     ...(Math.round(c2 * 100) === 100 ? [] : ["com 2 itens preenchidos de 2 deveria dar 100%, deu " + Math.round(c2 * 100)]),
     // O mesmo relatorio, com um item a mais no checklist: 3 de 4 = 75%.
     ...(Math.round(c3 * 100) === 75 ? [] : ["com um item a mais deveria cair para 75%, deu " + Math.round(c3 * 100)]),

@@ -133,19 +133,21 @@ function completudeDe(m, itens = ITENS_MAPEAMENTO) {
     return typeof v === "string" ? v.trim().length > 0 : !!v;
   }).length;
   /**
-   * O RELATO DA VISITA -- a descricao detalhada, ou o resumo nos antigos.
+   * SO A DESCRICAO CONTA -- e o `resumo` nao entra nesta parcela.
    *
-   * O formulario passou a ter dois campos: `resumo` e uma linha, o assunto da
-   * visita, e `descricao` e o relato do que foi feito. Quem conta na completude
-   * e a descricao -- uma linha de assunto nao explica visita nenhuma.
+   * O formulario tem dois campos: `resumo` e uma linha (o assunto da visita) e
+   * `descricao` e o relato do que foi feito. Uma linha de assunto nao explica
+   * visita nenhuma, entao quem vale aqui e o relato.
    *
-   * O `resumo` continua valendo PARA QUEM NAO TEM DESCRICAO. Sem isso, todo
-   * relatorio entregue antes deste campo perderia essa parcela de uma vez: a
-   * completude e recalculada a cada consulta, entao a nota de meses fechados
-   * cairia por causa de um campo que nao existia quando eles foram escritos.
+   * ── E OS RELATORIOS DE ANTES? ─────────────────────────────────────────
+   *
+   * O campo era um so, e o relato deles foi escrito no `resumo`. Em vez de um
+   * "ou" aqui -- que faria a conta depender de qual campo a pessoa usou, e foi
+   * o que deixou a porcentagem pulando na tela -- o texto foi MOVIDO para
+   * `descricao` de uma vez (prisma/backfill-descricao-mapeamento.js). A regra
+   * fica com um caminho so, e nenhum relatorio antigo perde a parcela.
    */
-  const relato = String(m.descricao || "").trim() || String(m.resumo || "").trim();
-  const comResumo = relato.length >= MINIMO_RESUMO ? 1 : 0;
+  const comResumo = String(m.descricao || "").trim().length >= MINIMO_RESUMO ? 1 : 0;
   return itens.length ? (preenchidos + comResumo) / (itens.length + 1) : 0;
 }
 

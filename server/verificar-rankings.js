@@ -556,8 +556,10 @@ async function main() {
     prisma.mapeamentoTecnico.create({
       data: {
         tecnicoId: tecnico.id, tecnicoNome: tecnico.nome,
+        // `descricao` e o campo que conta na completude desde 09/2026 -- o
+        // `resumo` virou a linha de assunto e nao entra na parcela.
         empresa: `${MARCA} Empresa`, dataVisita: noMes(5),
-        prazoEm: noMes(8), resumo: "Visita tecnica completa com levantamento de infraestrutura",
+        prazoEm: noMes(8), descricao: "Visita tecnica completa com levantamento de infraestrutura",
         itens: itensCheios, evidencias: [{ arquivo: "a.jpg" }, { arquivo: "b.jpg" }, { arquivo: "c.jpg" }],
         ...dados,
       },
@@ -598,7 +600,7 @@ async function main() {
   // minimo. Sem isso ela valeria 65 pontos e lideraria em cima de uma amostra
   // de um -- o mesmo defeito que o minimo de avaliacoes ja impede na sede.
   const umSo = pontuarExterno([
-    { status: "aprovado", resumo: "x".repeat(50), itens: itensCheios, evidencias: [1, 2, 3], devolucoes: 0, prazoEm: noMes(8), entregueEm: noMes(6) },
+    { status: "aprovado", descricao: "x".repeat(50), itens: itensCheios, evidencias: [1, 2, 3], devolucoes: 0, prazoEm: noMes(8), entregueEm: noMes(6) },
   ]);
   check(umSo.completude.conta === false, "com 1 relatorio a completude nao conta");
   check(umSo.completude.pontos === 0 && umSo.prazo.pontos === 0 && umSo.evidencias.pontos === 0,
@@ -613,7 +615,7 @@ async function main() {
     "e o MINIMO vai junto nas tres parcelas de qualidade, para a tela nao chutar"
   );
   const comCinco = pontuarExterno(
-    [{ status: "entregue", resumo: "x".repeat(50), itens: itensCheios, evidencias: [1, 2, 3], devolucoes: 0 }],
+    [{ status: "entregue", descricao: "x".repeat(50), itens: itensCheios, evidencias: [1, 2, 3], devolucoes: 0 }],
     { minimoRelatorios: 5 }
   );
   check(
@@ -645,9 +647,9 @@ async function main() {
   // reguas -- a que a tela explica e a que sai no placar.
   const comVolume30 = pontuarExterno(
     [
-      { status: "entregue", resumo: "x".repeat(50), itens: itensCheios, evidencias: [1, 2, 3], devolucoes: 0, prazoEm: noMes(8), entregueEm: noMes(6) },
-      { status: "entregue", resumo: "x".repeat(50), itens: itensCheios, evidencias: [1, 2, 3], devolucoes: 0, prazoEm: noMes(8), entregueEm: noMes(6) },
-      { status: "entregue", resumo: "x".repeat(50), itens: itensCheios, evidencias: [1, 2, 3], devolucoes: 0, prazoEm: noMes(8), entregueEm: noMes(6) },
+      { status: "entregue", descricao: "x".repeat(50), itens: itensCheios, evidencias: [1, 2, 3], devolucoes: 0, prazoEm: noMes(8), entregueEm: noMes(6) },
+      { status: "entregue", descricao: "x".repeat(50), itens: itensCheios, evidencias: [1, 2, 3], devolucoes: 0, prazoEm: noMes(8), entregueEm: noMes(6) },
+      { status: "entregue", descricao: "x".repeat(50), itens: itensCheios, evidencias: [1, 2, 3], devolucoes: 0, prazoEm: noMes(8), entregueEm: noMes(6) },
     ],
     { pesos: { volume: 30, completude: 20, prazo: 20, evidencias: 15, retrabalho: 15 } }
   );
@@ -657,7 +659,7 @@ async function main() {
   );
 
   // E rascunho nao pontua: abrir formulario nao pode valer ponto.
-  const soRascunho = pontuarExterno([{ status: "rascunho", resumo: "x".repeat(50), itens: itensCheios, evidencias: [1, 2, 3] }]);
+  const soRascunho = pontuarExterno([{ status: "rascunho", descricao: "x".repeat(50), itens: itensCheios, evidencias: [1, 2, 3] }]);
   check(soRascunho.pontos === 0, "rascunho nao pontua nada");
 
   titulo("6. OS DOIS RANKINGS NAO SE MISTURAM");
@@ -1111,7 +1113,7 @@ async function main() {
       // A CONFIGURACAO MUDA A NOTA -- se nao mudasse, a tela seria decoracao.
       const m = {
         status: "aprovado", entregueEm: new Date(), prazoEm: new Date(Date.now() + 86400000),
-        resumo: "x".repeat(30), itens: { infraestrutura: "a", servidores: "a" },
+        descricao: "x".repeat(30), itens: { infraestrutura: "a", servidores: "a" },
         fotosRelatorio: 3, devolucoes: 0,
       };
       const lista = [m, m, m, m];

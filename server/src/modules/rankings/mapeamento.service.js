@@ -298,11 +298,15 @@ class MapeamentoService {
       campos: {
         itens: Object.keys(somados).length ? somados : null,
         fotosRelatorio: analise.fotos,
-        // O resumo so e escrito quando a pessoa nao escreveu um: o texto dela
+        // O relato so e escrito quando a pessoa nao escreveu um: o texto dela
         // vale mais que o meu, e sobrescrever apagaria o que ela digitou.
+        //
+        // Vai para `descricao`, que e o campo que conta na completude -- este
+        // caminho existe justamente para o relatorio lido de um PDF nao perder
+        // a parcela por nao ter campo digitado a mao.
         ...(String(resumoAtual || "").trim().length >= MINIMO_RESUMO
           ? {}
-          : { resumo: this._resumoDe(analise, regras.itens) }),
+          : { descricao: this._resumoDe(analise, regras.itens) }),
       },
     };
   }

@@ -290,7 +290,13 @@ class RankingService {
     const mapeamentos = await prisma.mapeamentoTecnico.findMany({
       where: { dataVisita: { gte: desde, lt: fim }, tecnicoId: { in: equipe.map((u) => u.id) } },
       select: {
-        tecnicoId: true, status: true, resumo: true, itens: true,
+        tecnicoId: true, status: true, itens: true,
+        // `descricao` PELO MESMO MOTIVO do `fotosRelatorio` logo abaixo: e ela
+        // que a completude conta desde que o relato ganhou campo proprio. Sem a
+        // coluna aqui ela chega `undefined`, a parcela do relato vale zero para
+        // todo mundo, e a nota cai sem nada acusando. (`resumo` saiu: e a linha
+        // de assunto, e nao entra em conta nenhuma.)
+        descricao: true,
         evidencias: true, devolucoes: true, prazoEm: true, entregueEm: true,
         // `fotosRelatorio` E OBRIGATORIO NESTE SELECT: a parcela de evidencias
         // conta o maior valor entre as fotos anexadas e as que estao dentro do

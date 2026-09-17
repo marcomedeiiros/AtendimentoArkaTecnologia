@@ -538,12 +538,18 @@ function EditorMapeamento({ itensRegra, minimoResumo, inicial, tecnicoNome, onFe
   const completude = useMemo(() => {
     const cobertos = itensRegra.filter((i) => String(itens[i.chave] || '').trim()).length;
     const minimo = minimoResumo ?? 20;
-    // QUEM CONTA É A DESCRIÇÃO, e não o resumo -- a mesma conta do servidor
-    // (pontuacao.externa.completudeDe). O resumo é uma linha de assunto; ele
-    // só vale nesta parcela nos relatórios antigos, que não têm descrição.
-    const relato = descricao.trim() || resumo.trim();
-    return Math.round(((cobertos + (relato.length >= minimo ? 1 : 0)) / (itensRegra.length + 1)) * 100);
-  }, [itens, resumo, descricao, itensRegra, minimoResumo]);
+    // QUEM CONTA É A DESCRIÇÃO, e só ela -- a mesma conta do servidor
+    // (pontuacao.externa.completudeDe). O resumo é a linha de assunto e não
+    // entra nesta parcela.
+    //
+    // Havia um "descrição OU resumo" aqui, para os relatórios antigos não
+    // perderem a parcela. O efeito na tela era a porcentagem PULANDO: escrever
+    // no resumo subia 33%, e a primeira letra na descrição derrubava de volta --
+    // porque a conta trocava de campo no meio. O texto dos antigos foi movido
+    // para a descrição de uma vez (backfill-descricao-mapeamento.js), e aqui
+    // ficou um caminho só.
+    return Math.round(((cobertos + (descricao.trim().length >= minimo ? 1 : 0)) / (itensRegra.length + 1)) * 100);
+  }, [itens, descricao, itensRegra, minimoResumo]);
 
   const dentroDoPrazo = useMemo(() => hojeISO() <= prazoEm, [prazoEm]);
 
@@ -810,7 +816,7 @@ function EditorMapeamento({ itensRegra, minimoResumo, inicial, tecnicoNome, onFe
             <textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={5}
               placeholder="O que foi encontrado, o que foi feito e como ficou."
               className={`${ENTRADA} resize-none`} />
-          </div>
+          </div> 
 
           <div>
             <p className="text-[11px] font-semibold text-texto-suave mb-1.5">Checklist técnico</p>
