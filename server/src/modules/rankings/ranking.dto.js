@@ -93,6 +93,9 @@ const criarMapeamentoSchema = z.object({
   // unico caminho era a tela digitar o valor.
   prazoEm: z.string().min(8).optional().nullable(),
   resumo: z.string().max(4000).optional(),
+  // A descricao detalhada da visita -- o campo que conta na completude. Teto
+  // maior que o do resumo: aqui e onde se escreve o que foi feito.
+  descricao: z.string().max(8000).optional().nullable(),
   itens: itensSchema,
   pendencias: z.string().max(4000).optional().nullable(),
   evidencias: z.array(evidenciaSchema).max(12).optional(),

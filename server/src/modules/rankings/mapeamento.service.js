@@ -509,6 +509,7 @@ class MapeamentoService {
         // outro caminho, e para o dia em que a tela esquecer de mandar.
         prazoEm: dataDoDia(dados.prazoEm) || regrasRelatorio.prazoDe(dados.dataVisita, regras),
         resumo: String(dados.resumo || "").trim(),
+        descricao: dados.descricao ? String(dados.descricao).trim() : null,
         itens: saneiaItens(dados.itens, regras.itens),
         pendencias: dados.pendencias ? String(dados.pendencias).trim() : null,
         evidencias,
@@ -569,6 +570,8 @@ class MapeamentoService {
         dataVisita: dados.dataVisita ? dataDoDia(dados.dataVisita) : undefined,
         prazoEm: dados.prazoEm ? dataDoDia(dados.prazoEm) : undefined,
         resumo: dados.resumo !== undefined ? String(dados.resumo).trim() : undefined,
+        descricao:
+          dados.descricao !== undefined ? (dados.descricao ? String(dados.descricao).trim() : null) : undefined,
         // `atual.itens` entra como terceiro argumento: item removido da
         // configuração continua nos relatórios antigos, e salvar uma correção
         // qualquer não pode apagar o que foi escrito nele.
@@ -716,6 +719,7 @@ class MapeamentoService {
     return {
       ...base,
       resumo: m.resumo,
+      descricao: m.descricao || "",
       itens: m.itens || {},
       pendencias: m.pendencias,
       // Os caminhos so vao no detalhe: a listagem nao precisa deles e mandar

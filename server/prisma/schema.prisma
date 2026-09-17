@@ -142,7 +142,18 @@ model MapeamentoTecnico {
   entregueEm   DateTime? @map("entregue_em")
   /// rascunho | entregue | em_correcao | aprovado
   status       String    @default("rascunho")
+  /// O RESUMO -- uma linha, o assunto da visita ("verificacao da rede").
   resumo       String    @default("")
+  /// A DESCRICAO detalhada do que foi feito. E ela que conta na completude.
+  ///
+  /// Coluna NOVA, e nao um resumo mais comprido: o relatorio precisava das
+  /// duas leituras -- o assunto, para achar a visita numa lista, e o relato,
+  /// para quem valida entender o que aconteceu. Um campo so obrigava a
+  /// escolher entre os dois.
+  ///
+  /// Opcional porque os relatorios de antes nao a tem: neles quem conta na
+  /// completude continua sendo o `resumo` (ver pontuacao.externa.completudeDe).
+  descricao    String?
   /// Checklist tecnico do que foi levantado (rede, servidores, backup, ...).
   /// JSON e nao colunas: a lista de itens muda com o tempo e uma coluna por
   /// item viraria migracao a cada revisao do formulario.

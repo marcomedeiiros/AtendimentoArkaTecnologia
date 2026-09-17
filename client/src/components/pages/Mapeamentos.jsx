@@ -188,6 +188,13 @@ function ModalDetalhe({ id, itensRegra, onFechar, onEditar, podeEditar }) {
                   </div>
                 )}
 
+                {m.descricao && (
+                  <div>
+                    <p className="text-[11px] font-semibold text-texto-suave mb-1">Descrição da visita</p>
+                    <p className="text-xs text-texto leading-relaxed whitespace-pre-wrap">{m.descricao}</p>
+                  </div>
+                )}
+
                 {/* O CHECKLIST, com o que foi escrito. Mostra só o preenchido:
                     oito rótulos vazios não informam nada e afogam o que tem. */}
                 {itensPreenchidos.length > 0 && (
@@ -368,7 +375,10 @@ function FolhaRelatorio({ documento }) {
                       No PDF elas ganham uma página só para elas, maiores.
                     </p>
                   )}
-                  <div className={`mt-2 grid gap-1.5 ${secao.fotos.length <= 8 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                  {/* A terceira coluna só a partir do `sm`: no celular a folha
+                      inteira tem a largura da tela, e três miniaturas ali não
+                      mostram foto nenhuma. */}
+                  <div className={`mt-2 grid gap-1.5 ${secao.fotos.length <= 8 ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3'}`}>
                   {secao.fotos.map((src, i) => (
                     <img key={i} src={src} alt={`Evidência ${i + 1}`}
                       className="w-full max-h-36 object-contain rounded"
@@ -426,6 +436,7 @@ function EditorMapeamento({ itensRegra, minimoResumo, inicial, tecnicoNome, onFe
     inicial?.prazoEm ? String(inicial.prazoEm).slice(0, 10) : prazoSugerido(hojeISO())
   );
   const [resumo, setResumo] = useState(inicial?.resumo || '');
+  const [descricao, setDescricao] = useState(inicial?.descricao || '');
   const [itens, setItens] = useState(() => ({ ...(inicial?.itens || {}) }));
   const [pendencias, setPendencias] = useState(inicial?.pendencias || '');
   const [evidencias, setEvidencias] = useState(() => inicial?.arquivos || []);
@@ -490,18 +501,22 @@ function EditorMapeamento({ itensRegra, minimoResumo, inicial, tecnicoNome, onFe
   const completude = useMemo(() => {
     const cobertos = itensRegra.filter((i) => String(itens[i.chave] || '').trim()).length;
     const minimo = minimoResumo ?? 20;
-    return Math.round(((cobertos + (resumo.trim().length >= minimo ? 1 : 0)) / (itensRegra.length + 1)) * 100);
-  }, [itens, resumo, itensRegra, minimoResumo]);
+    // QUEM CONTA É A DESCRIÇÃO, e não o resumo -- a mesma conta do servidor
+    // (pontuacao.externa.completudeDe). O resumo é uma linha de assunto; ele
+    // só vale nesta parcela nos relatórios antigos, que não têm descrição.
+    const relato = descricao.trim() || resumo.trim();
+    return Math.round(((cobertos + (relato.length >= minimo ? 1 : 0)) / (itensRegra.length + 1)) * 100);
+  }, [itens, resumo, descricao, itensRegra, minimoResumo]);
 
   const dentroDoPrazo = useMemo(() => hojeISO() <= prazoEm, [prazoEm]);
 
   // A DESCRIÇÃO DO DOCUMENTO, que a folha desenha e o PDF desenha.
   const documento = useMemo(
     () => montarDocumentoMapeamento(
-      { empresa, cnpj, dataVisita, prazoEm, resumo, itens, pendencias, tecnicoNome, evidencias: fotos },
+      { empresa, cnpj, dataVisita, prazoEm, resumo, descricao, itens, pendencias, tecnicoNome, evidencias: fotos },
       itensRegra
     ),
-    [empresa, cnpj, dataVisita, prazoEm, resumo, itens, pendencias, tecnicoNome, fotos, itensRegra]
+    [empresa, cnpj, dataVisita, prazoEm, resumo, descricao, itens, pendencias, tecnicoNome, fotos, itensRegra]
   );
 
   const anexar = (e) => {
@@ -542,7 +557,7 @@ function EditorMapeamento({ itensRegra, minimoResumo, inicial, tecnicoNome, onFe
     const corpo = {
       empresa: empresa.trim(),
       cnpj: cnpj.replace(/\D/g, '') || null,
-      dataVisita, prazoEm, resumo, itens, pendencias, evidencias, entregar,
+      dataVisita, prazoEm, resumo, descricao, itens, pendencias, evidencias, entregar,
     };
     try {
       const pdf = await gerarMapeamentoPdf(documento, {
@@ -713,11 +728,25 @@ function EditorMapeamento({ itensRegra, minimoResumo, inicial, tecnicoNome, onFe
             </div>
           </div>
 
+          {/* DOIS CAMPOS, e não um mais comprido: o relatório precisa das duas
+              leituras. O resumo é o assunto -- é por ele que se acha a visita
+              numa lista. A descrição é o relato, e é ela que conta na
+              completude: uma linha de assunto não explica visita nenhuma. */}
           <div>
             <label className="text-[11px] font-semibold text-texto-suave block mb-1">
-              Resumo da visita <span className="text-texto-fraco font-normal">(conta na completude a partir de {minimoResumo ?? 20} caracteres)</span>
+              Resumo da visita <span className="text-texto-fraco font-normal">(uma linha: o assunto)</span>
             </label>
-            <textarea value={resumo} onChange={(e) => setResumo(e.target.value)} rows={4}
+            <textarea value={resumo} onChange={(e) => setResumo(e.target.value)} rows={2}
+              placeholder="Ex.: verificação da infraestrutura de rede"
+              className={`${ENTRADA} resize-none`} />
+          </div>
+
+          <div>
+            <label className="text-[11px] font-semibold text-texto-suave block mb-1">
+              Descrição da visita <span className="text-texto-fraco font-normal">(conta na completude a partir de {minimoResumo ?? 20} caracteres)</span>
+            </label>
+            <textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={5}
+              placeholder="O que foi encontrado, o que foi feito e como ficou."
               className={`${ENTRADA} resize-none`} />
           </div>
 
@@ -784,7 +813,7 @@ function EditorMapeamento({ itensRegra, minimoResumo, inicial, tecnicoNome, onFe
         <div className="border-t lg:border-t-0 lg:border-l border-linha-forte bg-grafite-800/40 p-3 sm:p-5 lg:overflow-y-auto">
           <p className="text-[10px] uppercase tracking-wider text-texto-fraco font-bold mb-2.5 flex items-center gap-1.5">
             <FileText size={12} /> Prévia do PDF
-            <span className="font-normal normal-case tracking-normal">é este arquivo que vai para o supervisor</span>
+            <span className="font-normal normal-case tracking-normal">é este arquivo que vai para o superior</span>
           </p>
           <FolhaRelatorio documento={documento} />
         </div>

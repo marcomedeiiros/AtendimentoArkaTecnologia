@@ -54,7 +54,7 @@ function documento(cnpj) {
  */
 export function montarDocumentoMapeamento(dados = {}, itensRegra = []) {
   const {
-    empresa, cnpj, dataVisita, prazoEm, resumo, itens = {},
+    empresa, cnpj, dataVisita, prazoEm, resumo, descricao, itens = {},
     pendencias, tecnicoNome, evidencias = [],
   } = dados;
 
@@ -79,7 +79,15 @@ export function montarDocumentoMapeamento(dados = {}, itensRegra = []) {
       tipo: 'texto',
       texto: String(resumo || '').trim(),
       vazia: !String(resumo || '').trim(),
-      espera: 'O que foi feito na visita, em poucas linhas.',
+      espera: 'O assunto da visita, em uma linha.',
+    },
+    {
+      id: 'descricao',
+      titulo: 'Descrição da visita',
+      tipo: 'texto',
+      texto: String(descricao || '').trim(),
+      vazia: !String(descricao || '').trim(),
+      espera: 'O relato do que foi feito: o que se encontrou, o que se mexeu, como ficou.',
     },
     {
       id: 'checklist',

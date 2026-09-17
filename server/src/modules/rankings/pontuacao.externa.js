@@ -132,7 +132,20 @@ function completudeDe(m, itens = ITENS_MAPEAMENTO) {
     const v = campos[i.chave];
     return typeof v === "string" ? v.trim().length > 0 : !!v;
   }).length;
-  const comResumo = String(m.resumo || "").trim().length >= MINIMO_RESUMO ? 1 : 0;
+  /**
+   * O RELATO DA VISITA -- a descricao detalhada, ou o resumo nos antigos.
+   *
+   * O formulario passou a ter dois campos: `resumo` e uma linha, o assunto da
+   * visita, e `descricao` e o relato do que foi feito. Quem conta na completude
+   * e a descricao -- uma linha de assunto nao explica visita nenhuma.
+   *
+   * O `resumo` continua valendo PARA QUEM NAO TEM DESCRICAO. Sem isso, todo
+   * relatorio entregue antes deste campo perderia essa parcela de uma vez: a
+   * completude e recalculada a cada consulta, entao a nota de meses fechados
+   * cairia por causa de um campo que nao existia quando eles foram escritos.
+   */
+  const relato = String(m.descricao || "").trim() || String(m.resumo || "").trim();
+  const comResumo = relato.length >= MINIMO_RESUMO ? 1 : 0;
   return itens.length ? (preenchidos + comResumo) / (itens.length + 1) : 0;
 }
 
