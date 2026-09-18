@@ -30,6 +30,9 @@ import { avisar, confirmar, pedirTexto } from '../../utils/dialogo';
 import Portal from '../Portal';
 import { FUSO_BR } from '../../utils/data';
 import { ehDaEquipeExterna } from '../../utils/equipeRanking';
+// A MESMA leitura da área de transferência da logo de Clientes: um lugar só
+// para "o que veio no Ctrl+V é imagem?".
+import { imagemDoColar } from '../LogoCliente';
 import { montarDocumentoMapeamento, nomeArquivoMapeamento } from '../../utils/documentoMapeamento';
 // O `jspdf` continua chegando so no primeiro PDF: quem importa a biblioteca e o
 // proprio `exportarPdf`, por dentro (ver `libs()`).
@@ -613,16 +616,47 @@ function EditorMapeamento({ itensRegra, minimoResumo, prazoRegra, inicial, tecni
     [empresa, cnpj, dataVisita, prazoEm, resumo, descricao, itens, pendencias, tecnicoNome, fotos, itensRegra]
   );
 
-  const anexar = (e) => {
-    const arquivos = [...(e.target.files || [])];
-    e.target.value = '';
+  /**
+   * AS FOTOS, venham de onde vierem.
+   *
+   * O botão de anexar e o Ctrl+V entram pela mesma porta: o teto de 6 MB, o de
+   * 12 fotos e a leitura em data URL são os mesmos, e dois caminhos separados
+   * seriam dois lugares para o limite divergir.
+   */
+  const adicionarFotos = useCallback((arquivos) => {
     for (const f of arquivos) {
-      if (f.size > 6 * 1024 * 1024) { setErro(`"${f.name}" passa de 6 MB.`); continue; }
+      if (!f) continue;
+      if (f.size > 6 * 1024 * 1024) { setErro(`"${f.name || 'imagem'}" passa de 6 MB.`); continue; }
       const r = new FileReader();
       r.onload = () => setEvidencias((l) => (l.length >= 12 ? l : [...l, r.result]));
       r.readAsDataURL(f);
     }
+  }, []);
+
+  const anexar = (e) => {
+    const arquivos = [...(e.target.files || [])];
+    e.target.value = '';
+    adicionarFotos(arquivos);
   };
+
+  /**
+   * COLAR A FOTO -- Ctrl+V em qualquer lugar do formulário.
+   *
+   * É como a foto costuma chegar: print de tela, recorte do WhatsApp, imagem
+   * copiada do gerenciador de arquivos. Salvar em disco só para depois achar o
+   * arquivo no seletor é um caminho a mais para a mesma imagem.
+   *
+   * `imagemDoColar` filtra por `kind === "file"`: sem imagem na área de
+   * transferência o evento segue o caminho dele, e o Ctrl+V de TEXTO nos campos
+   * continua funcionando -- foi por esse filtro que ele passou a existir na
+   * tela de Clientes.
+   */
+  const colar = useCallback((e) => {
+    const arquivo = imagemDoColar(e);
+    if (!arquivo) return;
+    e.preventDefault();
+    adicionarFotos([arquivo]);
+  }, [adicionarFotos]);
 
   /**
    * SALVAR -- e, junto, gerar o PDF.
@@ -698,7 +732,10 @@ function EditorMapeamento({ itensRegra, minimoResumo, prazoRegra, inicial, tecni
        propria -- e dela que os dois paineis herdam o teto. Uma altura em `dvh`
        aqui ignoraria o cabecalho do painel e deixaria a barra de botoes fora da
        tela em notebook. */
-    <div className="fade-in flex flex-col h-full min-h-[34rem]">
+    /* O `onPaste` fica na RAIZ, e não só na área das fotos: quem acabou de
+       copiar a imagem cola onde o cursor estiver -- em geral num campo de
+       texto que ele estava preenchendo. */
+    <div className="fade-in flex flex-col h-full min-h-[34rem]" onPaste={colar}>
       {/* A BARRA: quem sai, e quem salva. Fica fora dos dois painéis porque vale
           para os dois -- e porque o botão de entregar não pode ficar no fim de
           um formulário que rola. */}
@@ -917,7 +954,7 @@ function EditorMapeamento({ itensRegra, minimoResumo, prazoRegra, inicial, tecni
 
           <div>
             <p className="text-[11px] font-semibold text-texto-suave mb-1.5">
-              Evidências <span className="text-texto-fraco font-normal">({evidencias.length}/12 · 3 já valem a faixa cheia · entram no fim do PDF)</span>
+              Evidências <span className="text-texto-fraco font-normal">({evidencias.length}/12 · 3 já valem a faixa cheia · entram no fim do PDF · dá para colar com Ctrl+V)</span>
             </p>
             <div className="flex flex-wrap gap-2">
               {evidencias.map((ev, i) => {
