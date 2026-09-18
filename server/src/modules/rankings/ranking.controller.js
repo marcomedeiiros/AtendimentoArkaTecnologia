@@ -58,6 +58,9 @@ class RankingController {
    * (`GET /rankings/:equipe`), que exige o modulo "rankings".
    */
   async regras(req, res) {
+    // Uma leitura só da configuração: duas dariam duas respostas se alguém
+    // salvasse no meio.
+    const emVigor = await regrasRelatorio.obter();
     return success(res, {
       externo: {
         // O PADRAO, e com esse nome. Serve para a tela explicar a FORMA da
@@ -74,7 +77,16 @@ class RankingController {
         // Os itens EM VIGOR, e não a lista de fábrica: a tela desenha o
         // formulário de visita a partir daqui, e com a lista fixa um item
         // criado pela empresa não teria campo para ser preenchido.
-        itens: (await regrasRelatorio.obter()).itens,
+        itens: emVigor.itens,
+        // O PRAZO EM VIGOR, pelo mesmo motivo dos itens: o formulário sugere
+        // a data de entrega, e ele sugeria "visita + 3 dias" cravado no
+        // cliente -- com a Configuração em 7, a tela propunha um prazo que a
+        // empresa não usa, e o servidor gravava outro. Quem manda é a
+        // Configuração; isto é só o caminho até ela.
+        prazo: {
+          dias: emVigor.prazoDias,
+          vencimentoDiaDoMes: emVigor.vencimentoDiaDoMes,
+        },
         // O LIMIAR DO RESUMO, porque a tela mostra a completude enquanto a
         // pessoa digita e precisa da mesma regra que o servidor grava. Estava
         // cravado no cliente (F3 da auditoria de front-end).

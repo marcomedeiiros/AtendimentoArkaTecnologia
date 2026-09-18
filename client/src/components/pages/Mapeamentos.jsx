@@ -75,13 +75,37 @@ const ultimoDiaDoMes = () => {
   const ultimo = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(ultimo).padStart(2, '0')}`;
 };
-// Prazo sugerido: N dias após a visita. O N vem da CONFIGURAÇÃO (o servidor
-// manda junto com a leitura do PDF); o 3 aqui é só o valor de partida para o
-// formulário aberto antes de qualquer leitura.
-function prazoSugerido(dataVisita, dias = 3) {
-  const d = new Date(`${dataVisita || hojeISO()}T12:00:00`);
-  d.setDate(d.getDate() + dias);
-  return d.toISOString().slice(0, 10);
+/**
+ * O PRAZO SUGERIDO -- a mesma conta do servidor (relatorio.regras.prazoDe).
+ *
+ * Eram "3 dias" cravados aqui. Com a Configuração em 7, o formulário abria
+ * propondo um prazo que a empresa não usa, e o servidor gravava outro: a
+ * pessoa via 21/09 na tela e o relatório vencia noutro dia.
+ *
+ * Agora o prazo VEM DA CONFIGURAÇÃO (`regras.prazo`, servido junto com o
+ * checklist). Quando as duas regras existem, vale a MAIS APERTADA -- o prazo
+ * por relatório existe para o trabalho não esfriar, e o vencimento mensal
+ * existe para o mês fechar; valer a mais folgada esvaziaria uma das duas.
+ *
+ * O servidor refaz esta conta ao salvar, e é a dele que vale. Isto aqui é o
+ * que a pessoa vê antes de salvar -- e as duas precisam dizer o mesmo.
+ */
+function prazoSugerido(dataVisita, prazo = null) {
+  const base = new Date(`${dataVisita || hojeISO()}T12:00:00`);
+  if (Number.isNaN(base.getTime())) return hojeISO();
+  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  const porRelatorio = new Date(base);
+  porRelatorio.setDate(porRelatorio.getDate() + (prazo?.dias ?? 3));
+  if (!prazo?.vencimentoDiaDoMes) return iso(porRelatorio);
+
+  // O dia que não existe no mês do vencimento cai no último dele -- sem isso
+  // `new Date(2026, 1, 30)` transborda para março e dá dois dias de folga que
+  // ninguém concedeu.
+  const mes = base.getMonth() + 1;
+  const ultimo = new Date(base.getFullYear(), mes + 1, 0).getDate();
+  const mensal = new Date(base.getFullYear(), mes, Math.min(prazo.vencimentoDiaDoMes, ultimo), 12, 0, 0, 0);
+  return iso(porRelatorio <= mensal ? porRelatorio : mensal);
 }
 
 // "1,2 MB" -- o tamanho do PDF, para a pessoa saber o que está mandando.
@@ -489,7 +513,7 @@ function FolhaRelatorio({ documento }) {
  * obrigava a fechar tudo para consultar a lista, e escrever relatório é tarefa
  * longa: agora é uma tela, com volta explícita.
  */
-function EditorMapeamento({ itensRegra, minimoResumo, inicial, tecnicoNome, onFechar, onSalvo }) {
+function EditorMapeamento({ itensRegra, minimoResumo, prazoRegra, inicial, tecnicoNome, onFechar, onSalvo }) {
   const edicao = !!inicial?.id;
   const [empresa, setEmpresa] = useState(inicial?.empresa || '');
   const [cnpj, setCnpj] = useState(inicial?.cnpj || '');
@@ -497,7 +521,7 @@ function EditorMapeamento({ itensRegra, minimoResumo, inicial, tecnicoNome, onFe
     inicial?.dataVisita ? String(inicial.dataVisita).slice(0, 10) : hojeISO()
   );
   const [prazoEm, setPrazoEm] = useState(
-    inicial?.prazoEm ? String(inicial.prazoEm).slice(0, 10) : prazoSugerido(hojeISO())
+    inicial?.prazoEm ? String(inicial.prazoEm).slice(0, 10) : prazoSugerido(hojeISO(), prazoRegra)
   );
   const [resumo, setResumo] = useState(inicial?.resumo || '');
   const [descricao, setDescricao] = useState(inicial?.descricao || '');
@@ -820,13 +844,18 @@ function EditorMapeamento({ itensRegra, minimoResumo, inicial, tecnicoNome, onFe
                   aqui é conveniência -- a regra de verdade está no serviço,
                   porque o calendário do navegador não protege nada. */}
               <input type="date" value={dataVisita} min={primeiroDiaDoMes()} max={ultimoDiaDoMes()}
-                onChange={(e) => { setDataVisita(e.target.value); if (!edicao) setPrazoEm(prazoSugerido(e.target.value)); }}
+                onChange={(e) => { setDataVisita(e.target.value); if (!edicao) setPrazoEm(prazoSugerido(e.target.value, prazoRegra)); }}
                 className={ENTRADA} />
               <p className="text-[10px] text-texto-fraco mt-1">Só deste mês: é ele que está em disputa no ranking.</p>
             </div>
             <div>
               <label className="text-[11px] font-semibold text-texto-suave block mb-1">Prazo de entrega</label>
               <input type="date" value={prazoEm} onChange={(e) => setPrazoEm(e.target.value)} className={ENTRADA} />
+              <p className="text-[10px] text-texto-fraco mt-1">
+                {prazoRegra?.dias
+                  ? `${prazoRegra.dias} dias após a visita${prazoRegra.vencimentoDiaDoMes ? `, ou dia ${prazoRegra.vencimentoDiaDoMes} do mês seguinte -- o que vier primeiro` : ''} (Configuração).`
+                  : 'Sai da Configuração de relatórios.'}
+              </p>
             </div>
           </div>
 
@@ -1476,6 +1505,7 @@ export default function Mapeamentos() {
       <EditorMapeamento
         itensRegra={regras.itens}
         minimoResumo={regras.minimoResumo}
+        prazoRegra={regras.prazo}
         inicial={editando.novo ? null : editando}
         tecnicoNome={editando.novo ? usuario?.nome : editando.tecnicoNome || usuario?.nome}
         onFechar={() => setEditando(null)}
