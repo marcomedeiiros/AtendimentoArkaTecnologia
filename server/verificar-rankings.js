@@ -821,6 +821,85 @@ async function main() {
     }
     check(recusouFuturo === "FORA_DA_COMPETENCIA", `e a datada no mes que vem tambem (${recusouFuturo})`);
 
+    /**
+     * O PRAZO: dentro do mes da visita e em dia util.
+     *
+     * O mes -- a entrega daquele mes fecha junto com ele, entao um prazo no mes
+     * seguinte promete um dia em que o relatorio ja nao pode ser entregue.
+     * O dia util -- a equipe nao trabalha no fim de semana, e prazo no sabado e
+     * um dia a menos disfarcado.
+     */
+    const umDiaUtilDesteMes = (() => {
+      // Anda para tras a partir do fim do mes ate achar um dia util que ainda
+      // esteja neste mes -- serve em qualquer mes, sem data cravada.
+      const d = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0, 12, 0, 0);
+      while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1);
+      return d;
+    })();
+    const umFimDeSemanaDesteMes = (() => {
+      const d = new Date(hoje.getFullYear(), hoje.getMonth(), 1, 12, 0, 0);
+      while (d.getDay() !== 6) d.setDate(d.getDate() + 1);
+      return d;
+    })();
+    const proximoMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 5, 12, 0, 0);
+
+    let recusouPrazoFora = null;
+    try {
+      await mapeamentoService.criar(
+        {
+          empresa: `${MARCA} Prazo Fora`, dataVisita: noMes(hoje.getDate()).toISOString(),
+          prazoEm: proximoMes.toISOString(), descricao: "x".repeat(60), itens: {}, evidencias: [],
+        },
+        { sub: joao.id, nome: joao.nome }
+      );
+    } catch (e) {
+      recusouPrazoFora = e.code;
+    }
+    check(recusouPrazoFora === "PRAZO_FORA_DO_MES", `prazo no mes que vem e recusado (${recusouPrazoFora})`);
+
+    let recusouPrazoSabado = null;
+    try {
+      await mapeamentoService.criar(
+        {
+          empresa: `${MARCA} Prazo Sabado`, dataVisita: noMes(hoje.getDate()).toISOString(),
+          prazoEm: umFimDeSemanaDesteMes.toISOString(), descricao: "x".repeat(60), itens: {}, evidencias: [],
+        },
+        { sub: joao.id, nome: joao.nome }
+      );
+    } catch (e) {
+      recusouPrazoSabado = e.code;
+    }
+    check(recusouPrazoSabado === "PRAZO_EM_FIM_DE_SEMANA", `e prazo no sabado tambem (${recusouPrazoSabado})`);
+
+    const comPrazoBom = await mapeamentoService.criar(
+      {
+        empresa: `${MARCA} Prazo Util`, dataVisita: noMes(1).toISOString(),
+        prazoEm: umDiaUtilDesteMes.toISOString(), descricao: "x".repeat(60), itens: {}, evidencias: [],
+      },
+      { sub: joao.id, nome: joao.nome }
+    );
+    check(!!comPrazoBom.id, "e o prazo em dia util dentro do mes passa");
+
+    // E a SUGESTAO do servidor nunca cai fora dessas duas regras.
+    {
+      const regrasP = require("./src/modules/rankings/relatorio.regras");
+      const cfg = await regrasP.obter();
+      const fora = [];
+      const ultimo = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate();
+      for (let dia = 1; dia <= ultimo; dia += 1) {
+        const visita = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+        const sugerido = regrasP.prazoDe(visita, cfg);
+        if (!sugerido) continue;
+        const fds = sugerido.getDay() === 0 || sugerido.getDay() === 6;
+        const outroMes = sugerido.getMonth() !== hoje.getMonth();
+        // Visita que cai em fim de semana e o unico caso em que o prazo pode
+        // ser um fim de semana: nao ha dia util depois dela dentro do mes.
+        const visitaNoFimDeSemana = [0, 6].includes(new Date(`${visita}T12:00:00`).getDay());
+        if (outroMes || (fds && !visitaNoFimDeSemana)) fora.push(`${visita} -> ${regrasP.paraISO(sugerido)}`);
+      }
+      check(fora.length === 0, `a sugestao de prazo fica no mes e em dia util, para os ${ultimo} dias (${fora.join(", ") || "todos ok"})`);
+    }
+
     // O FECHAMENTO: com o dia 1 configurado, o mes corrente ja fechou -- entregar
     // e recusado, e salvar rascunho continua passando.
     const antesCfg = await prisma.configuracao.findUnique({ where: { chave: regras.CHAVE } });
@@ -1241,33 +1320,43 @@ async function main() {
       // O PRAZO: por relatorio e vencimento mensal, valendo a mais apertada.
       const so = regras.paraISO(regras.prazoDe("2026-09-20", { prazoDias: 3 }));
       check(so === "2026-09-23", `prazo por relatorio (20/09 + 3 = ${so})`);
-      const mensalManda = regras.paraISO(regras.prazoDe("2026-09-20", { prazoDias: 30, vencimentoDiaDoMes: 5 }));
-      check(mensalManda === "2026-10-05", `o vencimento mensal aperta o prazo longo (${mensalManda})`);
-      const relatorioManda = regras.paraISO(regras.prazoDe("2026-09-01", { prazoDias: 3, vencimentoDiaDoMes: 5 }));
-      check(relatorioManda === "2026-09-04", `e o prazo curto aperta o mensal (${relatorioManda})`);
+      // O PRAZO NAO SAI DO MES DA VISITA -- e por isso o vencimento mensal (que
+      // fala do mes SEGUINTE) deixou de conseguir esticar o prazo. 30 dias a
+      // partir de 20/09 sao aparados no ultimo dia UTIL de setembro.
+      const mensalManda = regras.paraISO(regras.prazoDe("2026-09-20", { prazoDias: 30 }));
+      check(mensalManda === "2026-09-30", `o prazo longo e aparado no fim do mes da visita (${mensalManda})`);
+      const curto = regras.paraISO(regras.prazoDe("2026-09-01", { prazoDias: 3 }));
+      check(curto === "2026-09-04", `e o curto fica onde caiu, em dia util (${curto})`);
 
-      // O VENCIMENTO NO DIA 30 (E NO 31) -- e o que fevereiro faz com ele.
-      //
-      // O campo era limitado a 28 porque "o dia 30 nao existe em fevereiro". O
-      // teto saiu e a data passou a ser APARADA para o ultimo dia do mes (ver o
-      // helper de calendario): sem isso, `new Date(2026, 1, 30)` nao falha --
-      // transborda para 02/03 e concede dois dias de folga que ninguem deu.
-      const fev = regras.paraISO(regras.prazoDe("2026-01-20", { prazoDias: 90, vencimentoDiaDoMes: 30 }));
-      check(fev === "2026-02-28", `dia 30 vence em 28/02 num fevereiro comum (${fev})`);
-      const bissexto = regras.paraISO(regras.prazoDe("2028-01-20", { prazoDias: 90, vencimentoDiaDoMes: 30 }));
-      check(bissexto === "2028-02-29", `e em 29/02 no ano bissexto (${bissexto})`);
-      // Dia 31 significa, na pratica, "sempre no ultimo dia do mes".
-      const abril = regras.paraISO(regras.prazoDe("2026-03-10", { prazoDias: 90, vencimentoDiaDoMes: 31 }));
-      check(abril === "2026-04-30", `dia 31 vence em 30/04 (${abril})`);
-      // E o mes que TEM o dia nao e mexido.
-      const outubro = regras.paraISO(regras.prazoDe("2026-09-20", { prazoDias: 90, vencimentoDiaDoMes: 30 }));
-      check(outubro === "2026-10-30", `dia 30 vence em 30/10, sem aparar (${outubro})`);
-      // A borda aceita a faixa nova, e continua recusando o que nao existe.
-      const trinta = await regras.salvar({ vencimentoDiaDoMes: 30 });
-      check(trinta.vencimentoDiaDoMes === 30, `dia 30 e aceito na configuracao (${trinta.vencimentoDiaDoMes})`);
-      const absurdo = await regras.salvar({ vencimentoDiaDoMes: 40 });
-      check(absurdo.vencimentoDiaDoMes === 31, `dia 40 e aparado para 31 (${absurdo.vencimentoDiaDoMes})`);
-      await regras.salvar({ vencimentoDiaDoMes: null });
+      /**
+       * O PRAZO NAO PASSA DO FIM DO MES DA VISITA -- e o que sobrou do
+       * vencimento mensal depois disso.
+       *
+       * O vencimento mensal fala do mes SEGUINTE ("ate o dia 30 do mes que
+       * vem"). Com o prazo preso ao mes da visita, ele nao consegue mais
+       * esticar nada: a aparagem chega primeiro, em qualquer configuracao.
+       *
+       * Estes casos eram sobre o dia que nao existe em fevereiro. Continuam
+       * aqui, virados do avesso: o que se prova agora e que NENHUM vencimento
+       * empurra o prazo para fora do mes -- inclusive nos meses curtos, onde o
+       * erro antigo (`new Date(2026, 1, 30)` transbordando para 02/03) daria
+       * folga que ninguem concedeu.
+       */
+      const fev = regras.paraISO(regras.prazoDe("2026-01-20", { prazoDias: 90 }));
+      check(fev === "2026-01-30", `janeiro nao escapa para fevereiro (${fev})`);
+      const bissexto = regras.paraISO(regras.prazoDe("2028-02-10", { prazoDias: 90 }));
+      check(bissexto === "2028-02-29", `e o mes bissexto termina no dia 29 (${bissexto})`);
+      const abril = regras.paraISO(regras.prazoDe("2026-03-10", { prazoDias: 90 }));
+      check(abril === "2026-03-31", `marco termina no 31, e nao vai para abril (${abril})`);
+      const setembro = regras.paraISO(regras.prazoDe("2026-09-20", { prazoDias: 90 }));
+      check(setembro === "2026-09-30", `e setembro termina no 30 (${setembro})`);
+      // O VENCIMENTO MENSAL SAIU: ele falava do mes seguinte, e o prazo agora
+      // termina no mes da visita. Um valor gravado por uma versao anterior e
+      // simplesmente ignorado, e nao pode ressuscitar a regra.
+      const comCampoVelho = await regras.salvar({ vencimentoDiaDoMes: 30 });
+      check(comCampoVelho.vencimentoDiaDoMes === undefined, "o vencimento mensal saiu da configuracao");
+      const aindaNoMes = regras.paraISO(regras.prazoDe("2026-09-20", { ...comCampoVelho, prazoDias: 90 }));
+      check(aindaNoMes === "2026-09-30", `e um valor velho no banco nao estica o prazo (${aindaNoMes})`);
 
       // A CONFIGURACAO MUDA A NOTA -- se nao mudasse, a tela seria decoracao.
       const m = {

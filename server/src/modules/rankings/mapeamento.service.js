@@ -160,6 +160,43 @@ function mesCorrente(agora = new Date()) {
   return `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}`;
 }
 
+/**
+ * O PRAZO PRECISA SER DO MES DA VISITA E CAIR EM DIA UTIL.
+ *
+ * O mes: a entrega daquele mes fecha junto com ele, entao um prazo no mes
+ * seguinte promete um dia em que o relatorio ja nao pode ser entregue.
+ *
+ * O dia util: a equipe nao trabalha no fim de semana, e prazo no sabado e um
+ * dia a menos disfarcado -- quem cumpre entrega na sexta, e quem confia na
+ * data perde o prazo com o sistema fechado.
+ *
+ * Conferido so quando o prazo e ESCOLHIDO (criacao, ou edicao que mexe nele):
+ * relatorio antigo tem prazo gravado sob a regra de ontem, e travar o
+ * salvamento dele seria impedir a correcao por causa de um campo que ninguem
+ * esta mudando -- o mesmo cuidado da data da visita.
+ */
+function conferirPrazo(prazoEm, dataVisita) {
+  const p = dataDoDia(prazoEm);
+  const v = dataDoDia(dataVisita);
+  if (!p || Number.isNaN(p.getTime())) return;
+  if (v && !Number.isNaN(v.getTime())) {
+    if (p.getFullYear() !== v.getFullYear() || p.getMonth() !== v.getMonth()) {
+      throw new AppError(
+        "O prazo de entrega precisa ser no mesmo mês da visita -- é ele que está em disputa.",
+        400,
+        "PRAZO_FORA_DO_MES"
+      );
+    }
+  }
+  if (regrasRelatorio.ehFimDeSemana(p)) {
+    throw new AppError(
+      "O prazo de entrega precisa cair em dia útil -- a equipe não trabalha no fim de semana.",
+      400,
+      "PRAZO_EM_FIM_DE_SEMANA"
+    );
+  }
+}
+
 /** A data escolhida precisa ser do mes corrente. Vale ao criar e ao MUDAR a data. */
 function conferirMesDaVisita(dataVisita) {
   const mes = mesDaVisita(dataVisita);
@@ -417,7 +454,7 @@ class MapeamentoService {
       return {
         ...analise,
         prazoSugerido: analise.dataVisita ? regrasRelatorio.paraISO(regrasRelatorio.prazoDe(analise.dataVisita, regras)) : null,
-        regras: { prazoDias: regras.prazoDias, vencimentoDiaDoMes: regras.vencimentoDiaDoMes },
+        regras: { prazoDias: regras.prazoDias },
       };
     } finally {
       await midiaStorage.remover(salvo.arquivoPath).catch(() => {});
@@ -569,6 +606,7 @@ class MapeamentoService {
         })
       : { campos: {} };
     conferirMesDaVisita(dados.dataVisita);
+    if (dados.prazoEm) conferirPrazo(dados.prazoEm, dados.dataVisita);
     if (dados.entregar) conferirFechamento(dados.dataVisita, regras);
     const criado = await prisma.mapeamentoTecnico.create({
       data: {
@@ -579,8 +617,8 @@ class MapeamentoService {
         empresa: String(dados.empresa || "").trim(),
         cnpj: dados.cnpj ? String(dados.cnpj).replace(/\D/g, "") : null,
         dataVisita: dataDoDia(dados.dataVisita),
-        // Sem prazo informado, vale a REGRA DA EMPRESA (prazo por relatório e,
-        // quando existe, o vencimento mensal -- a mais apertada das duas). A
+        // Sem prazo informado, vale a REGRA DA EMPRESA (prazo por relatório,
+        // aparado pelo fim do mês e pelo dia útil). A
         // tela sugere o mesmo valor; isto aqui e a rede para quem chega por
         // outro caminho, e para o dia em que a tela esquecer de mandar.
         prazoEm: dataDoDia(dados.prazoEm) || regrasRelatorio.prazoDe(dados.dataVisita, regras),
@@ -649,6 +687,11 @@ class MapeamentoService {
     const dataNova = dados.dataVisita ? dataDoDia(dados.dataVisita) : null;
     const mudouAData = !!dataNova && dataNova.getTime() !== new Date(atual.dataVisita).getTime();
     if (mudouAData) conferirMesDaVisita(dados.dataVisita);
+    // O prazo so passa pela regra quando MUDA, pelo mesmo motivo da data.
+    const prazoNovo = dados.prazoEm ? dataDoDia(dados.prazoEm) : null;
+    if (prazoNovo && prazoNovo.getTime() !== new Date(atual.prazoEm).getTime()) {
+      conferirPrazo(dados.prazoEm, mudouAData ? dados.dataVisita : atual.dataVisita);
+    }
     // O fechamento vale para a PRIMEIRA entrega. Reenviar uma correcao de algo
     // que ja saiu da mao do tecnico continua liberado (ver `conferirFechamento`).
     if (entregando && !atual.entregueEm) {

@@ -86,9 +86,7 @@ const ultimoDiaDoMes = () => {
  * pessoa via 21/09 na tela e o relatório vencia noutro dia.
  *
  * Agora o prazo VEM DA CONFIGURAÇÃO (`regras.prazo`, servido junto com o
- * checklist). Quando as duas regras existem, vale a MAIS APERTADA -- o prazo
- * por relatório existe para o trabalho não esfriar, e o vencimento mensal
- * existe para o mês fechar; valer a mais folgada esvaziaria uma das duas.
+ * checklist), e é aparado pelo fim do mês e pelo dia útil (ver `aparar`).
  *
  * O servidor refaz esta conta ao salvar, e é a dele que vale. Isto aqui é o
  * que a pessoa vê antes de salvar -- e as duas precisam dizer o mesmo.
@@ -100,15 +98,39 @@ function prazoSugerido(dataVisita, prazo = null) {
 
   const porRelatorio = new Date(base);
   porRelatorio.setDate(porRelatorio.getDate() + (prazo?.dias ?? 3));
-  if (!prazo?.vencimentoDiaDoMes) return iso(porRelatorio);
+  return iso(aparar(porRelatorio, base));
+}
 
-  // O dia que não existe no mês do vencimento cai no último dele -- sem isso
-  // `new Date(2026, 1, 30)` transborda para março e dá dois dias de folga que
-  // ninguém concedeu.
-  const mes = base.getMonth() + 1;
-  const ultimo = new Date(base.getFullYear(), mes + 1, 0).getDate();
-  const mensal = new Date(base.getFullYear(), mes, Math.min(prazo.vencimentoDiaDoMes, ultimo), 12, 0, 0, 0);
-  return iso(porRelatorio <= mensal ? porRelatorio : mensal);
+/** Sábado ou domingo? */
+const ehFimDeSemana = (d) => d.getDay() === 0 || d.getDay() === 6;
+
+/**
+ * O PRAZO NÃO SAI DO MÊS DA VISITA E NÃO CAI EM FIM DE SEMANA.
+ *
+ * A mesma aparagem do servidor (relatorio.regras.aparar), e pelos mesmos dois
+ * motivos: o mês em disputa é o da visita, e a entrega dele fecha junto com
+ * ele -- um prazo em outubro para uma visita de setembro promete um dia em que
+ * o relatório já não pode ser entregue. E a equipe não trabalha no fim de
+ * semana: prazo no sábado é um dia a menos disfarçado.
+ *
+ * Anda para TRÁS: o prazo é um limite, e empurrá-lo daria folga que a regra
+ * não concedeu.
+ */
+function aparar(prazo, dataVisita) {
+  const d = new Date(prazo);
+  const ultimoDoMes = new Date(dataVisita.getFullYear(), dataVisita.getMonth() + 1, 0, 12, 0, 0, 0);
+  if (d > ultimoDoMes) d.setTime(ultimoDoMes.getTime());
+  while (ehFimDeSemana(d) && d > dataVisita) d.setDate(d.getDate() - 1);
+  return d;
+}
+
+/** O mesmo `aparar`, falando em ISO -- é o que o campo de data guarda. */
+function ajustarPrazoISO(prazoISO, dataVisitaISO) {
+  const p = new Date(`${prazoISO}T12:00:00`);
+  const v = new Date(`${dataVisitaISO || hojeISO()}T12:00:00`);
+  if (Number.isNaN(p.getTime()) || Number.isNaN(v.getTime())) return prazoISO;
+  const d = aparar(p, v);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 // "1,2 MB" -- o tamanho do PDF, para a pessoa saber o que está mandando.
@@ -893,11 +915,20 @@ function EditorMapeamento({ itensRegra, minimoResumo, prazoRegra, inicial, tecni
             </div>
             <div>
               <label className="text-[11px] font-semibold text-texto-suave block mb-1">Prazo de entrega</label>
-              <input type="date" value={prazoEm} onChange={(e) => setPrazoEm(e.target.value)} className={ENTRADA} />
+              {/* O CAMPO CORRIGE A ESCOLHA em vez de só reclamar: o seletor de
+                  data do navegador não sabe desabilitar sábado e domingo, então
+                  a data escolhida é aparada na hora (fim de semana volta para a
+                  sexta; fora do mês vira o último dia útil dele) e a pessoa vê
+                  o resultado no próprio campo. O servidor recusa o resto. */}
+              <input type="date" value={prazoEm}
+                min={dataVisita || undefined}
+                max={edicao ? undefined : ultimoDiaDoMes()}
+                onChange={(e) => setPrazoEm(ajustarPrazoISO(e.target.value, dataVisita))}
+                className={ENTRADA} />
               <p className="text-[10px] text-texto-fraco mt-1">
                 {prazoRegra?.dias
-                  ? `${prazoRegra.dias} dias após a visita${prazoRegra.vencimentoDiaDoMes ? `, ou dia ${prazoRegra.vencimentoDiaDoMes} do mês seguinte -- o que vier primeiro` : ''} (Configuração).`
-                  : 'Sai da Configuração de relatórios.'}
+                  ? `${prazoRegra.dias} dias após a visita (Configuração), sem passar do fim do mês e sempre em dia útil.`
+                  : 'Sai da Configuração de relatórios, sempre dentro do mês e em dia útil.'}
               </p>
             </div>
           </div>
@@ -1291,12 +1322,7 @@ function Configuracao({ onSalvo }) {
               {' '}um dia que não existe no mês cai no último dele.
             </p>
           </Campo>
-          <Campo rotulo="Vencimento mensal (dia do mês seguinte)"
-            dica="Todos os relatórios de um mês precisam estar entregues até esse dia do mês seguinte No mês que não tiver esse dia, vence no último dia dele (31 = sempre no último dia) Vazio = a empresa não usa essa regra valendo as duas, vale a mais apertada">
-            <input type="number" min={1} max={31} placeholder="não usar" className={ENTRADA}
-              value={rascunho.vencimentoDiaDoMes ?? ''}
-              onChange={(e) => mexer('vencimentoDiaDoMes', e.target.value === '' ? null : Number(e.target.value))} />
-          </Campo>
+
         </div>
       </div>
 

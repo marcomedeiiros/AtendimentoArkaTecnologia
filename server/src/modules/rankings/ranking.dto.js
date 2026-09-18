@@ -89,8 +89,8 @@ const criarMapeamentoSchema = z.object({
   cnpj: z.string().optional().nullable(),
   dataVisita: z.string().min(8, "Informe a data da visita"),
   // Opcional: sem ele, o servidor aplica a regra da empresa (prazo por
-  // relatorio, e o vencimento mensal quando houver). Era obrigatorio quando o
-  // unico caminho era a tela digitar o valor.
+  // relatorio, aparado pelo fim do mes e pelo dia util). Era obrigatorio quando
+  // o unico caminho era a tela digitar o valor.
   prazoEm: z.string().min(8).optional().nullable(),
   resumo: z.string().max(4000).optional(),
   // A descricao detalhada da visita -- o campo que conta na completude. Teto
@@ -119,8 +119,8 @@ const atualizarMapeamentoSchema = criarMapeamentoSchema.partial().refine(
  * A CONFIGURACAO DOS RELATORIOS.
  *
  * Aqui so a FORMA (tipo e faixa grosseira). A regra de verdade -- pesos que
- * somam 100, item de checklist sem palavra nenhuma, dia 30 que nao existe em
- * fevereiro -- fica em `relatorio.regras.validar`, que e chamado tanto ao gravar
+ * somam o teto, item de checklist sem palavra nenhuma, horario invalido --
+ * fica em `relatorio.regras.validar`, que e chamado tanto ao gravar
  * quanto ao LER. Defesa em profundidade: um valor editado direto no banco
  * tambem passa por la antes de virar pontuacao.
  *
@@ -129,9 +129,7 @@ const atualizarMapeamentoSchema = criarMapeamentoSchema.partial().refine(
  */
 const regrasRelatorioSchema = z.object({
   prazoDias: z.number().int().min(1).max(90).optional(),
-  // De 1 a 31: o dia que nao existe no mes cai no ultimo dia dele (a aparagem e
-  // em `relatorio.regras`, com o helper de calendario). Aqui so a faixa.
-  vencimentoDiaDoMes: z.number().int().min(1).max(31).nullable().optional(),
+
   // Quanto vale cada relatorio entregue -- a parcela de volume deixou de ter
   // teto (ver pontuacao.externa.PONTOS_POR_RELATORIO).
   pontosPorRelatorio: z.number().int().min(1).max(100).optional(),

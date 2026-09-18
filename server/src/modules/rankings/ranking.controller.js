@@ -83,10 +83,7 @@ class RankingController {
         // cliente -- com a Configuração em 7, a tela propunha um prazo que a
         // empresa não usa, e o servidor gravava outro. Quem manda é a
         // Configuração; isto é só o caminho até ela.
-        prazo: {
-          dias: emVigor.prazoDias,
-          vencimentoDiaDoMes: emVigor.vencimentoDiaDoMes,
-        },
+        prazo: { dias: emVigor.prazoDias },
         // O LIMIAR DO RESUMO, porque a tela mostra a completude enquanto a
         // pessoa digita e precisa da mesma regra que o servidor grava. Estava
         // cravado no cliente (F3 da auditoria de front-end).

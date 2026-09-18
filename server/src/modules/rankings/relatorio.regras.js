@@ -32,7 +32,6 @@ const prisma = require("../../infrastructure/database/prisma.client");
 const AppError = require("../../shared/errors/AppError");
 const logger = require("../../config/logger");
 // A MESMA aparagem que o ciclo do ranking usa -- ver o helper.
-const { diaQueExiste } = require("../../shared/helpers/calendario.helper");
 const {
   ITENS_MAPEAMENTO, PESOS, TETO_QUALIDADE, PONTOS_POR_RELATORIO,
   MINIMO_MAPEAMENTOS, CUSTO_POR_DEVOLUCAO,
@@ -53,7 +52,7 @@ function padrao() {
     // Vencimento MENSAL: ate o dia N do mes seguinte, todos os relatorios
     // daquele mes precisam estar entregues. `null` = a empresa nao usa essa
     // regra e vale so o prazo por relatorio.
-    vencimentoDiaDoMes: null,
+
     // Quanto vale cada relatorio entregue. Substituiu a faixa de volume: a
     // pontuacao cresce o mes inteiro, sem teto (ver pontuacao.externa).
     pontosPorRelatorio: PONTOS_POR_RELATORIO,
@@ -157,15 +156,6 @@ function validar(entrada, base = padrao()) {
 
   if (entrada.prazoDias !== undefined) out.prazoDias = inteiro(entrada.prazoDias, 1, 90, base.prazoDias);
 
-  if (entrada.vencimentoDiaDoMes !== undefined) {
-    const v = entrada.vencimentoDiaDoMes;
-    // DE 1 A 31, e o dia que nao existe no mes cai no ULTIMO dia dele (ver
-    // `prazoDe` e o helper de calendario). O teto era 28, com a justificativa
-    // "o dia 30 nao existe em fevereiro" -- e ela resolvia o problema errado:
-    // quem fecha o mes no dia 30 precisava do dia 30. O que a regra nunca pode
-    // fazer e SUMIR num mes do ano, e a aparagem e o que garante isso.
-    out.vencimentoDiaDoMes = v === null || v === "" ? null : inteiro(v, 1, 31, base.vencimentoDiaDoMes ?? 5);
-  }
 
   if (entrada.pontosPorRelatorio !== undefined) {
     out.pontosPorRelatorio = inteiro(entrada.pontosPorRelatorio, 1, 100, base.pontosPorRelatorio);
@@ -323,9 +313,16 @@ async function salvar(entrada, autor = null) {
 /**
  * O PRAZO de um relatorio, a partir da data da visita.
  *
- * Combina as duas regras quando as duas existem, e vale a MAIS APERTADA: o
- * prazo por relatorio existe para o trabalho nao esfriar, e o vencimento mensal
- * existe para o mes fechar. Valer a mais folgada esvaziaria uma das duas.
+ * Dias corridos depois da visita, aparado pelo fim do mes e pelo dia util
+ * (ver `aparar`).
+ *
+ * ── O VENCIMENTO MENSAL SAIU DAQUI ───────────────────────────────────────
+ *
+ * Havia uma segunda regra: "ate o dia N do mes SEGUINTE". Quando o prazo
+ * passou a ficar dentro do mes da visita, ela deixou de conseguir esticar
+ * qualquer coisa -- a aparagem chega primeiro, em toda configuracao -- e virou
+ * um campo na tela que nao mexia em nada. Quem fecha o mes agora e
+ * `diaFechamento`.
  */
 function prazoDe(dataVisitaISO, regras) {
   const puro = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dataVisitaISO || ""));
@@ -337,27 +334,44 @@ function prazoDe(dataVisitaISO, regras) {
   const porRelatorio = new Date(base);
   porRelatorio.setDate(porRelatorio.getDate() + (regras?.prazoDias ?? 3));
 
-  if (!regras?.vencimentoDiaDoMes) return porRelatorio;
+  return aparar(porRelatorio, base);
+}
 
-  // O VENCIMENTO CAI NO ULTIMO DIA DO MES QUANDO O DIA NAO EXISTE NELE.
-  //
-  // Sem a aparagem, `new Date(2026, 1, 30)` nao falha: TRANSBORDA para 02/03,
-  // e o vencimento de fevereiro passaria a ser em marco -- dois dias de folga
-  // que ninguem concedeu, num mes so, sem nada na tela explicando.
-  //
-  // O mes de referencia e o SEGUINTE ao da visita, e por isso a aparagem usa
-  // `getMonth() + 1`: e nele que o dia precisa existir.
-  const mesDoVencimento = base.getMonth() + 1;
-  const mensal = new Date(
-    base.getFullYear(),
-    mesDoVencimento,
-    diaQueExiste(base.getFullYear(), mesDoVencimento, regras.vencimentoDiaDoMes),
-    12,
-    0,
-    0,
-    0
-  );
-  return porRelatorio <= mensal ? porRelatorio : mensal;
+/** Sabado ou domingo? */
+function ehFimDeSemana(d) {
+  const dia = d.getDay();
+  return dia === 0 || dia === 6;
+}
+
+/**
+ * O PRAZO FICA NO MES DA VISITA, E EM DIA UTIL.
+ *
+ * ── POR QUE O MES ────────────────────────────────────────────────────────
+ *
+ * O mes em disputa e o da visita, e a entrega dele fecha junto com ele. Um
+ * prazo caindo no mes seguinte prometia um dia em que o relatorio daquele mes
+ * ja nao pode mais ser entregue -- a tela dizia 05/10 para uma visita de
+ * setembro, e no dia 05/10 a entrega estaria barrada.
+ *
+ * ── E POR QUE DIA UTIL ───────────────────────────────────────────────────
+ *
+ * A equipe nao trabalha no fim de semana. Um prazo no sabado e um dia a menos
+ * disfarcado: quem cumpre entrega na sexta, e quem confia no que a tela
+ * escreveu perde o prazo com o sistema fechado.
+ *
+ * Anda para TRAS, e nao para frente: o prazo e um limite: empurra-lo daria
+ * folga que a regra nao concedeu. Voltar so nao pode passar da propria
+ * visita -- nesse caso (visita no ultimo dia, que e um sabado) o prazo e o dia
+ * da visita.
+ */
+function aparar(prazo, dataVisita) {
+  const d = new Date(prazo);
+  // Nao sai do mes da visita.
+  const ultimoDoMes = new Date(dataVisita.getFullYear(), dataVisita.getMonth() + 1, 0, 12, 0, 0, 0);
+  if (d > ultimoDoMes) d.setTime(ultimoDoMes.getTime());
+  // Volta ate cair em dia util.
+  while (ehFimDeSemana(d) && d > dataVisita) d.setDate(d.getDate() - 1);
+  return d;
 }
 
 const paraISO = (d) =>
@@ -392,4 +406,5 @@ function competenciaFechada(competencia, regras, agora = new Date()) {
 module.exports = {
   obter, salvar, padrao, validar, prazoDe, paraISO, CHAVE,
   fechamentoDaCompetencia, competenciaFechada,
+  ehFimDeSemana,
 };
