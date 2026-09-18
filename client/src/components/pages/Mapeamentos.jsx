@@ -843,7 +843,13 @@ function EditorMapeamento({ itensRegra, minimoResumo, prazoRegra, inicial, tecni
                   mexer num ranking que a equipe já viu fechado. O `min`/`max`
                   aqui é conveniência -- a regra de verdade está no serviço,
                   porque o calendário do navegador não protege nada. */}
-              <input type="date" value={dataVisita} min={primeiroDiaDoMes()} max={ultimoDiaDoMes()}
+              {/* O limite vale para o relatório NOVO. Num que já existe a data
+                  pode ser de um mês anterior (uma correção devolvida depois da
+                  virada), e travar o campo aqui deixaria o formulário inválido
+                  por causa de um dado que ninguém está mudando -- o servidor só
+                  recusa MUDAR a data para outro mês. */}
+              <input type="date" value={dataVisita}
+                min={edicao ? undefined : primeiroDiaDoMes()} max={edicao ? undefined : ultimoDiaDoMes()}
                 onChange={(e) => { setDataVisita(e.target.value); if (!edicao) setPrazoEm(prazoSugerido(e.target.value, prazoRegra)); }}
                 className={ENTRADA} />
               <p className="text-[10px] text-texto-fraco mt-1">Só deste mês: é ele que está em disputa no ranking.</p>
@@ -1132,7 +1138,19 @@ const TETO_QUALIDADE = 75;
 
 const ENTRADA = 'w-full bg-grafite-700 border border-linha rounded-xl px-3 py-2 text-xs text-texto focus:outline-none focus:border-acao/50';
 
-function Configuracao() {
+/**
+ * @param {function} onSalvo avisa a tela em volta que as regras mudaram.
+ *
+ * ── POR QUE ELE EXISTE ────────────────────────────────────────────────────
+ *
+ * As regras (checklist, prazo, mínimo) são lidas UMA vez, quando a tela de
+ * Relatórios abre, e é delas que o formulário de mapeamento monta os campos.
+ * Salvar aqui mudava só o estado desta aba: o item novo do checklist só
+ * aparecia em "Novo mapeamento" depois de um F5 -- e quem acabou de
+ * adicionar o item não tem por que desconfiar que a tela está com uma cópia
+ * velha.
+ */
+function Configuracao({ onSalvo }) {
   const [dados, setDados] = useState(null);
   const [rascunho, setRascunho] = useState(null);
   const [carregando, setCarregando] = useState(true);
@@ -1164,6 +1182,9 @@ function Configuracao() {
       const salvo = await RankingsAPI.salvarConfiguracaoRelatorios(rascunho);
       setRascunho(salvo);
       setDados((d) => ({ ...d, regras: salvo }));
+      // A tela em volta relê as regras: é ela que passa o checklist para o
+      // formulário de mapeamento.
+      onSalvo?.();
       avisar('As novas regras já valem para o ranking do mês.', { titulo: 'Configuração salva', tipo: 'info' });
     } catch (e) {
       setErro(e?.message || 'Não foi possível salvar.');
@@ -1423,6 +1444,21 @@ export default function Mapeamentos() {
 
   useEffect(() => { carregar(); }, [carregar]);
 
+  /**
+   * RELÊ SÓ AS REGRAS -- é o que a Configuração muda.
+   *
+   * Separado do `carregar` de propósito: recarregar a lista inteira de
+   * relatórios a cada "Salvar regras" seria pedir 300 linhas para atualizar um
+   * checklist. Falha em silêncio: as regras antigas continuam valendo na tela
+   * até a próxima abertura, e nada do que a pessoa estava fazendo se perde.
+   */
+  const recarregarRegras = useCallback(async () => {
+    try {
+      const r = await RankingsAPI.regras();
+      setRegras(r.externo);
+    } catch { /* fica com as regras que já estavam */ }
+  }, []);
+
   const abrirNovo = () => setEditando({ novo: true });
   const abrirEdicao = async (m) => {
     try { setEditando(await RankingsAPI.obterMapeamento(m.id)); }
@@ -1571,7 +1607,7 @@ export default function Mapeamentos() {
       )}
 
       {aba === 'configuracao' && ehSupervisor ? (
-        <Configuracao />
+        <Configuracao onSalvo={recarregarRegras} />
       ) : aba === 'historico' ? (
         carregando ? (
           <div className="glass-panel border border-linha rounded-2xl py-14 grid place-items-center">

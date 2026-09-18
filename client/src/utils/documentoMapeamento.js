@@ -49,7 +49,7 @@ function dataBR(iso) {
  * para quem esta escrevendo o relatorio.
  */
 export function urlLogoDaEmpresa(cnpj) {
-  const so = String(cnpj || '').replace(/D/g, '');
+  const so = String(cnpj || '').replace(/\D/g, '');
   if (so.length !== 14 && so.length !== 11) return null;
   return `/api/rankings/mapeamentos/empresas/${so}/logo`;
 }

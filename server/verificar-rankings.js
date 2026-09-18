@@ -856,6 +856,50 @@ async function main() {
         { sub: joao.id, nome: joao.nome }
       );
       check(rascunho.status === "rascunho", "mas o rascunho continua podendo ser salvo");
+
+      /**
+       * A CORRECAO DE UM RELATORIO JA ENTREGUE NAO PODE FICAR PRESA.
+       *
+       * O supervisor devolve depois do fechamento (ou no mes seguinte). Se a
+       * regra do mes valesse igual na edicao, o tecnico nao conseguiria salvar
+       * a correcao: a data da visita e do mes que passou, e reescreve-la seria
+       * mentir sobre quando a visita aconteceu. A devolucao viraria um beco sem
+       * saida -- com o desconto de retrabalho ja aplicado.
+       */
+      const jaEntregue = await prisma.mapeamentoTecnico.create({
+        data: {
+          tecnicoId: joao.id, tecnicoNome: joao.nome, empresa: `${MARCA} Empresa Corrigir`,
+          // Visita do MES PASSADO, ja entregue e devolvida.
+          dataVisita: new Date(hoje.getFullYear(), hoje.getMonth() - 1, 20, 12, 0, 0),
+          prazoEm: new Date(hoje.getFullYear(), hoje.getMonth() - 1, 27, 12, 0, 0),
+          entregueEm: new Date(hoje.getFullYear(), hoje.getMonth() - 1, 22, 12, 0, 0),
+          status: "em_correcao", devolucoes: 1, descricao: "x".repeat(60),
+        },
+      });
+      const corrigido = await mapeamentoService.atualizar(
+        jaEntregue.id,
+        { descricao: "correcao pedida pelo supervisor, com o que faltava", entregar: true },
+        { sub: joao.id }
+      );
+      check(corrigido.status === "entregue", "a correcao de um relatorio ja entregue passa, mesmo com o mes fechado");
+      const linhaCorrigida = await prisma.mapeamentoTecnico.findUnique({ where: { id: jaEntregue.id } });
+      check(
+        linhaCorrigida.entregueEm.getTime() === jaEntregue.entregueEm.getTime(),
+        "e a data da PRIMEIRA entrega nao se move -- e ela que decide o no prazo"
+      );
+
+      // Mas MOVER o relatorio de mes continua barrado: isso e mexer na data.
+      let recusouMudanca = null;
+      try {
+        await mapeamentoService.atualizar(
+          jaEntregue.id,
+          { dataVisita: new Date(hoje.getFullYear(), hoje.getMonth() - 1, 5, 12, 0, 0).toISOString() },
+          { sub: joao.id }
+        );
+      } catch (e) {
+        recusouMudanca = e.code;
+      }
+      check(recusouMudanca === "FORA_DA_COMPETENCIA", `mas mudar a data para outro mes continua recusado (${recusouMudanca})`);
     } finally {
       // A configuracao da empresa volta como estava -- verificar nao muda regra.
       if (antesCfg) {

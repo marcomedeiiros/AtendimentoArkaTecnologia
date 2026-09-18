@@ -160,23 +160,40 @@ function mesCorrente(agora = new Date()) {
   return `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function conferirCompetencia(dataVisita, regras, { entregando }) {
+/** A data escolhida precisa ser do mes corrente. Vale ao criar e ao MUDAR a data. */
+function conferirMesDaVisita(dataVisita) {
   const mes = mesDaVisita(dataVisita);
   if (!mes) return;
-  const atual = mesCorrente();
-  if (mes !== atual) {
+  if (mes !== mesCorrente()) {
     throw new AppError(
       "A data da visita precisa ser deste mês -- é ele que está em disputa no ranking.",
       400,
       "FORA_DA_COMPETENCIA"
     );
   }
-  // Depois do fechamento o mes nao recebe mais entrega: a nota daquele mes
-  // esta dada. O rascunho continua podendo ser salvo.
-  if (entregando && regrasRelatorio.competenciaFechada(mes, regras)) {
+}
+
+/**
+ * Depois do fechamento o mes nao recebe ENTREGA NOVA: a nota dele esta dada.
+ *
+ * ── E A CORRECAO DE UM RELATORIO JA ENTREGUE PASSA ────────────────────────
+ *
+ * O supervisor devolve no dia 2 do mes seguinte um relatorio da visita do dia
+ * 28. Barrar a correcao aqui seria um beco sem saida: o desconto de retrabalho
+ * ja foi aplicado, a data da visita nao pode ser reescrita (seria mentir sobre
+ * quando a visita aconteceu) e nao sobraria caminho de volta.
+ *
+ * A correcao nao inventa ponto: a data de ENTREGA nao se move (e ela que
+ * decide o "no prazo"), e o que muda e a qualidade de um relatorio que ja
+ * estava contado naquele mes.
+ */
+function conferirFechamento(dataVisita, regras) {
+  const mes = mesDaVisita(dataVisita);
+  if (!mes) return;
+  if (regrasRelatorio.competenciaFechada(mes, regras)) {
     const fim = regrasRelatorio.fechamentoDaCompetencia(mes, regras);
     throw new AppError(
-      `A competência deste mês fechou em ${fim.toLocaleDateString("pt-BR")}. Salve como rascunho.`,
+      `A competência de ${mes} fechou em ${fim.toLocaleDateString("pt-BR")}. Salve como rascunho.`,
       400,
       "COMPETENCIA_FECHADA"
     );
@@ -551,7 +568,8 @@ class MapeamentoService {
           itensAtuais: dados.itens,
         })
       : { campos: {} };
-    conferirCompetencia(dados.dataVisita, regras, { entregando: !!dados.entregar });
+    conferirMesDaVisita(dados.dataVisita);
+    if (dados.entregar) conferirFechamento(dados.dataVisita, regras);
     const criado = await prisma.mapeamentoTecnico.create({
       data: {
         // O TECNICO E SEMPRE QUEM ESTA LOGADO. Aceitar do corpo deixaria
@@ -620,9 +638,22 @@ class MapeamentoService {
     // O checklist EM VIGOR, para a allowlist dos campos. Lido aqui, uma vez.
     const regrasAtuais = await regrasRelatorio.obter();
 
-    // A data que vale e a nova, quando ela veio; senao, a que ja esta gravada
-    // -- entregar um rascunho antigo tambem passa pela regra do mes.
-    conferirCompetencia(dados.dataVisita ?? atual.dataVisita, regrasAtuais, { entregando });
+    /**
+     * A DATA SO PASSA PELA REGRA DO MES QUANDO MUDA.
+     *
+     * Um relatorio que ja existe carrega o mes dele. Exigir "mes corrente" a
+     * cada salvamento trancaria a correcao de um relatorio do mes passado --
+     * que e exatamente o que o supervisor pede quando devolve. O que a regra
+     * impede e MOVER um relatorio de mes, e isso e mexer na data.
+     */
+    const dataNova = dados.dataVisita ? dataDoDia(dados.dataVisita) : null;
+    const mudouAData = !!dataNova && dataNova.getTime() !== new Date(atual.dataVisita).getTime();
+    if (mudouAData) conferirMesDaVisita(dados.dataVisita);
+    // O fechamento vale para a PRIMEIRA entrega. Reenviar uma correcao de algo
+    // que ja saiu da mao do tecnico continua liberado (ver `conferirFechamento`).
+    if (entregando && !atual.entregueEm) {
+      conferirFechamento(mudouAData ? dados.dataVisita : atual.dataVisita, regrasAtuais);
+    }
     const salvo = await prisma.mapeamentoTecnico.update({
       where: { id },
       data: {
