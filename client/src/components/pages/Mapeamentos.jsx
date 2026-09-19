@@ -1577,7 +1577,7 @@ export default function Mapeamentos() {
   if (!podeUsar) {
     return (
       <div className="p-4 sm:p-6 fade-in">
-        <div className="glass-panel border border-linha rounded-2xl p-8 text-center max-w-lg mx-auto">
+        <div className="glass-panel border border-linha rounded-2xl p-5 sm:p-8 text-center max-w-lg mx-auto">
           <ClipboardList size={28} className="mx-auto text-texto-fraco mb-3" />
           <p className="text-sm font-semibold text-texto">Esta tela é da equipe de fora da sede.</p>
           <p className="text-[11px] text-texto-fraco mt-2 leading-relaxed">

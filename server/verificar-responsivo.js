@@ -235,6 +235,34 @@ for (const f of arquivos) {
 check("nenhuma grade rígida de 3+ colunas", gradeRigida);
 
 // ---------------------------------------------------------------------------
+titulo("4b. Respiro: a margem interna grande precisa encolher no celular");
+
+// `p-8` são 32px de cada lado. Num celular de 375px isso come 64px -- um sexto
+// da tela -- e o conteúdo fica espremido numa coluna de 311px. No computador o
+// mesmo respiro é o certo, então a correção não é tirar: é dar um valor menor
+// para o celular e subir a partir do `sm`.
+//
+// Só vale para a margem do PAINEL (`p-`), e não para a horizontal (`px-`) nem
+// para a vertical (`py-`): `py-8` não estreita nada, e `px-8` costuma estar em
+// barra de página, onde já há variante.
+const respiroTeimoso = [];
+for (const f of arquivos) {
+  linhasDe(f).forEach((l, i) => {
+    if (ehComentario(l)) return;
+    const achados = l.match(/(?:^|[\s"'`])((?:[a-z0-9-]+:)*p-(?:8|10|12|14|16))(?=[\s"'`])/g) || [];
+    for (const a of achados) {
+      const token = a.trim();
+      // Já prefixado com ponto de quebra: só existe da tela grande para cima.
+      if (/^(sm|md|lg|xl|2xl):/.test(token)) continue;
+      // Tem variante menor junto? (`p-5 sm:p-8` é exatamente a correção.)
+      if (/(sm|md|lg):p-\d/.test(l)) continue;
+      respiroTeimoso.push(`${rel(f)}:${i + 1}  ${token} sem variante de celular`);
+    }
+  });
+}
+check("margem interna grande sempre com variante menor", respiroTeimoso);
+
+// ---------------------------------------------------------------------------
 titulo("5. Largura fixa: precisa saber encolher");
 
 // Largura fixa é aceitável quando algo por perto ROLA: uma tabela de 520px

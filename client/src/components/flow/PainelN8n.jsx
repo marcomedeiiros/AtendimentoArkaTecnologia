@@ -155,7 +155,7 @@ export default function PainelN8n() {
           ))}
         </div>
       ) : workflows.length === 0 ? (
-        <div className="glass-panel p-10 rounded-2xl border border-linha text-center">
+        <div className="glass-panel p-5 sm:p-10 rounded-2xl border border-linha text-center">
           <div className="inline-flex p-4 rounded-2xl bg-grafite-600 border border-linha mb-3 text-slate-500">
             <Workflow size={30} />
           </div>
