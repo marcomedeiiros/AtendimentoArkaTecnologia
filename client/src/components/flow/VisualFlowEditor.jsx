@@ -1669,7 +1669,16 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
               ficar menor que o próprio conteúdo, a altura estoura o pai e não
               sobra o que rolar. */}
           <div
-            className="bg-grafite-800 border-r border-linha flex flex-col gap-3 select-none min-h-0"
+            /* NO CELULAR ELA FLUTUA POR CIMA DO CANVAS, e nao ao lado.
+
+               Aberta, a biblioteca tem 224px fixos. Numa tela de 375 isso
+               deixava 150px de canvas -- estreito demais para ver onde o bloco
+               vai cair, que e justamente o que se olha enquanto se arrasta. Por
+               cima, o canvas continua inteiro atras dela, e fechar devolve a
+               tela toda. No computador nada muda: `lg:static` traz de volta a
+               coluna ao lado. */
+            className="bg-grafite-800 border-r border-linha flex flex-col gap-3 select-none min-h-0
+              absolute inset-y-0 left-0 z-30 shadow-2xl shadow-black/50 lg:static lg:shadow-none"
             style={{
               width: showLibrary ? '224px' : '0px',
               padding: showLibrary ? '12px' : '0px',
@@ -1741,6 +1750,29 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
             backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
             backgroundPosition: `${canvasOffset.x}px ${canvasOffset.y}px`
           }} />
+
+          {/* O AVISO DE VAZIO FICA FORA DA CAMADA QUE ANDA.
+
+              Ele morava dentro do canvas transladado, com `inset-0`. O canvas
+              é maior que a janela e se move com o `pan`: no celular o centro
+              dele caía fora da tela e a frase saía cortada pela direita.
+              Aqui fora, ele é do tamanho do container -- que é o da tela.
+
+              A frase muda no celular: ali a biblioteca não está "à esquerda",
+              está atrás do botão da barra. Mandar procurar num lugar que não
+              existe é pior do que não dizer nada. */}
+          {nodes.length === 0 && (
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 px-6 text-center pointer-events-none">
+              <div className="text-6xl opacity-30">⚡</div>
+              <div>
+                <p className="text-slate-400 text-sm font-semibold">Fluxo vazio</p>
+                <p className="text-slate-600 text-xs mt-1">
+                  <span className="hidden lg:inline">Adicione blocos pela biblioteca à esquerda</span>
+                  <span className="lg:hidden">Abra a biblioteca na barra acima para adicionar blocos</span>
+                </p>
+              </div>
+            </div>
+          )}
 
           <div style={{ transform: `translate3d(${canvasOffset.x}px, ${canvasOffset.y}px, 0) scale(${zoom})`, transformOrigin: '0 0', width: '100%', height: '100%', position: 'absolute' }}>
 
@@ -1873,15 +1905,6 @@ export function VisualFlowEditor({ fluxos, setFluxos, equipe }) {
               }} />
             )}
 
-            {nodes.length === 0 && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 pointer-events-none">
-                <div className="text-6xl opacity-30">⚡</div>
-                <div className="text-center">
-                  <p className="text-slate-400 text-sm font-semibold">Fluxo vazio</p>
-                  <p className="text-slate-600 text-xs mt-1">Adicione blocos pela biblioteca à esquerda</p>
-                </div>
-              </div>
-            )}
 
             {nodes.map(node => {
               const isSelected  = selectedNodeIds.includes(node.id);

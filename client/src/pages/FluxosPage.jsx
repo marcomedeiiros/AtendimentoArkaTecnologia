@@ -29,13 +29,19 @@ export default function FluxosPage() {
   // e a barra de abas precisa ser shrink-0: sem isso o canvas fica cortado.
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* Barra enxuta de proposito: cada pixel aqui e altura tirada do canvas. */}
-      <div className="shrink-0 flex items-center gap-1 px-3 py-1.5 border-b border-linha bg-grafite-900">
+      {/* Barra enxuta de proposito: cada pixel aqui e altura tirada do canvas.
+
+          NO CELULAR ELA ROLA DE LADO, e nao quebra em duas linhas: os quatro
+          rotulos nao cabem em 375px, e empilha-los comeria o dobro da altura --
+          justamente o que esta barra evita. `shrink-0` nos botoes impede que o
+          flex os esprema ate o rotulo sumir; `whitespace-nowrap` impede a
+          quebra dentro do proprio botao. */}
+      <div className="shrink-0 flex items-center gap-1 px-3 py-1.5 border-b border-linha bg-grafite-900 overflow-x-auto">
         {ABAS.map(({ id, label, Icon }) => (
           <button
             key={id}
             onClick={() => setAba(id)}
-            className={`px-2.5 py-1 rounded-md text-[11px] font-bold flex items-center gap-1.5 transition-all ${
+            className={`px-2.5 py-1 rounded-md text-[11px] font-bold flex items-center gap-1.5 shrink-0 whitespace-nowrap transition-all ${
               aba === id
                 ? 'bg-acao/15 text-acao-200'
                 : 'text-slate-500 hover:text-slate-200 hover:bg-grafite-700'
