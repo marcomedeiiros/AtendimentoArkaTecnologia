@@ -264,10 +264,20 @@ function janela(ano, mes, cfg = PADRAO) {
     // regra nova é o dia 1 (ela começa no dia velho e termina no dia 1). Medir
     // a janela responde certo nos dois casos; medir a regra, não.
     personalizada: !(ehViradaDeCalendario(inicio) && ehViradaDeCalendario(fim)),
-    // A tela precisa poder explicar por que ESTE ciclo é mais longo (ou mais
-    // curto) que os outros -- sem isso, "01/09 a 28/10" parece defeito de
-    // cálculo. É a competência em que a regra trocou.
-    transicao: regraAntes !== regraAgora,
+    /**
+     * A tela precisa poder explicar por que ESTE ciclo é mais longo (ou mais
+     * curto) que os outros -- sem isso, "01/09 a 28/10" parece defeito de
+     * cálculo. É a competência em que a regra trocou.
+     *
+     * ── E SÓ QUANDO A JANELA REALMENTE FICOU DIFERENTE ──────────────────
+     *
+     * O aviso saía por trocar a regra, e não por a janela mudar. Voltando o
+     * ciclo para o dia 1 no meio do mês, a competência ficava 01/09 a 01/10 --
+     * o mês do calendário, igual a todos os outros -- e ainda assim escrita
+     * como "ciclo de transição". Explicar uma diferença que não existe é pior
+     * que não explicar: quem lê procura o que mudou e não acha.
+     */
+    transicao: regraAntes !== regraAgora && !(ehViradaDeCalendario(inicio) && ehViradaDeCalendario(fim)),
   };
 }
 
