@@ -2,7 +2,6 @@ const prisma = require("../../infrastructure/database/prisma.client");
 const conversaRepository = require("../../infrastructure/repositories/conversa.repository");
 const parceiroRepository = require("../../infrastructure/repositories/parceiro.repository");
 const equipeService = require("../equipe/equipe.service");
-const painelService = require("./painel.service");
 const ciclo = require("../rankings/ciclo");
 const piso = require("../rankings/piso.competencia");
 const AppError = require("../../shared/errors/AppError");
@@ -106,12 +105,24 @@ class DashboardService {
    * empresa toda. O que era defeito nao era o escopo -- era o escopo ACIDENTAL,
    * herdado de uma listagem feita para outra finalidade, e invisivel.
    *
-   * A JANELA e o ciclo corrente, a MESMA da parede e do ranking, e vai no
-   * payload para a tela poder escrever "de 01/09 a 28/10" em vez de deixar quem
-   * le supor.
+   * ── A JANELA E O MES DO CALENDARIO, e nao o ciclo do ranking ─────────────
+   *
+   * Ela era o ciclo corrente -- a mesma da parede e do ranking. Com o ciclo
+   * configurado fora do dia 1, a avaliacao passava a falar de um periodo que
+   * nao e mes nenhum: "de 01/09 a 29/10". Quem le a satisfacao quer comparar
+   * setembro com outubro, e nao um intervalo de 59 dias que muda de tamanho
+   * quando alguem mexe no fechamento do ranking.
+   *
+   * O ciclo continua mandando no RANKING, que e onde ele significa alguma
+   * coisa: la o recorte decide pontuacao e premiacao. Aqui decide so o que
+   * a media resume -- e o mes e a unidade que a empresa usa para isso.
    */
   async satisfacao() {
-    const { inicio, fim, personalizada, transicao } = await painelService.cicloCorrente();
+    const agora = new Date();
+    const inicio = new Date(agora.getFullYear(), agora.getMonth(), 1, 0, 0, 0, 0);
+    // FIM EXCLUSIVO, como no ciclo: e o primeiro instante do mes seguinte. A
+    // tela escreve o dia anterior a ele.
+    const fim = new Date(agora.getFullYear(), agora.getMonth() + 1, 1, 0, 0, 0, 0);
 
     // Por OS, e nao por conversa: a conversa e o fio permanente do cliente e
     // guarda so a avaliacao do ciclo em curso -- contar conversas esconderia
@@ -141,8 +152,9 @@ class DashboardService {
       janela: {
         inicio: inicio.toISOString(),
         fim: fim.toISOString(),
-        personalizada: !!personalizada,
-        transicao: !!transicao,
+        // O nome do mes vai pronto: a tela nao precisa saber traduzir mes em
+        // portugues, e os dois lados dizem a mesma coisa.
+        mes: inicio.toLocaleDateString("pt-BR", { month: "long", year: "numeric" }),
       },
       // `null` quando nao ha nota, e nunca `0`: zero seria uma afirmacao ("foi
       // mal") sobre um ciclo em que nao houve o que julgar. A tela ja distingue

@@ -325,11 +325,11 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
   const maxQtd = Math.max(1, ...resumo.distribuicao.map(d => d.qtd));
   const janelaResumo = satisfacao?.janela || null;
 
-  // "01/09 a 30/09" -- o ciclo por extenso.
+  // "01/09 a 30/09" -- o mês por extenso.
   //
-  // O `fim` que o servidor manda e EXCLUSIVO (e o instante em que o ciclo
-  // seguinte comeca), entao escreve-se o dia ANTERIOR a ele: sem isso o rotulo
-  // erra por um dia inteiro. Mesmo cuidado do intervalo na tela de Rankings.
+  // O `fim` que o servidor manda é EXCLUSIVO (é o primeiro instante do mês
+  // seguinte), então escreve-se o dia ANTERIOR a ele: sem isso o rótulo erra
+  // por um dia inteiro. Mesmo cuidado do intervalo na tela de Rankings.
   const intervaloSatisfacao = useMemo(() => {
     if (!janelaResumo?.inicio || !janelaResumo?.fim) return null;
     const dia = (iso, recuar = false) => {
@@ -345,8 +345,11 @@ export default function Dashboard({ equipe, fluxos, parceiros, conversas, setAba
   // O numero antigo nao era so impreciso -- ele nao dizia do que era. Duas
   // pessoas de cargos diferentes liam valores diferentes com o mesmo rotulo,
   // e nao havia como desconfiar. Agora o proprio painel diz de onde vem.
+  // Diz o MÊS pelo nome e as datas entre parênteses. "ciclo de 01/09 a 29/10"
+  // era duas coisas erradas ao mesmo tempo: chamava de ciclo (que é a régua do
+  // ranking, não desta conta) e mostrava um intervalo que não é mês nenhum.
   const legendaSatisfacao = satisfacao && intervaloSatisfacao
-    ? `Empresa inteira · ciclo de ${intervaloSatisfacao} · promotor é nota ${satisfacao.regua.promotorMinimo} ou mais, detrator é ${satisfacao.regua.detratorMaximo} ou menos`
+    ? `Empresa inteira · ${janelaResumo?.mes || 'o mês'} (${intervaloSatisfacao}) · promotor é nota ${satisfacao.regua.promotorMinimo} ou mais, detrator é ${satisfacao.regua.detratorMaximo} ou menos`
     : null;
 
   // Aplica os filtros da aba sobre a lista de avaliacoes -- menos o de
