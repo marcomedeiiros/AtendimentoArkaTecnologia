@@ -222,6 +222,11 @@ const VERIFICACOES = [
     resumo: "CSP, HSTS, nosniff -- e a CSP do nginx igual a do Express",
   },
   {
+    arquivo: "verificar-injecao.js",
+    titulo: "Injecao: a entrada nao vira comando",
+    resumo: "SQL sempre parametrizado, carga hostil volta como dado, borda valida o corpo",
+  },
+  {
     arquivo: "verificar-responsivo.js",
     titulo: "Responsividade do painel",
     resumo: "tabela rolavel, grade que quebra, largura que encolhe, safe-area",

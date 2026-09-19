@@ -108,19 +108,33 @@ async function main() {
   for (const carga of CARGAS) {
     try {
       const r = await mapeamentoService.empresasParaBusca(carga);
-      // Nenhuma carga pode CASAR com alguma coisa: são todas texto que não
-      // existe em razão social nenhuma. Voltar com linha significaria que a
-      // consulta foi interpretada, e não comparada.
-      if (Array.isArray(r) && r.length > 0) {
+      /**
+       * O RESULTADO TEM DE SER EXPLICÁVEL PELO TEXTO -- este é o teste.
+       *
+       * "Não voltou nada" seria fácil de escrever e fraco: a busca também
+       * procura por CNPJ, e uma carga com três dígitos ("1; DELETE ... 1")
+       * casa com o documento de algum cliente. Isso é COMPARAÇÃO de texto
+       * funcionando, e não comando rodando.
+       *
+       * Então a pergunta certa é: toda linha devolvida contém o que foi
+       * digitado, no nome ou no documento? Se sim, a carga foi tratada como
+       * dado. Se voltasse a tabela inteira (o efeito de um `OR 1=1` que pegou),
+       * a conta não fecharia.
+       */
+      const so = carga.replace(/\D/g, "");
+      const inexplicavel = (r || []).filter(
+        (e) => !e.razaoSocial.toLowerCase().includes(carga.toLowerCase()) && !(so.length >= 3 && e.cnpj.includes(so))
+      );
+      if (inexplicavel.length > 0) {
         buscaOk = false;
-        console.log(`        ${carga} devolveu ${r.length} linha(s)`);
+        console.log(`        ${carga} devolveu ${inexplicavel.length} linha(s) que o texto não explica`);
       }
     } catch (e) {
       buscaOk = false;
       console.log(`        ${carga} estourou: ${e.message}`);
     }
   }
-  check(buscaOk, "a busca de empresa trata a carga como texto (sem casar, sem estourar)");
+  check(buscaOk, "a busca de empresa trata a carga como texto: todo resultado é explicado pelo que foi digitado");
 
   // O FORMULÁRIO: a carga é gravada e lida de volta INTEIRA. Se o banco a
   // interpretasse, o texto voltaria diferente -- ou a tabela sumiria.

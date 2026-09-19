@@ -533,12 +533,29 @@ class MapeamentoService {
     // clientes, que e exatamente o que o `q` existe para evitar.
     if (q.length < 2) return [];
     const so = q.replace(/\D/g, "");
+    /**
+     * PROCURA POR CNPJ quando o que foi digitado PARECE um documento.
+     *
+     * Era "tem tres digitos?", e isso e frouxo demais: qualquer texto com tres
+     * numeros no meio -- um endereco, uma versao, uma frase colada por engano --
+     * passava a varrer os documentos e trazia cliente que nada tem a ver com o
+     * que a pessoa escreveu. Apareceu ao rodar cargas hostis contra a busca
+     * (verificar-injecao): "1; DELETE FROM usuarios WHERE '1'='1" devolvia
+     * quatro clientes, todos por casar "111" no CNPJ.
+     *
+     * Nao era brecha -- era comparacao de texto funcionando, e o banco nunca
+     * interpretou nada. Mas resultado que o usuario nao consegue explicar e
+     * defeito de busca do mesmo jeito.
+     *
+     * Agora vale "quase so numero": tres digitos ou mais e no maximo duas
+     * sujeiras (o ponto, a barra e o traco da mascara).
+     */
+    const sujeira = q.replace(/[\d.\-/\s]/g, "").length;
+    const pareceDocumento = so.length >= 3 && sujeira === 0;
     const linhas = await prisma.parceiro.findMany({
       where: {
         status: "ativo",
-        // Digitou numero? Procura por CNPJ tambem -- quem tem o documento na
-        // mao nao deveria ter de descobrir a grafia da razao social.
-        OR: so.length >= 3
+        OR: pareceDocumento
           ? [{ razaoSocial: { contains: q } }, { cnpj: { contains: so } }]
           : [{ razaoSocial: { contains: q } }],
       },
