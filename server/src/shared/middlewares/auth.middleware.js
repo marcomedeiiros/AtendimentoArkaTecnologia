@@ -65,13 +65,33 @@ async function authMiddleware(req, res, next) {
   // hora, sem esperar o token expirar (ate 8h). Toda checagem de permissao
   // adiante (admin, setor) passa a se basear no estado real, nao no congelado.
   try {
-    // Sessao revogada (logout, ou familia queimada por reuso de refresh token)
-    // invalida o token de acesso NA HORA. Sem esta checagem, sair do painel nao
-    // derrubaria um JWT copiado: ele valeria pelo prazo inteiro, porque token
-    // sem estado nao se revoga. `sid` so existe nos tokens emitidos a partir da
-    // versao com sessao renovavel -- token antigo segue valido ate vencer, para
-    // o deploy nao derrubar quem estava logado.
-    if (payload.sid && !(await sessaoRefreshRepository.familiaAtiva(payload.sid))) {
+    /**
+     * A SESSAO TEM DE EXISTIR -- e agora sem excecao.
+     *
+     * O `sid` do token e a FAMILIA da sessao no banco. Sessao revogada (logout,
+     * "sair de todos", conta desativada, ou familia queimada por reuso de
+     * refresh token) invalida o token de acesso NA HORA. Sem esta checagem,
+     * sair do painel nao derrubaria um JWT copiado: ele valeria pelo prazo
+     * inteiro, porque token sem estado nao se revoga.
+     *
+     * ── POR QUE O `sid` DEIXOU DE SER OPCIONAL ───────────────────────────────
+     *
+     * A condicao era `if (payload.sid && ...)`: token SEM `sid` passava direto.
+     * Isso existia para o deploy em que a sessao renovavel nasceu -- quem
+     * estava logado com um token da versao anterior nao seria derrubado no meio
+     * do expediente.
+     *
+     * Aquela janela fechou sozinha: o token de acesso dura no maximo 8h, e as
+     * duas unicas emissoes do sistema (login e renovacao) sempre passam a
+     * familia. Nao existe mais token legitimo sem `sid` -- so restava a
+     * excecao, e uma excecao que nada usa e um caminho nao-revogavel deixado
+     * em aberto: um token assim sobreviveria ao logout, ao "sair de todos" e a
+     * desativacao da conta, porque nao havia sessao para revogar.
+     *
+     * Exigir o `sid` transforma "todo token e revogavel" em invariante, e nao
+     * em regra com asterisco.
+     */
+    if (!payload.sid || !(await sessaoRefreshRepository.familiaAtiva(payload.sid))) {
       return next(new AppError("Sessao encerrada", 401, "SESSAO_REVOGADA"));
     }
 

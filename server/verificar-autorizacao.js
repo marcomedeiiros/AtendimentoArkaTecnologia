@@ -86,13 +86,19 @@ async function pedir(caminho, { metodo = "GET", corpo, token, ip = "203.0.113.9"
   return { status: r.status, texto, json };
 }
 
-async function logar(email, senha) {
+// A sessão inteira: o token de acesso e o de renovação. O de renovação só
+// interessa ao bloco do logout -- é ele que identifica QUAL sessão encerrar.
+async function logarSessao(email, senha) {
   const r = await pedir("/api/auth/login", { metodo: "POST", corpo: { email, senha } });
   const dados = r.json?.data || r.json || {};
   if (r.status !== 200 || !dados.token) {
     throw new Error(`login falhou para ${email}: HTTP ${r.status} ${r.texto.slice(0, 160)}`);
   }
-  return dados.token;
+  return dados;
+}
+
+async function logar(email, senha) {
+  return (await logarSessao(email, senha)).token;
 }
 
 async function criarUsuario(cargo, extras = {}) {
@@ -244,8 +250,15 @@ function descobrirRotasProtegidas() {
     // É o teste que mais importa: prova que o cargo é relido do banco. Se o
     // middleware um dia passar a confiar em `payload.cargo`, este é o único
     // lugar que grita.
+    // Com o `sid` da sessão REAL do técnico A: o token é perfeito em tudo
+    // menos no cargo. Assim o 403 que vem a seguir só pode ser o cargo relido
+    // do banco -- e não a sessão faltando.
+    const sessaoDoA = await prisma.sessaoRefresh.findFirst({
+      where: { usuarioId: tecA.id, revogadoEm: null },
+      orderBy: { familiaCriadaEm: "desc" },
+    });
     const tokenMentiroso = jwt.sign(
-      { sub: tecA.id, email: tecA.email, nome: tecA.nome, cargo: "Administrador" },
+      { sub: tecA.id, email: tecA.email, nome: tecA.nome, cargo: "Administrador", sid: sessaoDoA?.familia },
       env.jwt.secret,
       { expiresIn: "1h" }
     );
@@ -253,6 +266,29 @@ function descobrirRotasProtegidas() {
     check(
       comMentira.status === 403,
       `token assinado dizendo cargo=Administrador NÃO promove o Técnico -> ${comMentira.status} (esperado 403)`
+    );
+
+    /**
+     * 1a-bis. TOKEN SEM SESSÃO NÃO ENTRA.
+     *
+     * Um token de acesso que não aponta para nenhuma sessão é irrevogável por
+     * construção: não há família para queimar no logout, então ele
+     * sobreviveria a sair do painel, ao "sair de todos" e à desativação da
+     * conta. Tem de ser recusado na porta.
+     *
+     * Era aceito até hoje, por uma compatibilidade de deploy que já venceu
+     * sozinha (token de acesso dura no máximo 8h, e as duas emissões do
+     * sistema sempre criam família).
+     */
+    const tokenSemSessao = jwt.sign(
+      { sub: tecA.id, email: tecA.email, nome: tecA.nome, cargo: "Técnico" },
+      env.jwt.secret,
+      { expiresIn: "1h" }
+    );
+    const semSessao = await pedir("/api/auth/me", { token: tokenSemSessao });
+    check(
+      semSessao.status === 401 && semSessao.json?.error?.code === "SESSAO_REVOGADA",
+      `token sem sid (sessão nenhuma) é recusado -> ${semSessao.status} ${semSessao.json?.error?.code || ""}`
     );
 
     // 1b. Token assinado com OUTRO segredo não entra de jeito nenhum.
@@ -293,6 +329,34 @@ function descobrirRotasProtegidas() {
     check(
       depoisSair.status === 401,
       `depois de "sair de todos", o token copiado morre na hora -> ${depoisSair.status} (esperado 401)`
+    );
+
+    /**
+     * 1e-bis. O LOGOUT COMUM também mata o token de acesso -- e só o dele.
+     *
+     * É a pergunta que costuma vir como "precisamos de uma lista de `jti`
+     * revogados": num JWT puro, sair do painel não derruba nada, porque o token
+     * é um papel assinado que vale sozinho até vencer. Aqui não é assim -- o
+     * `sid` do token é a FAMÍLIA da sessão, e o `authMiddleware` confere
+     * `familiaAtiva(sid)` a cada requisição. Revogar a família é exatamente uma
+     * lista de revogação, só que por SESSÃO em vez de por token: a rotação do
+     * refresh emite vários tokens na mesma sessão, e todos morrem juntos.
+     *
+     * O teste cobra as duas metades, porque uma sem a outra seria defeito:
+     * o aparelho que saiu perde o acesso NA HORA, e o outro continua logado.
+     */
+    const aparelho1 = await logarSessao(tecB.email, tecB.senha);
+    const aparelho2 = await logarSessao(tecB.email, tecB.senha);
+    await pedir("/api/auth/sair", { metodo: "POST", corpo: { refreshToken: aparelho1.refreshToken } });
+    const saiu = await pedir("/api/auth/me", { token: aparelho1.token });
+    const ficou = await pedir("/api/auth/me", { token: aparelho2.token });
+    check(
+      saiu.status === 401,
+      `o logout comum derruba o token de acesso daquela sessão -> ${saiu.status} (esperado 401)`
+    );
+    check(
+      ficou.status === 200,
+      `e NÃO derruba o outro aparelho, que não saiu -> ${ficou.status} (esperado 200)`
     );
 
     // O tokenB foi revogado junto (sair-todos não poupa ninguém): renova.

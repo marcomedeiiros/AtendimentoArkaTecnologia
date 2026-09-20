@@ -4,8 +4,8 @@ Pedido: procurar vulnerabilidades, provar com teste automatizado, corrigir em
 profundidade e **nunca confiar no front-end** — identidade sempre a partir do
 token validado contra o banco.
 
-O que saiu: **1 correção**, **1 esclarecimento de arquitetura** (RLS), **um
-arquivo novo de teste** (`server/verificar-autorizacao.js`, 54 verificações em 6
+O que saiu: **2 correções**, **1 esclarecimento de arquitetura** (RLS), **um
+arquivo novo de teste** (`server/verificar-autorizacao.js`, 57 verificações em 6
 blocos, registrado no `verificar-tudo`) e **11 frentes investigadas e
 consideradas corretas** — que ficam listadas aqui para a próxima auditoria não
 refazer o mesmo caminho.
@@ -68,6 +68,52 @@ com um token *legítimo* que mente o cargo. Com o código antigo: `FALHA ...
 
 ---
 
+## 1b. Corrigido: o `sid` deixou de ser opcional (revogação sem asterisco)
+
+**Arquivo:** `server/src/shared/middlewares/auth.middleware.js`
+**Gravidade:** baixa (caminho não-revogável em aberto, sem explorador conhecido)
+
+Veio da pergunta "não deveríamos implementar uma lista de `jti` para revogar
+token no logout?". A resposta curta é que **o mecanismo já existe e é melhor do
+que uma lista de `jti`**: o `sid` do token é a *família* da sessão no banco, e o
+`authMiddleware` confere `familiaAtiva(sid)` a cada requisição. Revogar a
+família é exatamente uma lista de revogação — só que por **sessão** em vez de
+por token, o que importa porque a rotação do refresh emite vários tokens dentro
+da mesma sessão, e todos precisam morrer juntos. Uma lista de `jti` teria de
+acompanhar cada rotação; a família não.
+
+O que a pergunta descobriu foi o **asterisco**:
+
+```js
+if (payload.sid && !(await familiaAtiva(payload.sid)))   // sem sid: passava direto
+```
+
+Token sem `sid` era aceito. Isso nasceu para um deploy — o da sessão renovável —
+para não derrubar quem estava logado no meio do expediente. Aquela janela
+fechou sozinha: o token de acesso dura no máximo 8h e as duas únicas emissões do
+sistema (login e renovação) sempre passam a família. Não existe mais token
+legítimo sem `sid`; sobrava só a exceção, e um token assim **sobreviveria ao
+logout, ao "sair de todos" e à desativação da conta**, porque não haveria sessão
+para revogar.
+
+**Correção:** `if (!payload.sid || !(await familiaAtiva(payload.sid)))`. "Todo
+token é revogável" virou invariante, e não regra com nota de rodapé.
+
+**Efeito no deploy:** nenhum. Só derrubaria uma sessão cujo token não tivesse
+`sid`, e não existe caminho que emita um — a suíte inteira, inclusive
+`verificar-sessao-cookie` e `verificar-fluxo-arka`, continua passando.
+
+**Preso por:** três verificações do bloco 1 — `token sem sid é recusado (401
+SESSAO_REVOGADA)`, `o logout comum derruba o token de acesso daquela sessão` e
+`e NÃO derruba o outro aparelho`. Com a checagem de família desligada, as duas
+últimas caem (200 onde se espera 401); a primeira cai com o `payload.sid &&`
+de volta.
+
+O par de verificações do logout comum é de propósito: sem a segunda, um
+servidor que derrubasse *todo mundo* a cada logout passaria no teste.
+
+---
+
 ## 2. O teste novo: `server/verificar-autorizacao.js`
 
 Roda dentro do `verificar-tudo`. Sobe o app de verdade, cria as contas, ataca
@@ -76,7 +122,7 @@ por HTTP como um invasor com sessão válida faria com `curl`, e confere o
 
 | Bloco | Pergunta | Verificações |
 |---|---|---|
-| 1 | A identidade vem do banco? | token assinado mentindo `cargo=Administrador`; token de outro segredo; rebaixamento ao vivo; conta desativada; `sair de todos` matando o token já emitido; `optionalAuth` |
+| 1 | A identidade vem do banco? | token assinado mentindo `cargo=Administrador`; token sem `sid`; token de outro segredo; rebaixamento ao vivo; conta desativada; logout comum e `sair de todos` matando o token já emitido; `optionalAuth` |
 | 2 | IDOR nos relatórios | técnico B tentando **ler, baixar o PDF, ver a evidência, editar, devolver e apagar** o relatório do técnico A — e a lista dele não traz o do outro |
 | 3 | O corpo promove alguém? | criar/editar mandando `tecnicoId`, `status: "aprovado"`, `validadoPorId`, `pontos`; `PATCH /perfil` mandando `cargo`, `ativo`, `equipeRanking`; bug em nome de terceiro |
 | 3e | A segunda camada, sozinha | o service chamado **na mão**, sem a borda do Zod, com o mesmo corpo sujo |
