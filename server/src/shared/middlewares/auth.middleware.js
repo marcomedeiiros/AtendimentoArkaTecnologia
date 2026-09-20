@@ -107,19 +107,39 @@ async function authMiddleware(req, res, next) {
   }
 }
 
-// Mesma origem de token do `authMiddleware` -- se este lesse so o header, uma
-// rota de autenticacao opcional deixaria de reconhecer quem esta logado por
-// cookie, e passaria a trata-lo como visitante sem nenhum erro aparente.
+/**
+ * AUTENTICACAO OPCIONAL -- quem esta logado e reconhecido, visitante passa.
+ *
+ * ── POR QUE ELA DELEGA, EM VEZ DE SO VERIFICAR A ASSINATURA ────────────────
+ *
+ * Esta funcao montava `req.user` com o PAYLOAD do token: `jwt.verify` devolve
+ * o que foi assinado, e aquilo virava a identidade da requisicao -- cargo
+ * inclusive. Era o oposto exato da regra que o `authMiddleware` ao lado
+ * cumpre: cargo, `ativo` e sessao vem do BANCO, a cada chamada.
+ *
+ * Hoje nenhuma rota a usa, entao nao havia buraco aberto -- havia uma ARMADILHA
+ * pronta: a primeira rota "publica com extras" que a montasse na cadeia herdaria
+ * um `req.user.cargo` escolhido por quem tem o token na mao, e um `exigirModulo`
+ * logo abaixo decidiria com base nisso. Conta desativada e rebaixamento
+ * tambem seriam ignorados ate o JWT vencer.
+ *
+ * Agora ela CHAMA o caminho autoritativo e so troca o desfecho do erro: falhou
+ * (sem token, token velho, sessao revogada, conta inativa), segue como
+ * visitante, sem `req.user`. Uma porta a menos para manter em dia -- a regra
+ * mora num lugar so.
+ *
+ * Mesma origem de token do `authMiddleware` -- se este lesse so o header, uma
+ * rota de autenticacao opcional deixaria de reconhecer quem esta logado por
+ * cookie, e passaria a trata-lo como visitante sem nenhum erro aparente.
+ */
 function optionalAuth(req, res, next) {
   const token = tokenDaRequisicao(req);
   if (!token) return next();
 
-  try {
-    req.user = jwt.verify(token, env.jwt.secret);
-  } catch {
-    // ignora token invalido em rotas opcionais
-  }
-  return next();
+  return authMiddleware(req, res, (err) => {
+    if (err) delete req.user;
+    return next();
+  });
 }
 
 module.exports = { authMiddleware, optionalAuth };

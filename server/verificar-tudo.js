@@ -247,6 +247,11 @@ const VERIFICACOES = [
     resumo: "um setor nao enxerga a conversa de outro",
   },
   {
+    arquivo: "verificar-autorizacao.js",
+    titulo: "Autorizacao: identidade, posse e escalada",
+    resumo: "cargo vem do banco, relatorio de um nao abre para o outro, corpo nao promove ninguem",
+  },
+  {
     arquivo: "verificar-sessao-cookie.js",
     titulo: "Sessão em cookie e CSRF",
     resumo: "cookie de sessao, CSRF de duplo envio e a checagem de origem",
