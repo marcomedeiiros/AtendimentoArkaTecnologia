@@ -1389,9 +1389,7 @@ function Configuracao({ onSalvo }) {
         </p>
         <p className="text-[10px] text-texto-fraco leading-relaxed">
           Cada linha é um campo do formulário e uma seção do PDF a ordem daqui é a ordem da folha
-          as palavras ao lado valem só para os relatórios antigos, que eram lidos de um PDF
-          anexado hoje o documento é montado na plataforma, e o que conta é o que o técnico
-          escreve em cada item
+          o que conta é o que o técnico escreve em cada item
         </p>
 
         {/* MEXER NO CHECKLIST MUDA O PASSADO, e isso precisa estar escrito.
@@ -1408,7 +1406,7 @@ function Configuracao({ onSalvo }) {
 
         <div className="space-y-2">
           {(rascunho.itens || []).map((item, idx) => (
-            <div key={item.chave || `novo-${idx}`} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)_auto] gap-2 items-start">
+            <div key={item.chave || `novo-${idx}`} className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 items-start">
               <input
                 className={ENTRADA}
                 placeholder="Nome do item"
@@ -1419,19 +1417,19 @@ function Configuracao({ onSalvo }) {
                   return { ...r, itens };
                 })}
               />
-              <input
-                className={ENTRADA}
-                placeholder="palavras que o PDF pode trazer, separadas por vírgula"
-                value={(rascunho.palavras?.[item.chave] || []).join(', ')}
-                onChange={(e) => setRascunho((r) => ({
-                  ...r,
-                  palavras: { ...r.palavras, [item.chave]: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) },
-                }))}
-                // Item recém-criado ainda não tem chave: ela nasce no servidor,
-                // a partir do nome. Sem nome, não há onde guardar as palavras.
-                disabled={!item.chave}
-                title={!item.chave ? 'Salve o item primeiro: a chave dele nasce do nome.' : undefined}
-              />
+              {/* AS PALAVRAS SAÍRAM DA TELA, e não do sistema.
+
+                  Elas serviam para ler um PDF ANEXADO: o texto vinha de fora e
+                  alguém tinha de adivinhar qual item ele cobria. Desde que o
+                  documento passou a ser montado aqui, cada item tem o seu
+                  próprio campo -- não há o que adivinhar, e pedir vocabulário
+                  ao administrador era cobrar trabalho por um resultado que
+                  ninguém mais lê.
+
+                  O que está guardado continua guardado: `rascunho.palavras`
+                  volta ao servidor no mesmo formato, intocado, porque os
+                  relatórios antigos (os que ainda têm arquivo anexo) seguem
+                  sendo lidos por ele. */}
               <button
                 onClick={() => setRascunho((r) => ({ ...r, itens: (r.itens || []).filter((_, i) => i !== idx) }))}
                 className="px-2.5 py-2 rounded-xl border border-falha/40 bg-falha/10 text-falha-400 text-[11px] font-bold hover:bg-falha/20 transition-colors"
